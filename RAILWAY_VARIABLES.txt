@@ -23,18 +23,6 @@ KICK_CLIENT_SECRET=your_kick_client_secret_here
 NEXT_PUBLIC_APP_URL=https://www.sweetflipsrewards.com
 
 # ============================================
-# PUSHER (Required for real-time chat)
-# ============================================
-# ⚠️ ADD YOUR VALUES HERE - Get from https://dashboard.pusher.com/
-NEXT_PUBLIC_PUSHER_KEY=your_pusher_key_here
-NEXT_PUBLIC_PUSHER_CLUSTER=us2
-NEXT_PUBLIC_PUSHER_WS_HOST=ws-us2.pusher.com
-
-# Optional: Server-side Pusher (if needed)
-PUSHER_APP_ID=your_pusher_app_id
-PUSHER_SECRET=your_pusher_secret
-
-# ============================================
 # WEBHOOK CONFIGURATION (Optional)
 # ============================================
 EXTERNAL_WEBHOOK_URL=https://www.sweetflipsrewards.com/api/webhooks/kick

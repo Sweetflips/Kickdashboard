@@ -71,7 +71,6 @@ export async function GET(
         id: giveaway.id.toString(),
         title: giveaway.title,
         description: giveaway.description,
-        prize_info: giveaway.prize_info,
         status: giveaway.status,
         entries_count: giveaway.entries.length,
         total_tickets: totalTickets,

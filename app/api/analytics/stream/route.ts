@@ -204,7 +204,7 @@ export async function GET(request: Request) {
             totalLength += msg.content.length
         }
 
-        const avgMessageLength = totalMessages > 0 ? (totalLength / totalMessages).toFixed(1) : 0
+        const avgMessageLength = totalMessages > 0 ? (totalLength / totalMessages).toFixed(1) : '0'
 
         // Get user activity breakdown for this stream
         const userActivityMap = new Map<string, {
@@ -277,12 +277,12 @@ export async function GET(request: Request) {
         }).sort((a, b) => b.activity_score - a.activity_score)
 
         // Calculate messages per user
-        const avgMessagesPerUser = totalUsers > 0 ? (totalMessages / totalUsers).toFixed(2) : 0
+        const avgMessagesPerUser = totalUsers > 0 ? (totalMessages / totalUsers).toFixed(2) : '0'
 
         // Calculate engagement rate (messages per viewer)
         const engagementRate = streamSession.peak_viewer_count > 0
             ? (totalMessages / streamSession.peak_viewer_count).toFixed(2)
-            : 0
+            : '0'
 
         return NextResponse.json({
             session: {

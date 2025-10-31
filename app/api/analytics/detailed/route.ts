@@ -146,7 +146,7 @@ async function getUserEngagementBreakdown(kickUserId: bigint) {
         }
     }
 
-    const avgLength = userMessages.length > 0 ? (totalLength / userMessages.length).toFixed(1) : 0
+    const avgLength = userMessages.length > 0 ? (totalLength / userMessages.length).toFixed(1) : '0'
 
     return {
         engagement_types: engagementTypes,
@@ -209,27 +209,30 @@ export async function GET(request: Request) {
                     }
                 }
 
-                // Get total emotes sent (sum from all messages)
-                const emoteMessages = await db.chatMessage.findMany({
-                    where: {
-                        sender_user_id: kickUserId,
-                        emotes: { not: null },
-                    },
-                    select: {
-                        emotes: true,
-                    },
-                })
-
+                // Get total emotes sent (sum from all messages) - reuse the same query
                 let totalEmotesCounted = 0
-                for (const msg of emoteMessages) {
-                    if (msg.emotes && Array.isArray(msg.emotes)) {
-                        const emoteCount = msg.emotes.reduce((total: number, emote: any) => {
-                            if (emote?.positions && Array.isArray(emote.positions)) {
-                                return total + emote.positions.length
+                for (const msg of userMessagesForEmoteCheck) {
+                    if (hasEmotes(msg.emotes, msg.content)) {
+                        // Count emotes from emotes field
+                        if (msg.emotes && Array.isArray(msg.emotes)) {
+                            const emoteCount = msg.emotes.reduce((total: number, emote: any) => {
+                                if (emote?.positions && Array.isArray(emote.positions)) {
+                                    return total + emote.positions.length
+                                }
+                                if (emote?.position && Array.isArray(emote.position)) {
+                                    return total + emote.position.length
+                                }
+                                return total
+                            }, 0)
+                            totalEmotesCounted += emoteCount
+                        } else {
+                            // Count emotes from content [emote:ID:Name] format
+                            const emotePattern = /\[emote:\d+:[^\]]+\]/g
+                            const matches = msg.content.match(emotePattern)
+                            if (matches) {
+                                totalEmotesCounted += matches.length
                             }
-                            return total
-                        }, 0)
-                        totalEmotesCounted += emoteCount
+                        }
                     }
                 }
 
@@ -248,10 +251,10 @@ export async function GET(request: Request) {
                 const totalPoints = entry.total_points || 0
 
                 // Get average points per stream
-                const avgPointsPerStream = streamsWatched > 0 ? (totalPoints / streamsWatched).toFixed(2) : 0
+                const avgPointsPerStream = streamsWatched > 0 ? (totalPoints / streamsWatched).toFixed(2) : '0'
 
                 // Get average messages per stream
-                const avgMessagesPerStream = streamsWatched > 0 ? (totalMessages / streamsWatched).toFixed(2) : 0
+                const avgMessagesPerStream = streamsWatched > 0 ? (totalMessages / streamsWatched).toFixed(2) : '0'
 
                 // Get engagement breakdown
                 const engagementBreakdown = await getUserEngagementBreakdown(kickUserId)
@@ -357,7 +360,7 @@ export async function GET(request: Request) {
             totalLength += msg.content.length
         }
 
-        const avgMessageLength = allMessages.length > 0 ? (totalLength / allMessages.length).toFixed(1) : 0
+        const avgMessageLength = allMessages.length > 0 ? (totalLength / allMessages.length).toFixed(1) : '0'
 
         // Get time-based activity (last 30 days)
         const thirtyDaysAgo = new Date()
@@ -428,12 +431,12 @@ export async function GET(request: Request) {
         const totalViewers = streams.reduce((sum, s) => sum + s.peak_viewer_count, 0)
         const engagementRate = totalViewers > 0
             ? (totalMessages / totalViewers).toFixed(2)
-            : 0
+            : '0'
 
         // Calculate messages per user
         const avgMessagesPerUser = totalUsers > 0
             ? (totalMessages / totalUsers).toFixed(2)
-            : 0
+            : '0'
 
         // Get top streams by messages
         const topStreams = streams

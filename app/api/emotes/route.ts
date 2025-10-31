@@ -302,6 +302,51 @@ export async function GET(request: Request) {
 
         console.log(`📦 Normalized: ${normalizedChannelEmotes.length} channel emotes, ${normalizedGlobalEmotes.length} global emotes`)
 
+        // Categorize emotes based on naming patterns
+        const categorizeEmotes = (
+            channelEmotes: Array<{ id: string; name: string; url?: string; original?: any }>,
+            globalEmotes: Array<{ id: string; name: string; url?: string; original?: any }>
+        ) => {
+            // Capitalize channel slug for matching (e.g., "sweetflips" -> "SweetFlips")
+            const capitalizeSlug = (slugStr: string) => {
+                if (!slugStr) return ''
+                return slugStr
+                    .split(/[-_\s]/)
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                    .join('')
+            }
+
+            const channelPrefix = capitalizeSlug(slug)
+            const emojis: Array<{ id: string; name: string; url?: string; original?: any }> = []
+            const channel: Array<{ id: string; name: string; url?: string; original?: any }> = []
+            const global: Array<{ id: string; name: string; url?: string; original?: any }> = []
+
+            // Categorize channel emotes
+            channelEmotes.forEach((emote) => {
+                if (!emote || !emote.name) return
+
+                const emoteNameLower = emote.name.toLowerCase()
+
+                // Check if emote starts with "emoji" (case-insensitive)
+                if (emoteNameLower.startsWith('emoji')) {
+                    emojis.push(emote)
+                }
+                // Check if emote starts with channel prefix (case-insensitive)
+                else if (channelPrefix && (emote.name.startsWith(channelPrefix) || emoteNameLower.startsWith(channelPrefix.toLowerCase()))) {
+                    channel.push(emote)
+                }
+                // Channel emotes that don't match are still channel emotes
+                else {
+                    channel.push(emote)
+                }
+            })
+
+            // All global emotes go to global category
+            global.push(...globalEmotes)
+
+            return { emojis, channel, global }
+        }
+
         // Combine channel and global emotes, removing duplicates (channel emotes take precedence)
         const allEmotesMap = new Map<string, any>()
 
@@ -434,51 +479,6 @@ export async function GET(request: Request) {
             } catch (error) {
                 console.error('Failed to fetch from chatroom page:', error)
             }
-        }
-
-        // Categorize emotes based on naming patterns
-        const categorizeEmotes = (
-            channelEmotes: Array<{ id: string; name: string; url?: string; original?: any }>,
-            globalEmotes: Array<{ id: string; name: string; url?: string; original?: any }>
-        ) => {
-            // Capitalize channel slug for matching (e.g., "sweetflips" -> "SweetFlips")
-            const capitalizeSlug = (slugStr: string) => {
-                if (!slugStr) return ''
-                return slugStr
-                    .split(/[-_\s]/)
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                    .join('')
-            }
-
-            const channelPrefix = capitalizeSlug(slug)
-            const emojis: Array<{ id: string; name: string; url?: string; original?: any }> = []
-            const channel: Array<{ id: string; name: string; url?: string; original?: any }> = []
-            const global: Array<{ id: string; name: string; url?: string; original?: any }> = []
-
-            // Categorize channel emotes
-            channelEmotes.forEach((emote) => {
-                if (!emote || !emote.name) return
-
-                const emoteNameLower = emote.name.toLowerCase()
-
-                // Check if emote starts with "emoji" (case-insensitive)
-                if (emoteNameLower.startsWith('emoji')) {
-                    emojis.push(emote)
-                }
-                // Check if emote starts with channel prefix (case-insensitive)
-                else if (channelPrefix && (emote.name.startsWith(channelPrefix) || emoteNameLower.startsWith(channelPrefix.toLowerCase()))) {
-                    channel.push(emote)
-                }
-                // Channel emotes that don't match are still channel emotes
-                else {
-                    channel.push(emote)
-                }
-            })
-
-            // All global emotes go to global category
-            global.push(...globalEmotes)
-
-            return { emojis, channel, global }
         }
 
         const categorized = categorizeEmotes(normalizedChannelEmotes, normalizedGlobalEmotes)
