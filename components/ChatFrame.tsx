@@ -1,5 +1,6 @@
 'use client'
 
+import Pusher from 'pusher-js'
 import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
 import EmotePicker from './EmotePicker'
@@ -412,6 +413,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
     const [chatLoading, setChatLoading] = useState(false)
     const [chatInput, setChatInput] = useState('')
+    const pusherRef = useRef<Pusher | null>(null)
+    const [pusherConnected, setPusherConnected] = useState(false)
     const [emoteMap, setEmoteMap] = useState<Map<string, Emote>>(new Map())
     const [categorizedEmotes, setCategorizedEmotes] = useState<{
         emojis: Emote[]
@@ -766,15 +769,236 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
         loadMessagesFromDatabase()
 
-        // Poll for new messages every 5 seconds
-        const interval = setInterval(() => {
-            loadMessagesFromDatabase()
-        }, 5000)
+        // Connect to Kick's Pusher for real-time chat updates
+        // Use Kick's Pusher credentials (from Kick's frontend WebSocket connection)
+        const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || '32cbd69e4b950bf97679' // Kick's public Pusher key
+        const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2' // Kick uses us2 cluster
+        const pusherWsHost = process.env.NEXT_PUBLIC_PUSHER_WS_HOST || `ws-${pusherCluster}.pusher.com`
+
+        // Clean up any existing Pusher instance before creating a new one
+        if (pusherRef.current) {
+            try {
+                const existingPusher = pusherRef.current
+                if (existingPusher.connection) {
+                    const state = existingPusher.connection.state
+                    if (state !== 'closed' && state !== 'disconnected') {
+                        existingPusher.disconnect()
+                    }
+                }
+            } catch (e) {
+                console.debug('Error cleaning up existing Pusher instance:', e)
+            }
+            pusherRef.current = null
+        }
+
+        const pusher = new Pusher(pusherKey, {
+            cluster: pusherCluster,
+            wsHost: pusherWsHost,
+            wsPort: 443,
+            wssPort: 443,
+            enabledTransports: ['ws', 'wss'],
+            forceTLS: true,
+        })
+
+        pusherRef.current = pusher
+
+        // Store handlers so we can unbind them in cleanup
+        const handleConnected = () => {
+            setPusherConnected(true)
+            setChatLoading(false)
+        }
+
+        const handleDisconnected = () => {
+            setPusherConnected(false)
+        }
+
+        pusher.connection.bind('connected', handleConnected)
+        pusher.connection.bind('disconnected', handleDisconnected)
+
+        const channelName = `chatrooms.${chatroomId}.v2`
+        const channelNameAlt = `chatrooms.${chatroomId}`
+        const channel = pusher.subscribe(channelName)
+        const channelAlt = pusher.subscribe(channelNameAlt)
+
+        const handleChatMessage = async (data: any) => {
+            let parsedData = data
+            if (typeof data === 'string') {
+                try {
+                    parsedData = JSON.parse(data)
+                } catch (e) {
+                    return
+                }
+            }
+
+            let messageData = parsedData
+            if (parsedData.message) messageData = parsedData.message
+            if (parsedData.data) {
+                if (typeof parsedData.data === 'string') {
+                    try {
+                        messageData = JSON.parse(parsedData.data)
+                    } catch (e) {
+                        messageData = parsedData.data
+                    }
+                } else {
+                    messageData = parsedData.data
+                }
+            }
+
+            if (!messageData.content && !messageData.message && !messageData.text) return
+
+            // Extract message ID
+            const messageId = messageData.id ||
+                             messageData.message_id ||
+                             messageData.data?.id ||
+                             messageData.data?.message_id ||
+                             `pusher_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+            const message: ChatMessage = {
+                message_id: messageId,
+                broadcaster: {
+                    is_anonymous: false,
+                    user_id: broadcasterUserId || 42962282,
+                    username: username || 'sweetflips',
+                    is_verified: false,
+                    channel_slug: slug || 'sweetflips',
+                    identity: null,
+                },
+                sender: {
+                    is_anonymous: messageData.sender?.is_anonymous || false,
+                    user_id: messageData.sender?.id || messageData.sender?.user_id || messageData.user_id || 0,
+                    username: messageData.sender?.username || messageData.username || 'Unknown',
+                    is_verified: messageData.sender?.is_verified || isVerifiedUser(
+                        messageData.sender?.username || messageData.username || '',
+                        messageData.sender?.identity?.badges || messageData.badges || []
+                    ),
+                    profile_picture: messageData.sender?.profile_picture || messageData.profile_picture,
+                    channel_slug: messageData.sender?.slug || messageData.slug || '',
+                    identity: {
+                        username_color: messageData.sender?.identity?.color || messageData.sender?.identity?.username_color || messageData.color || '#FFFFFF',
+                        badges: (messageData.sender?.identity?.badges || messageData.badges || []).map((badge: any) => ({
+                            text: badge.text || badge.type || '',
+                            type: badge.type || '',
+                            count: badge.count,
+                        })),
+                    },
+                },
+                content: messageData.content || messageData.message || messageData.text || '',
+                emotes: (() => {
+                    let emotes = messageData.emotes || messageData.emote || []
+                    if (messageData.all && Array.isArray(messageData.all)) {
+                        emotes = messageData.all
+                    }
+                    if (!Array.isArray(emotes)) {
+                        emotes = []
+                    }
+                    return emotes
+                })(),
+                timestamp: messageData.created_at ? new Date(messageData.created_at).getTime() : Date.now(),
+            }
+
+            if (!message.content || !message.sender.user_id) {
+                console.warn('⚠️ Skipping message with missing content or user_id:', message)
+                return
+            }
+
+            // Check if we've already processed this message
+            if (processedMessageIdsRef.current.has(message.message_id)) {
+                return
+            }
+
+            // Mark message as processed
+            processedMessageIdsRef.current.add(message.message_id)
+
+            // Update UI with new message (don't save to DB - webhooks handle that)
+            setChatMessages((prev) => {
+                const exists = prev.some(m => m.message_id === message.message_id)
+                if (exists) return prev
+
+                const updated = [...prev, message].sort((a, b) => a.timestamp - b.timestamp)
+
+                // Check scroll position
+                const container = chatContainerRef.current
+                if (container) {
+                    const scrollTop = container.scrollTop
+                    const scrollHeight = container.scrollHeight
+                    const clientHeight = container.clientHeight
+                    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+
+                    if (!isNearBottom) {
+                        setShowNewMessagesSeparator(true)
+                    }
+
+                    if (!pinnedLocked && isNearBottom) {
+                        setTimeout(() => {
+                            if (chatContainerRef.current) {
+                                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+                            }
+                        }, 100)
+                    }
+                }
+
+                return updated
+            })
+        }
+
+        const bindEvents = (ch: any) => {
+            ch.bind('App\\Events\\ChatMessageEvent', (data: any) => handleChatMessage(data))
+            ch.bind_global((eventName: string, data: any) => {
+                if (eventName.startsWith('pusher:')) return
+                if (data && (data.content || data.message || data.text || data.data?.content || data.data?.message)) {
+                    handleChatMessage(data)
+                }
+            })
+        }
+
+        bindEvents(channel)
+        bindEvents(channelAlt)
 
         return () => {
-            clearInterval(interval)
+            // Cleanup channels first
+            try {
+                if (channel) {
+                    channel.unbind_all()
+                    channel.unsubscribe()
+                }
+            } catch (e) {
+                console.warn('Error cleaning up channel:', e)
+            }
+
+            try {
+                if (channelAlt) {
+                    channelAlt.unbind_all()
+                    channelAlt.unsubscribe()
+                }
+            } catch (e) {
+                console.warn('Error cleaning up channelAlt:', e)
+            }
+
+            // Unbind connection event listeners
+            try {
+                if (pusher && pusher.connection) {
+                    pusher.connection.unbind('connected', handleConnected)
+                    pusher.connection.unbind('disconnected', handleDisconnected)
+                }
+            } catch (e) {
+                console.warn('Error unbinding connection events:', e)
+            }
+
+            // Disconnect pusher
+            try {
+                if (pusher && pusher.connection) {
+                    const state = pusher.connection.state
+                    if (state !== 'closed' && state !== 'disconnected') {
+                        pusher.disconnect()
+                    }
+                }
+            } catch (e) {
+                console.debug('Pusher disconnect error (expected if already closed):', e)
+            }
+
+            pusherRef.current = null
         }
-    }, [chatroomId, broadcasterUserId])
+    }, [chatroomId, broadcasterUserId, slug, username])
 
     const handlePinMessage = (message: ChatMessage) => {
         setPinnedMessages((prev) => {
@@ -952,6 +1176,12 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             {/* Chat Header */}
             <div className="flex h-11 flex-row items-center justify-between border-b border-gray-200 dark:border-kick-border px-3.5 bg-white dark:bg-kick-surface">
                 <span className="text-body font-semibold text-gray-900 dark:text-kick-text">Chat</span>
+                {pusherConnected && (
+                    <div className="flex items-center gap-1.5 bg-kick-green/20 px-2 py-1 rounded-md border border-kick-green/50">
+                        <div className="w-2 h-2 bg-kick-green rounded-full"></div>
+                        <span className="text-kick-green text-xs font-medium">Live</span>
+                    </div>
+                )}
             </div>
 
             {/* Messages Area */}
@@ -1171,6 +1401,9 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                     ) : chatMessages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-gray-600 dark:text-kick-text-secondary">
                             <p className="text-small font-medium">No chat messages yet</p>
+                            <p className="text-xs mt-1 text-gray-600 dark:text-kick-text-secondary">
+                                {pusherConnected ? 'Connected - waiting for messages...' : 'Connecting...'}
+                            </p>
                         </div>
                     ) : (
                         <div id="chat-messages">
