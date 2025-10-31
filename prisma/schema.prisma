@@ -1,0 +1,200 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                BigInt    @id @default(autoincrement())
+  kick_user_id      BigInt    @unique
+  username          String
+  email             String?
+  profile_picture_url String?
+  custom_profile_picture_url String?
+  access_token_hash String?
+  refresh_token_hash String?
+  notifications_enabled Boolean @default(true)
+  email_notifications_enabled Boolean @default(false)
+  chat_font_size    String?  @default("14px")
+  chat_show_timestamps Boolean @default(true)
+  last_login_at     DateTime?
+  // Connected Accounts
+  discord_user_id   String?
+  discord_username  String?
+  discord_access_token_hash String?
+  telegram_user_id  String?
+  telegram_username String?
+  telegram_access_token_hash String?
+  kick_connected    Boolean   @default(true)
+  discord_connected Boolean   @default(false)
+  telegram_connected Boolean  @default(false)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  // Relations
+  points            UserPoints?
+  point_history     PointHistory[]
+  sent_messages     ChatMessage[] @relation("SenderMessages")
+  broadcaster_messages ChatMessage[] @relation("BroadcasterMessages")
+  stream_sessions   StreamSession[]
+  giveaways         Giveaway[]
+  giveaway_entries  GiveawayEntry[]
+
+  @@map("users")
+}
+
+model StreamSession {
+  id                BigInt    @id @default(autoincrement())
+  broadcaster_user_id BigInt
+  channel_slug      String
+  session_title     String?
+  thumbnail_url     String?
+  started_at        DateTime  @default(now())
+  ended_at          DateTime?
+  peak_viewer_count Int       @default(0)
+  total_messages    Int       @default(0)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  // Relations
+  broadcaster       User      @relation(fields: [broadcaster_user_id], references: [kick_user_id])
+  chat_messages     ChatMessage[]
+  point_history     PointHistory[]
+  giveaways         Giveaway[]
+
+  @@map("stream_sessions")
+}
+
+model ChatMessage {
+  id                BigInt    @id @default(autoincrement())
+  message_id        String    @unique
+  stream_session_id BigInt?
+  sender_user_id    BigInt
+  sender_username   String
+  broadcaster_user_id BigInt
+  content           String    @db.Text
+  emotes            Json?
+  timestamp         BigInt
+  sender_username_color String?
+  sender_badges     Json?
+  sender_is_verified Boolean  @default(false)
+  sender_is_anonymous Boolean @default(false)
+  points_earned    Int       @default(0)
+  created_at        DateTime  @default(now())
+
+  // Relations
+  stream_session    StreamSession? @relation(fields: [stream_session_id], references: [id])
+  sender            User          @relation("SenderMessages", fields: [sender_user_id], references: [kick_user_id])
+  broadcaster       User          @relation("BroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
+
+  @@map("chat_messages")
+}
+
+model UserPoints {
+  id                BigInt    @id @default(autoincrement())
+  user_id           BigInt    @unique
+  total_points      Int       @default(0)
+  total_emotes      Int       @default(0)
+  last_point_earned_at DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  // Relations
+  user              User      @relation(fields: [user_id], references: [id])
+
+  @@map("user_points")
+}
+
+model PointHistory {
+  id                BigInt    @id @default(autoincrement())
+  user_id           BigInt
+  stream_session_id BigInt?
+  points_earned     Int       @default(1)
+  message_id        String?
+  earned_at         DateTime  @default(now())
+  created_at        DateTime  @default(now())
+
+  // Relations
+  user              User          @relation(fields: [user_id], references: [id])
+  stream_session    StreamSession? @relation(fields: [stream_session_id], references: [id])
+
+  @@map("point_history")
+}
+
+model Giveaway {
+  id                BigInt    @id @default(autoincrement())
+  broadcaster_user_id BigInt
+  stream_session_id BigInt?
+  title             String
+  description       String?   @db.Text
+  prize_amount      String?   // Amount to giveaway (e.g., "$100", "1000 points")
+  number_of_winners Int       @default(1) // How many winners to select
+  status            String    @default("draft") // draft, active, completed, cancelled
+  entry_min_points  Int       @default(0)
+  scheduled_start   DateTime?
+  scheduled_end     DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  // Relations
+  broadcaster       User      @relation(fields: [broadcaster_user_id], references: [kick_user_id])
+  stream_session    StreamSession? @relation(fields: [stream_session_id], references: [id])
+  segments          GiveawaySegment[]
+  entries           GiveawayEntry[]
+  winners           GiveawayWinner[]
+
+  @@map("giveaways")
+}
+
+model GiveawaySegment {
+  id                BigInt    @id @default(autoincrement())
+  giveaway_id       BigInt
+  label             String
+  weight            Float     @default(1.0) // Probability weight (0.0 to 1.0)
+  color             String    // Hex color code
+  order_index       Int       @default(0)
+  created_at        DateTime  @default(now())
+
+  // Relations
+  giveaway          Giveaway  @relation(fields: [giveaway_id], references: [id], onDelete: Cascade)
+  winners           GiveawayWinner[]
+
+  @@map("giveaway_segments")
+}
+
+model GiveawayEntry {
+  id                BigInt    @id @default(autoincrement())
+  giveaway_id       BigInt
+  user_id           BigInt
+  points_at_entry   Int
+  created_at        DateTime  @default(now())
+
+  // Relations
+  giveaway          Giveaway  @relation(fields: [giveaway_id], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [user_id], references: [kick_user_id])
+  winner            GiveawayWinner?
+
+  @@unique([giveaway_id, user_id])
+  @@map("giveaway_entries")
+}
+
+model GiveawayWinner {
+  id                BigInt    @id @default(autoincrement())
+  giveaway_id       BigInt
+  entry_id          BigInt    @unique
+  segment_id        BigInt?
+  selected_at       DateTime  @default(now())
+
+  // Relations
+  giveaway          Giveaway  @relation(fields: [giveaway_id], references: [id], onDelete: Cascade)
+  entry             GiveawayEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  segment           GiveawaySegment? @relation(fields: [segment_id], references: [id])
+
+  @@map("giveaway_winners")
+}
