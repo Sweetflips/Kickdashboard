@@ -60,4 +60,3 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
     return null
   }
 }
-
