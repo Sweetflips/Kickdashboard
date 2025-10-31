@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { Prisma } from '@prisma/client'
 
 export async function GET(request: Request) {
     try {
@@ -49,25 +48,22 @@ export async function GET(request: Request) {
         // Get overall stats
         const totalMessages = await db.chatMessage.count()
 
-        // Count messages with null emotes using proper Prisma JSON filter
-        const messagesWithNullEmotes = await db.chatMessage.count({
-            where: {
-                emotes: Prisma.JsonNull,
-            },
-        })
-
-        // Count messages with empty array emotes
+        // Count messages with empty array emotes (we'll count nulls in the loop)
         const messagesWithEmptyArrayEmotes = await db.chatMessage.findMany({
             select: {
                 emotes: true,
             },
         })
 
+        let messagesWithNullEmotes = 0
         let messagesWithEmptyArray = 0
         let messagesWithValidEmotes = 0
 
         for (const msg of messagesWithEmptyArrayEmotes) {
-            if (msg.emotes === null) continue
+            if (msg.emotes === null) {
+                messagesWithNullEmotes++
+                continue
+            }
 
             let emotesData = msg.emotes
             if (typeof emotesData === 'string') {
