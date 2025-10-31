@@ -1,25 +1,38 @@
 # ============================================
-# SWEETFLIPS REWARDS - ENVIRONMENT VARIABLES EXAMPLE
+# RAILWAY ENVIRONMENT VARIABLES - REAL VALUES
 # ============================================
-# Copy this file to .env.local for local development
-# Or use .env.production for Railway deployment
+# Copy these to Railway Variables tab
 # ============================================
 
 # ============================================
 # DATABASE (Required)
 # ============================================
-DATABASE_URL=postgresql://user:password@localhost:5432/database_name
+# Get from Railway PostgreSQL service → Connect → Copy connection string
+DATABASE_URL=postgresql://postgres:uodQAUPrNwNEfJWVPwOQNYlBtWYvimQD@mainline.proxy.rlwy.net:46309/railway
 
 # ============================================
 # KICK OAUTH (Required)
 # ============================================
-KICK_CLIENT_ID=your_kick_client_id
-KICK_CLIENT_SECRET=your_kick_client_secret
+# ⚠️ ADD YOUR VALUES HERE - Get from https://kick.com/dashboard/oauth/applications
+KICK_CLIENT_ID=your_kick_client_id_here
+KICK_CLIENT_SECRET=your_kick_client_secret_here
 
 # ============================================
 # APPLICATION URL (Required)
 # ============================================
 NEXT_PUBLIC_APP_URL=https://www.sweetflipsrewards.com
+
+# ============================================
+# PUSHER (Required for real-time chat)
+# ============================================
+# ⚠️ ADD YOUR VALUES HERE - Get from https://dashboard.pusher.com/
+NEXT_PUBLIC_PUSHER_KEY=your_pusher_key_here
+NEXT_PUBLIC_PUSHER_CLUSTER=us2
+NEXT_PUBLIC_PUSHER_WS_HOST=ws-us2.pusher.com
+
+# Optional: Server-side Pusher (if needed)
+PUSHER_APP_ID=your_pusher_app_id
+PUSHER_SECRET=your_pusher_secret
 
 # ============================================
 # WEBHOOK CONFIGURATION (Optional)
@@ -29,23 +42,14 @@ WEBHOOK_TUNNEL_URL=
 NEXT_PUBLIC_WEBHOOK_TUNNEL_URL=
 
 # ============================================
-# PUSHER (Required for real-time chat)
-# ============================================
-NEXT_PUBLIC_PUSHER_KEY=your_pusher_key
-NEXT_PUBLIC_PUSHER_CLUSTER=us2
-NEXT_PUBLIC_PUSHER_WS_HOST=ws-us2.pusher.com
-PUSHER_APP_ID=your_pusher_app_id
-PUSHER_SECRET=your_pusher_secret
-
-# ============================================
 # DISCORD OAUTH (Optional)
 # ============================================
-DISCORD_CLIENT_ID=your_discord_client_id
-DISCORD_CLIENT_SECRET=your_discord_client_secret
+DISCORD_CLIENT_ID=1416857158640865340
+DISCORD_CLIENT_SECRET=fqW5kionWqu-nZ0QTvq_Ykh43ZyorWjx
 DISCORD_REDIRECT_URI=https://www.sweetflipsrewards.com/api/oauth/discord/callback
 
 # ============================================
 # TELEGRAM BOT (Optional)
 # ============================================
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_BOT_USERNAME=your_telegram_bot_username
+TELEGRAM_BOT_TOKEN=8043621475:AAEsKYIfU1MeN4xikV794z-UXSQLWV2FhsY
+TELEGRAM_BOT_USERNAME=Sweetflipskickauthbot

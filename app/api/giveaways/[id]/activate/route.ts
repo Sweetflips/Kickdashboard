@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAuthenticatedUser } from '../../route'
+import { getAuthenticatedUser } from '@/lib/auth'
 import { getEligibleUsers } from '@/lib/giveaway'
 
 export async function POST(
