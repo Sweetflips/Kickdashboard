@@ -1,11 +1,15 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 
-const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID || '01JPSA10J5XJ6TK18KWKVSJFCT'
-const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET || '0e910838e450e763be8abfac4b95d8c33abba8ad75538845475862d64d643bda'
+const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID!
+const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET!
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
 const KICK_OAUTH_BASE = 'https://id.kick.com'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sweetflipsrewards.com'
+
+if (!KICK_CLIENT_ID || !KICK_CLIENT_SECRET) {
+    throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set in environment variables')
+}
 
 // Generate PKCE code verifier and challenge
 function generatePKCE() {

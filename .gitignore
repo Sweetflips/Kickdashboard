@@ -34,4 +34,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# prisma
+prisma/migrations/
+
+# env files (never commit these)
+.env
+.env.production
+.env.local
+
 

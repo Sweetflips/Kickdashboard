@@ -779,9 +779,18 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
         loadMessagesFromDatabase()
 
-        const pusher = new Pusher('32cbd69e4b950bf97679', {
-            cluster: 'us2',
-            wsHost: 'ws-us2.pusher.com',
+        const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY
+        const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2'
+        const pusherWsHost = process.env.NEXT_PUBLIC_PUSHER_WS_HOST || `ws-${pusherCluster}.pusher.com`
+
+        if (!pusherKey) {
+            console.error('NEXT_PUBLIC_PUSHER_KEY is not set. Real-time chat will not work.')
+            return
+        }
+
+        const pusher = new Pusher(pusherKey, {
+            cluster: pusherCluster,
+            wsHost: pusherWsHost,
             wsPort: 443,
             wssPort: 443,
             enabledTransports: ['ws', 'wss'],
