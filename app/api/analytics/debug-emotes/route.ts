@@ -65,7 +65,7 @@ export async function GET(request: Request) {
                 continue
             }
 
-            let emotesData = msg.emotes
+            let emotesData: any = msg.emotes
             if (typeof emotesData === 'string') {
                 try {
                     emotesData = JSON.parse(emotesData)
