@@ -34,11 +34,13 @@ export async function GET(request: Request) {
         if (broadcasterUserId) {
             where.broadcaster_user_id = BigInt(broadcasterUserId)
         }
+        // Note: We intentionally do NOT filter out sent_when_offline messages
+        // Offline messages are saved to database and should be visible in dashboard
 
         const [messages, total] = await Promise.all([
             db.chatMessage.findMany({
                 where,
-                orderBy: { timestamp: 'desc' },
+                orderBy: { timestamp: 'desc' }, // Newest messages first
                 take: limit,
                 skip: offset,
                 include: {
@@ -63,7 +65,7 @@ export async function GET(request: Request) {
                     },
                 },
             }),
-            db.chatMessage.count({ where }),
+            db.chatMessage.count({ where }), // Count includes offline messages
         ])
 
         // Format messages to match ChatMessage interface

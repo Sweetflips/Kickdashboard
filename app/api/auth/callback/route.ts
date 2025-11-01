@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import crypto from 'crypto'
 import { db } from '@/lib/db'
+import crypto from 'crypto'
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 
 const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID!
 const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET!
@@ -73,11 +73,6 @@ export async function GET(request: Request) {
         }
 
         const tokenData = await tokenResponse.json()
-
-        console.log('🔑 Token response from Kick:', JSON.stringify(tokenData, null, 2))
-        console.log('🔑 Access token type:', typeof tokenData.access_token)
-        console.log('🔑 Access token length:', tokenData.access_token?.length)
-        console.log('🔑 Access token preview:', tokenData.access_token?.substring(0, 50))
 
         // Fetch user data from Kick API
         try {

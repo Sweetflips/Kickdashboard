@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
 
 interface UserData {
     id?: number
@@ -103,7 +103,7 @@ function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
     if (!user.username && !user.email) {
         return (
             <div className="flex items-center gap-3 px-3 py-2">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center border-2 border-kick-border">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
                     <span className="text-white text-sm font-semibold">U</span>
                 </div>
                 <div className="flex flex-col items-end">
@@ -131,7 +131,7 @@ function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
                             alt={username}
                             width={40}
                             height={40}
-                            className={`rounded-full border-2 border-kick-border object-cover ${imageError ? 'hidden' : ''}`}
+                            className={`w-10 h-10 rounded-full object-cover ${imageError ? 'hidden' : ''}`}
                             onError={(e) => {
                                 console.error('❌ Image failed to load')
                                 console.error('❌ Image src:', profilePicture)
@@ -144,13 +144,13 @@ function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
                             crossOrigin="anonymous"
                         />
                         {imageError && (
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center border-2 border-kick-border">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
                                 <span className="text-white text-sm font-semibold">{initials}</span>
                             </div>
                         )}
                     </>
                 ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center border-2 border-kick-border">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
                         <span className="text-white text-sm font-semibold">{initials}</span>
                     </div>
                 )}

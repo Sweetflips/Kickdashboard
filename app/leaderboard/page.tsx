@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import AppLayout from '../../components/AppLayout'
 
 interface LeaderboardEntry {
@@ -23,6 +23,8 @@ interface LeaderboardEntry {
     }
 }
 
+type DateFilterMode = 'overall' | 'custom'
+
 export default function LeaderboardPage() {
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
     const [loading, setLoading] = useState(true)
@@ -30,17 +32,23 @@ export default function LeaderboardPage() {
     const [total, setTotal] = useState(0)
     const [offset, setOffset] = useState(0)
     const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
+    const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('overall')
+    const [startDate, setStartDate] = useState<string>('')
+    const [endDate, setEndDate] = useState<string>('')
     const limit = 50
 
-    useEffect(() => {
-        fetchLeaderboard()
-    }, [offset])
-
-    const fetchLeaderboard = async () => {
+    const fetchLeaderboard = useCallback(async (newOffset: number = 0) => {
         try {
             setLoading(true)
             setError(null)
-            const response = await fetch(`/api/leaderboard?limit=${limit}&offset=${offset}`)
+
+            let url = `/api/leaderboard?limit=${limit}&offset=${newOffset}`
+
+            if (dateFilterMode === 'custom' && startDate && endDate) {
+                url += `&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+            }
+
+            const response = await fetch(url)
             if (!response.ok) {
                 throw new Error('Failed to fetch leaderboard')
             }
@@ -51,6 +59,23 @@ export default function LeaderboardPage() {
             setError(err instanceof Error ? err.message : 'Unknown error')
         } finally {
             setLoading(false)
+        }
+    }, [dateFilterMode, startDate, endDate])
+
+    useEffect(() => {
+        setOffset(0)
+        fetchLeaderboard(0)
+    }, [fetchLeaderboard])
+
+    useEffect(() => {
+        fetchLeaderboard(offset)
+    }, [offset, fetchLeaderboard])
+
+    const handleDateFilterChange = (mode: DateFilterMode) => {
+        setDateFilterMode(mode)
+        if (mode === 'overall') {
+            setStartDate('')
+            setEndDate('')
         }
     }
 
@@ -65,7 +90,54 @@ export default function LeaderboardPage() {
         <AppLayout>
             <div className="space-y-6">
                 <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
-                    <h1 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-6">Leaderboard</h1>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                        <h1 className="text-h2 font-semibold text-gray-900 dark:text-kick-text">Leaderboard</h1>
+
+                        {/* Date Filter */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => handleDateFilterChange('overall')}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                        dateFilterMode === 'overall'
+                                            ? 'bg-kick-purple text-white'
+                                            : 'bg-gray-100 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover'
+                                    }`}
+                                >
+                                    Overall
+                                </button>
+                                <button
+                                    onClick={() => handleDateFilterChange('custom')}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                        dateFilterMode === 'custom'
+                                            ? 'bg-kick-purple text-white'
+                                            : 'bg-gray-100 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover'
+                                    }`}
+                                >
+                                    Custom Range
+                                </button>
+                            </div>
+
+                            {dateFilterMode === 'custom' && (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="px-3 py-1.5 text-sm border border-gray-300 dark:border-kick-border rounded-md bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
+                                    />
+                                    <span className="text-sm text-gray-600 dark:text-kick-text-secondary">to</span>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        min={startDate}
+                                        className="px-3 py-1.5 text-sm border border-gray-300 dark:border-kick-border rounded-md bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
                     {loading ? (
                         <div className="flex items-center justify-center h-64">

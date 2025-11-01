@@ -722,7 +722,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                 if (broadcasterUserId) {
                     params.append('broadcaster_user_id', broadcasterUserId.toString())
                 }
-                params.append('limit', '500')
+                params.append('limit', '500') // Load last 500 messages (includes offline messages)
 
                 const response = await fetch(`/api/chat?${params.toString()}`)
                 if (response.ok) {
@@ -1405,8 +1405,9 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
                                                     <span className="chat-entry-username" style={{ color: usernameColor, fontSize: '0.875rem', fontWeight: '700', lineHeight: '1.5', display: 'inline' }}>
                                                         {message.sent_when_offline ? (
-                                                            <span className="inline-block px-1.5 py-0.5 rounded bg-red-500/20 dark:bg-red-500/30 border border-red-500/40 dark:border-red-500/50">
-                                                                {message.sender.username}
+                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 dark:bg-red-500/30 border border-red-500/40 dark:border-red-500/50">
+                                                                <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 uppercase">OFFLINE</span>
+                                                                <span>{message.sender.username}</span>
                                                             </span>
                                                         ) : (
                                                             message.sender.username
@@ -1655,8 +1656,9 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
                                                             <span className="chat-entry-username" style={{ color: usernameColor, fontSize: '0.875rem', fontWeight: '700', lineHeight: '1.5', display: 'inline' }}>
                                                                 {message.sent_when_offline ? (
-                                                                    <span className="inline-block px-1.5 py-0.5 rounded bg-red-500/20 dark:bg-red-500/30 border border-red-500/40 dark:border-red-500/50">
-                                                                        {message.sender.username}
+                                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 dark:bg-red-500/30 border border-red-500/40 dark:border-red-500/50">
+                                                                        <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 uppercase">OFFLINE</span>
+                                                                        <span>{message.sender.username}</span>
                                                                     </span>
                                                                 ) : (
                                                                     message.sender.username

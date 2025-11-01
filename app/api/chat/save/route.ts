@@ -272,9 +272,13 @@ export async function POST(request: Request) {
             })
 
             // Update stream session message count if session exists and is active
+            // Only count messages that were sent when online
             if (sessionIsActive && activeSession) {
                 const messageCount = await db.chatMessage.count({
-                    where: { stream_session_id: activeSession.id },
+                    where: {
+                        stream_session_id: activeSession.id,
+                        sent_when_offline: false,
+                    },
                 })
                 await db.streamSession.update({
                     where: { id: activeSession.id },

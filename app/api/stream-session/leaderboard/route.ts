@@ -71,6 +71,7 @@ export async function GET(request: Request) {
         const allMessages = await db.chatMessage.findMany({
             where: {
                 stream_session_id: session.id,
+                sent_when_offline: false,
             },
             select: {
                 sender_user_id: true, // This is kick_user_id
@@ -200,7 +201,7 @@ export async function GET(request: Request) {
                 }
                 return b.emotes - a.emotes
             })
-            .slice(0, 10) // Top 10
+            // No limit - show all users
 
         // Get user details for each chatter
         const leaderboard = await Promise.all(

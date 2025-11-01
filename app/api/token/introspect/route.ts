@@ -25,8 +25,6 @@ export async function GET(request: Request) {
             )
         }
 
-        console.log(`🔍 Introspecting token...`)
-
         // Call Kick's token introspection endpoint
         const response = await fetch(`${KICK_API_BASE}/token/introspect`, {
             method: 'POST',
@@ -36,8 +34,6 @@ export async function GET(request: Request) {
                 'Content-Type': 'application/json',
             },
         })
-
-        console.log(`📡 Introspection response status: ${response.status}`)
 
         if (!response.ok) {
             const errorText = await response.text()
@@ -53,7 +49,6 @@ export async function GET(request: Request) {
         }
 
         const introspectionData = await response.json()
-        console.log(`✅ Token introspection result:`, JSON.stringify(introspectionData, null, 2))
 
         // Parse scope string into array if it's a string
         if (introspectionData.scope && typeof introspectionData.scope === 'string') {
@@ -77,5 +72,3 @@ export async function GET(request: Request) {
         )
     }
 }
-
-

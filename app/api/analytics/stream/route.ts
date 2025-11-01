@@ -143,6 +143,7 @@ export async function GET(request: Request) {
         const allMessages = await db.chatMessage.findMany({
             where: {
                 stream_session_id: sessionIdBigInt,
+                sent_when_offline: false,
             },
             select: {
                 content: true,
@@ -168,6 +169,7 @@ export async function GET(request: Request) {
             by: ['sender_user_id'],
             where: {
                 stream_session_id: sessionIdBigInt,
+                sent_when_offline: false,
             },
         })
 
@@ -303,7 +305,7 @@ export async function GET(request: Request) {
                 avg_message_length: parseFloat(avgMessageLength),
             },
             engagement_types: engagementTypes,
-            top_users: userActivity.slice(0, 10), // Top 10 users for this stream
+            top_users: userActivity, // All users, not just top 10
         })
     } catch (error) {
         console.error('Error fetching stream analytics:', error)

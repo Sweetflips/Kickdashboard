@@ -22,7 +22,6 @@ function decodeToken(token: string): any {
         const decoded = Buffer.from(padded, 'base64').toString('utf-8')
         const parsed = JSON.parse(decoded)
 
-        console.log('🔓 Successfully decoded token payload')
         return parsed
     } catch (error) {
         console.error('❌ Token decoding error:', error instanceof Error ? error.message : 'Unknown error')
@@ -40,10 +39,6 @@ function decodeToken(token: string): any {
 }
 
 export async function GET(request: Request) {
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('👤 [USER INFO] Fetching user data from Kick API...')
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-
     try {
         const { searchParams } = new URL(request.url)
         const accessToken = searchParams.get('access_token')
@@ -56,8 +51,6 @@ export async function GET(request: Request) {
             )
         }
 
-        console.log('🔑 [TOKEN] Access token provided (length: ' + accessToken.length + ' chars)')
-        console.log('🔑 [TOKEN] Token preview (first 50 chars): ' + accessToken.substring(0, 50))
 
         // Note: Kick uses opaque tokens (not JWTs), so we don't validate format here
         // Just ensure it's not empty
@@ -85,7 +78,6 @@ export async function GET(request: Request) {
 
             if (introspectResponse.ok) {
                 const introspectData = await introspectResponse.json()
-                console.log(`🔑 Token introspection:`, JSON.stringify(introspectData, null, 2))
 
                 if (introspectData.active === false) {
                     return NextResponse.json(
@@ -120,7 +112,6 @@ export async function GET(request: Request) {
         // Response format: { "data": [{ "email": "...", "name": "...", "profile_picture": "...", "user_id": 1 }], "message": "..." }
         const endpoint = `${KICK_API_BASE}/users`
 
-        console.log(`🔍 Fetching user from: ${endpoint}`)
 
         let response: Response | null = null
         let lastError: string | null = null
@@ -134,22 +125,19 @@ export async function GET(request: Request) {
                 },
             })
 
-            console.log(`📡 Response status: ${response.status}`)
 
             if (response.ok) {
                 const apiResponse = await response.json()
-                console.log(`✅ Raw API response:`, JSON.stringify(apiResponse, null, 2))
 
                 // Kick API wraps data in { "data": [...], "message": "..." }
                 const userDataArray = apiResponse.data || []
 
                 if (!Array.isArray(userDataArray) || userDataArray.length === 0) {
                     lastError = 'API returned empty data array'
-                    console.warn(`⚠️ Empty or invalid data array:`, userDataArray)
+                    console.warn(`⚠️ Empty or invalid data array`)
                 } else {
                     // Get first user (should be the currently authorized user)
                     const userData = userDataArray[0]
-                    console.log(`📋 User data:`, JSON.stringify(userData, null, 2))
 
                     // Extract user info according to Kick API format:
                     // { email, name, profile_picture, user_id }
@@ -182,30 +170,12 @@ export async function GET(request: Request) {
                         ...userData // Include all other fields
                     }
 
-                    console.log(`👤 Extracted - ID: ${extractedData.id || 'NOT FOUND'}, Username: ${extractedData.username || 'NOT FOUND'}, Email: ${extractedData.email || 'NOT FOUND'}`)
-                    console.log(`🖼️ Profile Picture URL: ${extractedData.profile_picture || 'NOT FOUND (null or empty)'}`)
-                    if (extractedData.profile_picture) {
-                        console.log(`🖼️ Profile Picture type: ${typeof extractedData.profile_picture}, length: ${extractedData.profile_picture.length}`)
-                    }
-
                     // If we got valid data, save to database and return it
                     if (extractedData.id || extractedData.username) {
-                        console.log(`\n✅ [SUCCESS] User data extracted successfully`)
-
                         // Save profile picture to database if user exists
                         if (extractedData.id) {
-                            console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                            console.log('🗄️  [DATABASE] Saving user profile picture to database...')
-                            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-
                             try {
                                 const kickUserId = BigInt(extractedData.id)
-
-                                console.log('👤 [USER DATA]')
-                                console.log(`   ├─ Kick User ID: ${extractedData.id}`)
-                                console.log(`   ├─ Username: ${extractedData.username || 'Not provided'}`)
-                                console.log(`   ├─ Email: ${extractedData.email || 'Not provided'}`)
-                                console.log(`   └─ Profile Picture URL: ${profilePictureUrl || 'None (null)'}\n`)
 
                                 // Check if user exists first
                                 const existingUserForUpdate = await db.user.findUnique({
@@ -219,12 +189,6 @@ export async function GET(request: Request) {
                                 })
 
                                 if (existingUserForUpdate) {
-                                    console.log(`📋 [UPDATE] User exists in database`)
-                                    console.log(`   ├─ DB ID: ${existingUserForUpdate.id}`)
-                                    console.log(`   ├─ Current username: ${existingUserForUpdate.username}`)
-                                    console.log(`   ├─ Current profile_picture_url: ${existingUserForUpdate.profile_picture_url || 'None'}`)
-                                    console.log(`   └─ Current custom_profile_picture_url: ${existingUserForUpdate.custom_profile_picture_url || 'None'}\n`)
-
                                     await db.user.update({
                                         where: { kick_user_id: kickUserId },
                                         data: {
@@ -233,14 +197,7 @@ export async function GET(request: Request) {
                                             email: extractedData.email,
                                         },
                                     })
-
-                                    console.log(`✅ [SUCCESS] User profile updated in database`)
-                                    console.log(`   ├─ Updated profile_picture_url: ${profilePictureUrl || 'None (null)'}`)
-                                    console.log(`   ├─ Updated username: ${extractedData.username}`)
-                                    console.log(`   └─ Updated email: ${extractedData.email || 'Not provided'}\n`)
                                 } else {
-                                    console.log(`📋 [CREATE] User does not exist, creating new user record...\n`)
-
                                     await db.user.create({
                                         data: {
                                             kick_user_id: kickUserId,
@@ -249,26 +206,9 @@ export async function GET(request: Request) {
                                             profile_picture_url: profilePictureUrl,
                                         },
                                     })
-
-                                    console.log(`✅ [SUCCESS] New user created in database`)
-                                    console.log(`   ├─ Kick User ID: ${extractedData.id}`)
-                                    console.log(`   ├─ Username: ${extractedData.username}`)
-                                    console.log(`   ├─ Email: ${extractedData.email || 'Not provided'}`)
-                                    console.log(`   └─ Profile Picture URL: ${profilePictureUrl || 'None (null)'}\n`)
                                 }
-
-                                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                                console.log('✅ [COMPLETE] Database operation successful')
-                                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
                             } catch (dbError) {
-                                console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                                console.error('❌ [DATABASE ERROR] Failed to save user profile picture')
-                                console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-                                console.error(`   └─ Error: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`)
-                                if (dbError instanceof Error && dbError.stack) {
-                                    console.error(`   └─ Stack: ${dbError.stack}`)
-                                }
-                                console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+                                console.error('❌ [DATABASE ERROR] Failed to save user profile picture:', dbError instanceof Error ? dbError.message : 'Unknown error')
                                 // Don't fail the request if DB save fails
                             }
                         }

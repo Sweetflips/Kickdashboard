@@ -7,6 +7,23 @@ export async function GET(request: Request) {
         const limit = parseInt(searchParams.get('limit') || '50')
         const offset = parseInt(searchParams.get('offset') || '0')
 
+        // Date filtering
+        const startDate = searchParams.get('startDate')
+        const endDate = searchParams.get('endDate')
+        const hasDateFilter = startDate && endDate
+
+        let dateFilter: { gte?: Date; lte?: Date } | undefined
+        if (hasDateFilter) {
+            const start = new Date(startDate)
+            const end = new Date(endDate)
+            // Set end date to end of day
+            end.setHours(23, 59, 59, 999)
+            dateFilter = {
+                gte: start,
+                lte: end,
+            }
+        }
+
         // Get all users - include their points relation
         const allUsers = await db.user.findMany({
             include: {
@@ -14,10 +31,39 @@ export async function GET(request: Request) {
             },
         })
 
+        // Calculate points for sorting (needs to be done before sorting when date filter is applied)
+        let usersWithPoints = allUsers
+
+        if (hasDateFilter && dateFilter) {
+            // Calculate points for each user within date range
+            usersWithPoints = await Promise.all(
+                allUsers.map(async (user) => {
+                    const pointHistory = await db.pointHistory.findMany({
+                        where: {
+                            user_id: user.id,
+                            earned_at: dateFilter,
+                        },
+                        select: {
+                            points_earned: true,
+                        },
+                    })
+                    const calculatedPoints = pointHistory.reduce((sum, ph) => sum + ph.points_earned, 0)
+                    return {
+                        ...user,
+                        _calculatedPoints: calculatedPoints,
+                    }
+                })
+            )
+        }
+
         // Sort users by points (descending), then by last login (descending)
-        const sortedUsers = allUsers.sort((a, b) => {
-            const aPoints = a.points?.total_points || 0
-            const bPoints = b.points?.total_points || 0
+        const sortedUsers = usersWithPoints.sort((a, b) => {
+            const aPoints = hasDateFilter && dateFilter
+                ? (a as any)._calculatedPoints || 0
+                : a.points?.total_points || 0
+            const bPoints = hasDateFilter && dateFilter
+                ? (b as any)._calculatedPoints || 0
+                : b.points?.total_points || 0
 
             // First sort by points
             if (bPoints !== aPoints) {
@@ -40,22 +86,82 @@ export async function GET(request: Request) {
         const formattedLeaderboard = await Promise.all(
             users.map(async (user, index) => {
                 const kickUserId = user.kick_user_id
-                const userPoints = user.points
 
-                // Get total messages sent by this user
+                // Calculate points based on date filter
+                let totalPoints = 0
+                let totalEmotes = 0
+                let lastPointEarnedAt: Date | null = null
+
+                if (hasDateFilter && dateFilter) {
+                    // Get points from point history within date range
+                    const pointHistory = await db.pointHistory.findMany({
+                        where: {
+                            user_id: user.id,
+                            earned_at: dateFilter,
+                        },
+                        select: {
+                            points_earned: true,
+                            earned_at: true,
+                        },
+                    })
+
+                    // Get emotes from messages within date range
+                    // Exclude offline messages
+                    const emotesResult = await db.chatMessage.findMany({
+                        where: {
+                            sender_user_id: kickUserId,
+                            created_at: dateFilter,
+                            emotes: { not: null },
+                            sent_when_offline: false,
+                        },
+                        select: {
+                            emotes: true,
+                        },
+                    })
+
+                    totalPoints = pointHistory.reduce((sum, ph) => sum + ph.points_earned, 0)
+                    totalEmotes = emotesResult.length
+
+                    const latestPoint = pointHistory.sort((a, b) =>
+                        b.earned_at.getTime() - a.earned_at.getTime()
+                    )[0]
+                    lastPointEarnedAt = latestPoint?.earned_at || null
+                } else {
+                    // Use aggregated points from UserPoints table
+                    const userPoints = user.points
+                    totalPoints = userPoints?.total_points || 0
+                    totalEmotes = userPoints?.total_emotes || 0
+                    lastPointEarnedAt = userPoints?.last_point_earned_at || null
+                }
+
+                // Get total messages sent by this user (with date filter if applicable)
+                // Exclude messages sent when offline
+                const messageWhere: any = {
+                    sender_user_id: kickUserId,
+                    sent_when_offline: false,
+                }
+                if (hasDateFilter && dateFilter) {
+                    messageWhere.created_at = dateFilter
+                }
+
                 const totalMessages = await db.chatMessage.count({
-                    where: {
-                        sender_user_id: kickUserId,
-                    },
+                    where: messageWhere,
                 })
 
                 // Get unique stream sessions watched (streams where user sent at least one message)
+                // Filter by date range if applicable and exclude offline messages
+                const streamWhere: any = {
+                    sender_user_id: kickUserId,
+                    stream_session_id: { not: null },
+                    sent_when_offline: false,
+                }
+                if (hasDateFilter && dateFilter) {
+                    streamWhere.created_at = dateFilter
+                }
+
                 const streamsWatchedResult = await db.chatMessage.groupBy({
                     by: ['stream_session_id'],
-                    where: {
-                        sender_user_id: kickUserId,
-                        stream_session_id: { not: null },
-                    },
+                    where: streamWhere,
                 })
 
                 const streamsWatched = streamsWatchedResult.length
@@ -74,11 +180,11 @@ export async function GET(request: Request) {
                     kick_user_id: kickUserId.toString(),
                     username: user.username,
                     profile_picture_url: user.custom_profile_picture_url || user.profile_picture_url,
-                    total_points: userPoints?.total_points || 0,
-                    total_emotes: userPoints?.total_emotes || 0,
+                    total_points: totalPoints,
+                    total_emotes: totalEmotes,
                     total_messages: totalMessages || 0,
                     streams_watched: streamsWatched || 0,
-                    last_point_earned_at: userPoints?.last_point_earned_at?.toISOString() || null,
+                    last_point_earned_at: lastPointEarnedAt?.toISOString() || null,
                     is_verified: isVerified,
                     last_login_at: user.last_login_at?.toISOString() || null,
                     verification_methods: {

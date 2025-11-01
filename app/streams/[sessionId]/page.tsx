@@ -77,7 +77,18 @@ export default function StreamDetailPage() {
     const [offset, setOffset] = useState(0)
     const [total, setTotal] = useState(0)
     const [loadingMore, setLoadingMore] = useState(false)
-    const [activeTab, setActiveTab] = useState<'chat' | 'analytics'>('chat')
+    const [activeTab, setActiveTab] = useState<'chat' | 'analytics' | 'leaderboard'>('chat')
+    const [leaderboard, setLeaderboard] = useState<Array<{
+        rank: number
+        user_id?: string
+        kick_user_id?: string
+        username: string
+        points_earned: number
+        messages_sent: number
+        emotes_used: number
+        profile_picture_url: string | null
+    }>>([])
+    const [loadingLeaderboard, setLoadingLeaderboard] = useState(false)
     const limit = 100
 
     useEffect(() => {
@@ -86,13 +97,17 @@ export default function StreamDetailPage() {
             fetchAnalytics()
             if (activeTab === 'chat') {
                 fetchChats()
+            } else if (activeTab === 'leaderboard') {
+                fetchLeaderboard()
             }
         }
     }, [sessionId])
 
     useEffect(() => {
-        if (sessionId && offset > 0 && activeTab === 'chat') {
+        if (sessionId && activeTab === 'chat' && offset > 0) {
             fetchChats()
+        } else if (sessionId && activeTab === 'leaderboard') {
+            fetchLeaderboard()
         }
     }, [offset, activeTab])
 
@@ -123,6 +138,21 @@ export default function StreamDetailPage() {
             }
         } catch (err) {
             console.error('Error fetching stream data:', err)
+        }
+    }
+
+    const fetchLeaderboard = async () => {
+        try {
+            setLoadingLeaderboard(true)
+            const response = await fetch(`/api/stream-session/leaderboard?session_id=${sessionId}`)
+            if (!response.ok) throw new Error('Failed to fetch leaderboard')
+            const data = await response.json()
+            setLeaderboard(data.leaderboard || [])
+        } catch (err) {
+            console.error('Error fetching leaderboard:', err)
+            setLeaderboard([])
+        } finally {
+            setLoadingLeaderboard(false)
         }
     }
 
@@ -281,6 +311,16 @@ export default function StreamDetailPage() {
                         Chat Messages
                     </button>
                     <button
+                        onClick={() => setActiveTab('leaderboard')}
+                        className={`px-4 py-2 font-medium transition-colors ${
+                            activeTab === 'leaderboard'
+                                ? 'text-kick-purple border-b-2 border-kick-purple'
+                                : 'text-gray-600 dark:text-kick-text-secondary hover:text-gray-900 dark:hover:text-kick-text'
+                        }`}
+                    >
+                        Leaderboard
+                    </button>
+                    <button
                         onClick={() => setActiveTab('analytics')}
                         className={`px-4 py-2 font-medium transition-colors ${
                             activeTab === 'analytics'
@@ -343,19 +383,21 @@ export default function StreamDetailPage() {
                                                     <span className="text-xs text-gray-500 dark:text-kick-text-muted">
                                                         {formatTimestamp(msg.timestamp)}
                                                     </span>
-                                                    {msg.points_earned > 0 ? (
-                                                        <span className="text-xs text-kick-purple font-medium">
-                                                            +{msg.points_earned}pts
-                                                        </span>
-                                                    ) : msg.points_earned === 0 ? (
-                                                        <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-kick-text-secondary" title="Message sent too quickly (rate limited)">
-                                                            <img
-                                                                src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
-                                                                alt="Timeout - Message sent too quickly"
-                                                                className="w-3.5 h-3.5"
-                                                            />
-                                                            <span>0 pts</span>
-                                                        </span>
+                                                    {msg.points_earned !== null && msg.points_earned !== undefined ? (
+                                                        msg.points_earned > 0 ? (
+                                                            <span className="text-xs text-kick-purple font-medium">
+                                                                +{msg.points_earned}pts
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-kick-text-secondary" title="Message sent too quickly (rate limited)">
+                                                                <img
+                                                                    src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
+                                                                    alt="Timeout - Message sent too quickly"
+                                                                    className="w-3.5 h-3.5"
+                                                                />
+                                                                <span>0 pts</span>
+                                                            </span>
+                                                        )
                                                     ) : null}
                                                 </div>
                                                 <p className="text-sm text-gray-900 dark:text-kick-text break-words">
@@ -378,6 +420,80 @@ export default function StreamDetailPage() {
                                     </div>
                                 )}
                             </>
+                        )}
+                    </div>
+                ) : activeTab === 'leaderboard' ? (
+                    <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">Stream Leaderboard</h2>
+
+                        {loadingLeaderboard ? (
+                            <div className="flex items-center justify-center h-64">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+                            </div>
+                        ) : leaderboard.length === 0 ? (
+                            <div className="text-center py-12">
+                                <p className="text-gray-600 dark:text-kick-text-secondary">No users found for this stream.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-gray-200 dark:border-kick-border">
+                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Rank</th>
+                                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">User</th>
+                                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Points</th>
+                                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Messages</th>
+                                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Emotes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {leaderboard.map((entry, index) => (
+                                            <tr
+                                                key={entry.user_id || entry.kick_user_id || index}
+                                                className="border-b border-gray-100 dark:border-kick-border hover:bg-gray-50 dark:hover:bg-kick-dark transition-colors"
+                                            >
+                                                <td className="py-3 px-4">
+                                                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                                                        index === 0 ? 'bg-yellow-500 text-white' :
+                                                        index === 1 ? 'bg-gray-400 text-white' :
+                                                        index === 2 ? 'bg-orange-600 text-white' :
+                                                        'bg-gray-200 dark:bg-kick-surface text-gray-700 dark:text-kick-text'
+                                                    }`}>
+                                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <div className="flex items-center gap-2">
+                                                        {entry.profile_picture_url ? (
+                                                            <img
+                                                                src={entry.profile_picture_url}
+                                                                alt={entry.username}
+                                                                className="w-8 h-8 rounded-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-kick-surface-hover flex items-center justify-center">
+                                                                <span className="text-xs font-medium text-gray-600 dark:text-kick-text-secondary">
+                                                                    {entry.username.charAt(0).toUpperCase()}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <span className="font-medium text-gray-900 dark:text-kick-text">{entry.username}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-4 text-right">
+                                                    <span className="font-bold text-kick-purple">{entry.points_earned.toLocaleString()}</span>
+                                                </td>
+                                                <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
+                                                    {entry.messages_sent.toLocaleString()}
+                                                </td>
+                                                <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
+                                                    {entry.emotes_used.toLocaleString()}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
                 ) : analytics ? (
