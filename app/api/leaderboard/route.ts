@@ -123,7 +123,8 @@ export async function GET(request: Request) {
                         const emotes = msg.emotes
                         return emotes !== null &&
                                emotes !== undefined &&
-                               (Array.isArray(emotes) ? emotes.length > 0 : true)
+                               Array.isArray(emotes) &&
+                               emotes.length > 0
                     }).length
 
                     totalPoints = pointHistory.reduce((sum, ph) => sum + ph.points_earned, 0)
