@@ -161,9 +161,11 @@ export async function POST(request: Request) {
 
             // If no active session exists, check if stream is live and create session if needed
             if (!activeSession) {
+                console.log(`🔍 No active session found for broadcaster ${broadcasterUserId} - checking stream status...`)
                 try {
                     // Get broadcaster username from message or fetch from database
                     const broadcasterSlug = message.broadcaster.channel_slug || broadcasterUser.username.toLowerCase()
+                    console.log(`📡 Checking Kick API for channel: ${broadcasterSlug}`)
                     
                     // Check Kick API to see if stream is live
                     const controller = new AbortController()
@@ -189,6 +191,8 @@ export async function POST(request: Request) {
                         const viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
                         const streamTitle = livestream?.session_title || ''
                         
+                        console.log(`📊 Stream status: ${isLive ? 'LIVE' : 'OFFLINE'} (viewers: ${viewerCount})`)
+                        
                         let thumbnailUrl: string | null = null
                         if (livestream?.thumbnail) {
                             if (typeof livestream.thumbnail === 'string') {
@@ -210,13 +214,19 @@ export async function POST(request: Request) {
                                     peak_viewer_count: viewerCount,
                                 },
                             })
-                            console.log(`✅ Stream is live but no session existed - created session ${activeSession.id}`)
+                            console.log(`✅ Stream is LIVE - created session ${activeSession.id} - points will now count!`)
+                        } else {
+                            console.log(`ℹ️ Stream is OFFLINE - no session created, points will not be awarded`)
                         }
+                    } else {
+                        console.warn(`⚠️ Kick API returned ${channelResponse.status} - cannot verify stream status`)
                     }
                 } catch (checkError) {
                     // If we can't check stream status, assume offline
                     console.warn(`⚠️ Could not check stream status for broadcaster ${broadcasterUserId}:`, checkError instanceof Error ? checkError.message : 'Unknown error')
                 }
+            } else {
+                console.log(`✅ Active session found: ${activeSession.id} - points will count`)
             }
 
             // Determine if message was sent when offline
