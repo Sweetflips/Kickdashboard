@@ -9,6 +9,8 @@ if (!TELEGRAM_BOT_TOKEN) {
     throw new Error('TELEGRAM_BOT_TOKEN must be set in environment variables')
 }
 
+const BOT_TOKEN = TELEGRAM_BOT_TOKEN
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
@@ -37,7 +39,7 @@ export async function GET(request: Request) {
             .join('\n')
 
         // Compute secret key: SHA256 of bot token
-        const secretKey = crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest()
+        const secretKey = crypto.createHash('sha256').update(BOT_TOKEN).digest()
 
         // Compute HMAC-SHA256
         const hmac = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex')
