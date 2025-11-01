@@ -1421,8 +1421,13 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                             <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
                                                 {message.points_earned !== undefined ? (
                                                     message.points_earned === 0 ? (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                            0 pts
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
+                                                            {!message.sent_when_offline && (
+                                                                <svg className="w-3.5 h-3.5 text-red-500 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20" title="Message sent too quickly (rate limited)">
+                                                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98 1.742 2.98H4.67c1.955 0 2.493-1.646 1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                                </svg>
+                                                            )}
+                                                            <span>0 pts</span>
                                                         </span>
                                                     ) : (
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-kick-green/20 dark:bg-kick-green/30 text-kick-green dark:text-kick-green border border-kick-green/30 dark:border-kick-green/50">
@@ -1663,8 +1668,13 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                     <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
                                                         {message.points_earned !== undefined ? (
                                                             message.points_earned === 0 ? (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                                    0 pts
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
+                                                                    {!message.sent_when_offline && (
+                                                                        <svg className="w-3.5 h-3.5 text-red-500 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20" title="Message sent too quickly (rate limited)">
+                                                                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98 1.742 2.98H4.67c1.955 0 2.493-1.646 1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                                        </svg>
+                                                                    )}
+                                                                    <span>0 pts</span>
                                                                 </span>
                                                             ) : (
                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-kick-green/20 dark:bg-kick-green/30 text-kick-green dark:text-kick-green border border-kick-green/30 dark:border-kick-green/50">
