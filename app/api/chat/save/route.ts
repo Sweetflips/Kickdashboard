@@ -116,11 +116,11 @@ export async function POST(request: Request) {
             try {
                 // Get broadcaster username from message
                 const broadcasterSlug = message.broadcaster.channel_slug || broadcasterUser.username.toLowerCase()
-                
+
                 // Check Kick API to see if stream is live
                 const controller = new AbortController()
                 const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
-                
+
                 const channelResponse = await fetch(
                     `https://kick.com/api/v2/channels/${broadcasterSlug}`,
                     {
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
                         signal: controller.signal,
                     }
                 )
-                
+
                 clearTimeout(timeoutId)
 
                 if (channelResponse.ok) {
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
                     const isLive = livestream?.is_live === true
                     const viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
                     const streamTitle = livestream?.session_title || ''
-                    
+
                     let thumbnailUrl: string | null = null
                     if (livestream?.thumbnail) {
                         if (typeof livestream.thumbnail === 'string') {
@@ -212,10 +212,16 @@ export async function POST(request: Request) {
         // Count and track emotes (only when stream is live)
         // Skip counting emotes from messages sent by bots or when offline
         if (emotesToSave.length > 0 && !sentWhenOffline && sessionIsActive && !isBot(senderUsernameLower)) {
-            await awardEmotes(senderUserId, emotesToSave)
+            try {
+                await awardEmotes(senderUserId, emotesToSave)
+            } catch (emoteError) {
+                // Don't fail message save if emote award fails
+                console.warn('Failed to award emotes (non-critical):', emoteError)
+            }
         }
 
         // Save message to database (use upsert to handle duplicates gracefully)
+        // ALWAYS save messages, even when offline or if other operations fail
         try {
 
             // Log emotes structure for debugging (only occasionally)

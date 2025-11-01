@@ -257,15 +257,24 @@ export async function GET(request: Request) {
             })
 
             if (globalResponse.ok) {
-                const globalData = await globalResponse.json()
-                if (Array.isArray(globalData)) {
-                    globalEmotes = globalData
-                } else if (globalData.emotes && Array.isArray(globalData.emotes)) {
-                    globalEmotes = globalData.emotes
-                } else if (globalData.data && Array.isArray(globalData.data)) {
-                    globalEmotes = globalData.data
+                const contentType = globalResponse.headers.get('content-type')
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await globalResponse.text()
+                    console.error(`❌ Error fetching global emotes: Response is not JSON. Content-Type: ${contentType}, Body: ${text.substring(0, 200)}`)
+                } else {
+                    const globalData = await globalResponse.json()
+                    if (Array.isArray(globalData)) {
+                        globalEmotes = globalData
+                    } else if (globalData.emotes && Array.isArray(globalData.emotes)) {
+                        globalEmotes = globalData.emotes
+                    } else if (globalData.data && Array.isArray(globalData.data)) {
+                        globalEmotes = globalData.data
+                    }
+                    console.log(`✅ Found ${globalEmotes.length} global emotes`)
                 }
-                console.log(`✅ Found ${globalEmotes.length} global emotes`)
+            } else {
+                const text = await globalResponse.text()
+                console.error(`❌ Error fetching global emotes: HTTP ${globalResponse.status} - ${text.substring(0, 200)}`)
             }
         } catch (error) {
             console.error(`❌ Error fetching global emotes:`, error instanceof Error ? error.message : 'Unknown error')

@@ -910,7 +910,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             // Mark message as processed
             processedMessageIdsRef.current.add(message.message_id)
 
-            // Update UI with new message (don't save to DB - webhooks handle that)
+            // Update UI with new message
             setChatMessages((prev) => {
                 const exists = prev.some(m => m.message_id === message.message_id)
                 if (exists) return prev
@@ -939,6 +939,19 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                 }
 
                 return updated
+            })
+
+            // Fallback: Save message to database (webhook may not receive all messages)
+            // Fire-and-forget pattern - don't block UI updates
+            fetch('/api/chat/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(message),
+            }).catch((error) => {
+                // Silently handle errors - upsert in save route handles duplicates gracefully
+                console.warn('Failed to save message to database (non-critical):', error)
             })
         }
 
