@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
     try {
@@ -14,10 +14,9 @@ export async function GET(request: Request) {
 
         let dateFilter: { gte?: Date; lte?: Date } | undefined
         if (hasDateFilter) {
-            const start = new Date(startDate)
-            const end = new Date(endDate)
-            // Set end date to end of day
-            end.setHours(23, 59, 59, 999)
+            // Parse dates as UTC by appending 'T00:00:00Z' to ensure UTC timezone
+            const start = new Date(startDate + 'T00:00:00.000Z')
+            const end = new Date(endDate + 'T23:59:59.999Z')
             dateFilter = {
                 gte: start,
                 lte: end,
@@ -122,9 +121,9 @@ export async function GET(request: Request) {
                     totalEmotes = emotesResult.filter(msg => {
                         const emotes = msg.emotes
                         return emotes !== null &&
-                               emotes !== undefined &&
-                               Array.isArray(emotes) &&
-                               emotes.length > 0
+                            emotes !== undefined &&
+                            Array.isArray(emotes) &&
+                            emotes.length > 0
                     }).length
 
                     totalPoints = pointHistory.reduce((sum, ph) => sum + ph.points_earned, 0)

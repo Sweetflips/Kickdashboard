@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import AppLayout from '../../components/AppLayout'
 
 interface LeaderboardEntry {
@@ -23,7 +23,7 @@ interface LeaderboardEntry {
     }
 }
 
-type DateFilterMode = 'overall' | 'custom'
+type DateFilterMode = 'overall' | 'custom' | 'today' | 'last7days' | 'last30days' | 'last90days'
 
 export default function LeaderboardPage() {
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
@@ -35,7 +35,58 @@ export default function LeaderboardPage() {
     const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('overall')
     const [startDate, setStartDate] = useState<string>('')
     const [endDate, setEndDate] = useState<string>('')
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
     const limit = 50
+
+    const getDateRange = useCallback((mode: DateFilterMode): { start: string; end: string } | null => {
+        const today = new Date()
+        today.setUTCHours(23, 59, 59, 999)
+        
+        switch (mode) {
+            case 'today': {
+                const start = new Date(today)
+                start.setUTCHours(0, 0, 0, 0)
+                return {
+                    start: start.toISOString().split('T')[0],
+                    end: today.toISOString().split('T')[0],
+                }
+            }
+            case 'last7days': {
+                const start = new Date(today)
+                start.setUTCDate(start.getUTCDate() - 6)
+                start.setUTCHours(0, 0, 0, 0)
+                return {
+                    start: start.toISOString().split('T')[0],
+                    end: today.toISOString().split('T')[0],
+                }
+            }
+            case 'last30days': {
+                const start = new Date(today)
+                start.setUTCDate(start.getUTCDate() - 29)
+                start.setUTCHours(0, 0, 0, 0)
+                return {
+                    start: start.toISOString().split('T')[0],
+                    end: today.toISOString().split('T')[0],
+                }
+            }
+            case 'last90days': {
+                const start = new Date(today)
+                start.setUTCDate(start.getUTCDate() - 89)
+                start.setUTCHours(0, 0, 0, 0)
+                return {
+                    start: start.toISOString().split('T')[0],
+                    end: today.toISOString().split('T')[0],
+                }
+            }
+            case 'custom':
+                if (startDate && endDate) {
+                    return { start: startDate, end: endDate }
+                }
+                return null
+            default:
+                return null
+        }
+    }, [startDate, endDate])
 
     const fetchLeaderboard = useCallback(async (newOffset: number = 0) => {
         try {
@@ -44,8 +95,9 @@ export default function LeaderboardPage() {
 
             let url = `/api/leaderboard?limit=${limit}&offset=${newOffset}`
 
-            if (dateFilterMode === 'custom' && startDate && endDate) {
-                url += `&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+            const dateRange = getDateRange(dateFilterMode)
+            if (dateRange) {
+                url += `&startDate=${encodeURIComponent(dateRange.start)}&endDate=${encodeURIComponent(dateRange.end)}`
             }
 
             const response = await fetch(url)
@@ -60,7 +112,7 @@ export default function LeaderboardPage() {
         } finally {
             setLoading(false)
         }
-    }, [dateFilterMode, startDate, endDate])
+    }, [dateFilterMode, getDateRange])
 
     useEffect(() => {
         setOffset(0)
@@ -71,11 +123,60 @@ export default function LeaderboardPage() {
         fetchLeaderboard(offset)
     }, [offset, fetchLeaderboard])
 
+    // Auto-fetch when custom dates change (with debounce)
+    useEffect(() => {
+        if (dateFilterMode === 'custom') {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current)
+            }
+
+            if (startDate && endDate) {
+                debounceTimerRef.current = setTimeout(() => {
+                    setOffset(0)
+                    fetchLeaderboard(0)
+                }, 500)
+            }
+
+            return () => {
+                if (debounceTimerRef.current) {
+                    clearTimeout(debounceTimerRef.current)
+                }
+            }
+        }
+    }, [startDate, endDate, dateFilterMode, fetchLeaderboard])
+
     const handleDateFilterChange = (mode: DateFilterMode) => {
         setDateFilterMode(mode)
         if (mode === 'overall') {
             setStartDate('')
             setEndDate('')
+        } else if (mode !== 'custom') {
+            const today = new Date()
+            today.setUTCHours(23, 59, 59, 999)
+            const todayStr = today.toISOString().split('T')[0]
+            
+            let startDateStr = todayStr
+            if (mode === 'today') {
+                // Already set to today
+            } else if (mode === 'last7days') {
+                const start = new Date(today)
+                start.setUTCDate(start.getUTCDate() - 6)
+                start.setUTCHours(0, 0, 0, 0)
+                startDateStr = start.toISOString().split('T')[0]
+            } else if (mode === 'last30days') {
+                const start = new Date(today)
+                start.setUTCDate(start.getUTCDate() - 29)
+                start.setUTCHours(0, 0, 0, 0)
+                startDateStr = start.toISOString().split('T')[0]
+            } else if (mode === 'last90days') {
+                const start = new Date(today)
+                start.setUTCDate(start.getUTCDate() - 89)
+                start.setUTCHours(0, 0, 0, 0)
+                startDateStr = start.toISOString().split('T')[0]
+            }
+            
+            setStartDate(startDateStr)
+            setEndDate(todayStr)
         }
     }
 
@@ -94,8 +195,8 @@ export default function LeaderboardPage() {
                         <h1 className="text-h2 font-semibold text-gray-900 dark:text-kick-text">Leaderboard</h1>
 
                         {/* Date Filter */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                            <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     onClick={() => handleDateFilterChange('overall')}
                                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
@@ -105,6 +206,46 @@ export default function LeaderboardPage() {
                                     }`}
                                 >
                                     Overall
+                                </button>
+                                <button
+                                    onClick={() => handleDateFilterChange('today')}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                        dateFilterMode === 'today'
+                                            ? 'bg-kick-purple text-white'
+                                            : 'bg-gray-100 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover'
+                                    }`}
+                                >
+                                    Today
+                                </button>
+                                <button
+                                    onClick={() => handleDateFilterChange('last7days')}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                        dateFilterMode === 'last7days'
+                                            ? 'bg-kick-purple text-white'
+                                            : 'bg-gray-100 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover'
+                                    }`}
+                                >
+                                    Last 7 Days
+                                </button>
+                                <button
+                                    onClick={() => handleDateFilterChange('last30days')}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                        dateFilterMode === 'last30days'
+                                            ? 'bg-kick-purple text-white'
+                                            : 'bg-gray-100 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover'
+                                    }`}
+                                >
+                                    Last 30 Days
+                                </button>
+                                <button
+                                    onClick={() => handleDateFilterChange('last90days')}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                        dateFilterMode === 'last90days'
+                                            ? 'bg-kick-purple text-white'
+                                            : 'bg-gray-100 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover'
+                                    }`}
+                                >
+                                    Last 90 Days
                                 </button>
                                 <button
                                     onClick={() => handleDateFilterChange('custom')}
@@ -124,6 +265,7 @@ export default function LeaderboardPage() {
                                         type="date"
                                         value={startDate}
                                         onChange={(e) => setStartDate(e.target.value)}
+                                        max={endDate || undefined}
                                         className="px-3 py-1.5 text-sm border border-gray-300 dark:border-kick-border rounded-md bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
                                     />
                                     <span className="text-sm text-gray-600 dark:text-kick-text-secondary">to</span>
@@ -131,9 +273,12 @@ export default function LeaderboardPage() {
                                         type="date"
                                         value={endDate}
                                         onChange={(e) => setEndDate(e.target.value)}
-                                        min={startDate}
+                                        min={startDate || undefined}
                                         className="px-3 py-1.5 text-sm border border-gray-300 dark:border-kick-border rounded-md bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
                                     />
+                                    {startDate && endDate && startDate > endDate && (
+                                        <span className="text-xs text-red-600 dark:text-red-400">Start date must be before end date</span>
+                                    )}
                                 </div>
                             )}
                         </div>
