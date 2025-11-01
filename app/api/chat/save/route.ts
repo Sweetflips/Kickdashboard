@@ -103,14 +103,73 @@ export async function POST(request: Request) {
         }
 
         // Find active stream session for this broadcaster
-        // DO NOT create sessions automatically - only /api/channel route creates sessions when stream goes live
-        const activeSession = await db.streamSession.findFirst({
+        let activeSession = await db.streamSession.findFirst({
             where: {
                 broadcaster_user_id: broadcasterUserId,
                 ended_at: null,
             },
             orderBy: { started_at: 'desc' },
         })
+
+        // If no active session exists, check if stream is live and create session if needed
+        if (!activeSession) {
+            try {
+                // Get broadcaster username from message
+                const broadcasterSlug = message.broadcaster.channel_slug || broadcasterUser.username.toLowerCase()
+                
+                // Check Kick API to see if stream is live
+                const controller = new AbortController()
+                const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+                
+                const channelResponse = await fetch(
+                    `https://kick.com/api/v2/channels/${broadcasterSlug}`,
+                    {
+                        headers: {
+                            'Accept': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        },
+                        signal: controller.signal,
+                    }
+                )
+                
+                clearTimeout(timeoutId)
+
+                if (channelResponse.ok) {
+                    const channelData = await channelResponse.json()
+                    const livestream = channelData.livestream
+                    const isLive = livestream?.is_live === true
+                    const viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
+                    const streamTitle = livestream?.session_title || ''
+                    
+                    let thumbnailUrl: string | null = null
+                    if (livestream?.thumbnail) {
+                        if (typeof livestream.thumbnail === 'string') {
+                            thumbnailUrl = livestream.thumbnail
+                        } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
+                            thumbnailUrl = livestream.thumbnail.url
+                        }
+                    }
+
+                    if (isLive) {
+                        // Stream is live but no session exists - create one
+                        activeSession = await db.streamSession.create({
+                            data: {
+                                broadcaster_user_id: broadcasterUserId,
+                                channel_slug: broadcasterSlug,
+                                session_title: streamTitle || null,
+                                thumbnail_url: thumbnailUrl,
+                                started_at: new Date(),
+                                peak_viewer_count: viewerCount,
+                            },
+                        })
+                        console.log(`✅ Stream is live but no session existed - created session ${activeSession.id}`)
+                    }
+                }
+            } catch (checkError) {
+                // If we can't check stream status, assume offline
+                console.warn(`⚠️ Could not check stream status for broadcaster ${broadcasterUserId}:`, checkError instanceof Error ? checkError.message : 'Unknown error')
+            }
+        }
 
         // Determine if message was sent when offline
         const sentWhenOffline = !activeSession
