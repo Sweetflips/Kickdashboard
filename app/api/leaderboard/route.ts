@@ -7,16 +7,8 @@ export async function GET(request: Request) {
         const limit = parseInt(searchParams.get('limit') || '50')
         const offset = parseInt(searchParams.get('offset') || '0')
 
-        // Get all users who have logged in (have last_login_at or connected accounts)
-        // Include their points relation
+        // Get all users - include their points relation
         const allUsers = await db.user.findMany({
-            where: {
-                OR: [
-                    { last_login_at: { not: null } },
-                    { discord_connected: true },
-                    { telegram_connected: true },
-                ],
-            },
             include: {
                 points: true,
             },
@@ -26,12 +18,12 @@ export async function GET(request: Request) {
         const sortedUsers = allUsers.sort((a, b) => {
             const aPoints = a.points?.total_points || 0
             const bPoints = b.points?.total_points || 0
-            
+
             // First sort by points
             if (bPoints !== aPoints) {
                 return bPoints - aPoints
             }
-            
+
             // Then by last login time (most recent first)
             const aLogin = a.last_login_at?.getTime() || 0
             const bLogin = b.last_login_at?.getTime() || 0
@@ -41,7 +33,7 @@ export async function GET(request: Request) {
         // Paginate after sorting
         const users = sortedUsers.slice(offset, offset + limit)
 
-        // Get total count of users who have logged in
+        // Get total count of all users
         const total = allUsers.length
 
         // Calculate additional stats for each user
