@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   title: 'Kick Channel Viewer - SweetFlips',
   description: 'View Kick channel information',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/8 EMERALD (1).png',
   },
 }
 
