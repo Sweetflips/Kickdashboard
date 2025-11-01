@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAuthenticatedUser } from '@/lib/auth'
+import { getAuthenticatedUser, isAdmin } from '@/lib/auth'
 
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
 
 export async function GET(request: Request) {
   try {
-    const auth = await getAuthenticatedUser(request)
-    if (!auth) {
+    // Check admin access
+    const adminCheck = await isAdmin(request)
+    if (!adminCheck) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Unauthorized - Admin access required' },
+        { status: 403 }
       )
     }
+
+    const auth = await getAuthenticatedUser(request)
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -93,13 +96,16 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await getAuthenticatedUser(request)
-    if (!auth) {
+    // Check admin access
+    const adminCheck = await isAdmin(request)
+    if (!adminCheck) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Unauthorized - Admin access required' },
+        { status: 403 }
       )
     }
+
+    const auth = await getAuthenticatedUser(request)
 
     const body = await request.json()
     const { prize_amount, number_of_winners, entry_min_points, stream_session_id } = body

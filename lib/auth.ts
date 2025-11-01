@@ -60,3 +60,22 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
     return null
   }
 }
+
+export async function isAdmin(request: Request): Promise<boolean> {
+  try {
+    const auth = await getAuthenticatedUser(request)
+    if (!auth) {
+      return false
+    }
+
+    const user = await db.user.findUnique({
+      where: { kick_user_id: auth.kickUserId },
+      select: { is_admin: true },
+    })
+
+    return user?.is_admin === true
+  } catch (error) {
+    console.error('Error checking admin status:', error)
+    return false
+  }
+}

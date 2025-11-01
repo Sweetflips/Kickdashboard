@@ -164,11 +164,21 @@ export async function GET(request: Request) {
                         profilePictureUrl = null
                     }
 
+                    // Check if user exists to get admin status
+                    const kickUserId = BigInt(userData.user_id)
+                    const existingUser = await db.user.findUnique({
+                        where: { kick_user_id: kickUserId },
+                        select: {
+                            is_admin: true,
+                        },
+                    }).catch(() => null)
+
                     const extractedData = {
                         id: userData.user_id,
                         username: userData.name, // Kick uses "name" not "username"
                         email: userData.email,
                         profile_picture: profilePictureUrl,
+                        is_admin: existingUser?.is_admin || false,
                         ...userData // Include all other fields
                     }
 
@@ -198,7 +208,7 @@ export async function GET(request: Request) {
                                 console.log(`   └─ Profile Picture URL: ${profilePictureUrl || 'None (null)'}\n`)
 
                                 // Check if user exists first
-                                const existingUser = await db.user.findUnique({
+                                const existingUserForUpdate = await db.user.findUnique({
                                     where: { kick_user_id: kickUserId },
                                     select: {
                                         id: true,
@@ -208,12 +218,12 @@ export async function GET(request: Request) {
                                     },
                                 })
 
-                                if (existingUser) {
+                                if (existingUserForUpdate) {
                                     console.log(`📋 [UPDATE] User exists in database`)
-                                    console.log(`   ├─ DB ID: ${existingUser.id}`)
-                                    console.log(`   ├─ Current username: ${existingUser.username}`)
-                                    console.log(`   ├─ Current profile_picture_url: ${existingUser.profile_picture_url || 'None'}`)
-                                    console.log(`   └─ Current custom_profile_picture_url: ${existingUser.custom_profile_picture_url || 'None'}\n`)
+                                    console.log(`   ├─ DB ID: ${existingUserForUpdate.id}`)
+                                    console.log(`   ├─ Current username: ${existingUserForUpdate.username}`)
+                                    console.log(`   ├─ Current profile_picture_url: ${existingUserForUpdate.profile_picture_url || 'None'}`)
+                                    console.log(`   └─ Current custom_profile_picture_url: ${existingUserForUpdate.custom_profile_picture_url || 'None'}\n`)
 
                                     await db.user.update({
                                         where: { kick_user_id: kickUserId },

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAuthenticatedUser } from '@/lib/auth'
+import { getAuthenticatedUser, isAdmin } from '@/lib/auth'
 import { selectWeightedWinner, type WeightedEntry } from '@/lib/giveaway'
 
 export async function POST(
@@ -8,13 +8,16 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const auth = await getAuthenticatedUser(request)
-    if (!auth) {
+    // Check admin access
+    const adminCheck = await isAdmin(request)
+    if (!adminCheck) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Unauthorized - Admin access required' },
+        { status: 403 }
       )
     }
+
+    const auth = await getAuthenticatedUser(request)
 
     const giveawayId = BigInt(params.id)
 
