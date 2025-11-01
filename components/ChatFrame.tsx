@@ -1424,7 +1424,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
                                                             {!message.sent_when_offline && (
                                                                 <img
-                                                                    src="https://www.clipartmax.com/png/middle/360-3608716_timeout-comments-time-out-icon-png.png"
+                                                                    src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
                                                                     alt="Timeout - Message sent too quickly"
                                                                     className="w-3.5 h-3.5"
                                                                     title="Message sent too quickly (rate limited)"
@@ -1674,7 +1674,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
                                                                     {!message.sent_when_offline && (
                                                                         <img
-                                                                            src="https://www.clipartmax.com/png/middle/360-3608716_timeout-comments-time-out-icon-png.png"
+                                                                            src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
                                                                             alt="Timeout - Message sent too quickly"
                                                                             className="w-3.5 h-3.5"
                                                                             title="Message sent too quickly (rate limited)"

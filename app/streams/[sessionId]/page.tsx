@@ -350,7 +350,7 @@ export default function StreamDetailPage() {
                                                     ) : msg.points_earned === 0 ? (
                                                         <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-kick-text-secondary" title="Message sent too quickly (rate limited)">
                                                             <img
-                                                                src="https://www.clipartmax.com/png/middle/360-3608716_timeout-comments-time-out-icon-png.png"
+                                                                src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
                                                                 alt="Timeout - Message sent too quickly"
                                                                 className="w-3.5 h-3.5"
                                                             />
