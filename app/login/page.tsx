@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 export default function LoginPage() {
     const router = useRouter()
@@ -89,10 +90,15 @@ export default function LoginPage() {
                     {/* SweetFlips Logo */}
                     <div className="text-center mb-10">
                         <div className="inline-flex items-center justify-center mb-6">
-                            <div className="bg-gradient-to-br from-kick-green to-kick-green-dark rounded-2xl p-4 shadow-lg">
-                                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
+                            <div className="shadow-lg overflow-hidden">
+                                <Image
+                                    src="/8 EMERALD (1).png"
+                                    alt="SweetFlips Logo"
+                                    width={160}
+                                    height={160}
+                                    className="w-40 h-40 object-contain"
+                                    unoptimized
+                                />
                             </div>
                         </div>
                         <h1 className="text-3xl font-bold bg-gradient-to-r from-kick-green to-kick-green-dark bg-clip-text text-transparent mb-2">
