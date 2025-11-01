@@ -55,10 +55,11 @@ export async function GET(request: Request) {
                 const streamsWatched = streamsWatchedResult.length
 
                 // Determine if user is verified (has logged in at least once)
-                const isVerified = !!entry.user.last_login_at ||
-                                   entry.user.discord_connected ||
-                                   entry.user.telegram_connected ||
-                                   entry.user.kick_connected
+                // Only mark as verified if they have actually logged in (last_login_at) or connected Discord/Telegram
+                // Don't use kick_connected since it defaults to true for all users
+                const isVerified = !!entry.user.last_login_at || 
+                                   entry.user.discord_connected || 
+                                   entry.user.telegram_connected
 
                 return {
                     rank: offset + index + 1,
