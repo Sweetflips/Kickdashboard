@@ -139,6 +139,12 @@ export default function ProfilePage() {
 
     useEffect(() => {
         fetchUserData()
+        // Check URL params on mount to set active tab
+        const params = new URLSearchParams(window.location.search)
+        const tab = params.get('tab')
+        if (tab === 'connected') {
+            setActiveTab('connected')
+        }
     }, [])
 
     useEffect(() => {
@@ -160,18 +166,32 @@ export default function ProfilePage() {
         const params = new URLSearchParams(window.location.search)
         const success = params.get('success')
         const error = params.get('error')
+        const tab = params.get('tab')
 
         if (success && userData?.id) {
-            setActiveTab('connected')
-            fetchConnectedAccounts()
+            if (tab === 'connected') {
+                setActiveTab('connected')
+            }
+            // Clear Telegram widget state immediately
+            setTelegramAuthUrl(null)
+            // Refresh connected accounts after a short delay to ensure DB is updated
+            setTimeout(() => {
+                fetchConnectedAccounts()
+            }, 500)
             showToast('Account connected successfully!', 'success')
-            // Clean URL
-            window.history.replaceState({}, '', window.location.pathname)
+            // Clean URL but preserve tab
+            const newUrl = tab === 'connected' ? '/profile?tab=connected' : '/profile'
+            window.history.replaceState({}, '', newUrl)
         } else if (error) {
-            setActiveTab('connected')
+            if (tab === 'connected') {
+                setActiveTab('connected')
+            }
+            // Clear Telegram widget state on error
+            setTelegramAuthUrl(null)
             showToast(`Failed to connect account: ${error}`, 'error')
-            // Clean URL
-            window.history.replaceState({}, '', window.location.pathname)
+            // Clean URL but preserve tab
+            const newUrl = tab === 'connected' ? '/profile?tab=connected' : '/profile'
+            window.history.replaceState({}, '', newUrl)
         }
     }, [userData?.id])
 
@@ -828,28 +848,30 @@ export default function ProfilePage() {
                                                                             Disconnect
                                                                         </button>
                                                                     ) : (
-                                                                        <div className="flex flex-col items-end gap-2">
-                                                                            {telegramAuthUrl && (
-                                                                                <>
+                                                                        <>
+                                                                            {telegramAuthUrl ? (
+                                                                                <div className="flex flex-col items-end gap-2">
                                                                                     <div id="telegram-login-widget"></div>
                                                                                     <Script
                                                                                         id="telegram-widget-script"
+                                                                                        key={telegramAuthUrl}
                                                                                         strategy="afterInteractive"
                                                                                         dangerouslySetInnerHTML={{
                                                                                             __html: `
                                                                                                 (function() {
                                                                                                     if (typeof window !== 'undefined') {
-                                                                                                        const script = document.createElement('script');
-                                                                                                        script.async = true;
-                                                                                                        script.src = 'https://telegram.org/js/telegram-widget.js?22';
-                                                                                                        script.setAttribute('data-telegram-login', 'Sweetflipskickauthbot');
-                                                                                                        script.setAttribute('data-size', 'medium');
-                                                                                                        script.setAttribute('data-radius', '8');
-                                                                                                        script.setAttribute('data-userpic', 'false');
-                                                                                                        script.setAttribute('data-request-access', 'write');
-                                                                                                        script.setAttribute('data-auth-url', window.location.origin + '${telegramAuthUrl}');
                                                                                                         const container = document.getElementById('telegram-login-widget');
                                                                                                         if (container) {
+                                                                                                            container.innerHTML = '';
+                                                                                                            const script = document.createElement('script');
+                                                                                                            script.async = true;
+                                                                                                            script.src = 'https://telegram.org/js/telegram-widget.js?22';
+                                                                                                            script.setAttribute('data-telegram-login', 'Sweetflipskickauthbot');
+                                                                                                            script.setAttribute('data-size', 'medium');
+                                                                                                            script.setAttribute('data-radius', '8');
+                                                                                                            script.setAttribute('data-userpic', 'false');
+                                                                                                            script.setAttribute('data-request-access', 'write');
+                                                                                                            script.setAttribute('data-auth-url', window.location.origin + '${telegramAuthUrl}');
                                                                                                             container.appendChild(script);
                                                                                                         }
                                                                                                     }
@@ -857,9 +879,8 @@ export default function ProfilePage() {
                                                                                             `,
                                                                                         }}
                                                                                     />
-                                                                                </>
-                                                                            )}
-                                                                            {!telegramAuthUrl && (
+                                                                                </div>
+                                                                            ) : (
                                                                                 <button
                                                                                     onClick={() => handleConnectAccount('telegram')}
                                                                                     className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-xs font-medium"
@@ -870,7 +891,7 @@ export default function ProfilePage() {
                                                                                     Connect Telegram
                                                                                 </button>
                                                                             )}
-                                                                        </div>
+                                                                        </>
                                                                     )}
                                                                 </div>
                                                             </div>
