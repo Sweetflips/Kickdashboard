@@ -949,7 +949,47 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(message),
-            }).catch((error) => {
+            })
+            .then(async (response) => {
+                if (response.ok) {
+                    const data = await response.json()
+                    // Update message with points earned from server
+                    if (data.pointsEarned !== undefined) {
+                        const pointsValue = data.pointsEarned || 0
+
+                        // Update in main chat messages
+                        setChatMessages((prev) => {
+                            return prev.map((msg) => {
+                                if (msg.message_id === message.message_id) {
+                                    return {
+                                        ...msg,
+                                        points_earned: pointsValue,
+                                    }
+                                }
+                                return msg
+                            })
+                        })
+
+                        // Also update in pinned messages if it exists there
+                        setPinnedMessages((prev) => {
+                            return prev.map((msg) => {
+                                if (msg.message_id === message.message_id) {
+                                    return {
+                                        ...msg,
+                                        points_earned: pointsValue,
+                                    }
+                                }
+                                return msg
+                            })
+                        })
+
+                        if (pointsValue > 0) {
+                            console.log(`✅ Updated message ${message.message_id} with ${pointsValue} points`)
+                        }
+                    }
+                }
+            })
+            .catch((error) => {
                 // Silently handle errors - upsert in save route handles duplicates gracefully
                 console.warn('Failed to save message to database (non-critical):', error)
             })
