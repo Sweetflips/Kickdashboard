@@ -137,7 +137,8 @@ export default function LeaderboardPage() {
                                                                             alt="Kick verified"
                                                                             width={16}
                                                                             height={16}
-                                                                            className="object-contain"
+                                                                            className="object-contain w-4 h-4"
+                                                                            style={{ width: '16px', height: '16px' }}
                                                                             title="Verified via Kick login"
                                                                         />
                                                                     )}
@@ -147,7 +148,8 @@ export default function LeaderboardPage() {
                                                                             alt="Discord connected"
                                                                             width={16}
                                                                             height={16}
-                                                                            className="object-contain"
+                                                                            className="object-contain w-4 h-4"
+                                                                            style={{ width: '16px', height: '16px' }}
                                                                             title="Connected via Discord"
                                                                         />
                                                                     )}
@@ -157,7 +159,8 @@ export default function LeaderboardPage() {
                                                                             alt="Telegram connected"
                                                                             width={16}
                                                                             height={16}
-                                                                            className="object-contain"
+                                                                            className="object-contain w-4 h-4"
+                                                                            style={{ width: '16px', height: '16px' }}
                                                                             title="Connected via Telegram"
                                                                         />
                                                                     )}
