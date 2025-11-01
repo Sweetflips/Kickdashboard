@@ -111,7 +111,6 @@ export async function GET(request: Request) {
                         where: {
                             sender_user_id: kickUserId,
                             created_at: dateFilter,
-                            emotes: { not: null },
                             sent_when_offline: false,
                         },
                         select: {
@@ -119,8 +118,15 @@ export async function GET(request: Request) {
                         },
                     })
 
+                    // Filter messages that actually have emotes (not null/empty)
+                    totalEmotes = emotesResult.filter(msg => {
+                        const emotes = msg.emotes
+                        return emotes !== null &&
+                               emotes !== undefined &&
+                               (Array.isArray(emotes) ? emotes.length > 0 : true)
+                    }).length
+
                     totalPoints = pointHistory.reduce((sum, ph) => sum + ph.points_earned, 0)
-                    totalEmotes = emotesResult.length
 
                     const latestPoint = pointHistory.sort((a, b) =>
                         b.earned_at.getTime() - a.earned_at.getTime()
