@@ -72,17 +72,41 @@ export default function AppLayout({ children }: LayoutProps) {
                     return
                 }
             } else {
-                // Redirect to login if not authenticated
-                router.push('/login')
-                return
+                // Don't redirect to login if we're on profile page with success parameter (OAuth callback)
+                // This allows Telegram/Discord connections to complete even if token expires
+                const isOAuthCallback = params.get('success') === 'true' || params.get('error')
+                if (!isOAuthCallback) {
+                    // Redirect to login if not authenticated
+                    router.push('/login')
+                    return
+                } else {
+                    // For OAuth callbacks, check if we have a token, if not try to get one
+                    // But don't block the redirect - let the profile page handle it
+                    console.log('⚠️ [AUTH] OAuth callback detected but no token - user may need to login with Kick first')
+                }
             }
         }
-    }, [router])
+    }, [router, pathname])
 
     useEffect(() => {
         if (!isAuthenticated) return
         fetchUserData()
     }, [isAuthenticated])
+
+    // Refresh user data when URL has success parameter (after OAuth callbacks)
+    useEffect(() => {
+        if (typeof window === 'undefined' || !isAuthenticated) return
+
+        const params = new URLSearchParams(window.location.search)
+        const success = params.get('success')
+
+        if (success === 'true') {
+            // Refresh user data after successful OAuth connection
+            setTimeout(() => {
+                fetchUserData()
+            }, 1000) // Delay to ensure DB has updated
+        }
+    }, [isAuthenticated, pathname])
 
     // Close sidebar on mobile when navigating
     useEffect(() => {
