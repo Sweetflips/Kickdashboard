@@ -16,6 +16,11 @@ interface LeaderboardEntry {
     last_point_earned_at: string | null
     is_verified?: boolean
     last_login_at?: string | null
+    verification_methods?: {
+        kick: boolean
+        discord: boolean
+        telegram: boolean
+    }
 }
 
 export default function LeaderboardPage() {
@@ -124,15 +129,39 @@ export default function LeaderboardPage() {
                                                             <span className="font-medium text-body text-gray-900 dark:text-kick-text">
                                                                 {entry.username}
                                                             </span>
-                                                            {entry.is_verified && (
-                                                                <img
-                                                                    src="/verifiedicon.svg"
-                                                                    alt="Verified"
-                                                                    width={16}
-                                                                    height={16}
-                                                                    className="object-contain"
-                                                                    title="Verified user"
-                                                                />
+                                                            {entry.verification_methods && (
+                                                                <div className="flex items-center gap-1">
+                                                                    {entry.verification_methods.kick && (
+                                                                        <img
+                                                                            src="/imgi_144_kick-streaming-platform-logo-icon.svg"
+                                                                            alt="Kick verified"
+                                                                            width={16}
+                                                                            height={16}
+                                                                            className="object-contain"
+                                                                            title="Verified via Kick login"
+                                                                        />
+                                                                    )}
+                                                                    {entry.verification_methods.discord && (
+                                                                        <img
+                                                                            src="/Discord-Emblem.png"
+                                                                            alt="Discord connected"
+                                                                            width={16}
+                                                                            height={16}
+                                                                            className="object-contain"
+                                                                            title="Connected via Discord"
+                                                                        />
+                                                                    )}
+                                                                    {entry.verification_methods.telegram && (
+                                                                        <img
+                                                                            src="/Telegram-Logo-PNG-Image.png"
+                                                                            alt="Telegram connected"
+                                                                            width={16}
+                                                                            height={16}
+                                                                            className="object-contain"
+                                                                            title="Connected via Telegram"
+                                                                        />
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     </div>

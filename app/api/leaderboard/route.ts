@@ -54,12 +54,15 @@ export async function GET(request: Request) {
 
                 const streamsWatched = streamsWatchedResult.length
 
+                // Determine verification methods
+                const hasKickLogin = !!entry.user.last_login_at
+                const hasDiscord = entry.user.discord_connected || false
+                const hasTelegram = entry.user.telegram_connected || false
+                
                 // Determine if user is verified (has logged in at least once)
                 // Only mark as verified if they have actually logged in (last_login_at) or connected Discord/Telegram
                 // Don't use kick_connected since it defaults to true for all users
-                const isVerified = !!entry.user.last_login_at || 
-                                   entry.user.discord_connected || 
-                                   entry.user.telegram_connected
+                const isVerified = hasKickLogin || hasDiscord || hasTelegram
 
                 return {
                     rank: offset + index + 1,
@@ -74,6 +77,11 @@ export async function GET(request: Request) {
                     last_point_earned_at: entry.last_point_earned_at?.toISOString() || null,
                     is_verified: isVerified,
                     last_login_at: entry.user.last_login_at?.toISOString() || null,
+                    verification_methods: {
+                        kick: hasKickLogin,
+                        discord: hasDiscord,
+                        telegram: hasTelegram,
+                    },
                 }
             })
         )
