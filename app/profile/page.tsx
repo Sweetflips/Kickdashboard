@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import Script from 'next/script'
 import AppLayout from '../../components/AppLayout'
 import ThemeToggle from '../../components/ThemeToggle'
 import { useToast } from '../../components/Toast'
@@ -37,7 +36,6 @@ export default function ProfilePage() {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([])
     const [loadingAccounts, setLoadingAccounts] = useState(false)
-    const [telegramAuthUrl, setTelegramAuthUrl] = useState<string | null>(null)
     const { showToast } = useToast()
 
     const fetchUserData = async () => {
@@ -81,9 +79,12 @@ export default function ProfilePage() {
         }
 
         if (provider === 'telegram') {
-            // For Telegram, use the widget with kick_user_id parameter
-            // The widget will call the callback with kick_user_id for linking
-            setTelegramAuthUrl(`/api/tg-auth/callback?kick_user_id=${userData.id}`)
+            // Navigate directly to Telegram bot with auth token
+            const botUsername = 'Sweetflipskickauthbot'
+            const authData = JSON.stringify({ kick_user_id: userData.id, timestamp: Date.now() })
+            const authToken = btoa(authData)
+            const telegramUrl = `https://t.me/${botUsername}?start=${authToken}`
+            window.location.href = telegramUrl
             return
         }
 
@@ -146,14 +147,6 @@ export default function ProfilePage() {
             fetchConnectedAccounts()
         }
     }, [userData?.id, activeTab])
-
-    useEffect(() => {
-        // Clear Telegram auth URL if Telegram is connected
-        const telegram = connectedAccounts.find(acc => acc.provider === 'telegram')
-        if (telegram?.connected) {
-            setTelegramAuthUrl(null)
-        }
-    }, [connectedAccounts])
 
     useEffect(() => {
         // Handle URL parameters for OAuth callbacks
@@ -726,7 +719,7 @@ export default function ProfilePage() {
                                                                     <div className="flex items-center gap-4">
                                                                         <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
                                                                             <img
-                                                                                src="/Discord-Emblem.png"
+                                                                                src="/discord.png"
                                                                                 alt="Discord"
                                                                                 width="48"
                                                                                 height="48"
@@ -828,49 +821,15 @@ export default function ProfilePage() {
                                                                             Disconnect
                                                                         </button>
                                                                     ) : (
-                                                                        <div className="flex flex-col items-end gap-2">
-                                                                            {telegramAuthUrl && (
-                                                                                <>
-                                                                                    <div id="telegram-login-widget"></div>
-                                                                                    <Script
-                                                                                        id="telegram-widget-script"
-                                                                                        strategy="afterInteractive"
-                                                                                        dangerouslySetInnerHTML={{
-                                                                                            __html: `
-                                                                                                (function() {
-                                                                                                    if (typeof window !== 'undefined') {
-                                                                                                        const script = document.createElement('script');
-                                                                                                        script.async = true;
-                                                                                                        script.src = 'https://telegram.org/js/telegram-widget.js?22';
-                                                                                                        script.setAttribute('data-telegram-login', 'Sweetflipskickauthbot');
-                                                                                                        script.setAttribute('data-size', 'medium');
-                                                                                                        script.setAttribute('data-radius', '8');
-                                                                                                        script.setAttribute('data-userpic', 'false');
-                                                                                                        script.setAttribute('data-request-access', 'write');
-                                                                                                        script.setAttribute('data-auth-url', window.location.origin + '${telegramAuthUrl}');
-                                                                                                        const container = document.getElementById('telegram-login-widget');
-                                                                                                        if (container) {
-                                                                                                            container.appendChild(script);
-                                                                                                        }
-                                                                                                    }
-                                                                                                })();
-                                                                                            `,
-                                                                                        }}
-                                                                                    />
-                                                                                </>
-                                                                            )}
-                                                                            {!telegramAuthUrl && (
-                                                                                <button
-                                                                                    onClick={() => handleConnectAccount('telegram')}
-                                                                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-xs font-medium"
-                                                                                >
-                                                                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                                                                        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16l-1.704 8.04c-.128.576-.456.718-.927.446l-2.56-1.888-1.234 1.184c-.14.14-.258.258-.53.258l.184-2.608 4.736-4.28c.206-.184-.046-.286-.32-.104l-5.856 3.688-2.52-.788c-.54-.168-.554-.54.112-.804l9.856-3.8c.448-.16.84.112.696.696z"/>
-                                                                                    </svg>
-                                                                                    Connect Telegram
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => handleConnectAccount('telegram')}
+                                                                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-xs font-medium"
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                                                                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16l-1.704 8.04c-.128.576-.456.718-.927.446l-2.56-1.888-1.234 1.184c-.14.14-.258.258-.53.258l.184-2.608 4.736-4.28c.206-.184-.046-.286-.32-.104l-5.856 3.688-2.52-.788c-.54-.168-.554-.54.112-.804l9.856-3.8c.448-.16.84.112.696.696z"/>
+                                                                            </svg>
+                                                                            Connect Telegram
+                                                                        </button>
                                                                     )}
                                                                 </div>
                                                             </div>

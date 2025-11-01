@@ -144,7 +144,7 @@ export default function LeaderboardPage() {
                                                                     )}
                                                                     {entry.verification_methods.discord && (
                                                                         <img
-                                                                            src="/Discord-Emblem.png"
+                                                                            src="/discord.png"
                                                                             alt="Discord connected"
                                                                             width={16}
                                                                             height={16}
