@@ -8,6 +8,10 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Connection pooling configuration
+  // connection_limit sets the maximum number of connections Prisma can use
+  // Railway PostgreSQL typically allows 100 connections, we use 10 for safety
+  directUrl = env("DIRECT_URL") // Optional: for migrations using direct connection
 }
 
 model User {
