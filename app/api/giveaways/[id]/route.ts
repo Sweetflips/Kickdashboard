@@ -17,6 +17,12 @@ export async function GET(
     }
 
     const auth = await getAuthenticatedUser(request)
+    if (!auth) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const giveawayId = BigInt(params.id)
 
@@ -120,6 +126,12 @@ export async function PUT(
     }
 
     const auth = await getAuthenticatedUser(request)
+    if (!auth) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const giveawayId = BigInt(params.id)
 
@@ -191,6 +203,12 @@ export async function DELETE(
     }
 
     const auth = await getAuthenticatedUser(request)
+    if (!auth) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const giveawayId = BigInt(params.id)
 
