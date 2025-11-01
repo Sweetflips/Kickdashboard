@@ -16,6 +16,12 @@ export async function GET(request: Request) {
     }
 
     const auth = await getAuthenticatedUser(request)
+    if (!auth) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -106,6 +112,12 @@ export async function POST(request: Request) {
     }
 
     const auth = await getAuthenticatedUser(request)
+    if (!auth) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const body = await request.json()
     const { prize_amount, number_of_winners, entry_min_points, stream_session_id } = body
