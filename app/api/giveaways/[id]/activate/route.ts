@@ -18,6 +18,12 @@ export async function POST(
     }
 
     const auth = await getAuthenticatedUser(request)
+    if (!auth) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const giveawayId = BigInt(params.id)
 
