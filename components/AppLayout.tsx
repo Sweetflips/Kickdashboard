@@ -84,6 +84,25 @@ export default function AppLayout({ children }: LayoutProps) {
         fetchUserData()
     }, [isAuthenticated])
 
+    // Close sidebar on mobile when navigating
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        const handleResize = () => {
+            if (window.innerWidth >= 1024) {
+                setSidebarOpen(false)
+            }
+        }
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
+
+    // Close sidebar when pathname changes on mobile
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+            setSidebarOpen(false)
+        }
+    }, [pathname])
+
     const fetchUserData = async () => {
         try {
             const token = localStorage.getItem('kick_access_token')
@@ -181,7 +200,11 @@ export default function AppLayout({ children }: LayoutProps) {
                     </div>
                     <ul className="space-y-2">
                         <li>
-                            <Link href="/" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`}>
+                            <Link href="/" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                    setSidebarOpen(false)
+                                }
+                            }}>
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                                 </svg>
@@ -189,7 +212,11 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/leaderboard" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/leaderboard' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`}>
+                            <Link href="/leaderboard" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/leaderboard' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                    setSidebarOpen(false)
+                                }
+                            }}>
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
                                     <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
@@ -198,50 +225,23 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/streams" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/streams' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`}>
+                            <Link href="/streams" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                    setSidebarOpen(false)
+                                }
+                            }}>
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
                                 </svg>
                                 <span className="ml-3 text-body font-medium">Past Streams</span>
                             </Link>
                         </li>
-                        {userData?.is_admin && (
-                            <>
-                                <li className="mt-4 mb-2">
-                                    <div className="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-secondary uppercase tracking-wider">
-                                        Admin
-                                    </div>
-                                </li>
-                                <li>
-                                    <Link href="/admin/analytics" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/analytics' || pathname === '/analytics' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Analytics</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/giveaways" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/giveaways' || pathname === '/giveaways' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Giveaways</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/users" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/users' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">User Management</span>
-                                    </Link>
-                                </li>
-                            </>
-                        )}
                         <li>
-                            <Link href="/profile" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`}>
+                            <Link href="/profile" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                    setSidebarOpen(false)
+                                }
+                            }}>
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
                                 </svg>
@@ -269,9 +269,9 @@ export default function AppLayout({ children }: LayoutProps) {
                             <Image
                                 src="/sweet_flips (2).png"
                                 alt="SweetFlips Logo"
-                                width={120}
-                                height={40}
-                                className="h-8 w-auto object-contain"
+                                width={360}
+                                height={120}
+                                className="h-24 w-auto object-contain"
                                 priority
                             />
                         </div>
