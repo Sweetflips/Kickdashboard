@@ -32,27 +32,30 @@ export async function GET(request: Request) {
 
         // Calculate points for sorting (needs to be done before sorting when date filter is applied)
         let usersWithPoints = allUsers
+        let userPointsMap: Map<number, number> = new Map()
 
         if (hasDateFilter && dateFilter) {
-            // Calculate points for each user within date range
-            usersWithPoints = await Promise.all(
-                allUsers.map(async (user) => {
-                    const pointHistory = await db.pointHistory.findMany({
-                        where: {
-                            user_id: user.id,
-                            earned_at: dateFilter,
-                        },
-                        select: {
-                            points_earned: true,
-                        },
-                    })
-                    const calculatedPoints = pointHistory.reduce((sum, ph) => sum + ph.points_earned, 0)
-                    return {
-                        ...user,
-                        _calculatedPoints: calculatedPoints,
-                    }
-                })
-            )
+            // Batch query all point history with aggregation
+            const pointHistoryAggregates = await db.pointHistory.groupBy({
+                by: ['user_id'],
+                where: {
+                    earned_at: dateFilter,
+                },
+                _sum: {
+                    points_earned: true,
+                },
+            })
+
+            // Create map for quick lookup
+            pointHistoryAggregates.forEach((agg) => {
+                userPointsMap.set(Number(agg.user_id), agg._sum.points_earned || 0)
+            })
+
+            // Add calculated points to users
+            usersWithPoints = allUsers.map((user) => ({
+                ...user,
+                _calculatedPoints: userPointsMap.get(Number(user.id)) || 0,
+            }))
         }
 
         // Sort users by points (descending), then by last login (descending)
@@ -81,126 +84,204 @@ export async function GET(request: Request) {
         // Get total count of all users
         const total = allUsers.length
 
-        // Calculate additional stats for each user
-        const formattedLeaderboard = await Promise.all(
-            users.map(async (user, index) => {
-                const kickUserId = user.kick_user_id
+        // Batch fetch all stats for paginated users to avoid connection exhaustion
+        const kickUserIds = users.map(u => Number(u.kick_user_id))
+        const userIds = users.map(u => Number(u.id))
 
-                // Calculate points based on date filter
-                let totalPoints = 0
-                let totalEmotes = 0
-                let lastPointEarnedAt: Date | null = null
+        // Batch fetch all aggregated stats
+        let pointsMap: Map<number, number> = new Map()
+        let emotesMap: Map<number, number> = new Map()
+        let messagesMap: Map<number, number> = new Map()
+        let streamsMap: Map<number, number> = new Map()
+        let lastPointEarnedMap: Map<number, Date | null> = new Map()
 
-                if (hasDateFilter && dateFilter) {
-                    // Get points from point history within date range
-                    const pointHistory = await db.pointHistory.findMany({
-                        where: {
-                            user_id: user.id,
-                            earned_at: dateFilter,
-                        },
-                        select: {
-                            points_earned: true,
-                            earned_at: true,
-                        },
-                    })
+        if (hasDateFilter && dateFilter) {
+            // Batch query point history aggregates
+            const pointAggregates = await db.pointHistory.groupBy({
+                by: ['user_id'],
+                where: {
+                    user_id: { in: userIds },
+                    earned_at: dateFilter,
+                },
+                _sum: {
+                    points_earned: true,
+                },
+                _max: {
+                    earned_at: true,
+                },
+            })
 
-                    // Get emotes from messages within date range
-                    // Exclude offline messages
-                    const emotesResult = await db.chatMessage.findMany({
-                        where: {
-                            sender_user_id: kickUserId,
-                            created_at: dateFilter,
-                            sent_when_offline: false,
-                        },
-                        select: {
-                            emotes: true,
-                        },
-                    })
+            pointAggregates.forEach((agg) => {
+                pointsMap.set(Number(agg.user_id), agg._sum.points_earned || 0)
+                lastPointEarnedMap.set(Number(agg.user_id), agg._max.earned_at || null)
+            })
 
-                    // Filter messages that actually have emotes (not null/empty)
-                    totalEmotes = emotesResult.filter(msg => {
-                        const emotes = msg.emotes
-                        return emotes !== null &&
-                            emotes !== undefined &&
-                            Array.isArray(emotes) &&
-                            emotes.length > 0
-                    }).length
-
-                    totalPoints = pointHistory.reduce((sum, ph) => sum + ph.points_earned, 0)
-
-                    const latestPoint = pointHistory.sort((a, b) =>
-                        b.earned_at.getTime() - a.earned_at.getTime()
-                    )[0]
-                    lastPointEarnedAt = latestPoint?.earned_at || null
-                } else {
-                    // Use aggregated points from UserPoints table
-                    const userPoints = user.points
-                    totalPoints = userPoints?.total_points || 0
-                    totalEmotes = userPoints?.total_emotes || 0
-                    lastPointEarnedAt = userPoints?.last_point_earned_at || null
-                }
-
-                // Get total messages sent by this user (with date filter if applicable)
-                // Exclude messages sent when offline
-                const messageWhere: any = {
-                    sender_user_id: kickUserId,
+            // Batch query emotes count (messages with emotes)
+            // Note: Can't filter JSON fields directly, so fetch all and filter in code
+            const emotesQuery = await db.chatMessage.findMany({
+                where: {
+                    sender_user_id: { in: kickUserIds },
+                    created_at: dateFilter,
                     sent_when_offline: false,
-                }
-                if (hasDateFilter && dateFilter) {
-                    messageWhere.created_at = dateFilter
-                }
+                },
+                select: {
+                    sender_user_id: true,
+                    emotes: true,
+                },
+            })
 
-                const totalMessages = await db.chatMessage.count({
-                    where: messageWhere,
-                })
-
-                // Get unique stream sessions watched (streams where user sent at least one message)
-                // Filter by date range if applicable and exclude offline messages
-                const streamWhere: any = {
-                    sender_user_id: kickUserId,
-                    stream_session_id: { not: null },
-                    sent_when_offline: false,
-                }
-                if (hasDateFilter && dateFilter) {
-                    streamWhere.created_at = dateFilter
-                }
-
-                const streamsWatchedResult = await db.chatMessage.groupBy({
-                    by: ['stream_session_id'],
-                    where: streamWhere,
-                })
-
-                const streamsWatched = streamsWatchedResult.length
-
-                // Determine verification methods
-                const hasKickLogin = !!user.last_login_at
-                const hasDiscord = user.discord_connected || false
-                const hasTelegram = user.telegram_connected || false
-
-                // Determine if user is verified (has logged in at least once)
-                const isVerified = hasKickLogin || hasDiscord || hasTelegram
-
-                return {
-                    rank: offset + index + 1,
-                    user_id: user.id.toString(),
-                    kick_user_id: kickUserId.toString(),
-                    username: user.username,
-                    profile_picture_url: user.custom_profile_picture_url || user.profile_picture_url,
-                    total_points: totalPoints,
-                    total_emotes: totalEmotes,
-                    total_messages: totalMessages || 0,
-                    streams_watched: streamsWatched || 0,
-                    last_point_earned_at: lastPointEarnedAt?.toISOString() || null,
-                    is_verified: isVerified,
-                    last_login_at: user.last_login_at?.toISOString() || null,
-                    verification_methods: {
-                        kick: hasKickLogin,
-                        discord: hasDiscord,
-                        telegram: hasTelegram,
-                    },
+            // Group by user and count messages with non-empty emotes
+            const emotesByUser = new Map<number, number>()
+            emotesQuery.forEach((msg) => {
+                const kickUserId = Number(msg.sender_user_id)
+                const emotes = msg.emotes
+                if (emotes && Array.isArray(emotes) && emotes.length > 0) {
+                    emotesByUser.set(kickUserId, (emotesByUser.get(kickUserId) || 0) + 1)
                 }
             })
-        )
+            emotesMap = emotesByUser
+
+            // Batch query message counts
+            const messageCounts = await db.chatMessage.groupBy({
+                by: ['sender_user_id'],
+                where: {
+                    sender_user_id: { in: kickUserIds },
+                    created_at: dateFilter,
+                    sent_when_offline: false,
+                },
+                _count: {
+                    id: true,
+                },
+            })
+
+            messageCounts.forEach((count) => {
+                messagesMap.set(Number(count.sender_user_id), Number(count._count.id))
+            })
+
+            // Batch query streams watched
+            const streamsWatched = await db.chatMessage.groupBy({
+                by: ['sender_user_id', 'stream_session_id'],
+                where: {
+                    sender_user_id: { in: kickUserIds },
+                    created_at: dateFilter,
+                    stream_session_id: { not: null },
+                    sent_when_offline: false,
+                },
+            })
+
+            const streamsByUser = new Map<number, Set<number>>()
+            streamsWatched.forEach((stream) => {
+                const kickUserId = Number(stream.sender_user_id)
+                const sessionId = stream.stream_session_id ? Number(stream.stream_session_id) : null
+                if (sessionId) {
+                    if (!streamsByUser.has(kickUserId)) {
+                        streamsByUser.set(kickUserId, new Set())
+                    }
+                    streamsByUser.get(kickUserId)!.add(sessionId)
+                }
+            })
+
+            streamsByUser.forEach((sessionSet, kickUserId) => {
+                streamsMap.set(kickUserId, sessionSet.size)
+            })
+        } else {
+            // For non-filtered, use pre-aggregated data from UserPoints
+            users.forEach((user) => {
+                const userPoints = user.points
+                pointsMap.set(Number(user.id), userPoints?.total_points || 0)
+                emotesMap.set(Number(user.kick_user_id), userPoints?.total_emotes || 0)
+                lastPointEarnedMap.set(Number(user.id), userPoints?.last_point_earned_at || null)
+            })
+
+            // Batch query message counts
+            const messageCounts = await db.chatMessage.groupBy({
+                by: ['sender_user_id'],
+                where: {
+                    sender_user_id: { in: kickUserIds },
+                    sent_when_offline: false,
+                },
+                _count: {
+                    id: true,
+                },
+            })
+
+            messageCounts.forEach((count) => {
+                messagesMap.set(Number(count.sender_user_id), Number(count._count.id))
+            })
+
+            // Batch query streams watched
+            const streamsWatched = await db.chatMessage.groupBy({
+                by: ['sender_user_id', 'stream_session_id'],
+                where: {
+                    sender_user_id: { in: kickUserIds },
+                    stream_session_id: { not: null },
+                    sent_when_offline: false,
+                },
+            })
+
+            const streamsByUser = new Map<number, Set<number>>()
+            streamsWatched.forEach((stream) => {
+                const kickUserId = Number(stream.sender_user_id)
+                const sessionId = stream.stream_session_id ? Number(stream.stream_session_id) : null
+                if (sessionId) {
+                    if (!streamsByUser.has(kickUserId)) {
+                        streamsByUser.set(kickUserId, new Set())
+                    }
+                    streamsByUser.get(kickUserId)!.add(sessionId)
+                }
+            })
+
+            streamsByUser.forEach((sessionSet, kickUserId) => {
+                streamsMap.set(kickUserId, sessionSet.size)
+            })
+        }
+
+        // Build formatted leaderboard from batch data
+        const formattedLeaderboard = users.map((user, index) => {
+            const kickUserId = Number(user.kick_user_id)
+            const userId = Number(user.id)
+
+            const totalPoints = hasDateFilter && dateFilter
+                ? (pointsMap.get(userId) || 0)
+                : (user.points?.total_points || 0)
+
+            const totalEmotes = hasDateFilter && dateFilter
+                ? (emotesMap.get(kickUserId) || 0)
+                : (user.points?.total_emotes || 0)
+
+            const lastPointEarnedAt = hasDateFilter && dateFilter
+                ? (lastPointEarnedMap.get(userId) || null)
+                : (user.points?.last_point_earned_at || null)
+
+            const totalMessages = messagesMap.get(kickUserId) || 0
+            const streamsWatched = streamsMap.get(kickUserId) || 0
+
+            // Determine verification methods
+            const hasKickLogin = !!user.last_login_at
+            const hasDiscord = user.discord_connected || false
+            const hasTelegram = user.telegram_connected || false
+            const isVerified = hasKickLogin || hasDiscord || hasTelegram
+
+            return {
+                rank: offset + index + 1,
+                user_id: userId.toString(),
+                kick_user_id: kickUserId.toString(),
+                username: user.username,
+                profile_picture_url: user.custom_profile_picture_url || user.profile_picture_url,
+                total_points: totalPoints,
+                total_emotes: totalEmotes,
+                total_messages: totalMessages,
+                streams_watched: streamsWatched,
+                last_point_earned_at: lastPointEarnedAt?.toISOString() || null,
+                is_verified: isVerified,
+                last_login_at: user.last_login_at?.toISOString() || null,
+                verification_methods: {
+                    kick: hasKickLogin,
+                    discord: hasDiscord,
+                    telegram: hasTelegram,
+                },
+            }
+        })
 
         return NextResponse.json({
             leaderboard: formattedLeaderboard,
