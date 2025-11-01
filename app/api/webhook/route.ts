@@ -315,7 +315,7 @@ export async function POST(request: Request) {
                 }
             }
 
-            console.log(`✅ Saved message to database: ${message.message_id}`)
+            console.log(`✅ Saved message to database: ${message.message_id} (sent_when_offline: ${sentWhenOffline})`)
         } catch (dbError) {
             console.error('❌ Error saving message to database:', dbError)
             return NextResponse.json(
