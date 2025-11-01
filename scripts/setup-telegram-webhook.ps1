@@ -68,3 +68,4 @@ curl "https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo"
 3. **Run the script** with your ngrok URL
 
 4. **Test**: Send a message to your bot on Telegram, then check your server logs
+

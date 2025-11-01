@@ -5,3 +5,4 @@ ALTER TABLE "users" ADD COLUMN "email_notifications_enabled" BOOLEAN NOT NULL DE
 ALTER TABLE "users" ADD COLUMN "chat_font_size" TEXT DEFAULT '14px';
 ALTER TABLE "users" ADD COLUMN "chat_show_timestamps" BOOLEAN NOT NULL DEFAULT true;
 
+

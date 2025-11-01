@@ -4,3 +4,4 @@ ALTER TABLE "giveaways" ADD COLUMN IF NOT EXISTS "number_of_winners" INTEGER NOT
 
 -- Migrate existing prize_info to prize_amount if needed
 UPDATE "giveaways" SET "prize_amount" = "prize_info" WHERE "prize_amount" IS NULL AND "prize_info" IS NOT NULL;
+

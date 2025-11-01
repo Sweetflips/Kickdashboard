@@ -19,6 +19,10 @@ export async function GET(request: Request) {
                             username: true,
                             profile_picture_url: true,
                             custom_profile_picture_url: true,
+                            last_login_at: true,
+                            discord_connected: true,
+                            telegram_connected: true,
+                            kick_connected: true,
                         },
                     },
                 },
@@ -50,6 +54,12 @@ export async function GET(request: Request) {
 
                 const streamsWatched = streamsWatchedResult.length
 
+                // Determine if user is verified (has logged in at least once)
+                const isVerified = !!entry.user.last_login_at ||
+                                   entry.user.discord_connected ||
+                                   entry.user.telegram_connected ||
+                                   entry.user.kick_connected
+
                 return {
                     rank: offset + index + 1,
                     user_id: entry.user_id.toString(),
@@ -61,6 +71,8 @@ export async function GET(request: Request) {
                     total_messages: totalMessages || 0,
                     streams_watched: streamsWatched || 0,
                     last_point_earned_at: entry.last_point_earned_at?.toISOString() || null,
+                    is_verified: isVerified,
+                    last_login_at: entry.user.last_login_at?.toISOString() || null,
                 }
             })
         )

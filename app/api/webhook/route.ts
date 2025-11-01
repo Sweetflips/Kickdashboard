@@ -160,38 +160,26 @@ export async function POST(request: Request) {
                 orderBy: { started_at: 'desc' },
             })
 
-            // If no active session exists, stream is offline - don't save message or award points
-            if (!activeSession) {
-                console.log(`ℹ️ No active session found for broadcaster ${broadcasterUserId} - stream is offline. Skipping message save and points.`)
-                return NextResponse.json({
-                    success: false,
-                    message: 'Stream is offline - no points awarded',
-                    pointsEarned: 0
+            // Determine if message was sent when offline
+            const sentWhenOffline = !activeSession
+
+            // If there's an active session, double-check it's still active (prevent race conditions)
+            let sessionIsActive = false
+            if (activeSession) {
+                const sessionCheck = await db.streamSession.findUnique({
+                    where: { id: activeSession.id },
+                    select: { ended_at: true },
                 })
+                sessionIsActive = sessionCheck !== null && sessionCheck.ended_at === null
             }
 
-            // Double-check session is still active (prevent race conditions)
-            const sessionCheck = await db.streamSession.findUnique({
-                where: { id: activeSession.id },
-                select: { ended_at: true },
-            })
-
-            if (!sessionCheck || sessionCheck.ended_at !== null) {
-                console.log(`ℹ️ Session ${activeSession.id} has ended - skipping message save and points.`)
-                return NextResponse.json({
-                    success: false,
-                    message: 'Stream session has ended - no points awarded',
-                    pointsEarned: 0
-                })
-            }
-
-            // Calculate points earned before saving message
+            // Calculate points earned (only when stream is active)
             const senderUsername = message.sender.username.toLowerCase()
             let pointsEarned = 0
-            if (!isBot(senderUsername)) {
+            if (!sentWhenOffline && sessionIsActive && !isBot(senderUsername)) {
                 const pointResult = await awardPoint(
                     senderUserId,
-                    activeSession.id,
+                    activeSession!.id,
                     message.message_id,
                     message.sender.identity?.badges
                 )
@@ -202,7 +190,11 @@ export async function POST(request: Request) {
                     console.log(`⏸️ Point not awarded to ${message.sender.username}: ${pointResult.reason}`)
                 }
             } else {
-                console.log(`🤖 Skipped points for bot: ${message.sender.username}`)
+                if (sentWhenOffline) {
+                    console.log(`ℹ️ Message sent when stream is offline - no points awarded`)
+                } else if (isBot(senderUsername)) {
+                    console.log(`🤖 Skipped points for bot: ${message.sender.username}`)
+                }
             }
 
             // Extract emotes from content if not provided separately
@@ -218,17 +210,18 @@ export async function POST(request: Request) {
             }
 
             // Count and track emotes (only when stream is live)
-            // Skip counting emotes from messages sent by bots
-            if (emotesToSave.length > 0 && !isBot(senderUsername)) {
+            // Skip counting emotes from messages sent by bots or when offline
+            if (emotesToSave.length > 0 && !sentWhenOffline && sessionIsActive && !isBot(senderUsername)) {
                 await awardEmotes(senderUserId, emotesToSave)
             }
 
             // Save message to database (use upsert to handle duplicates gracefully)
+            // Always save messages, even when offline
             await db.chatMessage.upsert({
                 where: { message_id: message.message_id },
                 update: {
                     // Update with latest data if message already exists
-                    stream_session_id: activeSession?.id ?? null,
+                    stream_session_id: sessionIsActive ? activeSession!.id : null,
                     sender_username: message.sender.username,
                     content: message.content,
                     emotes: emotesToSave,
@@ -238,10 +231,11 @@ export async function POST(request: Request) {
                     sender_is_verified: message.sender.is_verified || false,
                     sender_is_anonymous: message.sender.is_anonymous || false,
                     points_earned: pointsEarned,
+                    sent_when_offline: sentWhenOffline,
                 },
                 create: {
                     message_id: message.message_id,
-                    stream_session_id: activeSession?.id ?? null,
+                    stream_session_id: sessionIsActive ? activeSession!.id : null,
                     sender_user_id: senderUserId,
                     sender_username: message.sender.username,
                     broadcaster_user_id: broadcasterUserId,
@@ -253,11 +247,12 @@ export async function POST(request: Request) {
                     sender_is_verified: message.sender.is_verified || false,
                     sender_is_anonymous: message.sender.is_anonymous || false,
                     points_earned: pointsEarned,
+                    sent_when_offline: sentWhenOffline,
                 },
             })
 
-            // Update stream session message count if session exists
-            if (activeSession) {
+            // Update stream session message count if session exists and is active
+            if (sessionIsActive && activeSession) {
                 const messageCount = await db.chatMessage.count({
                     where: { stream_session_id: activeSession.id },
                 })
@@ -271,7 +266,8 @@ export async function POST(request: Request) {
             }
 
             // Auto-entry for active giveaways - update entry points as user earns more
-            if (!isBot(senderUsername) && activeSession) {
+            // Only process when stream is active
+            if (!isBot(senderUsername) && sessionIsActive && activeSession) {
                 try {
                     const activeGiveaway = await getActiveGiveaway(broadcasterUserId, activeSession.id)
                     if (activeGiveaway && activeGiveaway.stream_session_id === activeSession.id) {

@@ -76,3 +76,4 @@ ALTER TABLE "giveaway_winners" ADD CONSTRAINT "giveaway_winners_entry_id_fkey" F
 
 -- AddForeignKey
 ALTER TABLE "giveaway_winners" ADD CONSTRAINT "giveaway_winners_segment_id_fkey" FOREIGN KEY ("segment_id") REFERENCES "giveaway_segments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+

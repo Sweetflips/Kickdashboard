@@ -86,6 +86,7 @@ model ChatMessage {
   sender_is_verified Boolean  @default(false)
   sender_is_anonymous Boolean @default(false)
   points_earned    Int       @default(0)
+  sent_when_offline Boolean  @default(false)
   created_at        DateTime  @default(now())
 
   // Relations

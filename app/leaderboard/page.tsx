@@ -14,6 +14,8 @@ interface LeaderboardEntry {
     total_messages: number
     streams_watched: number
     last_point_earned_at: string | null
+    is_verified?: boolean
+    last_login_at?: string | null
 }
 
 export default function LeaderboardPage() {
@@ -84,7 +86,7 @@ export default function LeaderboardPage() {
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Emotes</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Streams Watched</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Messages Sent</th>
-                                            <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Last Activity</th>
+                                            <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Last Login</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -118,9 +120,21 @@ export default function LeaderboardPage() {
                                                                 </span>
                                                             </div>
                                                         )}
-                                                        <span className="font-medium text-body text-gray-900 dark:text-kick-text">
-                                                            {entry.username}
-                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-medium text-body text-gray-900 dark:text-kick-text">
+                                                                {entry.username}
+                                                            </span>
+                                                            {entry.is_verified && (
+                                                                <img
+                                                                    src="/verifiedicon.svg"
+                                                                    alt="Verified"
+                                                                    width={16}
+                                                                    height={16}
+                                                                    className="object-contain"
+                                                                    title="Verified user"
+                                                                />
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
@@ -144,8 +158,8 @@ export default function LeaderboardPage() {
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-small text-gray-600 dark:text-kick-text-secondary">
-                                                    {entry.last_point_earned_at
-                                                        ? new Date(entry.last_point_earned_at).toLocaleDateString()
+                                                    {entry.last_login_at
+                                                        ? new Date(entry.last_login_at).toLocaleString()
                                                         : 'Never'}
                                                 </td>
                                             </tr>

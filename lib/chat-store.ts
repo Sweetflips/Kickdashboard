@@ -33,6 +33,7 @@ export interface ChatMessage {
     }>
     timestamp: number
     points_earned?: number
+    sent_when_offline?: boolean
 }
 
 // In-memory storage for chat messages (in production, use a database)

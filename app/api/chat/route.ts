@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         const [messages, total] = await Promise.all([
             db.chatMessage.findMany({
                 where,
-                orderBy: { created_at: 'desc' },
+                orderBy: { timestamp: 'desc' },
                 take: limit,
                 skip: offset,
                 include: {
@@ -97,6 +97,7 @@ export async function GET(request: Request) {
             emotes: (msg.emotes as any) || [],
             timestamp: Number(msg.timestamp),
             points_earned: msg.points_earned || 0,
+            sent_when_offline: msg.sent_when_offline || false,
         }))
 
         console.log(`📡 Chat API: Returning ${formattedMessages.length} messages from database (total: ${total}, limit: ${limit}, offset: ${offset})`)
