@@ -146,7 +146,7 @@ export async function GET(request: Request) {
                 }
             } else {
                 // Format online message
-                const onlineMsg = msg as typeof onlineMessages[0]
+                const onlineMsg = msg as typeof onlineMessages[0] & { isOffline: false }
                 return {
                     message_id: onlineMsg.message_id,
                     broadcaster: {
