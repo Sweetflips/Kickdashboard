@@ -119,7 +119,8 @@ export default function Dashboard() {
         const fetchStreamLeaderboard = async () => {
             try {
                 setLeaderboardLoading(true)
-                const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}`)
+                // Always fetch fresh data from database - add timestamp to prevent caching
+                const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}&_t=${Date.now()}`)
                 if (!response.ok) {
                     throw new Error('Failed to fetch stream leaderboard')
                 }
@@ -163,13 +164,14 @@ export default function Dashboard() {
             }
         }
 
+        // Fetch immediately on mount and when dependencies change
         fetchStreamLeaderboard()
-        // Refresh leaderboard every 10 seconds only when live
+        // Refresh leaderboard every 5 seconds only when live (faster updates)
         const interval = setInterval(() => {
             if (isLive) {
                 fetchStreamLeaderboard()
             }
-        }, 10000)
+        }, 5000)
         return () => clearInterval(interval)
     }, [channelData?.broadcaster_user_id, isLive])
     const viewerCount = channelData?.viewer_count || 0

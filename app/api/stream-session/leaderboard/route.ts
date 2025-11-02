@@ -68,10 +68,12 @@ export async function GET(request: Request) {
         }
 
         // Get all messages for this session to count per user
+        // Note: Offline messages are in a separate table, so we only query chat_messages
+        // This ensures stats always reflect real-time database state
         const allMessages = await db.chatMessage.findMany({
             where: {
                 stream_session_id: session.id,
-                sent_when_offline: false,
+                // sent_when_offline is always false now since offline messages are in separate table
             },
             select: {
                 sender_user_id: true, // This is kick_user_id
