@@ -184,19 +184,6 @@ export async function POST(request: Request) {
             sessionIsActive = sessionCheck !== null && sessionCheck.ended_at === null
         }
 
-        // Calculate points earned (only when stream is active)
-        const senderUsernameLower = senderUsername.toLowerCase()
-        let pointsEarned = 0
-        if (!sentWhenOffline && sessionIsActive && !isBot(senderUsernameLower)) {
-            const pointResult = await awardPoint(
-                senderUserId,
-                activeSession!.id,
-                message.message_id,
-                message.sender.identity?.badges
-            )
-            pointsEarned = pointResult.pointsEarned || 0
-        }
-
         // Extract emotes from content if not provided separately
         let emotesToSave = message.emotes || []
         if (!Array.isArray(emotesToSave) || emotesToSave.length === 0) {
@@ -209,21 +196,9 @@ export async function POST(request: Request) {
             }
         }
 
-        // Count and track emotes (only when stream is live)
-        // Skip counting emotes from messages sent by bots or when offline
-        if (emotesToSave.length > 0 && !sentWhenOffline && sessionIsActive && !isBot(senderUsernameLower)) {
-            try {
-                await awardEmotes(senderUserId, emotesToSave)
-            } catch (emoteError) {
-                // Don't fail message save if emote award fails
-                console.warn('Failed to award emotes (non-critical):', emoteError)
-            }
-        }
-
-        // Save message to database (use upsert to handle duplicates gracefully)
+        // Save message to database using create-first pattern for idempotency
         // ALWAYS save messages, even when offline or if other operations fail
         try {
-
             // Log emotes structure for debugging (only occasionally)
             if (emotesToSave.length > 0 && Math.random() < 0.01) {
                 console.log('💾 Saving message with emotes:', {
@@ -235,73 +210,128 @@ export async function POST(request: Request) {
                 })
             }
 
-            if (sentWhenOffline) {
-                // Save offline messages to separate table
-                await db.offlineChatMessage.upsert({
-                    where: { message_id: message.message_id },
-                    update: {
-                        sender_username: message.sender.username,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                    },
-                    create: {
-                        message_id: message.message_id,
-                        sender_user_id: senderUserId,
-                        sender_username: message.sender.username,
-                        broadcaster_user_id: broadcasterUserId,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                    },
-                })
-                console.log(`✅ Saved offline message to database: ${message.message_id}`)
-            } else {
-                // Save online messages to regular table
-                const messageData = {
-                    message_id: message.message_id,
-                    stream_session_id: sessionIsActive ? activeSession!.id : null,
-                    sender_user_id: senderUserId,
-                    sender_username: message.sender.username,
-                    broadcaster_user_id: broadcasterUserId,
-                    content: message.content,
-                    emotes: emotesToSave,
-                    timestamp: BigInt(message.timestamp),
-                    sender_username_color: message.sender.identity?.username_color || null,
-                    sender_badges: message.sender.identity?.badges || undefined,
-                    sender_is_verified: message.sender.is_verified || false,
-                    sender_is_anonymous: message.sender.is_anonymous || false,
-                    points_earned: pointsEarned,
-                    sent_when_offline: false,
-                }
+            let isNewMessage = false
+            let pointsEarned = 0
+            const senderUsernameLower = senderUsername.toLowerCase()
 
-                await db.chatMessage.upsert({
-                    where: { message_id: message.message_id },
-                    update: {
-                        // Update with latest data if message already exists
-                        stream_session_id: sessionIsActive ? activeSession!.id : null,
-                        sender_username: message.sender.username,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                        points_earned: pointsEarned,
-                        sent_when_offline: false,
-                    },
-                    create: messageData,
-                })
-                console.log(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
+            if (sentWhenOffline) {
+                // Try to create offline message first
+                try {
+                    await db.offlineChatMessage.create({
+                        data: {
+                            message_id: message.message_id,
+                            sender_user_id: senderUserId,
+                            sender_username: message.sender.username,
+                            broadcaster_user_id: broadcasterUserId,
+                            content: message.content,
+                            emotes: emotesToSave,
+                            timestamp: BigInt(message.timestamp),
+                            sender_username_color: message.sender.identity?.username_color || null,
+                            sender_badges: message.sender.identity?.badges || undefined,
+                            sender_is_verified: message.sender.is_verified || false,
+                            sender_is_anonymous: message.sender.is_anonymous || false,
+                        },
+                    })
+                    isNewMessage = true
+                    console.log(`✅ Saved offline message to database: ${message.message_id}`)
+                } catch (createError: any) {
+                    // If message already exists (P2002 unique constraint violation), update it
+                    if (createError.code === 'P2002') {
+                        await db.offlineChatMessage.update({
+                            where: { message_id: message.message_id },
+                            data: {
+                                sender_username: message.sender.username,
+                                content: message.content,
+                                emotes: emotesToSave,
+                                timestamp: BigInt(message.timestamp),
+                                sender_username_color: message.sender.identity?.username_color || null,
+                                sender_badges: message.sender.identity?.badges || undefined,
+                                sender_is_verified: message.sender.is_verified || false,
+                                sender_is_anonymous: message.sender.is_anonymous || false,
+                            },
+                        })
+                        // Message already processed, skip awards
+                    } else {
+                        throw createError
+                    }
+                }
+            } else {
+                // Try to create online message first
+                try {
+                    await db.chatMessage.create({
+                        data: {
+                            message_id: message.message_id,
+                            stream_session_id: sessionIsActive ? activeSession!.id : null,
+                            sender_user_id: senderUserId,
+                            sender_username: message.sender.username,
+                            broadcaster_user_id: broadcasterUserId,
+                            content: message.content,
+                            emotes: emotesToSave,
+                            timestamp: BigInt(message.timestamp),
+                            sender_username_color: message.sender.identity?.username_color || null,
+                            sender_badges: message.sender.identity?.badges || undefined,
+                            sender_is_verified: message.sender.is_verified || false,
+                            sender_is_anonymous: message.sender.is_anonymous || false,
+                            points_earned: 0, // Will be updated after awards
+                            sent_when_offline: false,
+                        },
+                    })
+                    isNewMessage = true
+
+                    // Only award points/emotes for NEW messages when stream is active
+                    if (sessionIsActive && !isBot(senderUsernameLower)) {
+                        // Award points
+                        const pointResult = await awardPoint(
+                            senderUserId,
+                            activeSession!.id,
+                            message.message_id,
+                            message.sender.identity?.badges
+                        )
+                        pointsEarned = pointResult.pointsEarned || 0
+
+                        // Update message with points earned
+                        if (pointsEarned > 0) {
+                            await db.chatMessage.update({
+                                where: { message_id: message.message_id },
+                                data: { points_earned: pointsEarned },
+                            })
+                        }
+
+                        // Award emotes
+                        if (emotesToSave.length > 0) {
+                            try {
+                                await awardEmotes(senderUserId, emotesToSave)
+                            } catch (emoteError) {
+                                // Don't fail message save if emote award fails
+                                console.warn('Failed to award emotes (non-critical):', emoteError)
+                            }
+                        }
+                    }
+
+                    console.log(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
+                } catch (createError: any) {
+                    // If message already exists (P2002 unique constraint violation), update it
+                    if (createError.code === 'P2002') {
+                        await db.chatMessage.update({
+                            where: { message_id: message.message_id },
+                            data: {
+                                stream_session_id: sessionIsActive ? activeSession!.id : null,
+                                sender_username: message.sender.username,
+                                content: message.content,
+                                emotes: emotesToSave,
+                                timestamp: BigInt(message.timestamp),
+                                sender_username_color: message.sender.identity?.username_color || null,
+                                sender_badges: message.sender.identity?.badges || undefined,
+                                sender_is_verified: message.sender.is_verified || false,
+                                sender_is_anonymous: message.sender.is_anonymous || false,
+                                sent_when_offline: false,
+                            },
+                        })
+                        // Message already processed, skip awards (points_earned stays unchanged)
+                    } else {
+                        throw createError
+                    }
+                }
             }
 
             // Update stream session message count if session exists and is active
@@ -322,8 +352,8 @@ export async function POST(request: Request) {
             }
 
             // Auto-entry for active giveaways - update entry points as user earns more
-            // Only process when stream is active
-            if (!isBot(senderUsernameLower) && sessionIsActive && activeSession) {
+            // Only process for NEW messages when stream is active
+            if (isNewMessage && !isBot(senderUsernameLower) && sessionIsActive && activeSession) {
                 try {
                     const activeGiveaway = await getActiveGiveaway(broadcasterUserId, activeSession.id)
                     if (activeGiveaway && activeGiveaway.stream_session_id === activeSession.id) {

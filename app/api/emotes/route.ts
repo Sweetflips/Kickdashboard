@@ -246,11 +246,11 @@ export async function GET(request: Request) {
             console.error(`❌ Error fetching channel data:`, error instanceof Error ? error.message : 'Unknown error')
         }
 
-        // Step 2: Fetch global emotes from Kick
+        // Step 2: Fetch global emotes from Kick public API
         let globalEmotes: any[] = []
         try {
-            console.log(`🔍 Fetching global emotes: ${KICK_API_BASE}/v2/emotes`)
-            const globalResponse = await fetch(`${KICK_API_BASE}/v2/emotes`, {
+            console.log(`🔍 Fetching global emotes: https://api.kick.com/public/v1/emotes/global`)
+            const globalResponse = await fetch(`https://api.kick.com/public/v1/emotes/global`, {
                 headers: {
                     'Accept': 'application/json',
                 },
@@ -258,10 +258,7 @@ export async function GET(request: Request) {
 
             if (globalResponse.ok) {
                 const contentType = globalResponse.headers.get('content-type')
-                if (!contentType || !contentType.includes('application/json')) {
-                    const text = await globalResponse.text()
-                    console.error(`❌ Error fetching global emotes: Response is not JSON. Content-Type: ${contentType}, Body: ${text.substring(0, 200)}`)
-                } else {
+                if (contentType && contentType.includes('application/json')) {
                     const globalData = await globalResponse.json()
                     if (Array.isArray(globalData)) {
                         globalEmotes = globalData
@@ -271,13 +268,14 @@ export async function GET(request: Request) {
                         globalEmotes = globalData.data
                     }
                     console.log(`✅ Found ${globalEmotes.length} global emotes`)
+                } else {
+                    console.log(`ℹ️ Global emotes API returned non-JSON response, using fallback`)
                 }
             } else {
-                const text = await globalResponse.text()
-                console.error(`❌ Error fetching global emotes: HTTP ${globalResponse.status} - ${text.substring(0, 200)}`)
+                console.log(`ℹ️ Global emotes API returned ${globalResponse.status}, using fallback`)
             }
         } catch (error) {
-            console.error(`❌ Error fetching global emotes:`, error instanceof Error ? error.message : 'Unknown error')
+            console.log(`ℹ️ Failed to fetch global emotes, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
 
         // Normalize emotes first (before combining)
@@ -376,10 +374,9 @@ export async function GET(request: Request) {
         const allEmotes = Array.from(allEmotesMap.values())
         console.log(`📦 Total unique emotes: ${allEmotes.length}`)
 
-        // If no emotes found in API, try fetching from the chatroom page directly
+        // If no emotes found in API, try fetching from the chatroom page directly (quiet fallback)
         if (normalizedChannelEmotes.length === 0 && normalizedGlobalEmotes.length === 0) {
             try {
-                console.log(`🔍 Trying to fetch emotes from chatroom page: https://kick.com/${slug}/chatroom`)
                 const pageResponse = await fetch(`https://kick.com/${slug}/chatroom`, {
                     headers: {
                         'Accept': 'text/html',
@@ -486,7 +483,7 @@ export async function GET(request: Request) {
                     }
                 }
             } catch (error) {
-                console.error('Failed to fetch from chatroom page:', error)
+                // Silently fail - fallback to defaults
             }
         }
 

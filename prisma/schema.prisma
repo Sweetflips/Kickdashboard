@@ -142,7 +142,7 @@ model PointHistory {
   user_id           BigInt
   stream_session_id BigInt?
   points_earned     Int       @default(1)
-  message_id        String?
+  message_id        String?   @unique
   earned_at         DateTime  @default(now())
   created_at        DateTime  @default(now())
 

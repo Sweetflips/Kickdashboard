@@ -66,46 +66,49 @@ export async function GET(request: Request) {
         }
 
         // Optional: Verify token is valid and has required scopes via introspection
-        try {
-            const introspectResponse = await fetch(`${KICK_API_BASE}/token/introspect`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                },
-            })
+        // Only log if KICK_INTROSPECTION_LOGS env var is set to '1'
+        if (process.env.KICK_INTROSPECTION_LOGS === '1') {
+            try {
+                const introspectResponse = await fetch(`${KICK_API_BASE}/token/introspect`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                })
 
-            if (introspectResponse.ok) {
-                const introspectData = await introspectResponse.json()
+                if (introspectResponse.ok) {
+                    const introspectData = await introspectResponse.json()
 
-                if (introspectData.active === false) {
-                    return NextResponse.json(
-                        {
-                            error: 'Token is not active',
-                            details: 'The access token is invalid or expired.',
-                            suggestion: 'Please log out and log in again.',
-                        },
-                        { status: 401 }
-                    )
-                }
+                    if (introspectData.active === false) {
+                        return NextResponse.json(
+                            {
+                                error: 'Token is not active',
+                                details: 'The access token is invalid or expired.',
+                                suggestion: 'Please log out and log in again.',
+                            },
+                            { status: 401 }
+                        )
+                    }
 
-                // Check if token has required scopes
-                const scopes = introspectData.scope ? introspectData.scope.split(' ').filter((s: string) => s.length > 0) : []
-                const requiredScopes = ['user:read']
-                const missingScopes = requiredScopes.filter(scope => !scopes.includes(scope))
+                    // Check if token has required scopes
+                    const scopes = introspectData.scope ? introspectData.scope.split(' ').filter((s: string) => s.length > 0) : []
+                    const requiredScopes = ['user:read']
+                    const missingScopes = requiredScopes.filter(scope => !scopes.includes(scope))
 
-                if (missingScopes.length > 0) {
-                    console.warn(`⚠️ Token missing required scopes: ${missingScopes.join(', ')}`)
-                    console.warn(`📋 Token has scopes: ${scopes.join(', ')}`)
+                    if (missingScopes.length > 0) {
+                        console.warn(`⚠️ Token missing required scopes: ${missingScopes.join(', ')}`)
+                        console.warn(`📋 Token has scopes: ${scopes.join(', ')}`)
+                    } else {
+                        console.log(`✅ Token has required scopes: ${scopes.join(', ')}`)
+                    }
                 } else {
-                    console.log(`✅ Token has required scopes: ${scopes.join(', ')}`)
+                    console.warn(`⚠️ Token introspection failed, proceeding anyway: ${introspectResponse.status}`)
                 }
-            } else {
-                console.warn(`⚠️ Token introspection failed, proceeding anyway: ${introspectResponse.status}`)
+            } catch (introspectError) {
+                console.warn(`⚠️ Token introspection error, proceeding anyway:`, introspectError)
             }
-        } catch (introspectError) {
-            console.warn(`⚠️ Token introspection error, proceeding anyway:`, introspectError)
         }
 
         // According to Kick API docs: GET /public/v1/users (no params) returns currently authorized user
