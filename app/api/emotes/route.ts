@@ -263,20 +263,29 @@ export async function GET(request: Request) {
             if (globalResponse.ok) {
                 const contentType = globalResponse.headers.get('content-type')
                 if (contentType && contentType.includes('application/json')) {
-                    const globalData = await globalResponse.json()
-                    if (Array.isArray(globalData)) {
-                        globalEmotes = globalData
-                    } else if (globalData.emotes && Array.isArray(globalData.emotes)) {
-                        globalEmotes = globalData.emotes
-                    } else if (globalData.data && Array.isArray(globalData.data)) {
-                        globalEmotes = globalData.data
+                    try {
+                        const globalData = await globalResponse.json()
+                        if (Array.isArray(globalData)) {
+                            globalEmotes = globalData
+                        } else if (globalData.emotes && Array.isArray(globalData.emotes)) {
+                            globalEmotes = globalData.emotes
+                        } else if (globalData.data && Array.isArray(globalData.data)) {
+                            globalEmotes = globalData.data
+                        }
+                        console.log(`✅ Found ${globalEmotes.length} global emotes`)
+                    } catch (parseError) {
+                        console.log(`ℹ️ Failed to parse global emotes response, using fallback`)
                     }
-                    console.log(`✅ Found ${globalEmotes.length} global emotes`)
                 } else {
                     console.log(`ℹ️ Global emotes API returned non-JSON response, using fallback`)
                 }
             } else {
-                console.log(`ℹ️ Global emotes API returned ${globalResponse.status}, using fallback`)
+                // Silently handle 401/other errors - fallback will be used
+                if (globalResponse.status === 401) {
+                    console.log(`ℹ️ Global emotes API returned 401, using fallback`)
+                } else {
+                    console.log(`ℹ️ Global emotes API returned ${globalResponse.status}, using fallback`)
+                }
             }
         } catch (error) {
             console.log(`ℹ️ Failed to fetch global emotes, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
