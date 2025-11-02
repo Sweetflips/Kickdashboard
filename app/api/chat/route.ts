@@ -111,70 +111,72 @@ export async function GET(request: Request) {
         const formattedMessages = allMessages.map(msg => {
             if (msg.isOffline) {
                 // Format offline message
+                const offlineMsg = msg as typeof offlineMessages[0] & { isOffline: true }
                 return {
-                    message_id: msg.message_id,
+                    message_id: offlineMsg.message_id,
                     broadcaster: {
                         is_anonymous: false,
-                        user_id: Number(msg.broadcaster.kick_user_id),
-                        username: msg.broadcaster.username,
+                        user_id: Number(offlineMsg.broadcaster.kick_user_id),
+                        username: offlineMsg.broadcaster.username,
                         is_verified: false,
-                        profile_picture: msg.broadcaster.profile_picture_url || undefined,
+                        profile_picture: offlineMsg.broadcaster.profile_picture_url || undefined,
                         channel_slug: '',
                         identity: null,
                     },
                     sender: {
-                        is_anonymous: msg.sender_is_anonymous || false,
-                        user_id: Number(msg.sender.kick_user_id),
-                        username: msg.sender_username,
-                        is_verified: msg.sender_is_verified || isVerifiedUser(
-                            msg.sender_username,
-                            (msg.sender_badges as any) || []
+                        is_anonymous: offlineMsg.sender_is_anonymous || false,
+                        user_id: Number(offlineMsg.sender.kick_user_id),
+                        username: offlineMsg.sender_username,
+                        is_verified: offlineMsg.sender_is_verified || isVerifiedUser(
+                            offlineMsg.sender_username,
+                            (offlineMsg.sender_badges as any) || []
                         ),
-                        profile_picture: msg.sender.profile_picture_url || undefined,
+                        profile_picture: offlineMsg.sender.profile_picture_url || undefined,
                         channel_slug: '',
                         identity: {
-                            username_color: msg.sender_username_color || '#FFFFFF',
-                            badges: (msg.sender_badges as any) || [],
+                            username_color: offlineMsg.sender_username_color || '#FFFFFF',
+                            badges: (offlineMsg.sender_badges as any) || [],
                         },
                     },
-                    content: msg.content,
-                    emotes: (msg.emotes as any) || [],
-                    timestamp: Number(msg.timestamp),
+                    content: offlineMsg.content,
+                    emotes: (offlineMsg.emotes as any) || [],
+                    timestamp: Number(offlineMsg.timestamp),
                     points_earned: 0, // Offline messages have no points
                     sent_when_offline: true,
                 }
             } else {
                 // Format online message
+                const onlineMsg = msg as typeof onlineMessages[0]
                 return {
-                    message_id: msg.message_id,
+                    message_id: onlineMsg.message_id,
                     broadcaster: {
                         is_anonymous: false,
-                        user_id: Number(msg.broadcaster.kick_user_id),
-                        username: msg.broadcaster.username,
+                        user_id: Number(onlineMsg.broadcaster.kick_user_id),
+                        username: onlineMsg.broadcaster.username,
                         is_verified: false,
-                        profile_picture: msg.broadcaster.profile_picture_url || undefined,
-                        channel_slug: msg.stream_session?.channel_slug || '',
+                        profile_picture: onlineMsg.broadcaster.profile_picture_url || undefined,
+                        channel_slug: onlineMsg.stream_session?.channel_slug || '',
                         identity: null,
                     },
                     sender: {
-                        is_anonymous: msg.sender_is_anonymous || false,
-                        user_id: Number(msg.sender.kick_user_id),
-                        username: msg.sender_username,
-                        is_verified: msg.sender_is_verified || isVerifiedUser(
-                            msg.sender_username,
-                            (msg.sender_badges as any) || []
+                        is_anonymous: onlineMsg.sender_is_anonymous || false,
+                        user_id: Number(onlineMsg.sender.kick_user_id),
+                        username: onlineMsg.sender_username,
+                        is_verified: onlineMsg.sender_is_verified || isVerifiedUser(
+                            onlineMsg.sender_username,
+                            (onlineMsg.sender_badges as any) || []
                         ),
-                        profile_picture: msg.sender.profile_picture_url || undefined,
+                        profile_picture: onlineMsg.sender.profile_picture_url || undefined,
                         channel_slug: '',
                         identity: {
-                            username_color: msg.sender_username_color || '#FFFFFF',
-                            badges: (msg.sender_badges as any) || [],
+                            username_color: onlineMsg.sender_username_color || '#FFFFFF',
+                            badges: (onlineMsg.sender_badges as any) || [],
                         },
                     },
-                    content: msg.content,
-                    emotes: (msg.emotes as any) || [],
-                    timestamp: Number(msg.timestamp),
-                    points_earned: msg.points_earned || 0,
+                    content: onlineMsg.content,
+                    emotes: (onlineMsg.emotes as any) || [],
+                    timestamp: Number(onlineMsg.timestamp),
+                    points_earned: onlineMsg.points_earned || 0,
                     sent_when_offline: false,
                 }
             }
