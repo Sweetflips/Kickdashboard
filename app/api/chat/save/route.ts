@@ -235,29 +235,43 @@ export async function POST(request: Request) {
                 })
             }
 
-            const messageData = {
-                message_id: message.message_id,
-                stream_session_id: sessionIsActive ? activeSession!.id : null,
-                sender_user_id: senderUserId,
-                sender_username: message.sender.username,
-                broadcaster_user_id: broadcasterUserId,
-                content: message.content,
-                emotes: emotesToSave,
-                timestamp: BigInt(message.timestamp),
-                sender_username_color: message.sender.identity?.username_color || null,
-                sender_badges: message.sender.identity?.badges || undefined,
-                sender_is_verified: message.sender.is_verified || false,
-                sender_is_anonymous: message.sender.is_anonymous || false,
-                points_earned: pointsEarned,
-                sent_when_offline: sentWhenOffline,
-            }
-
-            await db.chatMessage.upsert({
-                where: { message_id: message.message_id },
-                update: {
-                    // Update with latest data if message already exists
+            if (sentWhenOffline) {
+                // Save offline messages to separate table
+                await db.offlineChatMessage.upsert({
+                    where: { message_id: message.message_id },
+                    update: {
+                        sender_username: message.sender.username,
+                        content: message.content,
+                        emotes: emotesToSave,
+                        timestamp: BigInt(message.timestamp),
+                        sender_username_color: message.sender.identity?.username_color || null,
+                        sender_badges: message.sender.identity?.badges || undefined,
+                        sender_is_verified: message.sender.is_verified || false,
+                        sender_is_anonymous: message.sender.is_anonymous || false,
+                    },
+                    create: {
+                        message_id: message.message_id,
+                        sender_user_id: senderUserId,
+                        sender_username: message.sender.username,
+                        broadcaster_user_id: broadcasterUserId,
+                        content: message.content,
+                        emotes: emotesToSave,
+                        timestamp: BigInt(message.timestamp),
+                        sender_username_color: message.sender.identity?.username_color || null,
+                        sender_badges: message.sender.identity?.badges || undefined,
+                        sender_is_verified: message.sender.is_verified || false,
+                        sender_is_anonymous: message.sender.is_anonymous || false,
+                    },
+                })
+                console.log(`✅ Saved offline message to database: ${message.message_id}`)
+            } else {
+                // Save online messages to regular table
+                const messageData = {
+                    message_id: message.message_id,
                     stream_session_id: sessionIsActive ? activeSession!.id : null,
+                    sender_user_id: senderUserId,
                     sender_username: message.sender.username,
+                    broadcaster_user_id: broadcasterUserId,
                     content: message.content,
                     emotes: emotesToSave,
                     timestamp: BigInt(message.timestamp),
@@ -266,10 +280,29 @@ export async function POST(request: Request) {
                     sender_is_verified: message.sender.is_verified || false,
                     sender_is_anonymous: message.sender.is_anonymous || false,
                     points_earned: pointsEarned,
-                    sent_when_offline: sentWhenOffline,
-                },
-                create: messageData,
-            })
+                    sent_when_offline: false,
+                }
+
+                await db.chatMessage.upsert({
+                    where: { message_id: message.message_id },
+                    update: {
+                        // Update with latest data if message already exists
+                        stream_session_id: sessionIsActive ? activeSession!.id : null,
+                        sender_username: message.sender.username,
+                        content: message.content,
+                        emotes: emotesToSave,
+                        timestamp: BigInt(message.timestamp),
+                        sender_username_color: message.sender.identity?.username_color || null,
+                        sender_badges: message.sender.identity?.badges || undefined,
+                        sender_is_verified: message.sender.is_verified || false,
+                        sender_is_anonymous: message.sender.is_anonymous || false,
+                        points_earned: pointsEarned,
+                        sent_when_offline: false,
+                    },
+                    create: messageData,
+                })
+                console.log(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
+            }
 
             // Update stream session message count if session exists and is active
             // Only count messages that were sent when online
@@ -277,7 +310,6 @@ export async function POST(request: Request) {
                 const messageCount = await db.chatMessage.count({
                     where: {
                         stream_session_id: activeSession.id,
-                        sent_when_offline: false,
                     },
                 })
                 await db.streamSession.update({

@@ -102,3 +102,5 @@ ALTER TABLE "point_history" ADD CONSTRAINT "point_history_user_id_fkey" FOREIGN 
 ALTER TABLE "point_history" ADD CONSTRAINT "point_history_stream_session_id_fkey" FOREIGN KEY ("stream_session_id") REFERENCES "stream_sessions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 
+
+

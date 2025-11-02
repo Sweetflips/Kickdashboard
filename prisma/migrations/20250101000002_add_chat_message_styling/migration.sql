@@ -5,3 +5,5 @@ ADD COLUMN "sender_is_verified" BOOLEAN NOT NULL DEFAULT false,
 ADD COLUMN "sender_is_anonymous" BOOLEAN NOT NULL DEFAULT false;
 
 
+
+

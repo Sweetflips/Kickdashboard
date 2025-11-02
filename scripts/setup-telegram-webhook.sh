@@ -30,3 +30,5 @@ curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo" | jq '.'
 echo ""
 echo "✨ Done! Try sending a message to your bot on Telegram."
 
+
+

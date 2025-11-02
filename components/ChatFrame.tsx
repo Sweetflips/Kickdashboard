@@ -1420,17 +1420,15 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                 {renderMessageWithEmotes(message.content, message.emotes, emoteMap)}
                                             </span>
                                             <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
-                                                {message.points_earned !== undefined ? (
+                                                {!message.sent_when_offline && message.points_earned !== undefined ? (
                                                     message.points_earned === 0 ? (
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                            {!message.sent_when_offline && (
-                                                                <img
-                                                                    src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
-                                                                    alt="Timeout - Message sent too quickly"
-                                                                    className="w-3.5 h-3.5"
-                                                                    title="Message sent too quickly (rate limited)"
-                                                                />
-                                                            )}
+                                                            <img
+                                                                src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
+                                                                alt="Timeout - Message sent too quickly"
+                                                                className="w-3.5 h-3.5"
+                                                                title="Message sent too quickly (rate limited)"
+                                                            />
                                                             <span>0 pts</span>
                                                         </span>
                                                     ) : (
@@ -1438,11 +1436,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                             +{message.points_earned} {message.points_earned !== 1 ? 'pts' : 'pt'}
                                                         </span>
                                                     )
-                                                ) : (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                        0 pts
-                                                    </span>
-                                                )}
+                                                ) : null}
                                             </span>
                                         </div>
                                         <button
@@ -1671,17 +1665,15 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                         {renderMessageWithEmotes(message.content, message.emotes, emoteMap)}
                                                     </span>
                                                     <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
-                                                        {message.points_earned !== undefined ? (
+                                                        {!message.sent_when_offline && message.points_earned !== undefined ? (
                                                             message.points_earned === 0 ? (
                                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                                    {!message.sent_when_offline && (
-                                                                        <img
-                                                                            src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
-                                                                            alt="Timeout - Message sent too quickly"
-                                                                            className="w-3.5 h-3.5"
-                                                                            title="Message sent too quickly (rate limited)"
-                                                                        />
-                                                                    )}
+                                                                    <img
+                                                                        src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
+                                                                        alt="Timeout - Message sent too quickly"
+                                                                        className="w-3.5 h-3.5"
+                                                                        title="Message sent too quickly (rate limited)"
+                                                                    />
                                                                     <span>0 pts</span>
                                                                 </span>
                                                             ) : (
@@ -1689,11 +1681,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                                     +{message.points_earned} {message.points_earned !== 1 ? 'pts' : 'pt'}
                                                                 </span>
                                                             )
-                                                        ) : (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                                0 pts
-                                                            </span>
-                                                        )}
+                                                        ) : null}
                                                     </span>
                                                 </div>
                                                 {!pinnedMessages.some(m => m.message_id === message.message_id) && (

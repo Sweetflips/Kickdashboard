@@ -41,7 +41,7 @@ export default function LeaderboardPage() {
     const getDateRange = useCallback((mode: DateFilterMode): { start: string; end: string } | null => {
         const today = new Date()
         today.setUTCHours(23, 59, 59, 999)
-        
+
         switch (mode) {
             case 'today': {
                 const start = new Date(today)
@@ -154,7 +154,7 @@ export default function LeaderboardPage() {
             const today = new Date()
             today.setUTCHours(23, 59, 59, 999)
             const todayStr = today.toISOString().split('T')[0]
-            
+
             let startDateStr = todayStr
             if (mode === 'today') {
                 // Already set to today
@@ -174,7 +174,7 @@ export default function LeaderboardPage() {
                 start.setUTCHours(0, 0, 0, 0)
                 startDateStr = start.toISOString().split('T')[0]
             }
-            
+
             setStartDate(startDateStr)
             setEndDate(todayStr)
         }

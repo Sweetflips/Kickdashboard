@@ -6,3 +6,5 @@ ALTER TABLE "users" ADD COLUMN "chat_font_size" TEXT DEFAULT '14px';
 ALTER TABLE "users" ADD COLUMN "chat_show_timestamps" BOOLEAN NOT NULL DEFAULT true;
 
 
+
+
