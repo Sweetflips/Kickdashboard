@@ -38,6 +38,11 @@ export async function GET(request: Request) {
                     leaderboard: [],
                     session_id: null,
                     has_active_session: false,
+                    stats: {
+                        total_messages: 0,
+                        total_points: 0,
+                        unique_chatters: 0,
+                    },
                 })
             }
         } else {
@@ -53,6 +58,11 @@ export async function GET(request: Request) {
                 leaderboard: [],
                 session_id: null,
                 has_active_session: false,
+                stats: {
+                    total_messages: 0,
+                    total_points: 0,
+                    unique_chatters: 0,
+                },
             })
         }
 
@@ -64,6 +74,11 @@ export async function GET(request: Request) {
                 leaderboard: [],
                 session_id: null,
                 has_active_session: false,
+                stats: {
+                    total_messages: 0,
+                    total_points: 0,
+                    unique_chatters: 0,
+                },
             })
         }
 

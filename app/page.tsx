@@ -107,10 +107,14 @@ export default function Dashboard() {
 
         // Only fetch leaderboard when stream is live
         if (!isLive) {
-            // Clear leaderboard when stream goes offline
+            // Clear leaderboard when stream goes offline - reset stats to zero
             setStreamLeaderboard([])
             setCurrentSessionId(null)
-            setStreamStats(null)
+            setStreamStats({
+                total_messages: 0,
+                total_points: 0,
+                unique_chatters: 0,
+            })
             setHasActiveSession(false)
             setLeaderboardLoading(false)
             return
@@ -143,7 +147,11 @@ export default function Dashboard() {
                         // Clear if no leaderboard data
                         setStreamLeaderboard([])
                         setCurrentSessionId(null)
-                        setStreamStats(null)
+                        setStreamStats({
+                            total_messages: 0,
+                            total_points: 0,
+                            unique_chatters: 0,
+                        })
                         setHasActiveSession(false)
                     }
                 }
@@ -155,7 +163,12 @@ export default function Dashboard() {
                 if (data.stats) {
                     setStreamStats(data.stats)
                 } else {
-                    setStreamStats(null)
+                    // If no stats provided, reset to zeros
+                    setStreamStats({
+                        total_messages: 0,
+                        total_points: 0,
+                        unique_chatters: 0,
+                    })
                 }
             } catch (err) {
                 console.error('Error fetching stream leaderboard:', err)
