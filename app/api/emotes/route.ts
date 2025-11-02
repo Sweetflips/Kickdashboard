@@ -241,9 +241,13 @@ export async function GET(request: Request) {
                     emotes = channelData.emotes
                     console.log(`✅ Found ${emotes.length} emotes from channel data`)
                 }
+            } else if (channelResponse.status === 401) {
+                console.log(`ℹ️ Channel API returned 401, using fallback emotes`)
+            } else {
+                console.log(`ℹ️ Channel API returned ${channelResponse.status}, using fallback emotes`)
             }
         } catch (error) {
-            console.error(`❌ Error fetching channel data:`, error instanceof Error ? error.message : 'Unknown error')
+            console.log(`ℹ️ Failed to fetch channel data, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
 
         // Step 2: Fetch global emotes from Kick public API
