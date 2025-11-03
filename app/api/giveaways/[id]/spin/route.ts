@@ -8,9 +8,14 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('🎰 [SPIN GIVEAWAY] Received request')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+
     // Check admin access
     const adminCheck = await isAdmin(request)
     if (!adminCheck) {
+      console.error('❌ [AUTH] Admin access required')
       return NextResponse.json(
         { error: 'Unauthorized - Admin access required' },
         { status: 403 }
@@ -19,6 +24,7 @@ export async function POST(
 
     const auth = await getAuthenticatedUser(request)
     if (!auth) {
+      console.error('❌ [AUTH] User not authenticated')
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -26,8 +32,11 @@ export async function POST(
     }
 
     const giveawayId = BigInt(params.id)
+    console.log(`🎁 [GIVEAWAY] ID: ${giveawayId}`)
+    console.log(`👤 [USER] Kick User ID: ${auth.kickUserId}\n`)
 
     // Verify giveaway exists and user owns it
+    console.log(`🔍 [VERIFICATION] Fetching giveaway...`)
     const giveaway = await db.giveaway.findFirst({
       where: {
         id: giveawayId,
@@ -55,20 +64,42 @@ export async function POST(
     })
 
     if (!giveaway) {
+      console.error(`❌ [VERIFICATION] Giveaway ${giveawayId} not found or doesn't belong to broadcaster ${auth.kickUserId}`)
+      
+      // Check if giveaway exists at all
+      const anyGiveaway = await db.giveaway.findUnique({
+        where: { id: giveawayId },
+        select: { broadcaster_user_id: true, status: true },
+      })
+      
+      if (anyGiveaway) {
+        console.error(`   └─ Giveaway exists but belongs to broadcaster ${anyGiveaway.broadcaster_user_id}, not ${auth.kickUserId}`)
+      } else {
+        console.error(`   └─ Giveaway ${giveawayId} does not exist`)
+      }
+      
       return NextResponse.json(
         { error: 'Giveaway not found' },
         { status: 404 }
       )
     }
 
+    console.log(`✅ [VERIFICATION] Giveaway found`)
+    console.log(`   ├─ Status: ${giveaway.status}`)
+    console.log(`   ├─ Entries: ${giveaway.entries.length}`)
+    console.log(`   ├─ Winners: ${giveaway.winners.length}`)
+    console.log(`   └─ Required Winners: ${giveaway.number_of_winners}\n`)
+
     if (giveaway.status !== 'active') {
+      console.error(`❌ [VALIDATION] Giveaway status is '${giveaway.status}', must be 'active'`)
       return NextResponse.json(
-        { error: 'Giveaway must be active to spin' },
+        { error: `Giveaway must be active to spin. Current status: ${giveaway.status}` },
         { status: 400 }
       )
     }
 
     if (giveaway.entries.length === 0) {
+      console.error(`❌ [VALIDATION] No entries to select from`)
       return NextResponse.json(
         { error: 'No entries to select from' },
         { status: 400 }
@@ -76,6 +107,7 @@ export async function POST(
     }
 
     if (giveaway.winners.length > 0) {
+      console.error(`❌ [VALIDATION] Winner already selected (${giveaway.winners.length} winner(s))`)
       return NextResponse.json(
         { error: 'Winner already selected' },
         { status: 400 }
@@ -123,13 +155,21 @@ export async function POST(
     }
 
     if (winners.length === 0) {
+      console.error(`❌ [SELECTION] Failed to select winners`)
       return NextResponse.json(
         { error: 'Failed to select winners' },
         { status: 500 }
       )
     }
 
+    console.log(`✅ [SELECTION] Selected ${winners.length} winner(s)`)
+    winners.forEach((winner, index) => {
+      console.log(`   ${index + 1}. Entry ID: ${winner.entryId}, User ID: ${winner.userId}`)
+    })
+    console.log()
+
     // Create winner records
+    console.log('💾 [DATABASE] Creating winner records...')
     const createdWinners = []
     for (const winner of winners) {
       const winnerRecord = await db.giveawayWinner.create({
@@ -160,6 +200,10 @@ export async function POST(
       data: { status: 'completed' },
     })
 
+    console.log(`✅ [SUCCESS] Giveaway completed`)
+    console.log(`   └─ Winners: ${createdWinners.length}`)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+
     return NextResponse.json({
       winners: createdWinners.map(w => ({
         ...w,
@@ -170,7 +214,15 @@ export async function POST(
       })),
     })
   } catch (error) {
-    console.error('Error spinning giveaway:', error)
+    console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.error('❌ [ERROR] Failed to spin giveaway')
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.error(`   └─ Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    if (error instanceof Error && error.stack) {
+      console.error(`   └─ Stack: ${error.stack}`)
+    }
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+    
     return NextResponse.json(
       { error: 'Failed to spin giveaway', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

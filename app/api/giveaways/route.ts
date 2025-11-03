@@ -124,9 +124,14 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('🎁 [CREATE GIVEAWAY] Received request')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+
     // Check admin access
     const adminCheck = await isAdmin(request)
     if (!adminCheck) {
+      console.error('❌ [AUTH] Admin access required')
       return NextResponse.json(
         { error: 'Unauthorized - Admin access required' },
         { status: 403 }
@@ -135,16 +140,26 @@ export async function POST(request: Request) {
 
     const auth = await getAuthenticatedUser(request)
     if (!auth) {
+      console.error('❌ [AUTH] User not authenticated')
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
+    console.log(`👤 [USER] Kick User ID: ${auth.kickUserId}`)
+
     const body = await request.json()
     const { prize_amount, number_of_winners, entry_min_points, stream_session_id } = body
 
+    console.log('📥 [PARAMS] Received parameters:')
+    console.log(`   ├─ prize_amount: ${prize_amount || 'N/A'}`)
+    console.log(`   ├─ number_of_winners: ${number_of_winners || 'N/A'}`)
+    console.log(`   ├─ entry_min_points: ${entry_min_points || 'N/A'}`)
+    console.log(`   └─ stream_session_id: ${stream_session_id || 'N/A'}\n`)
+
     if (!stream_session_id) {
+      console.error('❌ [VALIDATION] stream_session_id is required')
       return NextResponse.json(
         { error: 'stream_session_id is required' },
         { status: 400 }
@@ -152,6 +167,7 @@ export async function POST(request: Request) {
     }
 
     if (!prize_amount) {
+      console.error('❌ [VALIDATION] prize_amount is required')
       return NextResponse.json(
         { error: 'prize_amount is required' },
         { status: 400 }
@@ -159,6 +175,7 @@ export async function POST(request: Request) {
     }
 
     // Verify stream session exists and belongs to broadcaster
+    console.log(`🔍 [VERIFICATION] Checking stream session ${stream_session_id}...`)
     const streamSession = await db.streamSession.findFirst({
       where: {
         id: BigInt(stream_session_id),
@@ -167,13 +184,33 @@ export async function POST(request: Request) {
     })
 
     if (!streamSession) {
+      console.error(`❌ [VERIFICATION] Stream session ${stream_session_id} not found or doesn't belong to broadcaster ${auth.kickUserId}`)
+      
+      // Check if stream session exists at all
+      const anySession = await db.streamSession.findUnique({
+        where: { id: BigInt(stream_session_id) },
+        select: { broadcaster_user_id: true },
+      })
+      
+      if (anySession) {
+        console.error(`   └─ Stream session exists but belongs to broadcaster ${anySession.broadcaster_user_id}, not ${auth.kickUserId}`)
+      } else {
+        console.error(`   └─ Stream session ${stream_session_id} does not exist`)
+      }
+      
       return NextResponse.json(
         { error: 'Stream session not found or does not belong to you' },
         { status: 404 }
       )
     }
 
+    console.log(`✅ [VERIFICATION] Stream session found`)
+    console.log(`   ├─ Session ID: ${streamSession.id}`)
+    console.log(`   ├─ Channel: ${streamSession.channel_slug}`)
+    console.log(`   └─ Title: ${streamSession.session_title || 'N/A'}\n`)
+
     // Create giveaway (no segments needed - simplified)
+    console.log('💾 [DATABASE] Creating giveaway...')
     const giveaway = await db.giveaway.create({
       data: {
         broadcaster_user_id: auth.kickUserId,
@@ -186,6 +223,13 @@ export async function POST(request: Request) {
       },
     })
 
+    console.log(`✅ [SUCCESS] Giveaway created`)
+    console.log(`   ├─ Giveaway ID: ${giveaway.id}`)
+    console.log(`   ├─ Title: ${giveaway.title}`)
+    console.log(`   ├─ Prize: ${giveaway.prize_amount}`)
+    console.log(`   └─ Winners: ${giveaway.number_of_winners}`)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+
     return NextResponse.json({
       giveaway: {
         ...giveaway,
@@ -195,7 +239,15 @@ export async function POST(request: Request) {
       },
     }, { status: 201 })
   } catch (error) {
-    console.error('Error creating giveaway:', error)
+    console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.error('❌ [ERROR] Failed to create giveaway')
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.error(`   └─ Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    if (error instanceof Error && error.stack) {
+      console.error(`   └─ Stack: ${error.stack}`)
+    }
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+    
     return NextResponse.json(
       { error: 'Failed to create giveaway', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
