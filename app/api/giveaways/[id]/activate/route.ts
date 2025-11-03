@@ -60,6 +60,17 @@ export async function POST(
     const entriesCreated = []
     for (const eligible of eligibleUsers) {
       try {
+        // Verify user still exists in database before creating entry
+        const userExists = await db.user.findUnique({
+          where: { id: eligible.userId },
+          select: { id: true },
+        })
+
+        if (!userExists) {
+          console.warn(`⚠️ User ${eligible.userId} (Kick: ${eligible.kickUserId}) no longer exists, skipping entry creation`)
+          continue
+        }
+
         // Check if already entered
         const existing = await db.giveawayEntry.findUnique({
           where: {
@@ -81,7 +92,7 @@ export async function POST(
           entriesCreated.push(eligible.kickUserId.toString())
         }
       } catch (error) {
-        console.error(`Error creating entry for user ${eligible.kickUserId}:`, error)
+        console.error(`Error creating entry for user ${eligible.kickUserId} (DB ID: ${eligible.userId}):`, error)
       }
     }
 

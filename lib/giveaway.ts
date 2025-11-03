@@ -174,12 +174,21 @@ export async function getEligibleUsers(
     const userPointsMap = new Map<bigint, { userId: bigint; kickUserId: bigint; points: number }>()
 
     for (const ph of pointHistory) {
-      const existing = userPointsMap.get(ph.user_id)
+      // Skip if user doesn't exist (shouldn't happen, but safety check)
+      if (!ph.user) {
+        console.warn(`⚠️ PointHistory entry ${ph.id} references non-existent user ${ph.user_id}`)
+        continue
+      }
+
+      // Use ph.user_id as the key (should match ph.user.id)
+      // ph.user_id is the foreign key and should be the same as ph.user.id
+      const userId = ph.user_id
+      const existing = userPointsMap.get(userId)
       if (existing) {
         existing.points += ph.points_earned
       } else {
-        userPointsMap.set(ph.user_id, {
-          userId: ph.user.id,
+        userPointsMap.set(userId, {
+          userId: userId, // Use ph.user_id directly (should match ph.user.id)
           kickUserId: ph.user.kick_user_id,
           points: ph.points_earned,
         })
