@@ -176,7 +176,7 @@ export default function UsersPage() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
                             <Image
-                              src={user.profile_picture_url || '/kick.jpg'}
+                              src={user.profile_picture_url ? `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}` : '/kick.jpg'}
                               alt={user.username}
                               width={32}
                               height={32}
