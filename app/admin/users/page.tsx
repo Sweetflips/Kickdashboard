@@ -192,7 +192,7 @@ export default function UsersPage() {
                                   onError={(e) => {
                                     const target = e.target as HTMLImageElement
                                     // If direct URL failed and it's CloudFront, try proxy
-                                    if (isCloudFront && !target.src.includes('/api/image-proxy')) {
+                                    if (isCloudFront && !target.src.includes('/api/image-proxy') && user.profile_picture_url) {
                                       target.src = `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
                                     } else {
                                       target.src = '/kick.jpg'
