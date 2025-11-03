@@ -627,19 +627,32 @@ export default function AnalyticsPage() {
                                                         </td>
                                                         <td className="py-3 px-4">
                                                             <div className="flex items-center gap-3">
-                                                                {user.profile_picture_url ? (
-                                                                    <img
-                                                                        src={`/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`}
-                                                                        alt={user.username}
-                                                                        width={32}
-                                                                        height={32}
-                                                                        className="rounded-full"
-                                                                        onError={(e) => {
-                                                                            const target = e.target as HTMLImageElement
-                                                                            target.src = '/kick.jpg'
-                                                                        }}
-                                                                    />
-                                                                ) : (
+                                                                {user.profile_picture_url ? (() => {
+                                                                    // CloudFront URLs might work directly, kick.com URLs need proxy
+                                                                    const isCloudFront = user.profile_picture_url.includes('cloudfront.net') || user.profile_picture_url.includes('amazonaws.com')
+                                                                    const imageSrc = isCloudFront
+                                                                        ? user.profile_picture_url
+                                                                        : `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
+
+                                                                    return (
+                                                                        <img
+                                                                            src={imageSrc}
+                                                                            alt={user.username}
+                                                                            width={32}
+                                                                            height={32}
+                                                                            className="rounded-full"
+                                                                            onError={(e) => {
+                                                                                const target = e.target as HTMLImageElement
+                                                                                // If direct URL failed and it's CloudFront, try proxy
+                                                                                if (isCloudFront && !target.src.includes('/api/image-proxy')) {
+                                                                                    target.src = `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
+                                                                                } else {
+                                                                                    target.src = '/kick.jpg'
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    )
+                                                                })() : (
                                                                     <Image
                                                                         src="/kick.jpg"
                                                                         alt={user.username}

@@ -195,6 +195,22 @@ export default function ProfilePage() {
         }
     }, [userData?.id])
 
+    // Also check URL params when userData becomes available (handles case where userData loads before URL check)
+    useEffect(() => {
+        if (!userData?.id) return
+
+        const params = new URLSearchParams(window.location.search)
+        const success = params.get('success')
+        const tab = params.get('tab')
+
+        if (success && tab === 'connected') {
+            setActiveTab('connected')
+            setTimeout(() => {
+                fetchConnectedAccounts()
+            }, 500)
+        }
+    }, [userData?.id])
+
     useEffect(() => {
         // Load preferences from database when userData is available
         if (userData?.id) {

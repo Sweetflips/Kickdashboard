@@ -51,14 +51,44 @@ export async function GET(request: Request) {
             const errorText = await imageResponse.text().catch(() => 'Could not read error')
             console.error(`❌ Failed to fetch image: ${imageResponse.status}`)
             console.error(`❌ Error details: ${errorText.substring(0, 200)}`)
-            return NextResponse.json(
-                {
-                    error: `Failed to fetch image: ${imageResponse.status}`,
-                    details: errorText.substring(0, 200),
-                    url: imageUrl
-                },
-                { status: imageResponse.status }
-            )
+
+            // Fetch default avatar image from public folder via HTTP
+            // This works reliably across all deployment environments
+            try {
+                // Get base URL from headers (works in production with proxies)
+                const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
+                const proto = request.headers.get('x-forwarded-proto') || 'https'
+                const baseUrl = host ? `${proto}://${host}` : 'https://www.sweetflipsrewards.com'
+                const defaultImageUrl = `${baseUrl}/kick.jpg`
+
+                console.log(`🔄 Fetching default avatar: ${defaultImageUrl}`)
+                const defaultImageResponse = await fetch(defaultImageUrl)
+
+                if (defaultImageResponse.ok) {
+                    const defaultImageBuffer = await defaultImageResponse.arrayBuffer()
+                    console.log(`✅ Returning default avatar for failed image: ${imageUrl}`)
+                    return new NextResponse(defaultImageBuffer, {
+                        headers: {
+                            'Content-Type': 'image/jpeg',
+                            'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+                            'Access-Control-Allow-Origin': '*',
+                        },
+                    })
+                } else {
+                    throw new Error(`Failed to fetch default image: ${defaultImageResponse.status}`)
+                }
+            } catch (defaultError) {
+                // If we can't fetch default image, return JSON error as fallback
+                console.error(`❌ Failed to fetch default image:`, defaultError)
+                return NextResponse.json(
+                    {
+                        error: `Failed to fetch image: ${imageResponse.status}`,
+                        details: errorText.substring(0, 200),
+                        url: imageUrl
+                    },
+                    { status: imageResponse.status }
+                )
+            }
         }
 
         // Get the image data

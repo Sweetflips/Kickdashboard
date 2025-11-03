@@ -87,6 +87,28 @@ export async function GET(request: Request) {
           entries_count: g.entries.length,
           total_tickets: totalTickets,
           winners_count: g.winners.length,
+          segments: g.segments.map(s => ({
+            ...s,
+            id: s.id.toString(),
+            giveaway_id: s.giveaway_id.toString(),
+          })),
+          winners: g.winners.map(w => ({
+            ...w,
+            id: w.id.toString(),
+            giveaway_id: w.giveaway_id.toString(),
+            entry_id: w.entry_id.toString(),
+            segment_id: w.segment_id?.toString() || null,
+            entry: {
+              ...w.entry,
+              id: w.entry.id.toString(),
+              giveaway_id: w.entry.giveaway_id.toString(),
+              user_id: w.entry.user_id.toString(),
+              user: {
+                ...w.entry.user,
+                kick_user_id: w.entry.user.kick_user_id.toString(),
+              },
+            },
+          })),
           entries: undefined,
         }
       }),
