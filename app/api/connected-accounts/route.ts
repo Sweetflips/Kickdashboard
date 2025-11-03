@@ -13,6 +13,8 @@ export async function GET(request: Request) {
             )
         }
 
+        console.log(`\n📋 [CONNECTED ACCOUNTS] Fetching for Kick user: ${kickUserId}`)
+
         const kickUserIdBigInt = BigInt(kickUserId)
 
         const user = await db.user.findUnique({
@@ -31,8 +33,16 @@ export async function GET(request: Request) {
         })
 
         if (!user) {
+            console.log(`   └─ User not found in database`)
             return NextResponse.json({ accounts: [] })
         }
+
+        console.log(`   ├─ Username: ${user.username}`)
+        console.log(`   ├─ Kick connected: ${user.kick_connected ?? true}`)
+        console.log(`   ├─ Discord connected: ${user.discord_connected ?? false}`)
+        console.log(`   ├─ Telegram connected: ${user.telegram_connected ?? false}`)
+        console.log(`   ├─ Telegram username: ${user.telegram_username || 'N/A'}`)
+        console.log(`   └─ Telegram user ID: ${user.telegram_user_id || 'N/A'}`)
 
         const accounts = [
             {
@@ -55,9 +65,15 @@ export async function GET(request: Request) {
             },
         ]
 
+        console.log(`\n✅ [CONNECTED ACCOUNTS] Returning accounts:`)
+        accounts.forEach(acc => {
+            console.log(`   ├─ ${acc.provider}: ${acc.connected ? '✅ Connected' : '❌ Not connected'} ${acc.username ? `(${acc.username})` : ''}`)
+        })
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)
+
         return NextResponse.json({ accounts })
     } catch (error) {
-        console.error('Error fetching connected accounts:', error)
+        console.error('❌ Error fetching connected accounts:', error)
         return NextResponse.json(
             { error: 'Failed to fetch connected accounts' },
             { status: 500 }

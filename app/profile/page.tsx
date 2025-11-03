@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import Script from 'next/script'
 import AppLayout from '../../components/AppLayout'
 import ThemeToggle from '../../components/ThemeToggle'
@@ -57,22 +57,26 @@ export default function ProfilePage() {
         }
     }
 
-    const fetchConnectedAccounts = async () => {
+    const fetchConnectedAccounts = useCallback(async () => {
         if (!userData?.id) return
 
         setLoadingAccounts(true)
         try {
+            console.log(`🔄 [PROFILE] Fetching connected accounts for user: ${userData.id}`)
             const response = await fetch(`/api/connected-accounts?kick_user_id=${userData.id}`)
             if (response.ok) {
                 const data = await response.json()
+                console.log(`✅ [PROFILE] Received connected accounts:`, data.accounts)
                 setConnectedAccounts(data.accounts || [])
+            } else {
+                console.error(`❌ [PROFILE] Failed to fetch connected accounts: ${response.status}`)
             }
         } catch (error) {
-            console.error('Failed to fetch connected accounts:', error)
+            console.error('❌ [PROFILE] Failed to fetch connected accounts:', error)
         } finally {
             setLoadingAccounts(false)
         }
-    }
+    }, [userData?.id])
 
     const handleConnectAccount = async (provider: 'discord' | 'telegram') => {
         if (!userData?.id) {
@@ -151,7 +155,7 @@ export default function ProfilePage() {
         if (userData?.id && activeTab === 'connected') {
             fetchConnectedAccounts()
         }
-    }, [userData?.id, activeTab])
+    }, [userData?.id, activeTab, fetchConnectedAccounts])
 
     useEffect(() => {
         // Clear Telegram auth URL if Telegram is connected
@@ -169,6 +173,7 @@ export default function ProfilePage() {
         const tab = params.get('tab')
 
         if (success && userData?.id) {
+            console.log(`✅ [PROFILE] Success callback detected, refreshing connected accounts...`)
             if (tab === 'connected') {
                 setActiveTab('connected')
             }
@@ -193,7 +198,7 @@ export default function ProfilePage() {
             const newUrl = tab === 'connected' ? '/profile?tab=connected' : '/profile'
             window.history.replaceState({}, '', newUrl)
         }
-    }, [userData?.id])
+    }, [userData?.id, fetchConnectedAccounts])
 
     // Also check URL params when userData becomes available (handles case where userData loads before URL check)
     useEffect(() => {
@@ -204,12 +209,13 @@ export default function ProfilePage() {
         const tab = params.get('tab')
 
         if (success && tab === 'connected') {
+            console.log(`✅ [PROFILE] Success callback detected (secondary check), refreshing connected accounts...`)
             setActiveTab('connected')
             setTimeout(() => {
                 fetchConnectedAccounts()
             }, 500)
         }
-    }, [userData?.id])
+    }, [userData?.id, fetchConnectedAccounts])
 
     useEffect(() => {
         // Load preferences from database when userData is available
