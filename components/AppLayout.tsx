@@ -172,15 +172,37 @@ export default function AppLayout({ children }: LayoutProps) {
                             if (retryResponse.ok) {
                                 const retryData = await retryResponse.json()
                                 setUserData(retryData)
+                            } else {
+                                // Retry failed, clear tokens and redirect to login
+                                console.error('❌ Failed to fetch user after token refresh')
+                                localStorage.removeItem('kick_access_token')
+                                localStorage.removeItem('kick_refresh_token')
+                                router.push('/login?error=token_refresh_failed')
                             }
+                        } else {
+                            // Refresh failed, clear tokens and redirect to login
+                            console.error('❌ Token refresh failed:', refreshResponse.status)
+                            localStorage.removeItem('kick_access_token')
+                            localStorage.removeItem('kick_refresh_token')
+                            router.push('/login?error=token_expired')
                         }
                     } catch (refreshError) {
-                        console.error('Failed to refresh token:', refreshError)
+                        console.error('❌ Failed to refresh token:', refreshError)
+                        // Clear tokens and redirect to login on error
+                        localStorage.removeItem('kick_access_token')
+                        localStorage.removeItem('kick_refresh_token')
+                        router.push('/login?error=token_refresh_error')
                     }
+                } else {
+                    // No refresh token available, clear tokens and redirect to login
+                    console.error('❌ No refresh token available')
+                    localStorage.removeItem('kick_access_token')
+                    localStorage.removeItem('kick_refresh_token')
+                    router.push('/login?error=token_expired')
                 }
             } else {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-                console.error('Failed to fetch user data:', response.status, errorData)
+                console.error('❌ Failed to fetch user data:', response.status, errorData)
             }
         } catch (err) {
             console.error('Error fetching user data:', err)

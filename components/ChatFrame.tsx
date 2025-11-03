@@ -1175,10 +1175,29 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                     }, 100)
                                     setIsSending(false)
                                     return
+                                } else {
+                                    // Retry failed, clear tokens
+                                    console.error('❌ Failed to send message after token refresh')
+                                    localStorage.removeItem('kick_access_token')
+                                    localStorage.removeItem('kick_refresh_token')
+                                    setAccessToken(null)
+                                    alert('Authentication failed. Please log in again.')
+                                    window.location.href = '/login?error=token_refresh_failed'
+                                    setIsSending(false)
+                                    return
                                 }
+                            } else {
+                                // Refresh failed, clear tokens
+                                console.error('❌ Token refresh failed:', refreshResponse.status)
+                                localStorage.removeItem('kick_access_token')
+                                localStorage.removeItem('kick_refresh_token')
+                                setAccessToken(null)
                             }
                         } catch (refreshError) {
-                            console.error('Token refresh failed:', refreshError)
+                            console.error('❌ Token refresh error:', refreshError)
+                            localStorage.removeItem('kick_access_token')
+                            localStorage.removeItem('kick_refresh_token')
+                            setAccessToken(null)
                         }
                     }
 
