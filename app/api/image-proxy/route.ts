@@ -17,9 +17,16 @@ export async function GET(request: Request) {
             )
         }
 
-        // Validate URL is from Kick domain
+        // Validate URL is from Kick domain or Kick's CDN
         const url = new URL(imageUrl)
-        if (!url.hostname.includes('kick.com')) {
+        const allowedDomains = [
+            'kick.com',
+            'cloudfront.net',
+            'amazonaws.com',
+            'files.kick.com'
+        ]
+        const isAllowed = allowedDomains.some(domain => url.hostname.includes(domain))
+        if (!isAllowed) {
             return NextResponse.json(
                 { error: 'Only Kick.com images are allowed' },
                 { status: 400 }
