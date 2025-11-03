@@ -16,7 +16,7 @@ export async function GET(request: Request) {
         console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
         console.log('📱 [TELEGRAM AUTH CALLBACK] Received callback request')
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-        
+
         const { searchParams } = new URL(request.url)
         const params: Record<string, string> = {}
 
@@ -42,14 +42,22 @@ export async function GET(request: Request) {
             return NextResponse.redirect(`${errorRedirect}/?error=${encodeURIComponent('Missing hash parameter')}`)
         }
 
-        // Remove hash from params for verification
-        const { hash, ...paramsForCheck } = params
+        // Extract kick_user_id before verification (it's a custom parameter, not part of Telegram's hash)
+        const kickUserIdParam = params.kick_user_id
 
-        // Create check string from sorted parameters
+        // Remove hash and custom parameters (kick_user_id) from params for verification
+        // Telegram only includes their own parameters in the hash
+        const { hash, kick_user_id, ...paramsForCheck } = params
+
+        // Create check string from sorted parameters (only Telegram's official parameters)
         const checkString = Object.keys(paramsForCheck)
             .sort()
             .map(key => `${key}=${paramsForCheck[key]}`)
             .join('\n')
+
+        console.log('🔐 [VERIFICATION] Verifying Telegram signature...')
+        console.log(`   ├─ Check string: ${checkString}`)
+        console.log(`   ├─ Received hash: ${hashReceived.slice(0, 16)}...${hashReceived.slice(-8)}`)
 
         // Compute secret key: SHA256 of bot token
         const secretKey = crypto.createHash('sha256').update(BOT_TOKEN).digest()
@@ -57,14 +65,13 @@ export async function GET(request: Request) {
         // Compute HMAC-SHA256
         const hmac = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex')
 
-        console.log('🔐 [VERIFICATION] Verifying Telegram signature...')
-        console.log(`   ├─ Received hash: ${hashReceived.slice(0, 16)}...${hashReceived.slice(-8)}`)
         console.log(`   ├─ Computed hash: ${hmac.slice(0, 16)}...${hmac.slice(-8)}`)
 
         // Verify hash
         if (hmac !== hashReceived) {
             console.error('❌ [VERIFICATION] Hash verification failed!')
             console.error(`   └─ Hashes do not match`)
+            console.error(`   └─ Check string used: ${checkString}`)
             const host = request.headers.get('host') || ''
             const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
             const errorRedirect = isLocalhost ? `http://${host}` : APP_URL
@@ -92,14 +99,14 @@ export async function GET(request: Request) {
         const baseUrl = isLocalhost ? `http://${host}` : APP_URL
 
         // Check if this is a linking flow (kick_user_id provided)
-        const kickUserIdParam = params.kick_user_id
+        // Note: kick_user_id was extracted earlier and excluded from hash verification
         if (kickUserIdParam) {
             // Linking flow: update existing user's Telegram info
             try {
                 console.log(`🔗 [TELEGRAM LINK] Linking Telegram account for Kick user: ${kickUserIdParam}`)
                 console.log(`   ├─ Telegram ID: ${telegramId}`)
                 console.log(`   ├─ Telegram Username: ${username || firstName || 'N/A'}`)
-                
+
                 const kickUserIdBigInt = BigInt(kickUserIdParam)
                 await db.user.update({
                     where: { kick_user_id: kickUserIdBigInt },
@@ -114,7 +121,7 @@ export async function GET(request: Request) {
                 console.log(`✅ [TELEGRAM LINK] Successfully linked Telegram account`)
                 const redirectUrl = `${baseUrl}/profile?success=true&tab=connected`
                 console.log(`   └─ Redirecting to: ${redirectUrl}`)
-                
+
                 // Redirect to profile page with success
                 return NextResponse.redirect(redirectUrl)
             } catch (error) {
