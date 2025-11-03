@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { supabase } from '@/lib/supabase'
 
 /**
  * Upload profile picture endpoint
@@ -67,86 +66,80 @@ export async function POST(request: Request) {
         console.log('👤 [USER INFO]')
         console.log(`   └─ Kick User ID: ${userId}\n`)
 
-        // Check if user exists first
-        const kickUserId = BigInt(userId)
-        const existingUser = await db.user.findUnique({
-            where: { kick_user_id: kickUserId },
-            select: {
-                id: true,
-                username: true,
-                custom_profile_picture_url: true,
-            },
-        })
-
-        if (!existingUser) {
-            console.warn(`   └─ ⚠️  User ${userId} not found in database`)
-            return NextResponse.json(
-                { error: 'User not found in database' },
-                { status: 404 }
-            )
-        }
-
-        console.log(`   ├─ User found: ${existingUser.username || 'Unknown'} (DB ID: ${existingUser.id})`)
-        if (existingUser.custom_profile_picture_url && existingUser.custom_profile_picture_url.startsWith('https://')) {
-            // Delete old Supabase file if exists
-            const oldPath = existingUser.custom_profile_picture_url.split('/avatars/')[1]
-            if (oldPath) {
-                await supabase.storage.from('emotes').remove([`avatars/${oldPath}`]).catch(() => {})
-            }
-        }
-
-        // Upload to Supabase Storage
-        console.log('☁️  [SUPABASE] Uploading to Supabase Storage...')
-        const fileExt = file.name.split('.').pop() || 'jpg'
-        const fileName = `${userId}-${Date.now()}.${fileExt}`
-        const filePath = `avatars/${fileName}`
-
+        // Convert file to base64 data URI
+        console.log('💾 [IMAGE PROCESSING]')
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
+        const base64 = buffer.toString('base64')
+        const mimeType = file.type || 'image/jpeg'
+        const dataUri = `data:${mimeType};base64,${base64}`
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('emotes')
-            .upload(filePath, buffer, {
-                contentType: file.type,
-                upsert: false
+        console.log(`   ├─ File Size: ${(buffer.length / 1024).toFixed(2)} KB`)
+        console.log(`   ├─ MIME Type: ${mimeType}`)
+        console.log(`   ├─ Base64 Length: ${base64.length} characters`)
+        console.log(`   └─ ✅ Image converted to base64 data URI\n`)
+
+        // Save to database
+        console.log('🗄️  [DATABASE] Saving profile picture to database...')
+        try {
+            const kickUserId = BigInt(userId)
+
+            // Check if user exists first
+            console.log(`   ├─ Checking if user exists (kick_user_id: ${userId})...`)
+            const existingUser = await db.user.findUnique({
+                where: { kick_user_id: kickUserId },
+                select: {
+                    id: true,
+                    username: true,
+                    custom_profile_picture_url: true,
+                },
             })
 
-        if (uploadError) {
-            console.error(`   └─ ❌ Upload failed: ${uploadError.message}`)
+            if (existingUser) {
+                console.log(`   ├─ User found: ${existingUser.username || 'Unknown'} (DB ID: ${existingUser.id})`)
+                console.log(`   ├─ Previous custom profile picture: ${existingUser.custom_profile_picture_url ? 'Exists' : 'None'}`)
+
+                await db.user.update({
+                    where: { kick_user_id: kickUserId },
+                    data: { custom_profile_picture_url: dataUri },
+                })
+
+                console.log(`   ├─ New custom profile picture stored in database`)
+                console.log(`   ├─ Data URI length: ${dataUri.length} characters`)
+                console.log(`   └─ ✅ Successfully saved to database\n`)
+            } else {
+                console.warn(`   └─ ⚠️  User ${userId} not found in database`)
+                console.warn(`      └─ Database update skipped`)
+                console.warn(`      └─ User may need to be created via auth callback first\n`)
+                return NextResponse.json(
+                    { error: 'User not found in database' },
+                    { status: 404 }
+                )
+            }
+        } catch (dbError) {
+            console.error(`   └─ ❌ Database error:`, dbError)
+            if (dbError instanceof Error) {
+                console.error(`      └─ Error message: ${dbError.message}`)
+            }
+            console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
             return NextResponse.json(
-                { error: 'Failed to upload to Supabase Storage', details: uploadError.message },
+                {
+                    error: 'Failed to save profile picture to database',
+                    details: dbError instanceof Error ? dbError.message : 'Unknown error',
+                },
                 { status: 500 }
             )
         }
 
-        console.log(`   ├─ File uploaded: ${filePath}`)
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-            .from('emotes')
-            .getPublicUrl(filePath)
-
-        console.log(`   ├─ Public URL: ${publicUrl}`)
-        console.log(`   └─ ✅ Successfully uploaded to Supabase\n`)
-
-        // Save URL to database
-        console.log('🗄️  [DATABASE] Saving profile picture URL to database...')
-        await db.user.update({
-            where: { kick_user_id: kickUserId },
-            data: { custom_profile_picture_url: publicUrl },
-        })
-
-        console.log(`   └─ ✅ Successfully saved to database\n`)
-
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
         console.log(`✅ [SUCCESS] Profile picture upload completed`)
-        console.log(`   └─ Stored in Supabase Storage`)
+        console.log(`   └─ Stored in database as data URI`)
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
 
         return NextResponse.json({
             success: true,
-            url: publicUrl,
-            message: 'Profile picture uploaded and saved successfully'
+            url: dataUri,
+            message: 'Profile picture uploaded and saved to database successfully'
         })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
