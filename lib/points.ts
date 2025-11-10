@@ -3,7 +3,8 @@ import { db } from '@/lib/db'
 const BOT_USERNAMES = ['botrix', 'kickbot']
 const POINTS_PER_MESSAGE_NORMAL = 1
 const POINTS_PER_MESSAGE_SUBSCRIBER = 2
-const RATE_LIMIT_SECONDS = 60 // 1 minute
+const RATE_LIMIT_SECONDS = 300 // 5 minutes
+const STREAM_START_COOLDOWN_SECONDS = 600 // 10 minutes
 
 export function isBot(username: string): boolean {
     return BOT_USERNAMES.some(bot => username.toLowerCase() === bot.toLowerCase())
@@ -75,6 +76,7 @@ export async function awardPoint(
             select: {
                 ended_at: true,
                 broadcaster_user_id: true,
+                started_at: true,
             },
         })
 
@@ -88,15 +90,31 @@ export async function awardPoint(
             }
         }
 
-        // Check rate limit
+        // Check if stream has been running for at least 10 minutes
         const now = new Date()
+        const timeSinceStreamStart = (now.getTime() - session.started_at.getTime()) / 1000
+        if (timeSinceStreamStart < STREAM_START_COOLDOWN_SECONDS) {
+            const remainingSeconds = Math.ceil(STREAM_START_COOLDOWN_SECONDS - timeSinceStreamStart)
+            const remainingMinutes = Math.floor(remainingSeconds / 60)
+            const remainingSecs = remainingSeconds % 60
+            return {
+                awarded: false,
+                pointsEarned: 0,
+                reason: `Points unavailable: Stream must be live for 10 minutes (${remainingMinutes}m ${remainingSecs}s remaining)`,
+            }
+        }
+
+        // Check rate limit
         if (userPoints.last_point_earned_at) {
             const timeSinceLastPoint = (now.getTime() - userPoints.last_point_earned_at.getTime()) / 1000
             if (timeSinceLastPoint < RATE_LIMIT_SECONDS) {
+                const remainingSeconds = Math.ceil(RATE_LIMIT_SECONDS - timeSinceLastPoint)
+                const remainingMinutes = Math.floor(remainingSeconds / 60)
+                const remainingSecs = remainingSeconds % 60
                 return {
                     awarded: false,
                     pointsEarned: 0,
-                    reason: `Rate limit: ${Math.ceil(RATE_LIMIT_SECONDS - timeSinceLastPoint)} seconds remaining`,
+                    reason: `Rate limit: ${remainingMinutes}m ${remainingSecs}s remaining`,
                 }
             }
         }
