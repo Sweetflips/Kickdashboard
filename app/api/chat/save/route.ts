@@ -437,8 +437,8 @@ export async function POST(request: Request) {
 
             const duration = Date.now() - startTime
 
-            // Only log when points are earned (points > 0)
-            if (pointsEarned > 0) {
+            // Only log when NEW points are earned (not duplicates)
+            if (isNewMessage && pointsEarned > 0) {
                 logRequest(`[chat/save] user=${senderUsername} duration=${duration}ms points=${pointsEarned}`)
             }
 
