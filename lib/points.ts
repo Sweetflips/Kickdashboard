@@ -1,4 +1,13 @@
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
+
+const verbosePointsLogging = process.env.CHAT_SAVE_VERBOSE_LOGS === 'true'
+
+const logDebug = (...args: Parameters<typeof console.debug>) => {
+    if (verbosePointsLogging) {
+        console.debug(...args)
+    }
+}
 
 const BOT_USERNAMES = ['botrix', 'kickbot']
 const POINTS_PER_MESSAGE_NORMAL = 1
@@ -82,7 +91,7 @@ export async function awardPoint(
 
         // If session doesn't exist or has ended, don't award points
         if (!session || session.ended_at !== null) {
-            console.log(`⏸️ Session ${streamSessionId} is not active - skipping points`)
+            logDebug(`⏸️ Session ${streamSessionId} is not active - skipping points`)
             return {
                 awarded: false,
                 pointsEarned: 0,
@@ -119,32 +128,58 @@ export async function awardPoint(
             }
         }
 
+        if (messageId) {
+            const existingPointHistory = await db.pointHistory.findUnique({
+                where: { message_id: messageId },
+                select: { points_earned: true },
+            })
+
+            if (existingPointHistory) {
+                return {
+                    awarded: false,
+                    pointsEarned: existingPointHistory.points_earned ?? 0,
+                    reason: 'Message already processed for points',
+                }
+            }
+        }
+
         // Determine points based on subscription status
         const isSub = isSubscriber(badges)
         const pointsToAward = isSub ? POINTS_PER_MESSAGE_SUBSCRIBER : POINTS_PER_MESSAGE_NORMAL
 
-        // Award points
-        await db.userPoints.update({
-            where: { user_id: userId },
-            data: {
-                total_points: {
-                    increment: pointsToAward,
-                },
-                last_point_earned_at: now,
-                updated_at: now,
-            },
-        })
+        try {
+            await db.$transaction(async (tx) => {
+                await tx.pointHistory.create({
+                    data: {
+                        user_id: userId,
+                        stream_session_id: streamSessionId,
+                        points_earned: pointsToAward,
+                        message_id: messageId,
+                        earned_at: now,
+                    },
+                })
 
-        // Log to point history
-        await db.pointHistory.create({
-            data: {
-                user_id: userId,
-                stream_session_id: streamSessionId,
-                points_earned: pointsToAward,
-                message_id: messageId,
-                earned_at: now,
-            },
-        })
+                await tx.userPoints.update({
+                    where: { user_id: userId },
+                    data: {
+                        total_points: {
+                            increment: pointsToAward,
+                        },
+                        last_point_earned_at: now,
+                        updated_at: now,
+                    },
+                })
+            })
+        } catch (transactionError) {
+            if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2002') {
+                return {
+                    awarded: false,
+                    pointsEarned: 0,
+                    reason: 'Message already processed for points',
+                }
+            }
+            throw transactionError
+        }
 
         return {
             awarded: true,
@@ -215,7 +250,7 @@ export async function awardEmotes(
             },
         })
 
-        console.log(`✅ Awarded ${totalEmotes} emote(s) to user ${kickUserId} (total_emotes incremented)`)
+        logDebug(`✅ Awarded ${totalEmotes} emote(s) to user ${kickUserId} (total_emotes incremented)`)
 
         return { counted: totalEmotes }
     } catch (error) {
