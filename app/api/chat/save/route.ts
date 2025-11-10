@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { isBot, awardPoint, awardEmotes } from '@/lib/points'
 import { getActiveGiveaway, isUserEligible } from '@/lib/giveaway'
 import { detectBotMessage } from '@/lib/bot-detection'
+import { Prisma } from '@prisma/client'
 import type { ChatMessage } from '@/lib/chat-store'
 
 const verboseChatLogging = process.env.CHAT_SAVE_VERBOSE_LOGS === 'true'
@@ -250,23 +251,33 @@ export async function POST(request: Request) {
                         },
                     })
                 } else {
-                    await db.offlineChatMessage.create({
-                        data: {
-                            message_id: message.message_id,
-                            sender_user_id: senderUserId,
-                            sender_username: message.sender.username,
-                            broadcaster_user_id: broadcasterUserId,
-                            content: message.content,
-                            emotes: emotesToSave,
-                            timestamp: BigInt(message.timestamp),
-                            sender_username_color: message.sender.identity?.username_color || null,
-                            sender_badges: message.sender.identity?.badges || undefined,
-                            sender_is_verified: message.sender.is_verified || false,
-                            sender_is_anonymous: message.sender.is_anonymous || false,
-                        },
-                    })
-                    isNewMessage = true
-                    logDebug(`✅ Saved offline message to database: ${message.message_id}`)
+                    try {
+                        await db.offlineChatMessage.create({
+                            data: {
+                                message_id: message.message_id,
+                                sender_user_id: senderUserId,
+                                sender_username: message.sender.username,
+                                broadcaster_user_id: broadcasterUserId,
+                                content: message.content,
+                                emotes: emotesToSave,
+                                timestamp: BigInt(message.timestamp),
+                                sender_username_color: message.sender.identity?.username_color || null,
+                                sender_badges: message.sender.identity?.badges || undefined,
+                                sender_is_verified: message.sender.is_verified || false,
+                                sender_is_anonymous: message.sender.is_anonymous || false,
+                            },
+                        })
+                        isNewMessage = true
+                        logDebug(`✅ Saved offline message to database: ${message.message_id}`)
+                    } catch (createError: any) {
+                        // Handle race condition: another request created the message between our check and create
+                        if (createError instanceof Prisma.PrismaClientKnownRequestError && createError.code === 'P2002') {
+                            // Message was created by another request, silently continue
+                            // No points for offline messages anyway
+                        } else {
+                            throw createError
+                        }
+                    }
                 }
             } else {
                 const existingChatMessage = await db.chatMessage.findUnique({
@@ -296,75 +307,90 @@ export async function POST(request: Request) {
 
                     pointsEarned = existingChatMessage.points_earned ?? 0
                 } else {
-                    await db.chatMessage.create({
-                        data: {
-                            message_id: message.message_id,
-                            stream_session_id: sessionIsActive ? activeSession!.id : null,
-                            sender_user_id: senderUserId,
-                            sender_username: message.sender.username,
-                            broadcaster_user_id: broadcasterUserId,
-                            content: message.content,
-                            emotes: emotesToSave,
-                            timestamp: BigInt(message.timestamp),
-                            sender_username_color: message.sender.identity?.username_color || null,
-                            sender_badges: message.sender.identity?.badges || undefined,
-                            sender_is_verified: message.sender.is_verified || false,
-                            sender_is_anonymous: message.sender.is_anonymous || false,
-                            points_earned: 0,
-                            sent_when_offline: false,
-                        },
-                    })
-                    isNewMessage = true
-
-                    if (sessionIsActive && !isBot(senderUsernameLower)) {
-                        // Get recent messages from this user for duplicate detection
-                        const recentMessages = await db.chatMessage.findMany({
-                            where: {
+                    try {
+                        await db.chatMessage.create({
+                            data: {
+                                message_id: message.message_id,
+                                stream_session_id: sessionIsActive ? activeSession!.id : null,
                                 sender_user_id: senderUserId,
+                                sender_username: message.sender.username,
                                 broadcaster_user_id: broadcasterUserId,
+                                content: message.content,
+                                emotes: emotesToSave,
+                                timestamp: BigInt(message.timestamp),
+                                sender_username_color: message.sender.identity?.username_color || null,
+                                sender_badges: message.sender.identity?.badges || undefined,
+                                sender_is_verified: message.sender.is_verified || false,
+                                sender_is_anonymous: message.sender.is_anonymous || false,
+                                points_earned: 0,
+                                sent_when_offline: false,
                             },
-                            orderBy: { timestamp: 'desc' },
-                            take: 10, // Check last 10 messages
-                            select: { content: true },
                         })
+                        isNewMessage = true
 
-                        const recentMessageContents = recentMessages.map(msg => msg.content)
+                        if (sessionIsActive && !isBot(senderUsernameLower)) {
+                            // Get recent messages from this user for duplicate detection
+                            const recentMessages = await db.chatMessage.findMany({
+                                where: {
+                                    sender_user_id: senderUserId,
+                                    broadcaster_user_id: broadcasterUserId,
+                                },
+                                orderBy: { timestamp: 'desc' },
+                                take: 10, // Check last 10 messages
+                                select: { content: true },
+                            })
 
-                        // Detect bot patterns in message content
-                        const botDetection = detectBotMessage(message.content, recentMessageContents)
+                            const recentMessageContents = recentMessages.map(msg => msg.content)
 
-                        if (botDetection.isBot) {
-                            logDebug(`🤖 Bot detected for ${senderUsername}: ${botDetection.reasons.join(', ')} (score: ${botDetection.score})`)
-                            // Don't award points or emotes for bot messages
-                            pointsEarned = 0
-                        } else {
-                            const pointResult = await awardPoint(
-                                senderUserId,
-                                activeSession!.id,
-                                message.message_id,
-                                message.sender.identity?.badges
-                            )
+                            // Detect bot patterns in message content
+                            const botDetection = detectBotMessage(message.content, recentMessageContents)
 
-                            pointsEarned = pointResult.pointsEarned || 0
+                            if (botDetection.isBot) {
+                                logDebug(`🤖 Bot detected for ${senderUsername}: ${botDetection.reasons.join(', ')} (score: ${botDetection.score})`)
+                                // Don't award points or emotes for bot messages
+                                pointsEarned = 0
+                            } else {
+                                const pointResult = await awardPoint(
+                                    senderUserId,
+                                    activeSession!.id,
+                                    message.message_id,
+                                    message.sender.identity?.badges
+                                )
 
-                            if (pointsEarned > 0) {
-                                await db.chatMessage.update({
-                                    where: { message_id: message.message_id },
-                                    data: { points_earned: pointsEarned },
-                                })
-                            }
+                                pointsEarned = pointResult.pointsEarned || 0
 
-                            if (emotesToSave.length > 0) {
-                                try {
-                                    await awardEmotes(senderUserId, emotesToSave)
-                                } catch (emoteError) {
-                                    console.warn('Failed to award emotes (non-critical):', emoteError)
+                                if (pointsEarned > 0) {
+                                    await db.chatMessage.update({
+                                        where: { message_id: message.message_id },
+                                        data: { points_earned: pointsEarned },
+                                    })
+                                }
+
+                                if (emotesToSave.length > 0) {
+                                    try {
+                                        await awardEmotes(senderUserId, emotesToSave)
+                                    } catch (emoteError) {
+                                        console.warn('Failed to award emotes (non-critical):', emoteError)
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    logDebug(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
+                        logDebug(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
+                    } catch (createError: any) {
+                        // Handle race condition: another request created the message between our check and create
+                        if (createError instanceof Prisma.PrismaClientKnownRequestError && createError.code === 'P2002') {
+                            // Message was created by another request, fetch it and use existing points
+                            const existingMessage = await db.chatMessage.findUnique({
+                                where: { message_id: message.message_id },
+                                select: { points_earned: true },
+                            })
+                            pointsEarned = existingMessage?.points_earned ?? 0
+                            // Not a new message, so don't award points or update counts
+                        } else {
+                            throw createError
+                        }
+                    }
                 }
             }
 
