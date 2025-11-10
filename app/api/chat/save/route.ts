@@ -436,7 +436,7 @@ export async function POST(request: Request) {
             }
 
             const duration = Date.now() - startTime
-            
+
             // Only log when points are earned (points > 0)
             if (pointsEarned > 0) {
                 logRequest(`[chat/save] user=${senderUsername} duration=${duration}ms points=${pointsEarned}`)
@@ -454,15 +454,15 @@ export async function POST(request: Request) {
         }
     } catch (error) {
         const duration = Date.now() - startTime
-        
+
         // Filter out ECONNRESET errors (client disconnects) - not real errors
-        const isConnectionReset = error instanceof Error && 
-            (error.code === 'ECONNRESET' || error.message.includes('aborted'))
-        
+        const isConnectionReset = error instanceof Error &&
+            (('code' in error && (error as any).code === 'ECONNRESET') || error.message.includes('aborted'))
+
         if (!isConnectionReset) {
             console.error(`/api/chat/save 500 in ${duration}ms - Chat message save failed:`, error)
         }
-        
+
         return NextResponse.json(
             { error: 'Failed to save message', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
