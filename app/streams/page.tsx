@@ -159,14 +159,19 @@ export default function StreamsPage() {
                                         onClick={() => router.push(`/streams/${session.id}`)}
                                     >
                                         {/* Thumbnail */}
-                                        {session.thumbnail_url ? (
+                                        {session.thumbnail_url && !imageErrors.has(session.id) ? (
                                             <div className="relative w-full h-48 bg-gray-100 dark:bg-kick-surface-hover">
                                                 <Image
-                                                    src={session.thumbnail_url}
+                                                    src={session.thumbnail_url.startsWith('http')
+                                                        ? `/api/image-proxy?url=${encodeURIComponent(session.thumbnail_url)}`
+                                                        : session.thumbnail_url}
                                                     alt={session.session_title || 'Stream thumbnail'}
                                                     fill
                                                     className="object-cover"
                                                     unoptimized
+                                                    onError={() => {
+                                                        setImageErrors(prev => new Set(prev).add(session.id))
+                                                    }}
                                                 />
                                                 <div className="absolute top-2 right-2">
                                                     {getStatusBadge()}
