@@ -128,6 +128,54 @@ export async function POST(request: Request) {
             orderBy: { started_at: 'desc' },
         })
 
+        // If active session exists but has no thumbnail, try to fetch and update it
+        if (activeSession && !activeSession.thumbnail_url) {
+            try {
+                const broadcasterSlug = message.broadcaster.channel_slug || broadcasterUser.username.toLowerCase()
+                const controller = new AbortController()
+                const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+                const channelResponse = await fetch(
+                    `https://kick.com/api/v2/channels/${broadcasterSlug}`,
+                    {
+                        headers: {
+                            'Accept': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        },
+                        signal: controller.signal,
+                    }
+                )
+
+                clearTimeout(timeoutId)
+
+                if (channelResponse.ok) {
+                    const channelData = await channelResponse.json()
+                    const livestream = channelData.livestream
+                    let thumbnailUrl: string | null = null
+
+                    if (livestream?.thumbnail) {
+                        if (typeof livestream.thumbnail === 'string') {
+                            thumbnailUrl = livestream.thumbnail
+                        } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
+                            thumbnailUrl = livestream.thumbnail.url
+                        }
+                    }
+
+                    if (thumbnailUrl) {
+                        await db.streamSession.update({
+                            where: { id: activeSession!.id },
+                            data: { thumbnail_url: thumbnailUrl },
+                        })
+                        activeSession.thumbnail_url = thumbnailUrl
+                        logDebug(`✅ Updated thumbnail for session ${activeSession.id}`)
+                    }
+                }
+            } catch (updateError) {
+                // Non-critical - just log and continue
+                logDebug(`⚠️ Could not update thumbnail for session ${activeSession.id}:`, updateError)
+            }
+        }
+
         // If no active session exists, check if stream is live and create session if needed
         if (!activeSession) {
             try {
@@ -229,6 +277,7 @@ export async function POST(request: Request) {
 
             let isNewMessage = false
             let pointsEarned = 0
+            let pointsReason: string | null = null
             const senderUsernameLower = senderUsername.toLowerCase()
 
             if (sentWhenOffline) {
@@ -271,9 +320,16 @@ export async function POST(request: Request) {
                         logDebug(`✅ Saved offline message to database: ${message.message_id}`)
                     } catch (createError: any) {
                         // Handle race condition: another request created the message between our check and create
-                        if (createError instanceof Prisma.PrismaClientKnownRequestError && createError.code === 'P2002') {
-                            // Message was created by another request, silently continue
-                            // No points for offline messages anyway
+                        if (createError instanceof Prisma.PrismaClientKnownRequestError) {
+                            if (createError.code === 'P2002') {
+                                // Message was created by another request, silently continue
+                                // No points for offline messages anyway
+                            } else if (createError.code === 'P2028') {
+                                // Transaction timeout - log but don't fail
+                                console.error('Transaction timeout creating offline chat message:', createError)
+                            } else {
+                                throw createError
+                            }
                         } else {
                             throw createError
                         }
@@ -306,8 +362,15 @@ export async function POST(request: Request) {
                     })
 
                     pointsEarned = existingChatMessage.points_earned ?? 0
+                    // Fetch points_reason from existing message if available
+                    const existingMessageWithReason = await db.chatMessage.findUnique({
+                        where: { message_id: message.message_id },
+                        select: { points_reason: true },
+                    })
+                    pointsReason = existingMessageWithReason?.points_reason || null
                 } else {
                     try {
+                        // Use create with error handling for race conditions
                         await db.chatMessage.create({
                             data: {
                                 message_id: message.message_id,
@@ -349,6 +412,7 @@ export async function POST(request: Request) {
                                 logDebug(`🤖 Bot detected for ${senderUsername}: ${botDetection.reasons.join(', ')} (score: ${botDetection.score})`)
                                 // Don't award points or emotes for bot messages
                                 pointsEarned = 0
+                                pointsReason = 'Bot detected'
                             } else {
                                 const pointResult = await awardPoint(
                                     senderUserId,
@@ -358,11 +422,24 @@ export async function POST(request: Request) {
                                 )
 
                                 pointsEarned = pointResult.pointsEarned || 0
+                                pointsReason = pointResult.reason || null
 
                                 if (pointsEarned > 0) {
                                     await db.chatMessage.update({
                                         where: { message_id: message.message_id },
-                                        data: { points_earned: pointsEarned },
+                                        data: {
+                                            points_earned: pointsEarned,
+                                            points_reason: null, // Clear reason when points are awarded
+                                        },
+                                    })
+                                } else {
+                                    // Update with reason when no points awarded
+                                    await db.chatMessage.update({
+                                        where: { message_id: message.message_id },
+                                        data: {
+                                            points_earned: 0,
+                                            points_reason: pointsReason,
+                                        },
                                     })
                                 }
 
@@ -379,14 +456,34 @@ export async function POST(request: Request) {
                         logDebug(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
                     } catch (createError: any) {
                         // Handle race condition: another request created the message between our check and create
-                        if (createError instanceof Prisma.PrismaClientKnownRequestError && createError.code === 'P2002') {
-                            // Message was created by another request, fetch it and use existing points
-                            const existingMessage = await db.chatMessage.findUnique({
-                                where: { message_id: message.message_id },
-                                select: { points_earned: true },
-                            })
-                            pointsEarned = existingMessage?.points_earned ?? 0
-                            // Not a new message, so don't award points or update counts
+                        if (createError instanceof Prisma.PrismaClientKnownRequestError) {
+                            if (createError.code === 'P2002') {
+                                // Unique constraint violation - message already exists
+                                const existingMessage = await db.chatMessage.findUnique({
+                                    where: { message_id: message.message_id },
+                                    select: { points_earned: true, points_reason: true },
+                                })
+                                pointsEarned = existingMessage?.points_earned ?? 0
+                                pointsReason = existingMessage?.points_reason || null
+                                // Not a new message, so don't award points or update counts
+                            } else if (createError.code === 'P2028') {
+                                // Transaction timeout - log but don't fail the request
+                                console.error('Transaction timeout creating chat message:', createError)
+                                // Try to fetch existing message in case it was created
+                                const existingMessage = await db.chatMessage.findUnique({
+                                    where: { message_id: message.message_id },
+                                    select: { points_earned: true, points_reason: true },
+                                })
+                                if (existingMessage) {
+                                    pointsEarned = existingMessage.points_earned ?? 0
+                                    pointsReason = existingMessage.points_reason || null
+                                } else {
+                                    // Message wasn't created, but we'll continue without failing
+                                    console.warn('Message creation timed out and message not found:', message.message_id)
+                                }
+                            } else {
+                                throw createError
+                            }
                         } else {
                             throw createError
                         }
@@ -471,7 +568,8 @@ export async function POST(request: Request) {
             return NextResponse.json({
                 success: true,
                 message: 'Message saved to database',
-                pointsEarned
+                pointsEarned,
+                pointsReason
             })
         } catch (error) {
             // For other errors, log them
