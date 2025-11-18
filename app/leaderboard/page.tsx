@@ -374,10 +374,10 @@ export default function LeaderboardPage() {
                                                                         <img
                                                                             src="/Telegram-Logo-PNG-Image.png"
                                                                             alt="Telegram connected"
-                                                                            width={16}
-                                                                            height={16}
-                                                                            className="object-contain w-4 h-4"
-                                                                            style={{ width: '16px', height: '16px' }}
+                                                                            width={18}
+                                                                            height={18}
+                                                                            className="object-contain"
+                                                                            style={{ width: '18px', height: '18px' }}
                                                                             title="Connected via Telegram"
                                                                         />
                                                                     )}

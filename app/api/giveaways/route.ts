@@ -185,19 +185,19 @@ export async function POST(request: Request) {
 
     if (!streamSession) {
       console.error(`❌ [VERIFICATION] Stream session ${stream_session_id} not found or doesn't belong to broadcaster ${auth.kickUserId}`)
-      
+
       // Check if stream session exists at all
       const anySession = await db.streamSession.findUnique({
         where: { id: BigInt(stream_session_id) },
         select: { broadcaster_user_id: true },
       })
-      
+
       if (anySession) {
         console.error(`   └─ Stream session exists but belongs to broadcaster ${anySession.broadcaster_user_id}, not ${auth.kickUserId}`)
       } else {
         console.error(`   └─ Stream session ${stream_session_id} does not exist`)
       }
-      
+
       return NextResponse.json(
         { error: 'Stream session not found or does not belong to you' },
         { status: 404 }
@@ -247,7 +247,7 @@ export async function POST(request: Request) {
       console.error(`   └─ Stack: ${error.stack}`)
     }
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-    
+
     return NextResponse.json(
       { error: 'Failed to create giveaway', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

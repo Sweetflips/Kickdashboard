@@ -18,6 +18,34 @@ function generatePKCE() {
     return { codeVerifier, codeChallenge }
 }
 
+/**
+ * Build redirect URI from request headers (proxy-aware)
+ * Prefers x-forwarded-proto/x-forwarded-host, falls back to host header, then env var
+ */
+function buildRedirectUri(request: Request): string {
+    const headers = request.headers
+    const forwardedHost = headers.get('x-forwarded-host')
+    const forwardedProto = headers.get('x-forwarded-proto')
+    const host = headers.get('host') || ''
+
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+
+    // Prefer forwarded headers if present (proxy/reverse proxy)
+    if (forwardedHost) {
+        const proto = forwardedProto || 'https'
+        return `${proto}://${forwardedHost}/api/auth/callback`
+    }
+
+    // Fallback to host header
+    if (host) {
+        const proto = isLocalhost ? 'http' : 'https'
+        return `${proto}://${host}/api/auth/callback`
+    }
+
+    // Final fallback to env var
+    return `${APP_URL}/api/auth/callback`
+}
+
 // Generate OAuth authorization URL
 export async function GET(request: Request) {
     try {
@@ -26,11 +54,9 @@ export async function GET(request: Request) {
 
         if (action === 'authorize') {
             // Generate authorization URL with PKCE
+            const redirectUri = buildRedirectUri(request)
             const host = request.headers.get('host') || ''
             const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
-            const redirectUri = isLocalhost
-                ? `http://${host}/api/auth/callback`
-                : `${APP_URL}/api/auth/callback`
 
             const state = crypto.randomUUID()
             const { codeVerifier, codeChallenge } = generatePKCE()
@@ -62,12 +88,9 @@ export async function GET(request: Request) {
 
         if (action === 'token') {
             const code = searchParams.get('code')
+            const redirectUri = searchParams.get('redirectUri') || buildRedirectUri(request)
             const host = request.headers.get('host') || ''
             const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
-            const redirectUri = searchParams.get('redirectUri') ||
-                (isLocalhost
-                    ? `http://${host}/api/auth/callback`
-                    : `${APP_URL}/api/auth/callback`)
 
             if (!code) {
                 return NextResponse.json(

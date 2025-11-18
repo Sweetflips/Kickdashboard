@@ -1,17 +1,16 @@
 'use client'
 
-import { use } from 'react'
 import GiveawayOverlay from '@/components/GiveawayOverlay'
 
 export default function GiveawayOverlayPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>
-  searchParams: Promise<{ transparent?: string }>
+  params: { id: string }
+  searchParams?: { transparent?: string }
 }) {
-  const { id } = use(params)
-  const { transparent } = use(searchParams)
+  const { id } = params
+  const { transparent } = searchParams || {}
 
   return (
     <GiveawayOverlay
@@ -20,6 +19,3 @@ export default function GiveawayOverlayPage({
     />
   )
 }
-
-
-

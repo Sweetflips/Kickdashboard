@@ -22,11 +22,6 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**.cloudfront.net',
       },
-      // Supabase Storage
-      {
-        protocol: 'https',
-        hostname: '**.supabase.co',
-      },
     ],
   },
 }

@@ -65,19 +65,19 @@ export async function POST(
 
     if (!giveaway) {
       console.error(`❌ [VERIFICATION] Giveaway ${giveawayId} not found or doesn't belong to broadcaster ${auth.kickUserId}`)
-      
+
       // Check if giveaway exists at all
       const anyGiveaway = await db.giveaway.findUnique({
         where: { id: giveawayId },
         select: { broadcaster_user_id: true, status: true },
       })
-      
+
       if (anyGiveaway) {
         console.error(`   └─ Giveaway exists but belongs to broadcaster ${anyGiveaway.broadcaster_user_id}, not ${auth.kickUserId}`)
       } else {
         console.error(`   └─ Giveaway ${giveawayId} does not exist`)
       }
-      
+
       return NextResponse.json(
         { error: 'Giveaway not found' },
         { status: 404 }
@@ -222,7 +222,7 @@ export async function POST(
       console.error(`   └─ Stack: ${error.stack}`)
     }
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-    
+
     return NextResponse.json(
       { error: 'Failed to spin giveaway', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

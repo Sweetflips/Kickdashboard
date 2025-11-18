@@ -41,6 +41,7 @@ interface ChatMessage {
     }>
     timestamp: number
     points_earned?: number
+    points_reason?: string
     sent_when_offline?: boolean
 }
 
@@ -803,25 +804,58 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
         pusherRef.current = pusher
 
-        // Store handlers so we can unbind them in cleanup
+        // Store handlers in refs so they can be cleaned up properly
         const handleConnected = () => {
-            setPusherConnected(true)
-            setChatLoading(false)
+            // Check if pusher is still valid before updating state
+            if (pusherRef.current && pusherRef.current.connection) {
+                const state = pusherRef.current.connection.state
+                if (state === 'connected' || state === 'connecting') {
+                    setPusherConnected(true)
+                    setChatLoading(false)
+                }
+            }
         }
 
         const handleDisconnected = () => {
             setPusherConnected(false)
         }
 
-        pusher.connection.bind('connected', handleConnected)
-        pusher.connection.bind('disconnected', handleDisconnected)
+        // Only bind if connection exists and is not already closed
+        if (pusher.connection) {
+            const currentState = pusher.connection.state
+            if (currentState !== 'closed' && currentState !== 'disconnected') {
+                pusher.connection.bind('connected', handleConnected)
+                pusher.connection.bind('disconnected', handleDisconnected)
+            }
+        }
 
         const channelName = `chatrooms.${chatroomId}.v2`
         const channelNameAlt = `chatrooms.${chatroomId}`
-        const channel = pusher.subscribe(channelName)
-        const channelAlt = pusher.subscribe(channelNameAlt)
+
+        let channel: any = null
+        let channelAlt: any = null
+
+        try {
+            // Only subscribe if pusher is valid
+            if (pusher.connection && pusher.connection.state !== 'closed') {
+                channel = pusher.subscribe(channelName)
+                channelAlt = pusher.subscribe(channelNameAlt)
+            }
+        } catch (subscribeError) {
+            console.warn('Error subscribing to Pusher channels:', subscribeError)
+        }
 
         const handleChatMessage = async (data: any) => {
+            // Early return if Pusher is no longer valid
+            if (!pusherRef.current || !pusherRef.current.connection) {
+                return
+            }
+
+            const connectionState = pusherRef.current.connection.state
+            if (connectionState === 'closed' || connectionState === 'disconnected' || connectionState === 'disconnecting') {
+                return
+            }
+
             let parsedData = data
             if (typeof data === 'string') {
                 try {
@@ -956,6 +990,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                     // Update message with points earned from server
                     if (data.pointsEarned !== undefined) {
                         const pointsValue = data.pointsEarned || 0
+                        const pointsReasonValue = data.pointsReason || undefined
 
                         // Update in main chat messages
                         setChatMessages((prev) => {
@@ -964,6 +999,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                     return {
                                         ...msg,
                                         points_earned: pointsValue,
+                                        points_reason: pointsReasonValue,
                                     }
                                 }
                                 return msg
@@ -977,6 +1013,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                     return {
                                         ...msg,
                                         points_earned: pointsValue,
+                                        points_reason: pointsReasonValue,
                                     }
                                 }
                                 return msg
@@ -1005,51 +1042,96 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             })
         }
 
-        bindEvents(channel)
-        bindEvents(channelAlt)
+        // Only bind events if channels were successfully created
+        if (channel) {
+            try {
+                bindEvents(channel)
+            } catch (e) {
+                console.warn('Error binding events to channel:', e)
+            }
+        }
+        if (channelAlt) {
+            try {
+                bindEvents(channelAlt)
+            } catch (e) {
+                console.warn('Error binding events to channelAlt:', e)
+            }
+        }
 
         return () => {
-            // Cleanup channels first
-            try {
-                if (channel) {
-                    channel.unbind_all()
-                    channel.unsubscribe()
+            // Use ref instead of closure variable to ensure we're cleaning up the right instance
+            const currentPusher = pusherRef.current
+
+            // Cleanup channels first (use local variables from closure)
+            if (channel) {
+                try {
+                    const channelState = channel.state || 'unknown'
+                    if (channelState !== 'unsubscribed') {
+                        channel.unbind_all()
+                        channel.unsubscribe()
+                    }
+                } catch (e: any) {
+                    // Ignore errors if channel is already closed/unsubscribed
+                    const errorMsg = e?.message || String(e || '')
+                    if (!errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                        console.warn('Error cleaning up channel:', e)
+                    }
                 }
-            } catch (e) {
-                console.warn('Error cleaning up channel:', e)
             }
 
-            try {
-                if (channelAlt) {
-                    channelAlt.unbind_all()
-                    channelAlt.unsubscribe()
+            if (channelAlt) {
+                try {
+                    const channelState = channelAlt.state || 'unknown'
+                    if (channelState !== 'unsubscribed') {
+                        channelAlt.unbind_all()
+                        channelAlt.unsubscribe()
+                    }
+                } catch (e: any) {
+                    // Ignore errors if channel is already closed/unsubscribed
+                    const errorMsg = e?.message || String(e || '')
+                    if (!errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                        console.warn('Error cleaning up channelAlt:', e)
+                    }
                 }
-            } catch (e) {
-                console.warn('Error cleaning up channelAlt:', e)
             }
 
             // Unbind connection event listeners
-            try {
-                if (pusher && pusher.connection) {
-                    pusher.connection.unbind('connected', handleConnected)
-                    pusher.connection.unbind('disconnected', handleDisconnected)
-                }
-            } catch (e) {
-                console.warn('Error unbinding connection events:', e)
-            }
-
-            // Disconnect pusher
-            try {
-                if (pusher && pusher.connection) {
-                    const state = pusher.connection.state
-                    if (state !== 'closed' && state !== 'disconnected') {
-                        pusher.disconnect()
+            if (currentPusher?.connection) {
+                try {
+                    const connectionState = currentPusher.connection.state
+                    if (connectionState !== 'closed' && connectionState !== 'disconnected') {
+                        currentPusher.connection.unbind('connected', handleConnected)
+                        currentPusher.connection.unbind('disconnected', handleDisconnected)
+                    }
+                } catch (e: any) {
+                    // Ignore errors if connection is already closed
+                    const errorMsg = e?.message || String(e || '')
+                    if (!errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                        console.warn('Error unbinding connection events:', e)
                     }
                 }
-            } catch (e) {
-                console.debug('Pusher disconnect error (expected if already closed):', e)
             }
 
+            // Disconnect pusher (use ref to ensure we disconnect the right instance)
+            if (currentPusher?.connection) {
+                try {
+                    const state = currentPusher.connection.state
+                    // Only disconnect if not already closed/disconnected/closing
+                    if (state !== 'closed' && state !== 'disconnected' && state !== 'disconnecting') {
+                        currentPusher.disconnect()
+                    }
+                } catch (e: any) {
+                    // Ignore WebSocket errors - they're expected if already closed
+                    const errorMsg = e?.message || String(e || '')
+                    if (!errorMsg.includes('CLOSING') &&
+                        !errorMsg.includes('CLOSED') &&
+                        !errorMsg.includes('disconnect')) {
+                        console.debug('Pusher disconnect error:', e)
+                    }
+                }
+            }
+
+            // Clear ref after cleanup
             pusherRef.current = null
         }
     }, [chatroomId, broadcasterUserId, slug, username])
@@ -1441,15 +1523,24 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                             <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
                                                 {!message.sent_when_offline && message.points_earned !== undefined ? (
                                                     message.points_earned === 0 ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                            <img
-                                                                src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
-                                                                alt="Timeout - Message sent too quickly"
-                                                                className="w-3.5 h-3.5"
-                                                                title="Message sent too quickly (rate limited)"
-                                                            />
-                                                            <span>0 pts</span>
-                                                        </span>
+                                                        message.points_reason === 'Kick account not connected' ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/20 dark:bg-red-500/30 text-red-600 dark:text-red-400 border border-red-500/40 dark:border-red-500/50">
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+                                                                </svg>
+                                                                <span>No Kick connect</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
+                                                                <img
+                                                                    src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
+                                                                    alt="Timeout - Message sent too quickly"
+                                                                    className="w-3.5 h-3.5"
+                                                                    title="Message sent too quickly (rate limited)"
+                                                                />
+                                                                <span>0 pts</span>
+                                                            </span>
+                                                        )
                                                     ) : (
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-kick-green/20 dark:bg-kick-green/30 text-kick-green dark:text-kick-green border border-kick-green/30 dark:border-kick-green/50">
                                                             +{message.points_earned} {message.points_earned !== 1 ? 'pts' : 'pt'}
@@ -1686,15 +1777,24 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                     <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
                                                         {!message.sent_when_offline && message.points_earned !== undefined ? (
                                                             message.points_earned === 0 ? (
-                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                                    <img
-                                                                        src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
-                                                                        alt="Timeout - Message sent too quickly"
-                                                                        className="w-3.5 h-3.5"
-                                                                        title="Message sent too quickly (rate limited)"
-                                                                    />
-                                                                    <span>0 pts</span>
-                                                                </span>
+                                                                message.points_reason === 'Kick account not connected' ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/20 dark:bg-red-500/30 text-red-600 dark:text-red-400 border border-red-500/40 dark:border-red-500/50">
+                                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+                                                                        </svg>
+                                                                        <span>No Kick connect</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
+                                                                        <img
+                                                                            src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
+                                                                            alt="Timeout - Message sent too quickly"
+                                                                            className="w-3.5 h-3.5"
+                                                                            title="Message sent too quickly (rate limited)"
+                                                                        />
+                                                                        <span>0 pts</span>
+                                                                    </span>
+                                                                )
                                                             ) : (
                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-kick-green/20 dark:bg-kick-green/30 text-kick-green dark:text-kick-green border border-kick-green/30 dark:border-kick-green/50">
                                                                     +{message.points_earned} {message.points_earned !== 1 ? 'pts' : 'pt'}

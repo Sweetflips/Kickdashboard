@@ -47,7 +47,22 @@ export async function GET(request: Request) {
                 orderBy: { timestamp: 'desc' },
                 take: limit * 2, // Get more to account for merging
                 skip: offset,
-                include: {
+                select: {
+                    message_id: true,
+                    stream_session_id: true,
+                    sender_user_id: true,
+                    sender_username: true,
+                    broadcaster_user_id: true,
+                    content: true,
+                    emotes: true,
+                    timestamp: true,
+                    sender_username_color: true,
+                    sender_badges: true,
+                    sender_is_verified: true,
+                    sender_is_anonymous: true,
+                    points_earned: true,
+                    points_reason: true,
+                    sent_when_offline: true,
                     sender: {
                         select: {
                             username: true,
@@ -177,6 +192,7 @@ export async function GET(request: Request) {
                     emotes: (onlineMsg.emotes as any) || [],
                     timestamp: Number(onlineMsg.timestamp),
                     points_earned: onlineMsg.points_earned || 0,
+                    points_reason: onlineMsg.points_reason || undefined,
                     sent_when_offline: false,
                 }
             }

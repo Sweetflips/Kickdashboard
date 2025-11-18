@@ -33,6 +33,7 @@ export interface ChatMessage {
     }>
     timestamp: number
     points_earned?: number
+    points_reason?: string
     sent_when_offline?: boolean
 }
 

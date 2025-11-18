@@ -193,7 +193,12 @@ export async function GET(request: Request) {
         if (!chatroomId) {
             // Try to get chatroom_id from channel data first
             try {
-                const channelResponse = await fetch(`${KICK_API_BASE}/v2/channels/${slug}`)
+                const channelResponse = await fetch(`${KICK_API_BASE}/v2/channels/${slug}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    },
+                })
                 if (channelResponse.ok) {
                     const channelData = await channelResponse.json()
                     const extractedChatroomId = channelData.chatroom?.id || channelData.chatroom_id
@@ -223,6 +228,7 @@ export async function GET(request: Request) {
             const channelResponse = await fetch(`${KICK_API_BASE}/v2/channels/${slug}`, {
                 headers: {
                     'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 },
             })
 
@@ -257,6 +263,7 @@ export async function GET(request: Request) {
             const globalResponse = await fetch(`https://api.kick.com/public/v1/emotes/global`, {
                 headers: {
                     'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 },
             })
 

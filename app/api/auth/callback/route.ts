@@ -17,6 +17,34 @@ function hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex')
 }
 
+/**
+ * Build redirect URI from request headers (proxy-aware)
+ * Prefers x-forwarded-proto/x-forwarded-host, falls back to host header, then env var
+ */
+function buildRedirectUri(request: Request): string {
+    const headers = request.headers
+    const forwardedHost = headers.get('x-forwarded-host')
+    const forwardedProto = headers.get('x-forwarded-proto')
+    const host = headers.get('host') || ''
+
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+
+    // Prefer forwarded headers if present (proxy/reverse proxy)
+    if (forwardedHost) {
+        const proto = forwardedProto || 'https'
+        return `${proto}://${forwardedHost}/api/auth/callback`
+    }
+
+    // Fallback to host header
+    if (host) {
+        const proto = isLocalhost ? 'http' : 'https'
+        return `${proto}://${host}/api/auth/callback`
+    }
+
+    // Final fallback to env var
+    return `${APP_URL}/api/auth/callback`
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
@@ -24,11 +52,9 @@ export async function GET(request: Request) {
         const state = searchParams.get('state')
         const error = searchParams.get('error')
 
+        const redirectUri = buildRedirectUri(request)
         const host = request.headers.get('host') || ''
         const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
-        const redirectUri = isLocalhost
-            ? `http://${host}/api/auth/callback`
-            : `${APP_URL}/api/auth/callback`
 
         const baseUrl = isLocalhost ? `http://${host}` : APP_URL
         const errorRedirect = isLocalhost ? `http://${host}` : APP_URL

@@ -15,6 +15,35 @@ function hashToken(token: string): string {
 }
 
 /**
+ * Build redirect URI from request headers (proxy-aware)
+ * Prefers x-forwarded-proto/x-forwarded-host, falls back to host header, then env var
+ */
+function buildRedirectUri(request: Request): string {
+    const headers = request.headers
+    const forwardedHost = headers.get('x-forwarded-host')
+    const forwardedProto = headers.get('x-forwarded-proto')
+    const host = headers.get('host') || ''
+
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+
+    // Prefer forwarded headers if present (proxy/reverse proxy)
+    if (forwardedHost) {
+        const proto = forwardedProto || 'https'
+        return `${proto}://${forwardedHost}/api/auth/callback`
+    }
+
+    // Fallback to host header
+    if (host) {
+        const proto = isLocalhost ? 'http' : 'https'
+        return `${proto}://${host}/api/auth/callback`
+    }
+
+    // Final fallback to env var
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sweetflipsrewards.com'
+    return `${APP_URL}/api/auth/callback`
+}
+
+/**
  * Refresh access token using refresh token
  * POST /api/auth/refresh
  * Body: { refresh_token: string, kick_user_id?: string }
@@ -48,12 +77,16 @@ export async function POST(request: Request) {
             }
         }
 
+        // Build redirect URI (must match the one used during authorization)
+        const redirectUri = buildRedirectUri(request)
+
         // Exchange refresh token for new access token
         const params = new URLSearchParams({
             grant_type: 'refresh_token',
             client_id: KICK_CLIENT_ID,
             client_secret: KICK_CLIENT_SECRET,
             refresh_token: refreshToken,
+            redirect_uri: redirectUri,
         })
 
         const response = await fetch(`${KICK_OAUTH_BASE}/oauth/token`, {

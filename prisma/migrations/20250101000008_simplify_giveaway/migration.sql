@@ -7,3 +7,12 @@ UPDATE "giveaways" SET "prize_amount" = "prize_info" WHERE "prize_amount" IS NUL
 
 
 
+
+
+
+
+
+
+
+
+
