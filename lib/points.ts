@@ -39,16 +39,25 @@ export async function awardPoint(
     badges?: Array<{ text: string; type: string; count?: number }> | null
 ): Promise<{ awarded: boolean; pointsEarned?: number; reason?: string }> {
     try {
-        // First, find the user by kick_user_id to get the internal id
+        // First, find the user by kick_user_id to get the internal id and kick_connected status
         const user = await db.user.findUnique({
             where: { kick_user_id: kickUserId },
-            select: { id: true },
+            select: { id: true, kick_connected: true },
         })
 
         if (!user) {
             return {
                 awarded: false,
                 reason: 'User not found',
+            }
+        }
+
+        // Check if Kick account is connected
+        if (!user.kick_connected) {
+            return {
+                awarded: false,
+                pointsEarned: 0,
+                reason: 'Kick account not connected',
             }
         }
 
@@ -147,38 +156,79 @@ export async function awardPoint(
         const isSub = isSubscriber(badges)
         const pointsToAward = isSub ? POINTS_PER_MESSAGE_SUBSCRIBER : POINTS_PER_MESSAGE_NORMAL
 
-        try {
-            await db.$transaction(async (tx) => {
-                await tx.pointHistory.create({
-                    data: {
-                        user_id: userId,
-                        stream_session_id: streamSessionId,
-                        points_earned: pointsToAward,
-                        message_id: messageId,
-                        earned_at: now,
-                    },
+        // Retry transaction with exponential backoff for P2028 (transaction timeout)
+        const maxRetries = 3
+        let transactionSucceeded = false
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                await db.$transaction(async (tx) => {
+                    await tx.pointHistory.create({
+                        data: {
+                            user_id: userId,
+                            stream_session_id: streamSessionId,
+                            points_earned: pointsToAward,
+                            message_id: messageId,
+                            earned_at: now,
+                        },
+                    })
+
+                    await tx.userPoints.update({
+                        where: { user_id: userId },
+                        data: {
+                            total_points: {
+                                increment: pointsToAward,
+                            },
+                            last_point_earned_at: now,
+                            updated_at: now,
+                        },
+                    })
+                }, {
+                    maxWait: 10000, // Wait up to 10 seconds for transaction to start
+                    timeout: 20000, // Transaction timeout of 20 seconds
                 })
 
-                await tx.userPoints.update({
-                    where: { user_id: userId },
-                    data: {
-                        total_points: {
-                            increment: pointsToAward,
-                        },
-                        last_point_earned_at: now,
-                        updated_at: now,
-                    },
-                })
-            })
-        } catch (transactionError) {
-            if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2002') {
-                return {
-                    awarded: false,
-                    pointsEarned: 0,
-                    reason: 'Message already processed for points',
+                // Success - mark and break out of retry loop
+                transactionSucceeded = true
+                break
+            } catch (transactionError) {
+                // Handle unique constraint violation (race condition)
+                if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2002') {
+                    return {
+                        awarded: false,
+                        pointsEarned: 0,
+                        reason: 'Message already processed for points',
+                    }
                 }
+
+                // Handle transaction timeout - retry with exponential backoff
+                if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2028') {
+                    if (attempt < maxRetries - 1) {
+                        const delay = Math.min(100 * Math.pow(2, attempt), 1000) // 100ms, 200ms, 400ms max
+                        await new Promise(resolve => setTimeout(resolve, delay))
+                        continue // Retry
+                    }
+                    // Max retries reached
+                    console.error(`Error awarding point: Transaction timeout after ${maxRetries} attempts`, transactionError)
+                    return {
+                        awarded: false,
+                        pointsEarned: 0,
+                        reason: 'Transaction timeout - please try again',
+                    }
+                }
+
+                // For other errors, throw immediately
+                throw transactionError
             }
-            throw transactionError
+        }
+
+        // If transaction didn't succeed and we didn't return early, something went wrong
+        if (!transactionSucceeded) {
+            return {
+                awarded: false,
+                pointsEarned: 0,
+                reason: 'Transaction failed after retries',
+            }
         }
 
         return {
