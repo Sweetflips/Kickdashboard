@@ -24,6 +24,8 @@ export default function AdminStreamsPage() {
     const [syncing, setSyncing] = useState(false)
     const [syncResult, setSyncResult] = useState<any>(null)
     const [offset, setOffset] = useState(0)
+    const [showManualSync, setShowManualSync] = useState(false)
+    const [manualJson, setManualJson] = useState('')
     const limit = 20
 
     useEffect(() => {
@@ -68,22 +70,112 @@ export default function AdminStreamsPage() {
         try {
             setSyncing(true)
             setSyncResult(null)
+            const channelSlug = userData?.username || 'sweetflips'
+
+            // Strategy 1: Try Server-side sync first (simplest if it works)
+            let success = false
+            try {
+                const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
+                    method: 'POST'
+                })
+                
+                const result = await response.json()
+                if (response.ok && result.success) {
+                    setSyncResult(result)
+                    success = true
+                } else {
+                    // If server returns error (likely 500/403 from Kick), fallback
+                    console.warn('Server-side sync failed, trying client-side...', result.error)
+                }
+            } catch (e) {
+                console.warn('Server-side sync network error', e)
+            }
+
+            if (success) {
+                await fetchStreams()
+                setSyncing(false)
+                return
+            }
+
+            // Strategy 2: Client-side fetch (Browser -> Kick API)
+            // This bypasses server IP blocks, but might hit CORS
+            try {
+                console.log('Attempting client-side fetch...')
+                const kickResponse = await fetch(`https://kick.com/api/v2/channels/${channelSlug}/videos`)
+                
+                if (kickResponse.ok) {
+                    const videos = await kickResponse.json()
+                    console.log(`Fetched ${videos.length} videos client-side`)
+                    
+                    // Send data to backend
+                    const syncResponse = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ videos })
+                    })
+                    
+                    const result = await syncResponse.json()
+                    setSyncResult(result)
+                    if (syncResponse.ok) {
+                        await fetchStreams()
+                        setSyncing(false)
+                        return
+                    }
+                } else {
+                    throw new Error(`Kick API Status: ${kickResponse.status}`)
+                }
+            } catch (clientError) {
+                console.error('Client-side sync failed (likely CORS):', clientError)
+                // Fallback to manual mode
+                setShowManualSync(true)
+                setSyncResult({ 
+                    success: false, 
+                    error: 'Auto-sync blocked by Kick security. Please use the manual sync below.' 
+                })
+            }
+
+        } catch (error) {
+            console.error('Sync error:', error)
+            setSyncResult({ success: false, error: 'Failed to execute sync' })
+        } finally {
+            setSyncing(false)
+        }
+    }
+
+    const handleManualSync = async () => {
+        if (!manualJson) return
+        
+        try {
+            setSyncing(true)
+            setSyncResult(null)
+            let videos = []
+            try {
+                videos = JSON.parse(manualJson)
+                if (!Array.isArray(videos)) throw new Error('JSON is not an array')
+            } catch (e) {
+                alert('Invalid JSON format. Please copy the entire array from the Kick API page.')
+                setSyncing(false)
+                return
+            }
 
             const channelSlug = userData?.username || 'sweetflips'
             const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
-                method: 'POST'
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videos })
             })
 
             const result = await response.json()
             setSyncResult(result)
-
+            
             if (response.ok) {
-                // Refresh list after sync
+                setShowManualSync(false)
+                setManualJson('')
                 await fetchStreams()
             }
         } catch (error) {
-            console.error('Sync error:', error)
-            setSyncResult({ success: false, error: 'Failed to execute sync' })
+            console.error('Manual sync error:', error)
+            setSyncResult({ success: false, error: 'Failed to process manual sync' })
         } finally {
             setSyncing(false)
         }
@@ -98,6 +190,8 @@ export default function AdminStreamsPage() {
             </AppLayout>
         )
     }
+
+    const kickApiUrl = `https://kick.com/api/v2/channels/${userData?.username || 'sweetflips'}/videos`
 
     return (
         <AppLayout>
@@ -141,6 +235,46 @@ export default function AdminStreamsPage() {
                     </div>
                 )}
 
+                {/* Manual Sync Fallback */}
+                {showManualSync && (
+                    <div className="bg-white dark:bg-kick-surface rounded-lg p-6 border border-orange-200 dark:border-orange-800">
+                        <h3 className="text-lg font-bold text-orange-800 dark:text-orange-200 mb-2">
+                            Manual Sync Required
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-4">
+                            Automated sync was blocked by Kick's security. Please follow these steps:
+                        </p>
+                        <ol className="list-decimal list-inside text-sm text-gray-600 dark:text-kick-text-secondary mb-4 space-y-2">
+                            <li>
+                                Open this link in a new tab: <a href={kickApiUrl} target="_blank" rel="noopener noreferrer" className="text-kick-purple hover:underline">{kickApiUrl}</a>
+                            </li>
+                            <li>Copy all the text (JSON data) from that page.</li>
+                            <li>Paste it into the box below and click "Process Sync".</li>
+                        </ol>
+                        <textarea
+                            value={manualJson}
+                            onChange={(e) => setManualJson(e.target.value)}
+                            placeholder="Paste JSON here... [ { ... } ]"
+                            className="w-full h-48 p-3 border border-gray-300 dark:border-kick-border rounded-lg bg-gray-50 dark:bg-kick-dark text-xs font-mono mb-4"
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button
+                                onClick={() => setShowManualSync(false)}
+                                className="px-4 py-2 text-gray-600 dark:text-kick-text-secondary hover:text-gray-900 dark:hover:text-kick-text"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleManualSync}
+                                disabled={!manualJson || syncing}
+                                className="px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 disabled:opacity-50"
+                            >
+                                {syncing ? 'Processing...' : 'Process Sync'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Streams Table */}
                 <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border overflow-hidden">
                     <div className="overflow-x-auto">
@@ -164,8 +298,8 @@ export default function AdminStreamsPage() {
                                             <div className="w-24 h-14 bg-gray-100 dark:bg-kick-surface-hover rounded overflow-hidden relative">
                                                 {session.thumbnail_url ? (
                                                     <Image
-                                                        src={session.thumbnail_url.startsWith('http')
-                                                            ? `/api/image-proxy?url=${encodeURIComponent(session.thumbnail_url)}`
+                                                        src={session.thumbnail_url.startsWith('http') 
+                                                            ? `/api/image-proxy?url=${encodeURIComponent(session.thumbnail_url)}` 
                                                             : session.thumbnail_url}
                                                         alt="Thumbnail"
                                                         fill
@@ -195,7 +329,7 @@ export default function AdminStreamsPage() {
                                         </td>
                                         <td className="py-3 px-4">
                                             <span className={`px-2 py-1 rounded text-xs ${
-                                                session.ended_at
+                                                session.ended_at 
                                                     ? 'bg-gray-100 dark:bg-kick-dark text-gray-600 dark:text-kick-text-secondary'
                                                     : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 animate-pulse'
                                             }`}>
