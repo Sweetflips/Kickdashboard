@@ -2,6 +2,51 @@ import { NextResponse } from 'next/server'
 
 const KICK_API_BASE = 'https://kick.com/api'
 
+// In-memory cache for emotes (prevents excessive API calls)
+const emoteCache = new Map<string, { data: any; timestamp: number; expiresAt: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes cache
+const MAX_RETRIES = 3
+const INITIAL_RETRY_DELAY = 1000 // 1 second
+
+// Exponential backoff helper
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+async function fetchWithRetry(
+    url: string,
+    options: RequestInit = {},
+    retries = MAX_RETRIES
+): Promise<Response> {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            const response = await fetch(url, options)
+
+            // If successful or client error (4xx), return immediately
+            if (response.ok || (response.status >= 400 && response.status < 500)) {
+                return response
+            }
+
+            // For server errors (5xx), retry with exponential backoff
+            if (response.status >= 500 && attempt < retries - 1) {
+                const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt)
+                console.log(`⚠️ Server error ${response.status} on attempt ${attempt + 1}, retrying in ${delay}ms...`)
+                await sleep(delay)
+                continue
+            }
+
+            return response
+        } catch (error) {
+            if (attempt === retries - 1) {
+                throw error
+            }
+            const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt)
+            console.log(`⚠️ Network error on attempt ${attempt + 1}, retrying in ${delay}ms...`)
+            await sleep(delay)
+        }
+    }
+
+    throw new Error('Max retries exceeded')
+}
+
 // Hardcoded list of Kick's default emoji emotes (fallback)
 const DEFAULT_EMOJI_EMOTES = [
     { id: '1730752', name: 'emojiAngel' },
@@ -223,79 +268,140 @@ export async function GET(request: Request) {
         let emoteData: any = null
 
         // Step 1: Fetch channel/chatroom data for channel-specific emotes
-        try {
-            console.log(`🔍 Fetching chatroom data: ${KICK_API_BASE}/v2/channels/${slug}`)
-            const channelResponse = await fetch(`${KICK_API_BASE}/v2/channels/${slug}`, {
-                headers: {
-                    'Accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                },
-            })
+        // Check cache first
+        const channelCacheKey = `channel-${slug}`
+        const cachedChannel = emoteCache.get(channelCacheKey)
+        let channelResponse: Response | null = null
+        let channelData: any = null
 
-            if (channelResponse.ok) {
-                const channelData = await channelResponse.json()
-                emoteData = channelData
+        if (cachedChannel && Date.now() < cachedChannel.expiresAt && cachedChannel.data) {
+            console.log(`📦 Using cached channel data for ${slug}`)
+            channelData = cachedChannel.data
+            emoteData = cachedChannel.data
 
-                // Extract emotes from chatroom data
-                if (channelData.chatroom?.emotes && Array.isArray(channelData.chatroom.emotes)) {
-                    emotes = channelData.chatroom.emotes
-                    console.log(`✅ Found ${emotes.length} emotes from channel chatroom`)
-                } else if (channelData.chatroom?.emote_set && Array.isArray(channelData.chatroom.emote_set)) {
-                    emotes = channelData.chatroom.emote_set
-                    console.log(`✅ Found ${emotes.length} emotes from channel emote_set`)
-                } else if (channelData.emotes && Array.isArray(channelData.emotes)) {
-                    emotes = channelData.emotes
-                    console.log(`✅ Found ${emotes.length} emotes from channel data`)
-                }
-            } else if (channelResponse.status === 401) {
-                console.log(`ℹ️ Channel API returned 401, using fallback emotes`)
-            } else {
-                console.log(`ℹ️ Channel API returned ${channelResponse.status}, using fallback emotes`)
+            // Extract emotes from cached channel data
+            if (channelData.chatroom?.emotes && Array.isArray(channelData.chatroom.emotes)) {
+                emotes = channelData.chatroom.emotes
+                console.log(`✅ Found ${emotes.length} emotes from cached channel chatroom`)
+            } else if (channelData.chatroom?.emote_set && Array.isArray(channelData.chatroom.emote_set)) {
+                emotes = channelData.chatroom.emote_set
+                console.log(`✅ Found ${emotes.length} emotes from cached channel emote_set`)
+            } else if (channelData.emotes && Array.isArray(channelData.emotes)) {
+                emotes = channelData.emotes
+                console.log(`✅ Found ${emotes.length} emotes from cached channel data`)
             }
-        } catch (error) {
-            console.log(`ℹ️ Failed to fetch channel data, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        } else {
+            try {
+                console.log(`🔍 Fetching chatroom data: ${KICK_API_BASE}/v2/channels/${slug}`)
+                channelResponse = await fetchWithRetry(`${KICK_API_BASE}/v2/channels/${slug}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    },
+                })
+
+                if (channelResponse && channelResponse.ok) {
+                    const fetchedChannelData = await channelResponse.json()
+                    channelData = fetchedChannelData
+                    emoteData = fetchedChannelData
+
+                    // Cache successful response
+                    emoteCache.set(channelCacheKey, {
+                        data: channelData,
+                        timestamp: Date.now(),
+                        expiresAt: Date.now() + CACHE_TTL,
+                    })
+
+                    // Extract emotes from chatroom data
+                    if (channelData.chatroom?.emotes && Array.isArray(channelData.chatroom.emotes)) {
+                        emotes = channelData.chatroom.emotes
+                        console.log(`✅ Found ${emotes.length} emotes from channel chatroom`)
+                    } else if (channelData.chatroom?.emote_set && Array.isArray(channelData.chatroom.emote_set)) {
+                        emotes = channelData.chatroom.emote_set
+                        console.log(`✅ Found ${emotes.length} emotes from channel emote_set`)
+                    } else if (channelData.emotes && Array.isArray(channelData.emotes)) {
+                        emotes = channelData.emotes
+                        console.log(`✅ Found ${emotes.length} emotes from channel data`)
+                    }
+                } else if (channelResponse && channelResponse.status === 401) {
+                    console.log(`ℹ️ Channel API returned 401, using fallback emotes`)
+                    // Cache 401 responses briefly to avoid hammering the API
+                    emoteCache.set(channelCacheKey, {
+                        data: null,
+                        timestamp: Date.now(),
+                        expiresAt: Date.now() + 30000, // 30 second cache for errors
+                    })
+                } else {
+                    console.log(`ℹ️ Channel API returned ${channelResponse.status}, using fallback emotes`)
+                }
+            } catch (error) {
+                console.log(`ℹ️ Failed to fetch channel data, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
+            }
         }
 
         // Step 2: Fetch global emotes from Kick public API
+        // Check cache first
+        const globalCacheKey = 'global-emotes'
+        const cachedGlobal = emoteCache.get(globalCacheKey)
         let globalEmotes: any[] = []
-        try {
-            console.log(`🔍 Fetching global emotes: https://api.kick.com/public/v1/emotes/global`)
-            const globalResponse = await fetch(`https://api.kick.com/public/v1/emotes/global`, {
-                headers: {
-                    'Accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                },
-            })
+        let globalResponse: Response | null = null
 
-            if (globalResponse.ok) {
-                const contentType = globalResponse.headers.get('content-type')
-                if (contentType && contentType.includes('application/json')) {
-                    try {
-                        const globalData = await globalResponse.json()
-                        if (Array.isArray(globalData)) {
-                            globalEmotes = globalData
-                        } else if (globalData.emotes && Array.isArray(globalData.emotes)) {
-                            globalEmotes = globalData.emotes
-                        } else if (globalData.data && Array.isArray(globalData.data)) {
-                            globalEmotes = globalData.data
+        if (cachedGlobal && Date.now() < cachedGlobal.expiresAt && cachedGlobal.data) {
+            console.log(`📦 Using cached global emotes`)
+            globalEmotes = cachedGlobal.data
+        } else {
+            try {
+                console.log(`🔍 Fetching global emotes: https://api.kick.com/public/v1/emotes/global`)
+                globalResponse = await fetchWithRetry(`https://api.kick.com/public/v1/emotes/global`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    },
+                })
+
+                if (globalResponse && globalResponse.ok) {
+                    const contentType = globalResponse.headers.get('content-type')
+                    if (contentType && contentType.includes('application/json')) {
+                        try {
+                            const globalData = await globalResponse.json()
+                            if (Array.isArray(globalData)) {
+                                globalEmotes = globalData
+                            } else if (globalData.emotes && Array.isArray(globalData.emotes)) {
+                                globalEmotes = globalData.emotes
+                            } else if (globalData.data && Array.isArray(globalData.data)) {
+                                globalEmotes = globalData.data
+                            }
+                            console.log(`✅ Found ${globalEmotes.length} global emotes`)
+
+                            // Cache successful response
+                            emoteCache.set(globalCacheKey, {
+                                data: globalEmotes,
+                                timestamp: Date.now(),
+                                expiresAt: Date.now() + CACHE_TTL,
+                            })
+                        } catch (parseError) {
+                            console.log(`ℹ️ Failed to parse global emotes response, using fallback`)
                         }
-                        console.log(`✅ Found ${globalEmotes.length} global emotes`)
-                    } catch (parseError) {
-                        console.log(`ℹ️ Failed to parse global emotes response, using fallback`)
+                    } else {
+                        console.log(`ℹ️ Global emotes API returned non-JSON response, using fallback`)
                     }
                 } else {
-                    console.log(`ℹ️ Global emotes API returned non-JSON response, using fallback`)
+                    // Silently handle 401/other errors - fallback will be used
+                    if (globalResponse.status === 401) {
+                        console.log(`ℹ️ Global emotes API returned 401, using fallback`)
+                        // Cache 401 responses briefly to avoid hammering the API
+                        emoteCache.set(globalCacheKey, {
+                            data: [],
+                            timestamp: Date.now(),
+                            expiresAt: Date.now() + 30000, // 30 second cache for errors
+                        })
+                    } else {
+                        console.log(`ℹ️ Global emotes API returned ${globalResponse.status}, using fallback`)
+                    }
                 }
-            } else {
-                // Silently handle 401/other errors - fallback will be used
-                if (globalResponse.status === 401) {
-                    console.log(`ℹ️ Global emotes API returned 401, using fallback`)
-                } else {
-                    console.log(`ℹ️ Global emotes API returned ${globalResponse.status}, using fallback`)
-                }
+            } catch (error) {
+                console.log(`ℹ️ Failed to fetch global emotes, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
             }
-        } catch (error) {
-            console.log(`ℹ️ Failed to fetch global emotes, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
 
         // Normalize emotes first (before combining)

@@ -17,6 +17,7 @@ function hashToken(token: string): string {
 /**
  * Build redirect URI from request headers (proxy-aware)
  * Prefers x-forwarded-proto/x-forwarded-host, falls back to host header, then env var
+ * This must match the redirect URI used during initial OAuth authorization
  */
 function buildRedirectUri(request: Request): string {
     const headers = request.headers
@@ -26,21 +27,33 @@ function buildRedirectUri(request: Request): string {
 
     const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
 
+    // Check for explicit redirect URI override in environment (highest priority)
+    const explicitRedirectUri = process.env.KICK_REDIRECT_URI
+    if (explicitRedirectUri) {
+        return explicitRedirectUri
+    }
+
     // Prefer forwarded headers if present (proxy/reverse proxy)
     if (forwardedHost) {
         const proto = forwardedProto || 'https'
-        return `${proto}://${forwardedHost}/api/auth/callback`
+        // Remove port if present (Kick OAuth doesn't like ports in redirect URIs)
+        const cleanHost = forwardedHost.split(':')[0]
+        return `${proto}://${cleanHost}/api/auth/callback`
     }
 
     // Fallback to host header
     if (host) {
         const proto = isLocalhost ? 'http' : 'https'
-        return `${proto}://${host}/api/auth/callback`
+        // Remove port if present (Kick OAuth doesn't like ports in redirect URIs)
+        const cleanHost = host.split(':')[0]
+        return `${proto}://${cleanHost}/api/auth/callback`
     }
 
     // Final fallback to env var
-    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sweetflipsrewards.com'
-    return `${APP_URL}/api/auth/callback`
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://www.sweetflipsrewards.com'
+    // Ensure no trailing slash
+    const cleanAppUrl = APP_URL.replace(/\/$/, '')
+    return `${cleanAppUrl}/api/auth/callback`
 }
 
 /**
@@ -80,6 +93,9 @@ export async function POST(request: Request) {
         // Build redirect URI (must match the one used during authorization)
         const redirectUri = buildRedirectUri(request)
 
+        // Log redirect URI for debugging (first 50 chars only for security)
+        console.log(`🔄 Token refresh attempt - redirect URI: ${redirectUri.substring(0, 50)}...`)
+
         // Exchange refresh token for new access token
         const params = new URLSearchParams({
             grant_type: 'refresh_token',
@@ -99,9 +115,39 @@ export async function POST(request: Request) {
 
         if (!response.ok) {
             const errorText = await response.text()
-            console.error('❌ Token refresh failed:', response.status, errorText)
+            let errorDetails: any = { message: errorText }
+
+            // Try to parse error response for better error messages
+            try {
+                const errorJson = JSON.parse(errorText)
+                errorDetails = errorJson
+            } catch {
+                // Keep as text if not JSON
+            }
+
+            // Log detailed error information for debugging
+            console.error('❌ Token refresh failed:', {
+                status: response.status,
+                error: errorDetails,
+                redirectUri: redirectUri.substring(0, 50) + '...',
+                hasRefreshToken: !!refreshToken,
+                refreshTokenLength: refreshToken?.length || 0,
+            })
+
+            // If it's an invalid_grant error, the refresh token is likely expired/revoked
+            if (response.status === 401 && errorDetails.error === 'invalid_grant') {
+                return NextResponse.json(
+                    {
+                        error: 'Refresh token expired or invalid',
+                        details: 'The refresh token has expired, been revoked, or does not match the redirect URI used during authorization. Please log in again.',
+                        code: 'REFRESH_TOKEN_INVALID'
+                    },
+                    { status: 401 }
+                )
+            }
+
             return NextResponse.json(
-                { error: 'Failed to refresh token', details: errorText },
+                { error: 'Failed to refresh token', details: errorDetails },
                 { status: response.status }
             )
         }

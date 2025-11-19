@@ -336,159 +336,158 @@ export async function POST(request: Request) {
                     }
                 }
             } else {
-                const existingChatMessage = await db.chatMessage.findUnique({
+                // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
+                const upsertResult = await db.chatMessage.upsert({
+                    where: { message_id: message.message_id },
+                    update: {
+                        stream_session_id: sessionIsActive ? activeSession!.id : null,
+                        sender_username: message.sender.username,
+                        content: message.content,
+                        emotes: emotesToSave,
+                        timestamp: BigInt(message.timestamp),
+                        sender_username_color: message.sender.identity?.username_color || null,
+                        sender_badges: message.sender.identity?.badges || undefined,
+                        sender_is_verified: message.sender.is_verified || false,
+                        sender_is_anonymous: message.sender.is_anonymous || false,
+                        sent_when_offline: false,
+                        // Preserve existing points_earned and points_reason on update
+                    },
+                    create: {
+                        message_id: message.message_id,
+                        stream_session_id: sessionIsActive ? activeSession!.id : null,
+                        sender_user_id: senderUserId,
+                        sender_username: message.sender.username,
+                        broadcaster_user_id: broadcasterUserId,
+                        content: message.content,
+                        emotes: emotesToSave,
+                        timestamp: BigInt(message.timestamp),
+                        sender_username_color: message.sender.identity?.username_color || null,
+                        sender_badges: message.sender.identity?.badges || undefined,
+                        sender_is_verified: message.sender.is_verified || false,
+                        sender_is_anonymous: message.sender.is_anonymous || false,
+                        points_earned: 0,
+                        sent_when_offline: false,
+                    },
+                })
+
+                // Check if this was a new message by checking if points_earned is still 0
+                // If points_earned is 0, it means this is likely a new message (or points weren't awarded yet)
+                const messageAfterUpsert = await db.chatMessage.findUnique({
                     where: { message_id: message.message_id },
                     select: {
                         id: true,
                         points_earned: true,
+                        points_reason: true,
+                        created_at: true,
                     },
                 })
 
-                if (existingChatMessage) {
-                    await db.chatMessage.update({
-                        where: { id: existingChatMessage.id },
-                        data: {
-                            stream_session_id: sessionIsActive ? activeSession!.id : null,
-                            sender_username: message.sender.username,
-                            content: message.content,
-                            emotes: emotesToSave,
-                            timestamp: BigInt(message.timestamp),
-                            sender_username_color: message.sender.identity?.username_color || null,
-                            sender_badges: message.sender.identity?.badges || undefined,
-                            sender_is_verified: message.sender.is_verified || false,
-                            sender_is_anonymous: message.sender.is_anonymous || false,
-                            sent_when_offline: false,
-                        },
+                // If message already has points, it's definitely an existing message
+                const wasExistingMessage = messageAfterUpsert && messageAfterUpsert.points_earned > 0
+
+                if (wasExistingMessage) {
+                    // Existing message - use existing points
+                    pointsEarned = messageAfterUpsert.points_earned ?? 0
+                    pointsReason = messageAfterUpsert.points_reason || null
+                } else if (messageAfterUpsert && messageAfterUpsert.points_earned === 0 && sessionIsActive && !isBot(senderUsernameLower)) {
+                    // Message exists but has no points - check if we should award points
+                    // First verify the message still has 0 points (prevent race condition)
+                    const messageCheck = await db.chatMessage.findUnique({
+                        where: { message_id: message.message_id },
+                        select: { points_earned: true },
                     })
 
-                    pointsEarned = existingChatMessage.points_earned ?? 0
-                    // Fetch points_reason from existing message if available
-                    const existingMessageWithReason = await db.chatMessage.findUnique({
-                        where: { message_id: message.message_id },
-                        select: { points_reason: true },
-                    })
-                    pointsReason = existingMessageWithReason?.points_reason || null
-                } else {
-                    try {
-                        // Use create with error handling for race conditions
-                        await db.chatMessage.create({
-                            data: {
-                                message_id: message.message_id,
-                                stream_session_id: sessionIsActive ? activeSession!.id : null,
-                                sender_user_id: senderUserId,
-                                sender_username: message.sender.username,
-                                broadcaster_user_id: broadcasterUserId,
-                                content: message.content,
-                                emotes: emotesToSave,
-                                timestamp: BigInt(message.timestamp),
-                                sender_username_color: message.sender.identity?.username_color || null,
-                                sender_badges: message.sender.identity?.badges || undefined,
-                                sender_is_verified: message.sender.is_verified || false,
-                                sender_is_anonymous: message.sender.is_anonymous || false,
-                                points_earned: 0,
-                                sent_when_offline: false,
-                            },
-                        })
+                    // Only proceed if points are still 0 (another process hasn't awarded points yet)
+                    if (messageCheck && messageCheck.points_earned === 0) {
                         isNewMessage = true
 
-                        if (sessionIsActive && !isBot(senderUsernameLower)) {
-                            // Get recent messages from this user for duplicate detection
-                            const recentMessages = await db.chatMessage.findMany({
-                                where: {
-                                    sender_user_id: senderUserId,
-                                    broadcaster_user_id: broadcasterUserId,
+                        // Get recent messages from this user for duplicate detection
+                        const recentMessages = await db.chatMessage.findMany({
+                            where: {
+                                sender_user_id: senderUserId,
+                                broadcaster_user_id: broadcasterUserId,
+                            },
+                            orderBy: { timestamp: 'desc' },
+                            take: 10, // Check last 10 messages
+                            select: { content: true },
+                        })
+
+                        const recentMessageContents = recentMessages.map(msg => msg.content)
+
+                        // Detect bot patterns in message content
+                        const botDetection = detectBotMessage(message.content, recentMessageContents)
+
+                        if (botDetection.isBot) {
+                            logDebug(`🤖 Bot detected for ${senderUsername}: ${botDetection.reasons.join(', ')} (score: ${botDetection.score})`)
+                            // Don't award points or emotes for bot messages
+                            pointsEarned = 0
+                            pointsReason = 'Bot detected'
+
+                            // Update with bot detection reason
+                            await db.chatMessage.update({
+                                where: { message_id: message.message_id },
+                                data: {
+                                    points_earned: 0,
+                                    points_reason: pointsReason,
                                 },
-                                orderBy: { timestamp: 'desc' },
-                                take: 10, // Check last 10 messages
-                                select: { content: true },
                             })
-
-                            const recentMessageContents = recentMessages.map(msg => msg.content)
-
-                            // Detect bot patterns in message content
-                            const botDetection = detectBotMessage(message.content, recentMessageContents)
-
-                            if (botDetection.isBot) {
-                                logDebug(`🤖 Bot detected for ${senderUsername}: ${botDetection.reasons.join(', ')} (score: ${botDetection.score})`)
-                                // Don't award points or emotes for bot messages
-                                pointsEarned = 0
-                                pointsReason = 'Bot detected'
-                            } else {
-                                const pointResult = await awardPoint(
-                                    senderUserId,
-                                    activeSession!.id,
-                                    message.message_id,
-                                    message.sender.identity?.badges
-                                )
-
-                                pointsEarned = pointResult.pointsEarned || 0
-                                pointsReason = pointResult.reason || null
-
-                                if (pointsEarned > 0) {
-                                    await db.chatMessage.update({
-                                        where: { message_id: message.message_id },
-                                        data: {
-                                            points_earned: pointsEarned,
-                                            points_reason: null, // Clear reason when points are awarded
-                                        },
-                                    })
-                                } else {
-                                    // Update with reason when no points awarded
-                                    await db.chatMessage.update({
-                                        where: { message_id: message.message_id },
-                                        data: {
-                                            points_earned: 0,
-                                            points_reason: pointsReason,
-                                        },
-                                    })
-                                }
-
-                                if (emotesToSave.length > 0) {
-                                    try {
-                                        await awardEmotes(senderUserId, emotesToSave)
-                                    } catch (emoteError) {
-                                        console.warn('Failed to award emotes (non-critical):', emoteError)
-                                    }
-                                }
-                            }
-                        }
-
-                        logDebug(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
-                    } catch (createError: any) {
-                        // Handle race condition: another request created the message between our check and create
-                        if (createError instanceof Prisma.PrismaClientKnownRequestError) {
-                            if (createError.code === 'P2002') {
-                                // Unique constraint violation - message already exists
-                                const existingMessage = await db.chatMessage.findUnique({
-                                    where: { message_id: message.message_id },
-                                    select: { points_earned: true, points_reason: true },
-                                })
-                                pointsEarned = existingMessage?.points_earned ?? 0
-                                pointsReason = existingMessage?.points_reason || null
-                                // Not a new message, so don't award points or update counts
-                            } else if (createError.code === 'P2028') {
-                                // Transaction timeout - log but don't fail the request
-                                console.error('Transaction timeout creating chat message:', createError)
-                                // Try to fetch existing message in case it was created
-                                const existingMessage = await db.chatMessage.findUnique({
-                                    where: { message_id: message.message_id },
-                                    select: { points_earned: true, points_reason: true },
-                                })
-                                if (existingMessage) {
-                                    pointsEarned = existingMessage.points_earned ?? 0
-                                    pointsReason = existingMessage.points_reason || null
-                                } else {
-                                    // Message wasn't created, but we'll continue without failing
-                                    console.warn('Message creation timed out and message not found:', message.message_id)
-                                }
-                            } else {
-                                throw createError
-                            }
                         } else {
-                            throw createError
+                            const pointResult = await awardPoint(
+                                senderUserId,
+                                activeSession!.id,
+                                message.message_id,
+                                message.sender.identity?.badges
+                            )
+
+                            pointsEarned = pointResult.pointsEarned || 0
+                            pointsReason = pointResult.reason || null
+
+                            // Update message with points/reason - use conditional update to prevent overwriting if another process already awarded points
+                            try {
+                                await db.chatMessage.updateMany({
+                                    where: {
+                                        message_id: message.message_id,
+                                        points_earned: 0, // Only update if still 0
+                                    },
+                                    data: {
+                                        points_earned: pointsEarned,
+                                        points_reason: pointsEarned > 0 ? null : pointsReason, // Clear reason when points are awarded
+                                    },
+                                })
+                            } catch (updateError) {
+                                // If update fails, fetch current state
+                                const currentMessage = await db.chatMessage.findUnique({
+                                    where: { message_id: message.message_id },
+                                    select: { points_earned: true, points_reason: true },
+                                })
+                                pointsEarned = currentMessage?.points_earned ?? 0
+                                pointsReason = currentMessage?.points_reason || null
+                            }
+
+                            if (emotesToSave.length > 0) {
+                                try {
+                                    await awardEmotes(senderUserId, emotesToSave)
+                                } catch (emoteError) {
+                                    console.warn('Failed to award emotes (non-critical):', emoteError)
+                                }
+                            }
                         }
+                    } else {
+                        // Another process already awarded points - use existing values
+                        pointsEarned = messageCheck?.points_earned ?? 0
+                        const existingMessage = await db.chatMessage.findUnique({
+                            where: { message_id: message.message_id },
+                            select: { points_reason: true },
+                        })
+                        pointsReason = existingMessage?.points_reason || null
                     }
+                } else {
+                    // Not a new message or conditions not met - use existing points
+                    pointsEarned = messageAfterUpsert?.points_earned ?? 0
+                    pointsReason = messageAfterUpsert?.points_reason || null
                 }
+
+                logDebug(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned}, isNew: ${isNewMessage})`)
             }
 
             // Update stream session message count if session exists and is active
