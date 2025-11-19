@@ -1644,23 +1644,6 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                         </div>
                                                     )}
 
-                                                    {badges.find(b => b.type === 'vip') && (
-                                                        <div className="relative badge-tooltip h-4 ml-1 first:ml-0">
-                                                            <button type="button" className="base-badge ml-1 first:ml-0">
-                                                                <div className="base-icon icon size-sm" style={{ width: '16px', height: '16px' }}>
-                                                                    <img
-                                                                        src="/vip.svg"
-                                                                        alt="VIP"
-                                                                        width={16}
-                                                                        height={16}
-                                                                        className="object-contain"
-                                                                        style={{ width: '16px', height: '16px', display: 'block' }}
-                                                                    />
-                                                                </div>
-                                                            </button>
-                                                        </div>
-                                                    )}
-
                                                             {badges.find(b => b.type === 'vip') && (
                                                                 <div className="relative badge-tooltip h-4 ml-1 first:ml-0">
                                                                     <button type="button" className="base-badge ml-1 first:ml-0">
