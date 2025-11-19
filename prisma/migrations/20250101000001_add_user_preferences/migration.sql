@@ -20,3 +20,4 @@ ALTER TABLE "users" ADD COLUMN "chat_show_timestamps" BOOLEAN NOT NULL DEFAULT t
 
 
 
+
