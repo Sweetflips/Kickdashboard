@@ -5,9 +5,9 @@ const failedImageCache = new Map<string, { timestamp: number }>()
 const FAILED_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 /**
- * Proxy endpoint for Kick profile pictures
+ * Proxy endpoint for Kick profile pictures and thumbnails
  * This bypasses CORS and Next.js image restrictions
- * GET /api/image-proxy?url=https://kick.com/img/default-profile-pictures/default2.jpeg
+ * GET /api/image-proxy?url=https://stream.kick.com/thumbnails/livestream/123.jpg
  */
 export async function GET(request: Request) {
     try {
@@ -29,6 +29,7 @@ export async function GET(request: Request) {
             'amazonaws.com',
             'files.kick.com',
             'stream.kick.com', // For stream thumbnails
+            'api.kick.com', // Kick Dev API thumbnails
         ]
         const isAllowed = allowedDomains.some(domain => url.hostname.includes(domain))
         if (!isAllowed) {
@@ -74,13 +75,30 @@ export async function GET(request: Request) {
 
         let imageResponse: Response
         try {
+            // First try standard fetch
             imageResponse = await fetch(imageUrl, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'Referer': 'https://kick.com/',
+                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
                 },
                 signal: controller.signal,
             })
+
+            // If 403 with stream.kick.com, try without Referer or with modified headers
+            if (imageResponse.status === 403 && imageUrl.includes('stream.kick.com')) {
+                console.log('⚠️ 403 Forbidden - Retrying without Referer header')
+
+                // Some CDNs block specific Referers, or require none
+                imageResponse = await fetch(imageUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': '*/*'
+                    },
+                    signal: controller.signal,
+                })
+            }
+
             clearTimeout(timeoutId)
         } catch (fetchError) {
             clearTimeout(timeoutId)
@@ -94,25 +112,14 @@ export async function GET(request: Request) {
         }
 
         console.log(`📡 Image fetch response status: ${imageResponse.status}`)
-        console.log(`📡 Image fetch response headers:`, Object.fromEntries(imageResponse.headers.entries()))
 
         if (!imageResponse.ok) {
-            const errorText = await imageResponse.text().catch(() => 'Could not read error')
-
-            // Log error details (truncated for security)
-            const errorPreview = errorText.substring(0, 200)
-            console.error(`❌ Failed to fetch image: ${imageResponse.status} - ${imageUrl.substring(0, 80)}...`)
-            if (errorPreview && !errorPreview.includes('Access Denied')) {
-                console.error(`❌ Error details: ${errorPreview}`)
-            }
-
             // Cache failed requests (especially 403/404) to avoid repeated attempts
             if (imageResponse.status === 403 || imageResponse.status === 404 || imageResponse.status === 408) {
                 failedImageCache.set(imageUrl, { timestamp: Date.now() })
             }
 
             // Fetch default avatar image from public folder via HTTP
-            // This works reliably across all deployment environments
             try {
                 // Get base URL from headers (works in production with proxies)
                 const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
@@ -135,22 +142,10 @@ export async function GET(request: Request) {
                             'Access-Control-Allow-Origin': '*',
                         },
                     })
-                } else {
-                    throw new Error(`Failed to fetch default image: ${defaultImageResponse.status}`)
                 }
             } catch (defaultError) {
-                // If we can't fetch default image, return JSON error as fallback
-                console.error(`❌ Failed to fetch default image:`, defaultError)
-                return NextResponse.json(
-                    {
-                        error: `Failed to fetch image: ${imageResponse.status}`,
-                        details: imageResponse.status === 403
-                            ? 'Access denied by Kick CDN (image may be private or require authentication)'
-                            : errorPreview,
-                        url: imageUrl.substring(0, 100) // Truncate URL in response
-                    },
-                    { status: imageResponse.status }
-                )
+                // Return failed status if default image also fails
+                return new NextResponse(null, { status: imageResponse.status })
             }
         }
 
