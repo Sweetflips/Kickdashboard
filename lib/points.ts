@@ -64,15 +64,37 @@ export async function awardPoint(
         const userId = user.id
 
         // Get or create user points record (use upsert to handle race conditions)
-        let userPoints = await db.userPoints.upsert({
-            where: { user_id: userId },
-            update: {},
-            create: {
-                user_id: userId,
-                total_points: 0,
-                total_emotes: 0,
-            },
-        })
+        let userPoints
+        try {
+            userPoints = await db.userPoints.upsert({
+                where: { user_id: userId },
+                update: {},
+                create: {
+                    user_id: userId,
+                    total_points: 0,
+                    total_emotes: 0,
+                },
+            })
+        } catch (error) {
+            // Handle race condition where multiple requests try to create the same record
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                // Record already exists, fetch it
+                userPoints = await db.userPoints.findUnique({
+                    where: { user_id: userId },
+                })
+                if (!userPoints) {
+                    // Shouldn't happen, but handle gracefully
+                    return {
+                        awarded: false,
+                        pointsEarned: 0,
+                        reason: 'Failed to retrieve user points',
+                    }
+                }
+            } else {
+                // Re-throw other errors
+                throw error
+            }
+        }
 
         // If no stream session, award 0 points (offline)
         if (!streamSessionId) {
@@ -271,15 +293,33 @@ export async function awardEmotes(
         const userId = user.id
 
         // Get or create user points record (use upsert to handle race conditions)
-        let userPoints = await db.userPoints.upsert({
-            where: { user_id: userId },
-            update: {},
-            create: {
-                user_id: userId,
-                total_points: 0,
-                total_emotes: 0,
-            },
-        })
+        let userPoints
+        try {
+            userPoints = await db.userPoints.upsert({
+                where: { user_id: userId },
+                update: {},
+                create: {
+                    user_id: userId,
+                    total_points: 0,
+                    total_emotes: 0,
+                },
+            })
+        } catch (error) {
+            // Handle race condition where multiple requests try to create the same record
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                // Record already exists, fetch it
+                userPoints = await db.userPoints.findUnique({
+                    where: { user_id: userId },
+                })
+                if (!userPoints) {
+                    // Shouldn't happen, but handle gracefully
+                    return { counted: 0 }
+                }
+            } else {
+                // Re-throw other errors
+                throw error
+            }
+        }
 
         // Update emote count
         await db.userPoints.update({
