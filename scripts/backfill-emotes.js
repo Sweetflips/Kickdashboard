@@ -154,29 +154,19 @@ async function backfillEmotes() {
                 continue
             }
 
-            // Get or create user_points
-            let userPoints = await prisma.userPoints.findUnique({
+            // Get or create user_points (use upsert to handle race conditions)
+            await prisma.userPoints.upsert({
                 where: { user_id: user.id },
+                update: {
+                    total_emotes: totalEmotes,
+                    updated_at: new Date(),
+                },
+                create: {
+                    user_id: user.id,
+                    total_points: 0,
+                    total_emotes: totalEmotes,
+                },
             })
-
-            if (!userPoints) {
-                await prisma.userPoints.create({
-                    data: {
-                        user_id: user.id,
-                        total_points: 0,
-                        total_emotes: totalEmotes,
-                    },
-                })
-            } else {
-                // Update with the calculated total
-                await prisma.userPoints.update({
-                    where: { user_id: user.id },
-                    data: {
-                        total_emotes: totalEmotes,
-                        updated_at: new Date(),
-                    },
-                })
-            }
 
             updated++
             if (updated % 10 === 0) {

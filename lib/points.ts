@@ -63,20 +63,16 @@ export async function awardPoint(
 
         const userId = user.id
 
-        // Get or create user points record
-        let userPoints = await db.userPoints.findUnique({
+        // Get or create user points record (use upsert to handle race conditions)
+        let userPoints = await db.userPoints.upsert({
             where: { user_id: userId },
+            update: {},
+            create: {
+                user_id: userId,
+                total_points: 0,
+                total_emotes: 0,
+            },
         })
-
-        if (!userPoints) {
-            userPoints = await db.userPoints.create({
-                data: {
-                    user_id: userId,
-                    total_points: 0,
-                    total_emotes: 0,
-                },
-            })
-        }
 
         // If no stream session, award 0 points (offline)
         if (!streamSessionId) {
@@ -274,20 +270,16 @@ export async function awardEmotes(
 
         const userId = user.id
 
-        // Get or create user points record
-        let userPoints = await db.userPoints.findUnique({
+        // Get or create user points record (use upsert to handle race conditions)
+        let userPoints = await db.userPoints.upsert({
             where: { user_id: userId },
+            update: {},
+            create: {
+                user_id: userId,
+                total_points: 0,
+                total_emotes: 0,
+            },
         })
-
-        if (!userPoints) {
-            userPoints = await db.userPoints.create({
-                data: {
-                    user_id: userId,
-                    total_points: 0,
-                    total_emotes: 0,
-                },
-            })
-        }
 
         // Update emote count
         await db.userPoints.update({
