@@ -28,11 +28,23 @@ function buildRedirectUri(request: Request): string {
     const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
 
     // Check for explicit redirect URI override in environment (highest priority)
+    // This ensures consistency between auth and refresh
     const explicitRedirectUri = process.env.KICK_REDIRECT_URI
     if (explicitRedirectUri) {
         return explicitRedirectUri
     }
 
+    // Use consistent APP_URL from env (most reliable for production)
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://www.sweetflipsrewards.com'
+    const cleanAppUrl = APP_URL.replace(/\/$/, '')
+
+    // In production, always use the env var URL to ensure consistency
+    // Only use dynamic headers for localhost development
+    if (!host.includes('localhost') && !host.includes('127.0.0.1')) {
+        return `${cleanAppUrl}/api/auth/callback`
+    }
+
+    // For localhost, use dynamic headers
     // Prefer forwarded headers if present (proxy/reverse proxy)
     if (forwardedHost) {
         const proto = forwardedProto || 'https'
@@ -41,7 +53,7 @@ function buildRedirectUri(request: Request): string {
         return `${proto}://${cleanHost}/api/auth/callback`
     }
 
-    // Fallback to host header
+    // Fallback to host header for localhost
     if (host) {
         const proto = isLocalhost ? 'http' : 'https'
         // Remove port if present (Kick OAuth doesn't like ports in redirect URIs)
@@ -49,10 +61,7 @@ function buildRedirectUri(request: Request): string {
         return `${proto}://${cleanHost}/api/auth/callback`
     }
 
-    // Final fallback to env var
-    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://www.sweetflipsrewards.com'
-    // Ensure no trailing slash
-    const cleanAppUrl = APP_URL.replace(/\/$/, '')
+    // Final fallback
     return `${cleanAppUrl}/api/auth/callback`
 }
 

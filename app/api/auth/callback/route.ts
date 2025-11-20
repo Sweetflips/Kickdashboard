@@ -41,7 +41,7 @@ function extractIpAddress(request: Request): string | null {
 
 /**
  * Build redirect URI from request headers (proxy-aware)
- * Prefers x-forwarded-proto/x-forwarded-host, falls back to host header, then env var
+ * Ensures consistency between auth and refresh endpoints
  */
 function buildRedirectUri(request: Request): string {
     const headers = request.headers
@@ -51,20 +51,37 @@ function buildRedirectUri(request: Request): string {
 
     const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
 
+    // Check for explicit redirect URI override in environment (highest priority)
+    // This ensures consistency between auth and refresh
+    const explicitRedirectUri = process.env.KICK_REDIRECT_URI
+    if (explicitRedirectUri) {
+        return explicitRedirectUri
+    }
+
+    // Use consistent APP_URL from env (most reliable for production)
+    const cleanAppUrl = APP_URL.replace(/\/$/, '')
+
+    // In production, always use the env var URL to ensure consistency
+    // Only use dynamic headers for localhost development
+    if (!host.includes('localhost') && !host.includes('127.0.0.1')) {
+        return `${cleanAppUrl}/api/auth/callback`
+    }
+
+    // For localhost, use dynamic headers
     // Prefer forwarded headers if present (proxy/reverse proxy)
     if (forwardedHost) {
         const proto = forwardedProto || 'https'
         return `${proto}://${forwardedHost}/api/auth/callback`
     }
 
-    // Fallback to host header
+    // Fallback to host header for localhost
     if (host) {
         const proto = isLocalhost ? 'http' : 'https'
         return `${proto}://${host}/api/auth/callback`
     }
 
-    // Final fallback to env var
-    return `${APP_URL}/api/auth/callback`
+    // Final fallback
+    return `${cleanAppUrl}/api/auth/callback`
 }
 
 export async function GET(request: Request) {

@@ -53,8 +53,9 @@ export async function awardPoint(
             }
         }
 
-        // Block if Kick not connected OR never signed in
-        if (user.kick_connected === false || !user.last_login_at) {
+        // Block only if explicitly marked as not connected
+        // Allow points for users who chat (even if they haven't logged in via OAuth)
+        if (user.kick_connected === false) {
             console.log(`⏸️ Point not awarded to ${user.username}: Kick account not connected`)
             return {
                 awarded: false,
