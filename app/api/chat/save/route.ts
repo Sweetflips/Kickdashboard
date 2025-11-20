@@ -337,10 +337,20 @@ export async function POST(request: Request) {
                 }
             } else {
                 // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
+                // First check if message exists to preserve its stream_session_id if already assigned
+                const existingMessage = await db.chatMessage.findUnique({
+                    where: { message_id: message.message_id },
+                    select: { stream_session_id: true },
+                })
+
+                // Only update stream_session_id if message doesn't have one yet (preserve existing session assignment)
+                const shouldUpdateSessionId = !existingMessage?.stream_session_id && sessionIsActive
+
                 const upsertResult = await db.chatMessage.upsert({
                     where: { message_id: message.message_id },
                     update: {
-                        stream_session_id: sessionIsActive ? activeSession!.id : null,
+                        // Only update stream_session_id if it was null (don't reassign messages from previous sessions)
+                        ...(shouldUpdateSessionId && { stream_session_id: activeSession!.id }),
                         sender_username: message.sender.username,
                         content: message.content,
                         emotes: emotesToSave,

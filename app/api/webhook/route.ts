@@ -322,22 +322,35 @@ export async function POST(request: Request) {
                 console.log(`✅ Saved offline message to database: ${message.message_id}`)
             } else {
                 // Save online messages to regular table
+                // First check if message exists to preserve its stream_session_id if already assigned
+                const existingMessage = await db.chatMessage.findUnique({
+                    where: { message_id: message.message_id },
+                    select: { stream_session_id: true },
+                })
+
+                // Only update stream_session_id if message doesn't have one yet (preserve existing session assignment)
+                // This prevents messages from previous streams from being reassigned to current stream
+                const updateData: any = {
+                    sender_username: message.sender.username,
+                    content: message.content,
+                    emotes: emotesToSave,
+                    timestamp: BigInt(message.timestamp),
+                    sender_username_color: message.sender.identity?.username_color || null,
+                    sender_badges: message.sender.identity?.badges || undefined,
+                    sender_is_verified: message.sender.is_verified || false,
+                    sender_is_anonymous: message.sender.is_anonymous || false,
+                    points_earned: pointsEarned,
+                    sent_when_offline: false,
+                }
+
+                // Only update stream_session_id if message doesn't have one yet (don't reassign from previous sessions)
+                if (!existingMessage?.stream_session_id && sessionIsActive) {
+                    updateData.stream_session_id = activeSession!.id
+                }
+
                 await db.chatMessage.upsert({
                     where: { message_id: message.message_id },
-                    update: {
-                        // Update with latest data if message already exists
-                        stream_session_id: sessionIsActive ? activeSession!.id : null,
-                        sender_username: message.sender.username,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                        points_earned: pointsEarned,
-                        sent_when_offline: false,
-                    },
+                    update: updateData,
                     create: {
                         message_id: message.message_id,
                         stream_session_id: sessionIsActive ? activeSession!.id : null,
