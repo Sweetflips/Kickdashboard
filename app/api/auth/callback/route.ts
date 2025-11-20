@@ -18,6 +18,28 @@ function hashToken(token: string): string {
 }
 
 /**
+ * Extract IP address from request headers
+ * Handles x-forwarded-for (proxy) and direct connection
+ */
+function extractIpAddress(request: Request): string | null {
+    const headers = request.headers
+    // Check x-forwarded-for first (for proxies/load balancers)
+    const forwardedFor = headers.get('x-forwarded-for')
+    if (forwardedFor) {
+        // x-forwarded-for can contain multiple IPs, take the first one
+        return forwardedFor.split(',')[0].trim()
+    }
+    // Fallback to x-real-ip (some proxies use this)
+    const realIp = headers.get('x-real-ip')
+    if (realIp) {
+        return realIp.trim()
+    }
+    // Note: In Next.js edge/serverless, we can't directly access socket.remoteAddress
+    // So we rely on headers only
+    return null
+}
+
+/**
  * Build redirect URI from request headers (proxy-aware)
  * Prefers x-forwarded-proto/x-forwarded-host, falls back to host header, then env var
  */
@@ -123,30 +145,109 @@ export async function GET(request: Request) {
                         ? userData.profile_picture.trim()
                         : null
 
+                    // Extract IP address and User-Agent from request headers
+                    const ipAddress = extractIpAddress(request)
+                    const userAgent = request.headers.get('user-agent') || null
+                    const referrer = request.headers.get('referer') || request.headers.get('referrer') || null
+
+                    // Check if user already exists to determine if this is a signup
+                    const existingUser = await db.user.findUnique({
+                        where: { kick_user_id: kickUserId },
+                        select: { id: true, signup_ip_address: true },
+                    })
+                    const isNewSignup = !existingUser
+
+                    // Fetch channel data for additional profile information (bio, social links)
+                    let bio: string | null = null
+                    let emailVerifiedAt: Date | null = null
+                    let instagramUrl: string | null = null
+                    let twitterUrl: string | null = null
+
+                    try {
+                        // Fetch channel data to get bio and social links
+                        const channelResponse = await fetch(`https://kick.com/api/v2/channels/${username.toLowerCase()}`, {
+                            headers: {
+                                'Accept': 'application/json',
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                            },
+                        })
+
+                        if (channelResponse.ok) {
+                            const channelData = await channelResponse.json()
+                            const channelUser = channelData.user || channelData
+
+                            // Extract bio
+                            if (channelUser.bio && typeof channelUser.bio === 'string') {
+                                bio = channelUser.bio.trim() || null
+                            }
+
+                            // Extract email verification status
+                            if (channelUser.email_verified_at) {
+                                emailVerifiedAt = new Date(channelUser.email_verified_at)
+                            }
+
+                            // Extract social media links (for duplicate detection)
+                            if (channelUser.instagram && typeof channelUser.instagram === 'string' && channelUser.instagram.trim()) {
+                                instagramUrl = channelUser.instagram.trim()
+                            }
+                            if (channelUser.twitter && typeof channelUser.twitter === 'string' && channelUser.twitter.trim()) {
+                                twitterUrl = channelUser.twitter.trim()
+                            }
+                        }
+                    } catch (channelError) {
+                        // Non-critical - continue even if channel data fetch fails
+                        console.warn('⚠️ Could not fetch channel data for additional profile info:', channelError instanceof Error ? channelError.message : 'Unknown error')
+                    }
+
+                    // Prepare update data (always update these fields)
+                    const updateData: any = {
+                        username,
+                        email,
+                        profile_picture_url: profilePictureUrl,
+                        access_token_hash: tokenData.access_token ? hashToken(tokenData.access_token) : null,
+                        refresh_token_hash: tokenData.refresh_token ? hashToken(tokenData.refresh_token) : null,
+                        last_login_at: new Date(),
+                        last_ip_address: ipAddress,
+                        last_user_agent: userAgent,
+                        updated_at: new Date(),
+                    }
+
+                    // Update profile fields if available
+                    if (bio !== null) updateData.bio = bio
+                    if (emailVerifiedAt !== null) updateData.email_verified_at = emailVerifiedAt
+                    if (instagramUrl !== null) updateData.instagram_url = instagramUrl
+                    if (twitterUrl !== null) updateData.twitter_url = twitterUrl
+
+                    // Prepare create data (includes signup tracking)
+                    const createData: any = {
+                        kick_user_id: kickUserId,
+                        username,
+                        email,
+                        profile_picture_url: profilePictureUrl,
+                        access_token_hash: tokenData.access_token ? hashToken(tokenData.access_token) : null,
+                        refresh_token_hash: tokenData.refresh_token ? hashToken(tokenData.refresh_token) : null,
+                        last_login_at: new Date(),
+                        last_ip_address: ipAddress,
+                        last_user_agent: userAgent,
+                        signup_ip_address: ipAddress,
+                        signup_user_agent: userAgent,
+                        signup_referrer: referrer,
+                    }
+
+                    // Add profile fields to create data
+                    if (bio !== null) createData.bio = bio
+                    if (emailVerifiedAt !== null) createData.email_verified_at = emailVerifiedAt
+                    if (instagramUrl !== null) createData.instagram_url = instagramUrl
+                    if (twitterUrl !== null) createData.twitter_url = twitterUrl
+
                     // Save or update user in database
                     await db.user.upsert({
                         where: { kick_user_id: kickUserId },
-                        update: {
-                            username,
-                            email,
-                            profile_picture_url: profilePictureUrl,
-                            access_token_hash: tokenData.access_token ? hashToken(tokenData.access_token) : null,
-                            refresh_token_hash: tokenData.refresh_token ? hashToken(tokenData.refresh_token) : null,
-                            last_login_at: new Date(),
-                            updated_at: new Date(),
-                        },
-                        create: {
-                            kick_user_id: kickUserId,
-                            username,
-                            email,
-                            profile_picture_url: profilePictureUrl,
-                            access_token_hash: tokenData.access_token ? hashToken(tokenData.access_token) : null,
-                            refresh_token_hash: tokenData.refresh_token ? hashToken(tokenData.refresh_token) : null,
-                            last_login_at: new Date(),
-                        },
+                        update: updateData,
+                        create: createData,
                     })
 
-                    console.log(`✅ User saved to database: ${username} (ID: ${kickUserId})`)
+                    console.log(`✅ User ${isNewSignup ? 'signed up' : 'logged in'}: ${username} (ID: ${kickUserId})`)
                 } else {
                     console.warn('⚠️ Could not fetch user data to save to database')
                 }

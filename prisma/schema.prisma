@@ -15,6 +15,8 @@ model User {
   kick_user_id      BigInt    @unique
   username          String
   email             String?
+  email_verified_at DateTime?
+  bio               String?   @db.Text
   profile_picture_url String?
   custom_profile_picture_url String?
   access_token_hash String?
@@ -24,6 +26,15 @@ model User {
   chat_font_size    String?  @default("14px")
   chat_show_timestamps Boolean @default(true)
   last_login_at     DateTime?
+  last_ip_address   String?
+  last_user_agent   String?
+  // Social Media Links (for duplicate detection)
+  instagram_url     String?
+  twitter_url       String?
+  // Signup Tracking
+  signup_ip_address String?
+  signup_user_agent String?
+  signup_referrer   String?
   // Connected Accounts
   discord_user_id   String?
   discord_username  String?
