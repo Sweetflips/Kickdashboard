@@ -83,12 +83,11 @@ export async function GET(request: Request) {
         }
 
         // Get all messages for this session to count per user
-        // Note: Offline messages are in a separate table, so we only query chat_messages
-        // This ensures stats always reflect real-time database state
+        // Filter out offline messages to match analytics endpoint behavior
         const allMessages = await db.chatMessage.findMany({
             where: {
                 stream_session_id: session.id,
-                // sent_when_offline is always false now since offline messages are in separate table
+                sent_when_offline: false, // Only count messages sent during live stream
             },
             select: {
                 sender_user_id: true, // This is kick_user_id
@@ -108,6 +107,7 @@ export async function GET(request: Request) {
 
         const totalPoints = totalPointsResult._sum.points_earned || 0
         const totalMessages = allMessages.length
+        // Count unique chatters - only count messages sent during live stream (sent_when_offline: false)
         const uniqueChatters = new Set(allMessages.map(m => m.sender_user_id.toString())).size
 
         // Get points aggregated by user (user_id is internal ID)
