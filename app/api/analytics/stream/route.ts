@@ -140,10 +140,17 @@ export async function GET(request: Request) {
         }
 
         // Get all messages for this stream
+        // Filter out offline messages, invalid user IDs, and messages created before session started
         const allMessages = await db.chatMessage.findMany({
             where: {
                 stream_session_id: sessionIdBigInt,
                 sent_when_offline: false,
+                sender_user_id: {
+                    gt: BigInt(0), // Exclude invalid/anonymous user IDs (0 or negative)
+                },
+                created_at: {
+                    gte: streamSession.started_at, // Only count messages created after session started
+                },
             },
             select: {
                 content: true,
@@ -164,12 +171,18 @@ export async function GET(request: Request) {
             }
         }
 
-        // Get unique users
+        // Get unique users - filter out invalid user IDs and messages before session started
         const uniqueUsers = await db.chatMessage.groupBy({
             by: ['sender_user_id'],
             where: {
                 stream_session_id: sessionIdBigInt,
                 sent_when_offline: false,
+                sender_user_id: {
+                    gt: BigInt(0), // Exclude invalid/anonymous user IDs (0 or negative)
+                },
+                created_at: {
+                    gte: streamSession.started_at, // Only count messages created after session started
+                },
             },
         })
 

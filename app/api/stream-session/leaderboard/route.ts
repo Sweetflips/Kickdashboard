@@ -83,11 +83,17 @@ export async function GET(request: Request) {
         }
 
         // Get all messages for this session to count per user
-        // Filter out offline messages to match analytics endpoint behavior
+        // Filter out offline messages, invalid user IDs, and messages created before session started
         const allMessages = await db.chatMessage.findMany({
             where: {
                 stream_session_id: session.id,
                 sent_when_offline: false, // Only count messages sent during live stream
+                sender_user_id: {
+                    gt: BigInt(0), // Exclude invalid/anonymous user IDs (0 or negative)
+                },
+                created_at: {
+                    gte: session.started_at, // Only count messages created after session started
+                },
             },
             select: {
                 sender_user_id: true, // This is kick_user_id
@@ -107,8 +113,12 @@ export async function GET(request: Request) {
 
         const totalPoints = totalPointsResult._sum.points_earned || 0
         const totalMessages = allMessages.length
-        // Count unique chatters - only count messages sent during live stream (sent_when_offline: false)
-        const uniqueChatters = new Set(allMessages.map(m => m.sender_user_id.toString())).size
+        // Count unique chatters - filter out invalid user IDs and only count messages from when session started
+        const uniqueChatters = new Set(
+            allMessages
+                .filter(m => m.sender_user_id > BigInt(0)) // Double-check filter
+                .map(m => m.sender_user_id.toString())
+        ).size
 
         // Get points aggregated by user (user_id is internal ID)
         const pointsByUser = await db.pointHistory.groupBy({
