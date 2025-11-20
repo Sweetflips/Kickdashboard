@@ -627,12 +627,15 @@ export default function AnalyticsPage() {
                                                         </td>
                                                         <td className="py-3 px-4">
                                                             <div className="flex items-center gap-3">
-                                                                {user.profile_picture_url ? (() => {
+                                                                {user.profile_picture_url && user.profile_picture_url.trim() ? (() => {
                                                                     // CloudFront URLs might work directly, kick.com URLs need proxy
                                                                     const isCloudFront = user.profile_picture_url.includes('cloudfront.net') || user.profile_picture_url.includes('amazonaws.com')
+                                                                    const isKickDomain = user.profile_picture_url.includes('kick.com') || user.profile_picture_url.includes('files.kick.com')
                                                                     const imageSrc = isCloudFront
                                                                         ? user.profile_picture_url
-                                                                        : `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
+                                                                        : isKickDomain
+                                                                        ? `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
+                                                                        : user.profile_picture_url
 
                                                                     return (
                                                                         <img
@@ -640,12 +643,15 @@ export default function AnalyticsPage() {
                                                                             alt={user.username}
                                                                             width={32}
                                                                             height={32}
-                                                                            className="rounded-full"
+                                                                            className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                                                                             onError={(e) => {
                                                                                 const target = e.target as HTMLImageElement
                                                                                 // If direct URL failed and it's CloudFront, try proxy
                                                                                 if (isCloudFront && !target.src.includes('/api/image-proxy') && user.profile_picture_url) {
                                                                                     target.src = `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
+                                                                                } else if (isKickDomain && !target.src.includes('/api/image-proxy') && user.profile_picture_url) {
+                                                                                    // Already using proxy, fallback to default
+                                                                                    target.src = '/kick.jpg'
                                                                                 } else {
                                                                                     target.src = '/kick.jpg'
                                                                                 }
@@ -653,14 +659,11 @@ export default function AnalyticsPage() {
                                                                         />
                                                                     )
                                                                 })() : (
-                                                                    <Image
-                                                                        src="/kick.jpg"
-                                                                        alt={user.username}
-                                                                        width={32}
-                                                                        height={32}
-                                                                        className="rounded-full"
-                                                                        unoptimized
-                                                                    />
+                                                                    <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center flex-shrink-0">
+                                                                        <span className="text-gray-600 dark:text-kick-text-secondary text-xs font-medium">
+                                                                            {user.username.charAt(0).toUpperCase()}
+                                                                        </span>
+                                                                    </div>
                                                                 )}
                                                                 <span className="font-medium text-gray-900 dark:text-kick-text">{user.username}</span>
                                                             </div>
