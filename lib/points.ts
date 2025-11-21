@@ -172,6 +172,8 @@ export async function awardPoint(
         let rateLimitHit: { remainingMinutes: number; remainingSecs: number } | null = null
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
+            // Reset rateLimitHit for each attempt
+            rateLimitHit = null
             try {
                 await db.$transaction(async (tx) => {
                     const transactionNow = new Date()
@@ -235,12 +237,13 @@ export async function awardPoint(
                 })
 
                 // Check if rate limit was hit (transaction completed but no writes happened)
-                if (rateLimitHit) {
-                    console.log(`⏸️ Point not awarded to ${user.username}: Rate limit (${rateLimitHit.remainingMinutes}m ${rateLimitHit.remainingSecs}s remaining)`)
+                if (rateLimitHit !== null) {
+                    const { remainingMinutes, remainingSecs } = rateLimitHit
+                    console.log(`⏸️ Point not awarded to ${user.username}: Rate limit (${remainingMinutes}m ${remainingSecs}s remaining)`)
                     return {
                         awarded: false,
                         pointsEarned: 0,
-                        reason: `Rate limit: ${rateLimitHit.remainingMinutes}m ${rateLimitHit.remainingSecs}s remaining`,
+                        reason: `Rate limit: ${remainingMinutes}m ${remainingSecs}s remaining`,
                     }
                 }
 
