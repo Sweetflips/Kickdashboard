@@ -145,22 +145,7 @@ export async function awardPoint(
             }
         }
 
-        // Check rate limit
-        if (userPoints.last_point_earned_at) {
-            const timeSinceLastPoint = (now.getTime() - userPoints.last_point_earned_at.getTime()) / 1000
-            if (timeSinceLastPoint < RATE_LIMIT_SECONDS) {
-                const remainingSeconds = Math.ceil(RATE_LIMIT_SECONDS - timeSinceLastPoint)
-                const remainingMinutes = Math.floor(remainingSeconds / 60)
-                const remainingSecs = remainingSeconds % 60
-                console.log(`⏸️ Point not awarded to ${user.username}: Rate limit (${remainingMinutes}m ${remainingSecs}s remaining)`)
-                return {
-                    awarded: false,
-                    pointsEarned: 0,
-                    reason: `Rate limit: ${remainingMinutes}m ${remainingSecs}s remaining`,
-                }
-            }
-        }
-
+        // Early check for message_id uniqueness (quick exit before transaction)
         if (messageId) {
             const existingPointHistory = await db.pointHistory.findUnique({
                 where: { message_id: messageId },
@@ -184,17 +169,53 @@ export async function awardPoint(
         // Retry transaction with exponential backoff for P2028 (transaction timeout)
         const maxRetries = 3
         let transactionSucceeded = false
+        let rateLimitHit: { remainingMinutes: number; remainingSecs: number } | null = null
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
                 await db.$transaction(async (tx) => {
+                    const transactionNow = new Date()
+
+                    // Check rate limit INSIDE transaction using fresh read of userPoints
+                    // This ensures concurrent requests see the updated last_point_earned_at
+                    const freshUserPoints = await tx.userPoints.findUnique({
+                        where: { user_id: userId },
+                        select: { last_point_earned_at: true },
+                    })
+
+                    if (freshUserPoints?.last_point_earned_at) {
+                        const timeSinceLastPoint = (transactionNow.getTime() - freshUserPoints.last_point_earned_at.getTime()) / 1000
+                        if (timeSinceLastPoint < RATE_LIMIT_SECONDS) {
+                            const remainingSeconds = Math.ceil(RATE_LIMIT_SECONDS - timeSinceLastPoint)
+                            rateLimitHit = {
+                                remainingMinutes: Math.floor(remainingSeconds / 60),
+                                remainingSecs: remainingSeconds % 60,
+                            }
+                            // Return early from transaction - no writes will happen
+                            return
+                        }
+                    }
+
+                    // Double-check message_id uniqueness inside transaction (defense in depth)
+                    if (messageId) {
+                        const existingHistory = await tx.pointHistory.findUnique({
+                            where: { message_id: messageId },
+                            select: { id: true },
+                        })
+                        if (existingHistory) {
+                            // Message already processed - return without writing
+                            return
+                        }
+                    }
+
+                    // All checks passed - create pointHistory and update userPoints atomically
                     await tx.pointHistory.create({
                         data: {
                             user_id: userId,
                             stream_session_id: streamSessionId,
                             points_earned: pointsToAward,
                             message_id: messageId,
-                            earned_at: now,
+                            earned_at: transactionNow,
                         },
                     })
 
@@ -204,8 +225,8 @@ export async function awardPoint(
                             total_points: {
                                 increment: pointsToAward,
                             },
-                            last_point_earned_at: now,
-                            updated_at: now,
+                            last_point_earned_at: transactionNow,
+                            updated_at: transactionNow,
                         },
                     })
                 }, {
@@ -213,11 +234,21 @@ export async function awardPoint(
                     timeout: 20000, // Transaction timeout of 20 seconds
                 })
 
+                // Check if rate limit was hit (transaction completed but no writes happened)
+                if (rateLimitHit) {
+                    console.log(`⏸️ Point not awarded to ${user.username}: Rate limit (${rateLimitHit.remainingMinutes}m ${rateLimitHit.remainingSecs}s remaining)`)
+                    return {
+                        awarded: false,
+                        pointsEarned: 0,
+                        reason: `Rate limit: ${rateLimitHit.remainingMinutes}m ${rateLimitHit.remainingSecs}s remaining`,
+                    }
+                }
+
                 // Success - mark and break out of retry loop
                 transactionSucceeded = true
                 break
             } catch (transactionError) {
-                // Handle unique constraint violation (race condition)
+                // Handle unique constraint violation (race condition on message_id)
                 if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2002') {
                     console.log(`⏸️ Point not awarded to ${user.username}: Message already processed for points (race condition)`)
                     return {
