@@ -42,27 +42,102 @@ async function ensurePointsReasonColumn() {
   }
 }
 
+// Safety net: Ensure point_award_jobs table exists
+async function ensurePointAwardJobsTable() {
+  const prisma = new PrismaClient();
+  try {
+    console.log('🔄 Verifying point_award_jobs table...');
+
+    // Check if table exists
+    const checkResult = await prisma.$queryRaw`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'point_award_jobs'
+    `;
+
+    if (Array.isArray(checkResult) && checkResult.length > 0) {
+      console.log('✅ point_award_jobs table already exists');
+    } else {
+      console.log('⚠️ point_award_jobs table missing, creating it...');
+      const fs = require('fs');
+      const path = require('path');
+      const migrationSQL = fs.readFileSync(
+        path.join(__dirname, '..', 'prisma', 'migrations', '20250101000020_add_point_award_job', 'migration.sql'),
+        'utf-8'
+      );
+      try {
+        await prisma.$executeRawUnsafe(migrationSQL);
+        console.log('✅ Created point_award_jobs table');
+      } catch (createError) {
+        // If table was created between check and create, that's fine
+        if (createError.message && createError.message.includes('already exists')) {
+          console.log('✅ point_award_jobs table already exists (created concurrently)');
+        } else {
+          throw createError;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ Point award jobs table check failed (continuing anyway):', error.message);
+    // Non-critical - table might already exist or will be created on next deploy
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // Run the safety net check and wait for it to complete before starting server
 (async () => {
   await ensurePointsReasonColumn();
+  await ensurePointAwardJobsTable();
 
   const port = process.env.PORT || '3000';
+  const enableWorker = process.env.ENABLE_POINT_WORKER !== 'false'; // Default to true, set to 'false' to disable
+
+  // Start Next.js server
   const nextProcess = spawn('next', ['start', '-p', port], {
     stdio: 'inherit',
     env: process.env
   });
 
+  // Start point worker if enabled
+  let workerProcess = null;
+  if (enableWorker) {
+    console.log('🔄 Starting point award worker...');
+    // Use npx tsx to run TypeScript (tsx should be installed as dev dependency)
+    // If tsx is not available, the worker will fail to start (which is fine - it's optional)
+    workerProcess = spawn('npx', ['tsx', 'scripts/point-worker.ts'], {
+      stdio: 'inherit',
+      env: process.env
+    });
+
+    workerProcess.on('exit', (code) => {
+      if (code !== 0 && code !== null) {
+        console.error(`⚠️ Point worker exited with code ${code}`);
+      }
+    });
+  } else {
+    console.log('⏸️ Point worker disabled (ENABLE_POINT_WORKER=false)');
+  }
+
+  // Handle process exits
   nextProcess.on('exit', (code) => {
+    if (workerProcess) {
+      workerProcess.kill('SIGTERM');
+    }
     process.exit(code || 0);
   });
 
-  process.on('SIGTERM', () => {
-    nextProcess.kill('SIGTERM');
-  });
+  // Handle graceful shutdown
+  const shutdown = (signal) => {
+    console.log(`\n${signal} received, shutting down...`);
+    nextProcess.kill(signal);
+    if (workerProcess) {
+      workerProcess.kill(signal);
+    }
+  };
 
-  process.on('SIGINT', () => {
-    nextProcess.kill('SIGINT');
-  });
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 })().catch(err => {
   console.error('⚠️ Error starting server:', err.message);
   process.exit(1);
