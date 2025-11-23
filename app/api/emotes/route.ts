@@ -233,7 +233,7 @@ export async function GET(request: Request) {
         const chatroomId = searchParams.get('chatroom_id')
         const slug = searchParams.get('slug') || 'sweetflips'
 
-        console.log(`🎭 Fetching emotes: chatroom_id=${chatroomId}, slug=${slug}`)
+        // Emote fetching started (no verbose logging)
 
         if (!chatroomId) {
             // Try to get chatroom_id from channel data first
@@ -275,20 +275,20 @@ export async function GET(request: Request) {
         let channelData: any = null
 
         if (cachedChannel && Date.now() < cachedChannel.expiresAt && cachedChannel.data) {
-            console.log(`📦 Using cached channel data for ${slug}`)
+            // Using cached channel data
             channelData = cachedChannel.data
             emoteData = cachedChannel.data
 
             // Extract emotes from cached channel data
             if (channelData.chatroom?.emotes && Array.isArray(channelData.chatroom.emotes)) {
                 emotes = channelData.chatroom.emotes
-                console.log(`✅ Found ${emotes.length} emotes from cached channel chatroom`)
+                // Found emotes from cached channel chatroom
             } else if (channelData.chatroom?.emote_set && Array.isArray(channelData.chatroom.emote_set)) {
                 emotes = channelData.chatroom.emote_set
-                console.log(`✅ Found ${emotes.length} emotes from cached channel emote_set`)
+                // Found emotes from cached channel emote_set
             } else if (channelData.emotes && Array.isArray(channelData.emotes)) {
                 emotes = channelData.emotes
-                console.log(`✅ Found ${emotes.length} emotes from cached channel data`)
+                // Found emotes from cached channel data
             }
         } else {
             try {
@@ -315,16 +315,16 @@ export async function GET(request: Request) {
                     // Extract emotes from chatroom data
                     if (channelData.chatroom?.emotes && Array.isArray(channelData.chatroom.emotes)) {
                         emotes = channelData.chatroom.emotes
-                        console.log(`✅ Found ${emotes.length} emotes from channel chatroom`)
+                        // Found emotes from channel chatroom
                     } else if (channelData.chatroom?.emote_set && Array.isArray(channelData.chatroom.emote_set)) {
                         emotes = channelData.chatroom.emote_set
-                        console.log(`✅ Found ${emotes.length} emotes from channel emote_set`)
+                        // Found emotes from channel emote_set
                     } else if (channelData.emotes && Array.isArray(channelData.emotes)) {
                         emotes = channelData.emotes
-                        console.log(`✅ Found ${emotes.length} emotes from channel data`)
+                        // Found emotes from channel data
                     }
                 } else if (channelResponse && channelResponse.status === 401) {
-                    console.log(`ℹ️ Channel API returned 401, using fallback emotes`)
+                    // Channel API returned 401, using fallback
                     // Cache 401 responses briefly to avoid hammering the API
                     emoteCache.set(channelCacheKey, {
                         data: null,
@@ -332,7 +332,7 @@ export async function GET(request: Request) {
                         expiresAt: Date.now() + 30000, // 30 second cache for errors
                     })
                 } else {
-                    console.log(`ℹ️ Channel API returned ${channelResponse.status}, using fallback emotes`)
+                    // Channel API returned error, using fallback
                 }
             } catch (error) {
                 console.log(`ℹ️ Failed to fetch channel data, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -347,11 +347,11 @@ export async function GET(request: Request) {
         let globalResponse: Response | null = null
 
         if (cachedGlobal && Date.now() < cachedGlobal.expiresAt && cachedGlobal.data) {
-            console.log(`📦 Using cached global emotes`)
+            // Using cached global emotes
             globalEmotes = cachedGlobal.data
         } else {
             try {
-                console.log(`🔍 Fetching global emotes: https://api.kick.com/public/v1/emotes/global`)
+                // Fetching global emotes
                 globalResponse = await fetchWithRetry(`https://api.kick.com/public/v1/emotes/global`, {
                     headers: {
                         'Accept': 'application/json',
@@ -371,7 +371,7 @@ export async function GET(request: Request) {
                             } else if (globalData.data && Array.isArray(globalData.data)) {
                                 globalEmotes = globalData.data
                             }
-                            console.log(`✅ Found ${globalEmotes.length} global emotes`)
+                            // Found global emotes
 
                             // Cache successful response
                             emoteCache.set(globalCacheKey, {
@@ -380,15 +380,15 @@ export async function GET(request: Request) {
                                 expiresAt: Date.now() + CACHE_TTL,
                             })
                         } catch (parseError) {
-                            console.log(`ℹ️ Failed to parse global emotes response, using fallback`)
+                            // Failed to parse global emotes, using fallback
                         }
                     } else {
-                        console.log(`ℹ️ Global emotes API returned non-JSON response, using fallback`)
+                        // Global emotes API returned non-JSON, using fallback
                     }
                 } else {
                     // Silently handle 401/other errors - fallback will be used
                     if (globalResponse.status === 401) {
-                        console.log(`ℹ️ Global emotes API returned 401, using fallback`)
+                        // Global emotes API returned 401, using fallback
                         // Cache 401 responses briefly to avoid hammering the API
                         emoteCache.set(globalCacheKey, {
                             data: [],
@@ -396,11 +396,11 @@ export async function GET(request: Request) {
                             expiresAt: Date.now() + 30000, // 30 second cache for errors
                         })
                     } else {
-                        console.log(`ℹ️ Global emotes API returned ${globalResponse.status}, using fallback`)
+                        // Global emotes API returned error, using fallback
                     }
                 }
             } catch (error) {
-                console.log(`ℹ️ Failed to fetch global emotes, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                // Failed to fetch global emotes, using fallback
             }
         }
 
@@ -433,7 +433,7 @@ export async function GET(request: Request) {
             .map(normalizeEmote)
             .filter((e: any) => e.id && e.name)
 
-        console.log(`📦 Normalized: ${normalizedChannelEmotes.length} channel emotes, ${normalizedGlobalEmotes.length} global emotes`)
+        // Normalized emotes
 
         // Categorize emotes based on naming patterns
         const categorizeEmotes = (
@@ -498,7 +498,7 @@ export async function GET(request: Request) {
         })
 
         const allEmotes = Array.from(allEmotesMap.values())
-        console.log(`📦 Total unique emotes: ${allEmotes.length}`)
+        // Total unique emotes calculated
 
         // If no emotes found in API, try fetching from the chatroom page directly (quiet fallback)
         if (normalizedChannelEmotes.length === 0 && normalizedGlobalEmotes.length === 0) {
@@ -556,7 +556,7 @@ export async function GET(request: Request) {
                                 }
 
                                 if (emotes.length > 0) {
-                                    console.log(`✅ Found ${emotes.length} emotes from HTML parsing`)
+                                    // Found emotes from HTML parsing
                                     // Re-normalize and categorize after HTML parsing
                                     const htmlChannelEmotes = emotes.map(normalizeEmote).filter((e: any) => e.id && e.name)
                                     const htmlCategorized = categorizeEmotes(htmlChannelEmotes, normalizedGlobalEmotes)
@@ -595,7 +595,7 @@ export async function GET(request: Request) {
                                                 const parsed = JSON.parse(emoteArrayMatch[0])
                                                 if (Array.isArray(parsed) && parsed.length > 0) {
                                                     emotes = parsed
-                                                    console.log(`✅ Found ${emotes.length} emotes from script tag parsing`)
+                                                    // Found emotes from script tag parsing
                                                     break
                                                 }
                                             }
@@ -615,11 +615,11 @@ export async function GET(request: Request) {
 
         const categorized = categorizeEmotes(normalizedChannelEmotes, normalizedGlobalEmotes)
 
-        console.log(`📊 Categorized: ${categorized.emojis.length} emojis, ${categorized.channel.length} channel, ${categorized.global.length} global`)
+        // Categorized emotes
 
         // If no emotes found from API, add default emotes as fallback
         if (allEmotes.length === 0 && normalizedGlobalEmotes.length === 0) {
-            console.log(`⚠️  [API] No emotes found from API, using default emotes as fallback`)
+            // No emotes found from API, using default emotes
             const defaultEmojis = DEFAULT_EMOJI_EMOTES.map(e => ({
                 id: e.id,
                 name: e.name,
@@ -635,10 +635,10 @@ export async function GET(request: Request) {
             categorized.global = defaultGlobals
             allEmotes.push(...defaultEmojis, ...defaultGlobals)
 
-            console.log(`📦 [API] Added ${defaultEmojis.length} default emoji emotes and ${defaultGlobals.length} default global emotes`)
+            // Added default emotes
         } else if (categorized.global.length === 0 && normalizedGlobalEmotes.length === 0) {
             // If no global emotes found but we have channel emotes, still add default globals
-            console.log(`⚠️  [API] No global emotes found from API, adding default global emotes as fallback`)
+            // No global emotes found, adding defaults
             const defaultGlobals = DEFAULT_GLOBAL_EMOTES.map(e => ({
                 id: e.id,
                 name: e.name,
@@ -653,7 +653,7 @@ export async function GET(request: Request) {
 
         // Always ensure we have default emoji emotes if none found
         if (categorized.emojis.length === 0) {
-            console.log(`⚠️  [API] No emoji emotes found, adding default emoji emotes`)
+            // No emoji emotes found, adding defaults
             const defaultEmojis = DEFAULT_EMOJI_EMOTES.map(e => ({
                 id: e.id,
                 name: e.name,
@@ -661,12 +661,12 @@ export async function GET(request: Request) {
             }))
             categorized.emojis = defaultEmojis
             allEmotes.push(...defaultEmojis)
-            console.log(`📦 [API] Added ${defaultEmojis.length} default emoji emotes`)
+            // Added default emoji emotes
         }
 
         // Always ensure we have default global emotes if none found
         if (categorized.global.length === 0) {
-            console.log(`⚠️  [API] No global emotes found, adding default global emotes`)
+            // No global emotes found, adding defaults
             const defaultGlobals = DEFAULT_GLOBAL_EMOTES.map(e => ({
                 id: e.id,
                 name: e.name,
@@ -679,7 +679,7 @@ export async function GET(request: Request) {
 
         // Add SweetFlips channel emotes as fallback if slug matches and no channel emotes found
         if (slug && slug.toLowerCase() === 'sweetflips' && categorized.channel.length === 0) {
-            console.log(`⚠️  [API] No channel emotes found for SweetFlips, adding default SweetFlips emotes`)
+            // No channel emotes found, adding defaults
             const sweetflipsEmotes = SWEETFLIPS_CHANNEL_EMOTES.map(e => ({
                 id: e.id,
                 name: e.name,
@@ -687,16 +687,12 @@ export async function GET(request: Request) {
             }))
             categorized.channel = sweetflipsEmotes
             allEmotes.push(...sweetflipsEmotes)
-            console.log(`📦 [API] Added ${sweetflipsEmotes.length} SweetFlips channel emotes`)
+            // Added default channel emotes
         }
 
         // Always return categorized structure, even if empty
-        console.log(`📦 [API] Returning response with ${allEmotes.length} total emotes`)
-        console.log(`📊 [API] Categorized breakdown:`, {
-            emojis: categorized.emojis.length,
-            channel: categorized.channel.length,
-            global: categorized.global.length,
-        })
+        // Simple log: emotes loaded
+        console.log(`✅ Emotes loaded: ${allEmotes.length} total`)
 
         return NextResponse.json({
             emotes: categorized,
