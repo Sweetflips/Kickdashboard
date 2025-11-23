@@ -94,13 +94,14 @@ export default function StreamDetailPage() {
     const limit = 100
 
     useEffect(() => {
-        // Check admin status on mount
+        // Check admin status on mount - Past Streams are admin-only
         const checkAdminStatus = async () => {
             try {
                 const token = localStorage.getItem('kick_access_token')
                 if (!token) {
                     setIsAdmin(false)
                     setAdminCheckLoading(false)
+                    router.push('/')
                     return
                 }
 
@@ -108,19 +109,25 @@ export default function StreamDetailPage() {
                 if (response.ok) {
                     const data = await response.json()
                     setIsAdmin(data.is_admin === true)
+                    if (!data.is_admin) {
+                        router.push('/')
+                        return
+                    }
                 } else {
                     setIsAdmin(false)
+                    router.push('/')
                 }
             } catch (error) {
                 console.error('Error checking admin status:', error)
                 setIsAdmin(false)
+                router.push('/')
             } finally {
                 setAdminCheckLoading(false)
             }
         }
 
         checkAdminStatus()
-    }, [])
+    }, [router])
 
     useEffect(() => {
         if (sessionId) {
