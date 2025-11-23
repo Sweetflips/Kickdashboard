@@ -340,9 +340,29 @@ export async function GET(request: Request) {
             // Continue with redirect even if user save fails
         }
 
-        // Clear PKCE cookie and redirect to dashboard
+        // Clear PKCE cookie and set auth tokens in cookies with 3-month expiration
         const response = NextResponse.redirect(`${baseUrl}/?auth_success=true&access_token=${encodeURIComponent(tokenData.access_token)}&refresh_token=${encodeURIComponent(tokenData.refresh_token || '')}`)
         response.cookies.delete('pkce_code_verifier')
+
+        // Set authentication tokens in cookies with 3-month expiration (90 days)
+        const threeMonthsInSeconds = 90 * 24 * 60 * 60 // 7,776,000 seconds
+        response.cookies.set('kick_access_token', tokenData.access_token, {
+            httpOnly: false, // Needs to be accessible from client-side JavaScript
+            secure: !isLocalhost,
+            sameSite: 'lax',
+            maxAge: threeMonthsInSeconds,
+            path: '/',
+        })
+
+        if (tokenData.refresh_token) {
+            response.cookies.set('kick_refresh_token', tokenData.refresh_token, {
+                httpOnly: false, // Needs to be accessible from client-side JavaScript
+                secure: !isLocalhost,
+                sameSite: 'lax',
+                maxAge: threeMonthsInSeconds,
+                path: '/',
+            })
+        }
 
         return response
     } catch (error) {

@@ -3,6 +3,8 @@
  * Automatically refreshes access tokens when they expire
  */
 
+import { getAccessToken, getRefreshToken, setAuthTokens } from './cookies'
+
 export interface TokenRefreshResult {
     access_token: string
     refresh_token: string
@@ -13,15 +15,26 @@ export interface TokenRefreshResult {
 /**
  * Refresh access token using refresh token
  */
-export async function refreshAccessToken(refreshToken: string, kickUserId?: string): Promise<TokenRefreshResult | null> {
+export async function refreshAccessToken(refreshToken?: string, kickUserId?: string): Promise<TokenRefreshResult | null> {
     try {
+        // Use provided refresh token or get from cookies/localStorage
+        const tokenToUse = refreshToken || getRefreshToken()
+        if (!tokenToUse) {
+            return {
+                access_token: '',
+                refresh_token: '',
+                success: false,
+                error: 'No refresh token available',
+            }
+        }
+
         const response = await fetch('/api/auth/refresh', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                refresh_token: refreshToken,
+                refresh_token: tokenToUse,
                 kick_user_id: kickUserId,
             }),
         })
@@ -38,7 +51,7 @@ export async function refreshAccessToken(refreshToken: string, kickUserId?: stri
 
             return {
                 access_token: '',
-                refresh_token: refreshToken,
+                refresh_token: tokenToUse,
                 success: false,
                 error: errorData.error || 'Failed to refresh token',
             }
@@ -46,17 +59,14 @@ export async function refreshAccessToken(refreshToken: string, kickUserId?: stri
 
         const data = await response.json()
 
-        // Update tokens in localStorage
+        // Update tokens in both cookies and localStorage (for backward compatibility)
         if (typeof window !== 'undefined') {
-            localStorage.setItem('kick_access_token', data.access_token)
-            if (data.refresh_token) {
-                localStorage.setItem('kick_refresh_token', data.refresh_token)
-            }
+            setAuthTokens(data.access_token, data.refresh_token || tokenToUse)
         }
 
         return {
             access_token: data.access_token,
-            refresh_token: data.refresh_token || refreshToken,
+            refresh_token: data.refresh_token || tokenToUse,
             success: true,
         }
     } catch (error) {
@@ -111,8 +121,8 @@ export async function fetchWithTokenRefresh(
         } else {
             // Refresh failed, user needs to re-authenticate
             console.warn('⚠️ Token refresh failed - user needs to re-authenticate')
-            localStorage.removeItem('kick_access_token')
-            localStorage.removeItem('kick_refresh_token')
+            const { clearAuthTokens } = await import('./cookies')
+            clearAuthTokens()
             throw new Error('Token refresh failed. Please log in again.')
         }
     }
