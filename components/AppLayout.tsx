@@ -46,10 +46,9 @@ export default function AppLayout({ children }: LayoutProps) {
 
                     // Kick uses opaque tokens, not JWTs - just validate it's not empty
                     if (accessToken.trim().length > 0) {
-                        localStorage.setItem('kick_access_token', accessToken)
-                        if (refreshToken) {
-                            localStorage.setItem('kick_refresh_token', refreshToken)
-                        }
+                        // Set tokens in cookies (with 3-month expiration) and localStorage (backward compatibility)
+                        const { setAuthTokens } = await import('@/lib/cookies')
+                        setAuthTokens(accessToken, refreshToken || undefined)
                         setIsAuthenticated(true)
                         // Clean URL
                         const newUrl = window.location.pathname
@@ -163,10 +162,8 @@ export default function AppLayout({ children }: LayoutProps) {
                         })
                         if (refreshResponse.ok) {
                             const refreshData = await refreshResponse.json()
-                            localStorage.setItem('kick_access_token', refreshData.access_token)
-                            if (refreshData.refresh_token) {
-                                localStorage.setItem('kick_refresh_token', refreshData.refresh_token)
-                            }
+                            const { setAuthTokens } = await import('@/lib/cookies')
+                            setAuthTokens(refreshData.access_token, refreshData.refresh_token)
                             // Retry user fetch
                             const retryResponse = await fetch(`/api/user?access_token=${encodeURIComponent(refreshData.access_token)}`)
                             if (retryResponse.ok) {
