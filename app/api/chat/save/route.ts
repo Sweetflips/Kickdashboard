@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { isBot, awardPoint, awardEmotes } from '@/lib/points'
+import { isBot } from '@/lib/points'
+import { enqueuePointJob } from '@/lib/point-queue'
 import { getActiveGiveaway, isUserEligible } from '@/lib/giveaway'
 import { detectBotMessage } from '@/lib/bot-detection'
 import { Prisma } from '@prisma/client'
@@ -100,180 +101,133 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: false, message: 'Invalid sender user_id' }, { status: 400 })
         }
 
-        // Find or create sender user
-        let senderUser
+        // Batch user upserts in parallel to reduce connection usage
+        let senderUser: { id: bigint } | null = null
+        let broadcasterUser: { id: bigint } | null = null
+
         try {
-            senderUser = await db.user.upsert({
-                where: { kick_user_id: senderUserId },
-                update: {
-                    username: message.sender.username,
-                    profile_picture_url: message.sender.profile_picture || null,
-                },
-                create: {
-                    kick_user_id: senderUserId,
-                    username: message.sender.username,
-                    profile_picture_url: message.sender.profile_picture || null,
-                },
-            })
+            const [senderResult, broadcasterResult] = await Promise.all([
+                db.user.upsert({
+                    where: { kick_user_id: senderUserId },
+                    update: {
+                        username: message.sender.username,
+                        profile_picture_url: message.sender.profile_picture || null,
+                    },
+                    create: {
+                        kick_user_id: senderUserId,
+                        username: message.sender.username,
+                        profile_picture_url: message.sender.profile_picture || null,
+                    },
+                    select: { id: true }, // Only fetch id to reduce data transfer
+                }),
+                db.user.upsert({
+                    where: { kick_user_id: broadcasterUserId },
+                    update: {
+                        username: message.broadcaster.username,
+                        profile_picture_url: message.broadcaster.profile_picture || null,
+                    },
+                    create: {
+                        kick_user_id: broadcasterUserId,
+                        username: message.broadcaster.username,
+                        profile_picture_url: message.broadcaster.profile_picture || null,
+                    },
+                    select: { id: true }, // Only fetch id to reduce data transfer
+                }),
+            ])
+            senderUser = senderResult
+            broadcasterUser = broadcasterResult
         } catch (error) {
-            console.error('Failed to upsert sender user:', error)
+            console.error('Failed to upsert users:', error)
             return NextResponse.json(
-                { error: 'Failed to create/update sender user' },
+                { error: 'Failed to create/update users' },
                 { status: 500 }
             )
         }
 
-        // Find or create broadcaster user
-        let broadcasterUser
-        try {
-            broadcasterUser = await db.user.upsert({
-                where: { kick_user_id: broadcasterUserId },
-                update: {
-                    username: message.broadcaster.username,
-                    profile_picture_url: message.broadcaster.profile_picture || null,
-                },
-                create: {
-                    kick_user_id: broadcasterUserId,
-                    username: message.broadcaster.username,
-                    profile_picture_url: message.broadcaster.profile_picture || null,
-                },
-            })
-        } catch (error) {
-            console.error('Failed to upsert broadcaster user:', error)
-            return NextResponse.json(
-                { error: 'Failed to create/update broadcaster user' },
-                { status: 500 }
-            )
-        }
-
-        // Find active stream session for this broadcaster
+        // Find active stream session for this broadcaster (only fetch needed fields)
         let activeSession = await db.streamSession.findFirst({
             where: {
                 broadcaster_user_id: broadcasterUserId,
                 ended_at: null,
             },
             orderBy: { started_at: 'desc' },
+            select: {
+                id: true,
+                ended_at: true,
+                thumbnail_url: true,
+            },
         })
-
-        // If active session exists but has no thumbnail, try to fetch and update it
-        if (activeSession && !activeSession.thumbnail_url) {
-            try {
-                const broadcasterSlug = message.broadcaster.channel_slug || broadcasterUser.username.toLowerCase()
-                const controller = new AbortController()
-                const timeoutId = setTimeout(() => controller.abort(), 5000)
-
-                const channelResponse = await fetch(
-                    `https://kick.com/api/v2/channels/${broadcasterSlug}`,
-                    {
-                        headers: {
-                            'Accept': 'application/json',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        },
-                        signal: controller.signal,
-                    }
-                )
-
-                clearTimeout(timeoutId)
-
-                if (channelResponse.ok) {
-                    const channelData = await channelResponse.json()
-                    const livestream = channelData.livestream
-                    let thumbnailUrl: string | null = null
-
-                    if (livestream?.thumbnail) {
-                        if (typeof livestream.thumbnail === 'string') {
-                            thumbnailUrl = livestream.thumbnail
-                        } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
-                            thumbnailUrl = livestream.thumbnail.url
-                        }
-                    }
-
-                    if (thumbnailUrl) {
-                        await db.streamSession.update({
-                            where: { id: activeSession!.id },
-                            data: { thumbnail_url: thumbnailUrl },
-                        })
-                        activeSession.thumbnail_url = thumbnailUrl
-                        logDebug(`✅ Updated thumbnail for session ${activeSession.id}`)
-                    }
-                }
-            } catch (updateError) {
-                // Non-critical - just log and continue
-                logDebug(`⚠️ Could not update thumbnail for session ${activeSession.id}:`, updateError)
-            }
-        }
-
-        // If no active session exists, check if stream is live and create session if needed
-        if (!activeSession) {
-            try {
-                // Get broadcaster username from message
-                const broadcasterSlug = message.broadcaster.channel_slug || broadcasterUser.username.toLowerCase()
-
-                // Check Kick API to see if stream is live
-                const controller = new AbortController()
-                const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
-
-                const channelResponse = await fetch(
-                    `https://kick.com/api/v2/channels/${broadcasterSlug}`,
-                    {
-                        headers: {
-                            'Accept': 'application/json',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        },
-                        signal: controller.signal,
-                    }
-                )
-
-                clearTimeout(timeoutId)
-
-                if (channelResponse.ok) {
-                    const channelData = await channelResponse.json()
-                    const livestream = channelData.livestream
-                    const isLive = livestream?.is_live === true
-                    const viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
-                    const streamTitle = livestream?.session_title || ''
-
-                    let thumbnailUrl: string | null = null
-                    if (livestream?.thumbnail) {
-                        if (typeof livestream.thumbnail === 'string') {
-                            thumbnailUrl = livestream.thumbnail
-                        } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
-                            thumbnailUrl = livestream.thumbnail.url
-                        }
-                    }
-
-                    if (isLive) {
-                        // Stream is live but no session exists - create one
-                        activeSession = await db.streamSession.create({
-                            data: {
-                                broadcaster_user_id: broadcasterUserId,
-                                channel_slug: broadcasterSlug,
-                                session_title: streamTitle || null,
-                                thumbnail_url: thumbnailUrl,
-                                started_at: new Date(),
-                                peak_viewer_count: viewerCount,
-                            },
-                        })
-                        logDebug(`✅ Stream is live but no session existed - created session ${activeSession.id}`)
-                    }
-                }
-            } catch (checkError) {
-                // If we can't check stream status, assume offline
-                console.warn(`⚠️ Could not check stream status for broadcaster ${broadcasterUserId}:`, checkError instanceof Error ? checkError.message : 'Unknown error')
-            }
-        }
 
         // Determine if message was sent when offline
         const sentWhenOffline = !activeSession
+        const sessionIsActive = activeSession !== null && activeSession.ended_at === null
 
-        // If there's an active session, double-check it's still active (prevent race conditions)
-        let sessionIsActive = false
-        if (activeSession) {
-            const sessionCheck = await db.streamSession.findUnique({
-                where: { id: activeSession.id },
-                select: { ended_at: true },
-            })
-            sessionIsActive = sessionCheck !== null && sessionCheck.ended_at === null
+        // Fetch thumbnail/check stream status asynchronously (don't block message saving)
+        // This prevents holding DB connections during external API calls
+        if (!activeSession || !activeSession.thumbnail_url) {
+            // Fire and forget - don't await to avoid blocking
+            Promise.resolve().then(async () => {
+                try {
+                    const broadcasterSlug = message.broadcaster.channel_slug || message.broadcaster.username.toLowerCase()
+                    const controller = new AbortController()
+                    const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+                    const channelResponse = await fetch(
+                        `https://kick.com/api/v2/channels/${broadcasterSlug}`,
+                        {
+                            headers: {
+                                'Accept': 'application/json',
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                            },
+                            signal: controller.signal,
+                        }
+                    )
+
+                    clearTimeout(timeoutId)
+
+                    if (channelResponse.ok) {
+                        const channelData = await channelResponse.json()
+                        const livestream = channelData.livestream
+                        const isLive = livestream?.is_live === true
+                        const viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
+                        const streamTitle = livestream?.session_title || ''
+
+                        let thumbnailUrl: string | null = null
+                        if (livestream?.thumbnail) {
+                            if (typeof livestream.thumbnail === 'string') {
+                                thumbnailUrl = livestream.thumbnail
+                            } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
+                                thumbnailUrl = livestream.thumbnail.url
+                            }
+                        }
+
+                        if (activeSession && thumbnailUrl) {
+                            // Update existing session thumbnail
+                            await db.streamSession.update({
+                                where: { id: activeSession!.id },
+                                data: { thumbnail_url: thumbnailUrl },
+                            })
+                            logDebug(`✅ Updated thumbnail for session ${activeSession!.id}`)
+                        } else if (!activeSession && isLive) {
+                            // Stream is live but no session exists - create one
+                            await db.streamSession.create({
+                                data: {
+                                    broadcaster_user_id: broadcasterUserId,
+                                    channel_slug: broadcasterSlug,
+                                    session_title: streamTitle || null,
+                                    thumbnail_url: thumbnailUrl,
+                                    started_at: new Date(),
+                                    peak_viewer_count: viewerCount,
+                                },
+                            })
+                            logDebug(`✅ Stream is live but no session existed - created session`)
+                        }
+                    }
+                } catch (error) {
+                    // Non-critical - just log and continue
+                    logDebug(`⚠️ Could not check/update stream status:`, error)
+                }
+            }).catch(() => {}) // Swallow errors in background task
         }
 
         // Extract emotes from content if not provided separately
@@ -364,20 +318,26 @@ export async function POST(request: Request) {
                 }
             } else {
                 // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
-                // First check if message exists to preserve its stream_session_id if already assigned
+                // Fetch existing message data in one query to check stream_session_id and points
                 const existingMessage = await db.chatMessage.findUnique({
                     where: { message_id: message.message_id },
-                    select: { stream_session_id: true },
+                    select: {
+                        stream_session_id: true,
+                        points_earned: true,
+                        points_reason: true,
+                    },
                 })
 
                 // Only update stream_session_id if message doesn't have one yet (preserve existing session assignment)
-                const shouldUpdateSessionId = !existingMessage?.stream_session_id && sessionIsActive
+                const shouldUpdateSessionId = !existingMessage?.stream_session_id && sessionIsActive && activeSession !== null
+                const wasExistingMessage = existingMessage !== null && existingMessage.points_earned > 0
 
+                // Upsert message - upsert returns the result, so we can use it directly
                 const upsertResult = await db.chatMessage.upsert({
                     where: { message_id: message.message_id },
                     update: {
                         // Only update stream_session_id if it was null (don't reassign messages from previous sessions)
-                        ...(shouldUpdateSessionId && { stream_session_id: activeSession!.id }),
+                        ...(shouldUpdateSessionId && activeSession ? { stream_session_id: activeSession.id } : {}),
                         sender_username: message.sender.username,
                         content: message.content,
                         emotes: emotesToSave,
@@ -391,7 +351,7 @@ export async function POST(request: Request) {
                     },
                     create: {
                         message_id: message.message_id,
-                        stream_session_id: sessionIsActive ? activeSession!.id : null,
+                        stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
                         sender_user_id: senderUserId,
                         sender_username: message.sender.username,
                         broadcaster_user_id: broadcasterUserId,
@@ -405,123 +365,85 @@ export async function POST(request: Request) {
                         points_earned: 0,
                         sent_when_offline: false,
                     },
-                })
-
-                // Check if this was a new message by checking if points_earned is still 0
-                // If points_earned is 0, it means this is likely a new message (or points weren't awarded yet)
-                const messageAfterUpsert = await db.chatMessage.findUnique({
-                    where: { message_id: message.message_id },
                     select: {
-                        id: true,
                         points_earned: true,
                         points_reason: true,
-                        created_at: true,
                     },
                 })
 
                 // If message already has points, it's definitely an existing message
-                const wasExistingMessage = messageAfterUpsert && messageAfterUpsert.points_earned > 0
-
                 if (wasExistingMessage) {
                     // Existing message - use existing points
-                    pointsEarned = messageAfterUpsert.points_earned ?? 0
-                    pointsReason = messageAfterUpsert.points_reason || null
-                } else if (messageAfterUpsert && messageAfterUpsert.points_earned === 0 && sessionIsActive && !isBot(senderUsernameLower)) {
+                    pointsEarned = existingMessage.points_earned ?? 0
+                    pointsReason = existingMessage.points_reason || null
+                } else if (upsertResult.points_earned === 0 && sessionIsActive && !isBot(senderUsernameLower)) {
                     // Message exists but has no points - check if we should award points
-                    // First verify the message still has 0 points (prevent race condition)
-                    const messageCheck = await db.chatMessage.findUnique({
-                        where: { message_id: message.message_id },
-                        select: { points_earned: true },
+                    // Use atomic update to check and set pending status
+                    isNewMessage = true
+
+                    // Get recent messages from this user for duplicate detection (limit to reduce query time)
+                    const recentMessages = await db.chatMessage.findMany({
+                        where: {
+                            sender_user_id: senderUserId,
+                            broadcaster_user_id: broadcasterUserId,
+                        },
+                        orderBy: { timestamp: 'desc' },
+                        take: 10, // Check last 10 messages
+                        select: { content: true },
                     })
 
-                    // Only proceed if points are still 0 (another process hasn't awarded points yet)
-                    if (messageCheck && messageCheck.points_earned === 0) {
-                        isNewMessage = true
+                    const recentMessageContents = recentMessages.map(msg => msg.content)
 
-                        // Get recent messages from this user for duplicate detection
-                        const recentMessages = await db.chatMessage.findMany({
-                            where: {
-                                sender_user_id: senderUserId,
-                                broadcaster_user_id: broadcasterUserId,
-                            },
-                            orderBy: { timestamp: 'desc' },
-                            take: 10, // Check last 10 messages
-                            select: { content: true },
-                        })
+                    // Detect bot patterns in message content
+                    const botDetection = detectBotMessage(message.content, recentMessageContents)
 
-                        const recentMessageContents = recentMessages.map(msg => msg.content)
+                    if (botDetection.isBot) {
+                        logDebug(`🤖 Bot detected for ${senderUsername}: ${botDetection.reasons.join(', ')} (score: ${botDetection.score})`)
+                        // Don't award points or emotes for bot messages
+                        pointsEarned = 0
+                        pointsReason = 'Bot detected'
 
-                        // Detect bot patterns in message content
-                        const botDetection = detectBotMessage(message.content, recentMessageContents)
-
-                        if (botDetection.isBot) {
-                            logDebug(`🤖 Bot detected for ${senderUsername}: ${botDetection.reasons.join(', ')} (score: ${botDetection.score})`)
-                            // Don't award points or emotes for bot messages
-                            pointsEarned = 0
-                            pointsReason = 'Bot detected'
-
-                            // Update with bot detection reason
-                            await db.chatMessage.update({
-                                where: { message_id: message.message_id },
-                                data: {
-                                    points_earned: 0,
-                                    points_reason: pointsReason,
-                                },
-                            })
-                        } else {
-                            const pointResult = await awardPoint(
-                                senderUserId,
-                                activeSession!.id,
-                                message.message_id,
-                                message.sender.identity?.badges
-                            )
-
-                            pointsEarned = pointResult.pointsEarned || 0
-                            pointsReason = pointResult.reason || null
-
-                            // Update message with points/reason - use conditional update to prevent overwriting if another process already awarded points
-                            try {
-                                await db.chatMessage.updateMany({
-                                    where: {
-                                        message_id: message.message_id,
-                                        points_earned: 0, // Only update if still 0
-                                    },
-                                    data: {
-                                        points_earned: pointsEarned,
-                                        points_reason: pointsEarned > 0 ? null : pointsReason, // Clear reason when points are awarded
-                                    },
-                                })
-                            } catch (updateError) {
-                                // If update fails, fetch current state
-                                const currentMessage = await db.chatMessage.findUnique({
-                                    where: { message_id: message.message_id },
-                                    select: { points_earned: true, points_reason: true },
-                                })
-                                pointsEarned = currentMessage?.points_earned ?? 0
-                                pointsReason = currentMessage?.points_reason || null
-                            }
-
-                            if (emotesToSave.length > 0) {
-                                try {
-                                    await awardEmotes(senderUserId, emotesToSave)
-                                } catch (emoteError) {
-                                    console.warn('Failed to award emotes (non-critical):', emoteError)
-                                }
-                            }
-                        }
-                    } else {
-                        // Another process already awarded points - use existing values
-                        pointsEarned = messageCheck?.points_earned ?? 0
-                        const existingMessage = await db.chatMessage.findUnique({
+                        // Update with bot detection reason
+                        await db.chatMessage.update({
                             where: { message_id: message.message_id },
-                            select: { points_reason: true },
+                            data: {
+                                points_earned: 0,
+                                points_reason: pointsReason,
+                            },
                         })
-                        pointsReason = existingMessage?.points_reason || null
+                    } else {
+                        // Enqueue point award job for async processing
+                        if (activeSession) {
+                            await enqueuePointJob({
+                                kickUserId: senderUserId,
+                                streamSessionId: activeSession.id,
+                                messageId: message.message_id,
+                                badges: message.sender.identity?.badges,
+                                emotes: emotesToSave.length > 0 ? emotesToSave : null,
+                            })
+                        }
+
+                        // Set initial state - worker will update points_earned and points_reason when processing
+                        pointsEarned = 0
+                        pointsReason = 'pending'
+
+                        // Update message with pending status (non-blocking - if it fails, worker will handle it)
+                        db.chatMessage.updateMany({
+                            where: {
+                                message_id: message.message_id,
+                                points_earned: 0, // Only update if still 0
+                            },
+                            data: {
+                                points_reason: 'pending',
+                            },
+                        }).catch(() => {
+                            // Ignore errors - worker will handle point updates
+                        })
                     }
                 } else {
                     // Not a new message or conditions not met - use existing points
-                    pointsEarned = messageAfterUpsert?.points_earned ?? 0
-                    pointsReason = messageAfterUpsert?.points_reason || null
+                    pointsEarned = upsertResult.points_earned ?? 0
+                    pointsReason = upsertResult.points_reason || null
                 }
 
                 logDebug(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned}, isNew: ${isNewMessage})`)
@@ -529,69 +451,82 @@ export async function POST(request: Request) {
 
             // Update stream session message count if session exists and is active
             // Only count messages that were sent when online
+            // Do this asynchronously to avoid blocking the response
             if (isNewMessage && sessionIsActive && activeSession) {
-                const messageCount = await db.chatMessage.count({
-                    where: {
-                        stream_session_id: activeSession.id,
-                    },
-                })
-                await db.streamSession.update({
-                    where: { id: activeSession.id },
-                    data: {
-                        total_messages: messageCount,
-                        updated_at: new Date(),
-                    },
-                })
+                // Fire and forget - don't await to avoid blocking
+                Promise.resolve().then(async () => {
+                    try {
+                        const messageCount = await db.chatMessage.count({
+                            where: {
+                                stream_session_id: activeSession!.id,
+                            },
+                        })
+                        await db.streamSession.update({
+                            where: { id: activeSession!.id },
+                            data: {
+                                total_messages: messageCount,
+                                updated_at: new Date(),
+                            },
+                        })
+                    } catch (error) {
+                        // Non-critical - just log
+                        logDebug(`⚠️ Failed to update session message count:`, error)
+                    }
+                }).catch(() => {}) // Swallow errors in background task
             }
 
             // Auto-entry for active giveaways - update entry points as user earns more
             // Only process for NEW messages when stream is active
+            // Do this asynchronously to avoid blocking the response
             if (isNewMessage && !isBot(senderUsernameLower) && sessionIsActive && activeSession) {
-                try {
-                    const activeGiveaway = await getActiveGiveaway(broadcasterUserId, activeSession.id)
-                    if (activeGiveaway && activeGiveaway.stream_session_id === activeSession.id) {
-                        // Check if user is eligible based on stream session points
-                        const eligible = await isUserEligible(senderUserId, activeGiveaway.entry_min_points, activeSession.id)
-                        if (eligible) {
-                            // Get user's current points from this stream session
-                            const sessionPointsResult = await db.pointHistory.aggregate({
-                                where: {
-                                    stream_session_id: activeSession.id,
-                                    user_id: senderUser.id,
-                                },
-                                _sum: {
-                                    points_earned: true,
-                                },
-                            })
-
-                            const sessionPoints = sessionPointsResult._sum.points_earned || 0
-
-                            if (sessionPoints >= activeGiveaway.entry_min_points) {
-                                // Upsert entry - update points if exists, create if not
-                                await db.giveawayEntry.upsert({
+                // Fire and forget - don't await to avoid blocking
+                Promise.resolve().then(async () => {
+                    try {
+                        const activeGiveaway = await getActiveGiveaway(broadcasterUserId, activeSession!.id)
+                        if (activeGiveaway && activeGiveaway.stream_session_id === activeSession!.id) {
+                            // Check if user is eligible based on stream session points
+                            const eligible = await isUserEligible(senderUserId, activeGiveaway.entry_min_points, activeSession!.id)
+                            if (eligible) {
+                                // Get user's current points from this stream session
+                                const sessionPointsResult = await db.pointHistory.aggregate({
                                     where: {
-                                        giveaway_id_user_id: {
-                                            giveaway_id: activeGiveaway.id,
-                                            user_id: senderUser.id,
-                                        },
+                                        stream_session_id: activeSession!.id,
+                                        user_id: senderUser!.id,
                                     },
-                                    update: {
-                                        points_at_entry: sessionPoints, // Update tickets as points increase
-                                    },
-                                    create: {
-                                        giveaway_id: activeGiveaway.id,
-                                        user_id: senderUser.id,
-                                        points_at_entry: sessionPoints,
+                                    _sum: {
+                                        points_earned: true,
                                     },
                                 })
-                                logDebug(`🎁 Updated ${senderUsername} giveaway entry: ${sessionPoints} tickets`)
+
+                                const sessionPoints = sessionPointsResult._sum.points_earned || 0
+
+                                if (sessionPoints >= activeGiveaway.entry_min_points) {
+                                    // Upsert entry - update points if exists, create if not
+                                    await db.giveawayEntry.upsert({
+                                        where: {
+                                            giveaway_id_user_id: {
+                                                giveaway_id: activeGiveaway.id,
+                                                user_id: senderUser!.id,
+                                            },
+                                        },
+                                        update: {
+                                            points_at_entry: sessionPoints, // Update tickets as points increase
+                                        },
+                                        create: {
+                                            giveaway_id: activeGiveaway.id,
+                                            user_id: senderUser!.id,
+                                            points_at_entry: sessionPoints,
+                                        },
+                                    })
+                                    logDebug(`🎁 Updated ${senderUsername} giveaway entry: ${sessionPoints} tickets`)
+                                }
                             }
                         }
+                    } catch (giveawayError) {
+                        // Don't fail the entire request if giveaway entry fails
+                        console.error('Error processing giveaway auto-entry:', giveawayError)
                     }
-                } catch (giveawayError) {
-                    // Don't fail the entire request if giveaway entry fails
-                    console.error('Error processing giveaway auto-entry:', giveawayError)
-                }
+                }).catch(() => {}) // Swallow errors in background task
             }
 
             const duration = Date.now() - startTime
