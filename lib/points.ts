@@ -174,25 +174,42 @@ export async function awardPoint(
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             // Reset rateLimitHit for each attempt
             rateLimitHit = null
+            const attemptStartTime = Date.now()
             try {
                 await db.$transaction(async (tx) => {
                     const transactionNow = new Date()
 
-                    // Check rate limit INSIDE transaction using fresh read of userPoints
-                    // This ensures concurrent requests see the updated last_point_earned_at
-                    const freshUserPoints = await tx.userPoints.findUnique({
-                        where: { user_id: userId },
-                        select: { last_point_earned_at: true },
-                    })
+                    // Use row-level locking (SELECT FOR UPDATE) to prevent concurrent modifications
+                    // This ensures only one transaction can read and update a user's points at a time
+                    const lockedUserPoints = await tx.$queryRaw<Array<{
+                        id: bigint
+                        user_id: bigint
+                        last_point_earned_at: Date | null
+                        total_points: number
+                    }>>`
+                        SELECT id, user_id, last_point_earned_at, total_points
+                        FROM user_points
+                        WHERE user_id = ${userId}
+                        FOR UPDATE
+                    `
+
+                    const freshUserPoints = lockedUserPoints.length > 0 ? {
+                        last_point_earned_at: lockedUserPoints[0].last_point_earned_at,
+                    } : null
+
+                    // Log transaction attempt details (behind verbose flag)
+                    logDebug(`[awardPoint] Transaction attempt ${attempt + 1}: userId=${userId}, messageId=${messageId}, last_point_earned_at=${freshUserPoints?.last_point_earned_at || 'null'}, isolation=SERIALIZABLE`)
 
                     if (freshUserPoints?.last_point_earned_at) {
                         const timeSinceLastPoint = (transactionNow.getTime() - freshUserPoints.last_point_earned_at.getTime()) / 1000
+                        logDebug(`[awardPoint] Rate limit check: timeSinceLastPoint=${timeSinceLastPoint}s, limit=${RATE_LIMIT_SECONDS}s`)
                         if (timeSinceLastPoint < RATE_LIMIT_SECONDS) {
                             const remainingSeconds = Math.ceil(RATE_LIMIT_SECONDS - timeSinceLastPoint)
                             rateLimitHit = {
                                 remainingMinutes: Math.floor(remainingSeconds / 60),
                                 remainingSecs: remainingSeconds % 60,
                             }
+                            logDebug(`[awardPoint] Rate limit hit: ${rateLimitHit.remainingMinutes}m ${rateLimitHit.remainingSecs}s remaining`)
                             // Return early from transaction - no writes will happen
                             return
                         }
@@ -205,6 +222,7 @@ export async function awardPoint(
                             select: { id: true },
                         })
                         if (existingHistory) {
+                            logDebug(`[awardPoint] Message already processed: messageId=${messageId}`)
                             // Message already processed - return without writing
                             return
                         }
@@ -231,9 +249,13 @@ export async function awardPoint(
                             updated_at: transactionNow,
                         },
                     })
+
+                    const transactionDuration = Date.now() - attemptStartTime
+                    logDebug(`[awardPoint] Transaction succeeded: userId=${userId}, messageId=${messageId}, points=${pointsToAward}, duration=${transactionDuration}ms`)
                 }, {
                     maxWait: 10000, // Wait up to 10 seconds for transaction to start
                     timeout: 20000, // Transaction timeout of 20 seconds
+                    isolationLevel: Prisma.TransactionIsolationLevel.Serializable, // Use SERIALIZABLE isolation to prevent race conditions
                 })
 
                 // Check if rate limit was hit (transaction completed but no writes happened)
@@ -251,8 +273,11 @@ export async function awardPoint(
                 transactionSucceeded = true
                 break
             } catch (transactionError) {
+                const attemptDuration = Date.now() - attemptStartTime
+
                 // Handle unique constraint violation (race condition on message_id)
                 if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2002') {
+                    logDebug(`[awardPoint] Unique constraint violation (race condition): userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}, duration=${attemptDuration}ms`)
                     console.log(`⏸️ Point not awarded to ${user.username}: Message already processed for points (race condition)`)
                     return {
                         awarded: false,
@@ -263,19 +288,41 @@ export async function awardPoint(
 
                 // Handle transaction timeout - retry with exponential backoff
                 if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2028') {
+                    logDebug(`[awardPoint] Transaction timeout: userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}/${maxRetries}, duration=${attemptDuration}ms`)
                     if (attempt < maxRetries - 1) {
                         const delay = Math.min(100 * Math.pow(2, attempt), 1000) // 100ms, 200ms, 400ms max
+                        logDebug(`[awardPoint] Retrying after ${delay}ms delay...`)
                         await new Promise(resolve => setTimeout(resolve, delay))
                         continue // Retry
                     }
                     // Max retries reached
-                    console.error(`Error awarding point: Transaction timeout after ${maxRetries} attempts`, transactionError)
+                    console.error(`Error awarding point: Transaction timeout after ${maxRetries} attempts (userId=${userId}, messageId=${messageId})`, transactionError)
                     return {
                         awarded: false,
                         pointsEarned: 0,
                         reason: 'Transaction timeout - please try again',
                     }
                 }
+
+                // Handle serialization failures (deadlocks) - retry
+                if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2034') {
+                    logDebug(`[awardPoint] Serialization failure (deadlock): userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}/${maxRetries}, duration=${attemptDuration}ms`)
+                    if (attempt < maxRetries - 1) {
+                        const delay = Math.min(100 * Math.pow(2, attempt), 1000)
+                        logDebug(`[awardPoint] Retrying after ${delay}ms delay...`)
+                        await new Promise(resolve => setTimeout(resolve, delay))
+                        continue // Retry
+                    }
+                    console.error(`Error awarding point: Serialization failure after ${maxRetries} attempts (userId=${userId}, messageId=${messageId})`, transactionError)
+                    return {
+                        awarded: false,
+                        pointsEarned: 0,
+                        reason: 'Transaction conflict - please try again',
+                    }
+                }
+
+                // Log other transaction errors with context
+                logDebug(`[awardPoint] Transaction error: userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}, duration=${attemptDuration}ms, error=${transactionError instanceof Error ? transactionError.message : 'Unknown'}`)
 
                 // For other errors, throw immediately
                 throw transactionError

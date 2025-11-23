@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { isAdmin } from '@/lib/auth'
 
 // Helper function to extract emotes from message content [emote:ID:Name] format
 function extractEmotesFromContent(content: string): Array<{ emote_id: string; positions: Array<{ s: number; e: number }> }> {
@@ -108,6 +109,15 @@ function analyzeEngagementType(content: string, hasEmotes: boolean): string {
 
 export async function GET(request: Request) {
     try {
+        // Check admin access - analytics are admin-only
+        const adminCheck = await isAdmin(request)
+        if (!adminCheck) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Admin access required' },
+                { status: 403 }
+            )
+        }
+
         const { searchParams } = new URL(request.url)
         const sessionId = searchParams.get('session_id')
 

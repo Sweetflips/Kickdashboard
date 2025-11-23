@@ -89,19 +89,53 @@ export default function StreamDetailPage() {
         profile_picture_url: string | null
     }>>([])
     const [loadingLeaderboard, setLoadingLeaderboard] = useState(false)
+    const [isAdmin, setIsAdmin] = useState<boolean>(false)
+    const [adminCheckLoading, setAdminCheckLoading] = useState(true)
     const limit = 100
+
+    useEffect(() => {
+        // Check admin status on mount
+        const checkAdminStatus = async () => {
+            try {
+                const token = localStorage.getItem('kick_access_token')
+                if (!token) {
+                    setIsAdmin(false)
+                    setAdminCheckLoading(false)
+                    return
+                }
+
+                const response = await fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setIsAdmin(data.is_admin === true)
+                } else {
+                    setIsAdmin(false)
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error)
+                setIsAdmin(false)
+            } finally {
+                setAdminCheckLoading(false)
+            }
+        }
+
+        checkAdminStatus()
+    }, [])
 
     useEffect(() => {
         if (sessionId) {
             fetchStreamData()
-            fetchAnalytics()
+            // Only fetch analytics if user is admin
+            if (isAdmin) {
+                fetchAnalytics()
+            }
             if (activeTab === 'chat') {
                 fetchChats()
             } else if (activeTab === 'leaderboard') {
                 fetchLeaderboard()
             }
         }
-    }, [sessionId])
+    }, [sessionId, isAdmin])
 
     useEffect(() => {
         if (sessionId && activeTab === 'chat' && offset > 0) {
@@ -495,6 +529,12 @@ export default function StreamDetailPage() {
                                 </table>
                             </div>
                         )}
+                    </div>
+                ) : activeTab === 'analytics' && !isAdmin ? (
+                    <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
+                        <div className="text-center py-12">
+                            <p className="text-gray-600 dark:text-kick-text-secondary">Analytics are only available to administrators.</p>
+                        </div>
                     </div>
                 ) : analytics ? (
                     <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">

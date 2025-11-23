@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       ]
     }
 
-    // Get users with pagination
+    // Get users with pagination and session diagnostics
     const [users, total] = await Promise.all([
       db.user.findMany({
         where,
@@ -40,6 +40,20 @@ export async function GET(request: Request) {
               total_emotes: true,
             },
           },
+          user_sessions: {
+            take: 5, // Get last 5 sessions
+            orderBy: {
+              last_seen_at: 'desc',
+            },
+            select: {
+              session_id: true,
+              region: true,
+              country: true,
+              client_type: true,
+              last_seen_at: true,
+              created_at: true,
+            },
+          },
         },
         orderBy: {
           created_at: 'desc',
@@ -48,19 +62,60 @@ export async function GET(request: Request) {
       db.user.count({ where }),
     ])
 
+    // Get aggregated session stats for each user
+    const userIds = users.map(u => u.id)
+    const sessionStats = await db.userSession.groupBy({
+      by: ['user_id'],
+      where: {
+        user_id: { in: userIds },
+      },
+      _count: {
+        id: true,
+      },
+    })
+
+    const sessionStatsMap = new Map(sessionStats.map(s => [s.user_id.toString(), s._count.id]))
+
     return NextResponse.json({
-      users: users.map(u => ({
-        id: u.id.toString(),
-        kick_user_id: u.kick_user_id.toString(),
-        username: u.username,
-        email: u.email,
-        profile_picture_url: u.custom_profile_picture_url || u.profile_picture_url,
-        is_admin: u.is_admin,
-        total_points: u.points?.total_points || 0,
-        total_emotes: u.points?.total_emotes || 0,
-        created_at: u.created_at.toISOString(),
-        last_login_at: u.last_login_at?.toISOString() || null,
-      })),
+      users: users.map(u => {
+        const recentSessions = u.user_sessions || []
+        const latestSession = recentSessions[0] || null
+        const totalSessions = sessionStatsMap.get(u.id.toString()) || 0
+
+        // Get unique regions and client types
+        const uniqueRegions = new Set(recentSessions.map(s => s.region).filter(Boolean))
+        const uniqueClientTypes = new Set(recentSessions.map(s => s.client_type).filter(Boolean))
+
+        return {
+          id: u.id.toString(),
+          kick_user_id: u.kick_user_id.toString(),
+          username: u.username,
+          email: u.email,
+          profile_picture_url: u.custom_profile_picture_url || u.profile_picture_url,
+          is_admin: u.is_admin,
+          total_points: u.points?.total_points || 0,
+          total_emotes: u.points?.total_emotes || 0,
+          created_at: u.created_at.toISOString(),
+          last_login_at: u.last_login_at?.toISOString() || null,
+          session_diagnostics: {
+            total_sessions: totalSessions,
+            last_seen: latestSession?.last_seen_at.toISOString() || null,
+            last_region: latestSession?.region || null,
+            last_country: latestSession?.country || null,
+            last_client_type: latestSession?.client_type || null,
+            recent_sessions: recentSessions.map(s => ({
+              session_id: s.session_id,
+              region: s.region,
+              country: s.country,
+              client_type: s.client_type,
+              last_seen_at: s.last_seen_at.toISOString(),
+              created_at: s.created_at.toISOString(),
+            })),
+            unique_regions: Array.from(uniqueRegions),
+            unique_client_types: Array.from(uniqueClientTypes),
+          },
+        }
+      }),
       total,
       limit,
       offset,

@@ -51,7 +51,24 @@ export async function POST(request: Request) {
         const body = await request.json()
         const message = body as ChatMessage
 
-        if (!message.message_id || !message.sender || !message.content) {
+        // Validate message structure - message_id is required and must be non-empty
+        if (!message.message_id || typeof message.message_id !== 'string' || message.message_id.trim() === '') {
+            console.error('Invalid message structure: missing or invalid message_id', {
+                has_message_id: !!message.message_id,
+                message_id_type: typeof message.message_id,
+                message_id_value: message.message_id ? message.message_id.substring(0, 50) : null,
+                has_sender: !!message.sender,
+                has_content: !!message.content,
+                sender_user_id: message.sender?.user_id,
+                content_preview: message.content ? message.content.substring(0, 50) : null,
+            })
+            return NextResponse.json(
+                { error: 'Invalid message structure: message_id is required and must be a non-empty string' },
+                { status: 400 }
+            )
+        }
+
+        if (!message.sender || !message.content) {
             console.error('Invalid message structure:', {
                 has_message_id: !!message.message_id,
                 has_sender: !!message.sender,
@@ -61,6 +78,16 @@ export async function POST(request: Request) {
                 { error: 'Invalid message structure' },
                 { status: 400 }
             )
+        }
+
+        // Additional validation: check for suspicious message IDs (too short, repeated patterns)
+        const messageId = message.message_id.trim()
+        if (messageId.length < 5) {
+            console.warn('⚠️ Suspiciously short message_id detected:', {
+                message_id: messageId,
+                sender: message.sender?.username,
+                content_preview: message.content?.substring(0, 50),
+            })
         }
 
         const senderUserId = BigInt(message.sender.user_id)

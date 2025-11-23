@@ -74,6 +74,8 @@ export default function Dashboard() {
         total_points: number
         unique_chatters: number
     } | null>(null)
+    const [isAdmin, setIsAdmin] = useState<boolean>(false)
+    const [adminCheckLoading, setAdminCheckLoading] = useState(true)
 
     useEffect(() => {
         fetchChannelData()
@@ -82,6 +84,35 @@ export default function Dashboard() {
             fetchChannelData()
         }, 30000) // Refresh every 30 seconds (reduced from 10s)
         return () => clearInterval(interval)
+    }, [])
+
+    // Check admin status on mount
+    useEffect(() => {
+        const checkAdminStatus = async () => {
+            try {
+                const token = localStorage.getItem('kick_access_token')
+                if (!token) {
+                    setIsAdmin(false)
+                    setAdminCheckLoading(false)
+                    return
+                }
+
+                const response = await fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setIsAdmin(data.is_admin === true)
+                } else {
+                    setIsAdmin(false)
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error)
+                setIsAdmin(false)
+            } finally {
+                setAdminCheckLoading(false)
+            }
+        }
+
+        checkAdminStatus()
     }, [])
 
     const fetchChannelData = async () => {
@@ -317,7 +348,7 @@ export default function Dashboard() {
 
                     {/* Stream Stats Cards */}
                     {streamStats && isLive && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-6`}>
                             {/* Total Messages Card */}
                             <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors shadow-sm">
                                 <div className="flex items-center justify-between">

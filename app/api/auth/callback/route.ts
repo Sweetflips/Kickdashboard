@@ -258,11 +258,75 @@ export async function GET(request: Request) {
                     if (twitterUrl !== null) createData.twitter_url = twitterUrl
 
                     // Save or update user in database
-                    await db.user.upsert({
+                    const savedUser = await db.user.upsert({
                         where: { kick_user_id: kickUserId },
                         update: updateData,
                         create: createData,
                     })
+
+                    // Create or update user session for diagnostics
+                    try {
+                        // Infer client type from user agent
+                        let clientType: string | null = null
+                        if (userAgent) {
+                            const ua = userAgent.toLowerCase()
+                            if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone') || ua.includes('ipad')) {
+                                clientType = 'mobile'
+                            } else if (ua.includes('embedded') || ua.includes('iframe')) {
+                                clientType = 'embedded'
+                            } else {
+                                clientType = 'web'
+                            }
+                        }
+
+                        // Simple region detection based on IP (in production, use a geolocation service)
+                        // For now, we'll store a hash of the IP and leave region/country null
+                        // In production, you'd use a service like MaxMind GeoIP2 or Cloudflare's CF-IPCountry header
+                        const ipHash = ipAddress ? hashToken(ipAddress) : null
+
+                        // Find existing recent session for this user with same client type and IP hash (within last 24 hours)
+                        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+                        const existingSession = await db.userSession.findFirst({
+                            where: {
+                                user_id: savedUser.id,
+                                client_type: clientType,
+                                ip_hash: ipHash,
+                                last_seen_at: {
+                                    gte: oneDayAgo,
+                                },
+                            },
+                            orderBy: {
+                                last_seen_at: 'desc',
+                            },
+                        })
+
+                        if (existingSession) {
+                            // Update existing session
+                            await db.userSession.update({
+                                where: { id: existingSession.id },
+                                data: {
+                                    last_seen_at: new Date(),
+                                    updated_at: new Date(),
+                                },
+                            })
+                        } else {
+                            // Create new session
+                            const sessionId = crypto.randomUUID()
+                            await db.userSession.create({
+                                data: {
+                                    user_id: savedUser.id,
+                                    session_id: sessionId,
+                                    client_type: clientType,
+                                    user_agent: userAgent,
+                                    ip_hash: ipHash,
+                                    last_seen_at: new Date(),
+                                },
+                            })
+                        }
+                    } catch (sessionError) {
+                        // Non-critical - log but don't fail auth
+                        console.warn('⚠️ Could not create/update user session:', sessionError instanceof Error ? sessionError.message : 'Unknown error')
+                    }
 
                     console.log(`✅ User ${isNewSignup ? 'signed up' : 'logged in'}: ${username} (ID: ${kickUserId})`)
                 } else {

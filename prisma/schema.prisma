@@ -59,6 +59,7 @@ model User {
   stream_sessions   StreamSession[]
   giveaways         Giveaway[]
   giveaway_entries  GiveawayEntry[]
+  user_sessions     UserSession[]
 
   @@map("users")
 }
@@ -235,4 +236,25 @@ model GiveawayWinner {
   segment           GiveawaySegment? @relation(fields: [segment_id], references: [id])
 
   @@map("giveaway_winners")
+}
+
+model UserSession {
+  id                BigInt    @id @default(autoincrement())
+  user_id           BigInt
+  session_id        String    @unique // Unique session identifier (e.g., UUID)
+  region            String?   // Geographic region (e.g., "NA-East", "EU-West")
+  country           String?   // Country code (e.g., "US", "CA", "GB")
+  client_type       String?   // Client type: "web", "mobile", "embedded"
+  user_agent        String?   @db.Text // User agent string (for device/browser detection)
+  ip_hash           String?   // Hashed IP address (for privacy - not storing raw IP)
+  created_at        DateTime  @default(now())
+  last_seen_at      DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  // Relations
+  user              User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([last_seen_at])
+  @@map("user_sessions")
 }

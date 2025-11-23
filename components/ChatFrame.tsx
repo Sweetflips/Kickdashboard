@@ -881,12 +881,30 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
             if (!messageData.content && !messageData.message && !messageData.text) return
 
-            // Extract message ID
-            const messageId = messageData.id ||
-                             messageData.message_id ||
-                             messageData.data?.id ||
-                             messageData.data?.message_id ||
-                             `pusher_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+            // Extract message ID - ensure it's always present and unique
+            // Prefer IDs from Kick API, but generate a reliable fallback if missing
+            let messageId = messageData.id ||
+                           messageData.message_id ||
+                           messageData.data?.id ||
+                           messageData.data?.message_id ||
+                           null
+
+            // If no message ID provided, generate a deterministic unique ID
+            // Use sender ID + timestamp + content hash to ensure uniqueness even if same message arrives twice
+            if (!messageId || typeof messageId !== 'string' || messageId.trim() === '') {
+                const senderId = messageData.sender?.id || messageData.sender?.user_id || messageData.user_id || 'unknown'
+                const timestamp = messageData.created_at ? new Date(messageData.created_at).getTime() : Date.now()
+                const content = messageData.content || messageData.message || messageData.text || ''
+                // Create a deterministic hash-based ID to avoid collisions
+                const contentHash = content.substring(0, 10).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+                messageId = `kick_${senderId}_${timestamp}_${contentHash}_${Math.random().toString(36).substr(2, 9)}`
+            }
+
+            // Validate message ID format (should be non-empty string)
+            if (!messageId || typeof messageId !== 'string' || messageId.trim() === '') {
+                console.warn('⚠️ Failed to generate valid message_id, skipping message:', messageData)
+                return
+            }
 
             const message: ChatMessage = {
                 message_id: messageId,
