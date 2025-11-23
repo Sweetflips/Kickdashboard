@@ -292,7 +292,7 @@ export async function GET(request: Request) {
             }
         } else {
             try {
-                console.log(`🔍 Fetching chatroom data: ${KICK_API_BASE}/v2/channels/${slug}`)
+                // Fetching chatroom data
                 channelResponse = await fetchWithRetry(`${KICK_API_BASE}/v2/channels/${slug}`, {
                     headers: {
                         'Accept': 'application/json',
