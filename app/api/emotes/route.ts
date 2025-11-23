@@ -335,7 +335,7 @@ export async function GET(request: Request) {
                     // Channel API returned error, using fallback
                 }
             } catch (error) {
-                console.log(`ℹ️ Failed to fetch channel data, using fallback: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                // Failed to fetch channel data, using fallback
             }
         }
 
@@ -648,7 +648,7 @@ export async function GET(request: Request) {
             categorized.global = defaultGlobals
             allEmotes.push(...defaultGlobals)
 
-            console.log(`📦 [API] Added ${defaultGlobals.length} default global emotes`)
+            // Added default global emotes
         }
 
         // Always ensure we have default emoji emotes if none found
@@ -674,7 +674,7 @@ export async function GET(request: Request) {
             }))
             categorized.global = defaultGlobals
             allEmotes.push(...defaultGlobals)
-            console.log(`📦 [API] Added ${defaultGlobals.length} default global emotes`)
+            // Added default global emotes
         }
 
         // Add SweetFlips channel emotes as fallback if slug matches and no channel emotes found
