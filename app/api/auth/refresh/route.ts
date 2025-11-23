@@ -134,14 +134,19 @@ export async function POST(request: Request) {
                 // Keep as text if not JSON
             }
 
-            // Log detailed error information for debugging
-            console.error('❌ Token refresh failed:', {
-                status: response.status,
-                error: errorDetails,
-                redirectUri: redirectUri.substring(0, 50) + '...',
-                hasRefreshToken: !!refreshToken,
-                refreshTokenLength: refreshToken?.length || 0,
-            })
+            // Log detailed error information for debugging (only for non-401 errors or if verbose logging enabled)
+            if (response.status !== 401 || process.env.VERBOSE_TOKEN_REFRESH_LOGS === 'true') {
+                console.error('❌ Token refresh failed:', {
+                    status: response.status,
+                    error: errorDetails,
+                    redirectUri: redirectUri.substring(0, 50) + '...',
+                    hasRefreshToken: !!refreshToken,
+                    refreshTokenLength: refreshToken?.length || 0,
+                })
+            } else {
+                // For expected 401s (expired tokens), just log a warning
+                console.warn(`⚠️ Token refresh failed: Refresh token expired or invalid (401)`)
+            }
 
             // If it's an invalid_grant error, the refresh token is likely expired/revoked
             if (response.status === 401 && errorDetails.error === 'invalid_grant') {

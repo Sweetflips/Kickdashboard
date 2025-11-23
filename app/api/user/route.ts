@@ -224,7 +224,14 @@ export async function GET(request: Request) {
             } else {
                 const errorText = await response.text()
                 lastError = `${response.status} - ${errorText}`
-                console.error(`❌ API error: ${lastError}`)
+                
+                // Only log 401 errors at warning level (expected when tokens expire)
+                // Full error logging happens in token refresh handler
+                if (response.status === 401) {
+                    console.warn(`⚠️ Token expired for /api/user endpoint - token refresh will be attempted`)
+                } else {
+                    console.error(`❌ API error: ${lastError}`)
+                }
             }
         } catch (err) {
             lastError = err instanceof Error ? err.message : 'Unknown error'

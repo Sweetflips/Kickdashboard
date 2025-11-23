@@ -103,6 +103,7 @@ export async function fetchWithTokenRefresh(
             })
         } else {
             // Refresh failed, user needs to re-authenticate
+            console.warn('⚠️ Token refresh failed - user needs to re-authenticate')
             localStorage.removeItem('kick_access_token')
             localStorage.removeItem('kick_refresh_token')
             throw new Error('Token refresh failed. Please log in again.')
