@@ -131,6 +131,50 @@ export default function StreamsPage() {
         )
     }
 
+    if (adminCheckLoading) {
+        return (
+            <AppLayout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+                </div>
+            </AppLayout>
+        )
+    }
+
+    if (!isAdmin) {
+        return (
+            <AppLayout>
+                <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
+                    <div className="text-center py-12">
+                        <p className="text-gray-600 dark:text-kick-text-secondary">Past Streams are only available to administrators.</p>
+                    </div>
+                </div>
+            </AppLayout>
+        )
+    }
+
+    if (adminCheckLoading) {
+        return (
+            <AppLayout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+                </div>
+            </AppLayout>
+        )
+    }
+
+    if (!isAdmin) {
+        return (
+            <AppLayout>
+                <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
+                    <div className="text-center py-12">
+                        <p className="text-gray-600 dark:text-kick-text-secondary">Past Streams are only available to administrators.</p>
+                    </div>
+                </div>
+            </AppLayout>
+        )
+    }
+
     return (
         <AppLayout>
             <div className="space-y-6">

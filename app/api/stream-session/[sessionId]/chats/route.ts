@@ -1,15 +1,26 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { isAdmin } from '@/lib/auth'
 
 /**
  * Get all chat messages for a specific stream session
  * GET /api/stream-session/[sessionId]/chats?limit=100&offset=0
+ * Admin-only: Past streams are restricted to administrators
  */
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ sessionId: string }> }
 ) {
     try {
+        // Check admin access - Past Streams are admin-only
+        const adminCheck = await isAdmin(request)
+        if (!adminCheck) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Admin access required' },
+                { status: 403 }
+            )
+        }
+
         const { searchParams } = new URL(request.url)
         const limit = Math.max(1, Math.min(500, parseInt(searchParams.get('limit') || '100', 10) || 100))
         const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0)

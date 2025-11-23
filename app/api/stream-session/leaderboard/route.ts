@@ -1,17 +1,29 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { isAdmin } from '@/lib/auth'
 
 /**
  * Get top 10 chatters for stream session
  * GET /api/stream-session/leaderboard?broadcaster_user_id=123&session_id=456
- * If session_id is provided, get leaderboard for that session
- * Otherwise, get leaderboard for active session
+ * If session_id is provided, get leaderboard for that session (admin-only for past streams)
+ * Otherwise, get leaderboard for active session (public)
  */
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const broadcasterUserId = searchParams.get('broadcaster_user_id')
         const sessionId = searchParams.get('session_id')
+
+        // If session_id is provided, this is a past stream - require admin access
+        if (sessionId) {
+            const adminCheck = await isAdmin(request)
+            if (!adminCheck) {
+                return NextResponse.json(
+                    { error: 'Unauthorized - Admin access required for past stream leaderboards' },
+                    { status: 403 }
+                )
+            }
+        }
 
         let session
 

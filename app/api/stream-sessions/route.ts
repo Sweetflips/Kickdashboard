@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
+import { isAdmin } from '@/lib/auth'
 
 export async function GET(request: Request) {
     try {
+        // Check admin access - Past Streams are admin-only
+        const adminCheck = await isAdmin(request)
+        if (!adminCheck) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Admin access required' },
+                { status: 403 }
+            )
+        }
+
         const { searchParams } = new URL(request.url)
         const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '50', 10) || 50))
         const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0)

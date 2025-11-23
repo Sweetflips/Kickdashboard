@@ -270,18 +270,20 @@ export default function AppLayout({ children }: LayoutProps) {
                                 <span className="ml-3 text-body font-medium">Leaderboard</span>
                             </Link>
                         </li>
-                        <li>
-                            <Link href="/streams" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                    setSidebarOpen(false)
-                                }
-                            }}>
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                </svg>
-                                <span className="ml-3 text-body font-medium">Past Streams</span>
-                            </Link>
-                        </li>
+                        {userData?.is_admin && (
+                            <li>
+                                <Link href="/streams" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                        setSidebarOpen(false)
+                                    }
+                                }}>
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                    </svg>
+                                    <span className="ml-3 text-body font-medium">Past Streams</span>
+                                </Link>
+                            </li>
+                        )}
                         {userData?.is_admin && (
                             <>
                                 <li className="mt-4 mb-2">
