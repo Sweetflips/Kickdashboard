@@ -31,7 +31,8 @@ export default function AppLayout({ children }: LayoutProps) {
     useEffect(() => {
         // Check authentication
         if (typeof window !== 'undefined') {
-            const token = localStorage.getItem('kick_access_token')
+            // Check cookies first, then localStorage (backward compatibility)
+            const token = getAccessToken()
             const params = new URLSearchParams(window.location.search)
 
             // Handle auth callback
