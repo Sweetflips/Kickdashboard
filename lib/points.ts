@@ -253,9 +253,9 @@ export async function awardPoint(
                     const transactionDuration = Date.now() - attemptStartTime
                     logDebug(`[awardPoint] Transaction succeeded: userId=${userId}, messageId=${messageId}, points=${pointsToAward}, duration=${transactionDuration}ms`)
                 }, {
-                    maxWait: 10000, // Wait up to 10 seconds for transaction to start
-                    timeout: 20000, // Transaction timeout of 20 seconds
-                    isolationLevel: Prisma.TransactionIsolationLevel.Serializable, // Use SERIALIZABLE isolation to prevent race conditions
+                    maxWait: 20000, // Wait up to 20 seconds for transaction to start (increased for high contention)
+                    timeout: 30000, // Transaction timeout of 30 seconds (increased for high contention)
+                    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, // Use REPEATABLE READ - sufficient for our use case, less contention than SERIALIZABLE
                 })
 
                 // Check if rate limit was hit (transaction completed but no writes happened)
@@ -304,16 +304,18 @@ export async function awardPoint(
                     }
                 }
 
-                // Handle serialization failures (deadlocks) - retry
-                if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2034') {
-                    logDebug(`[awardPoint] Serialization failure (deadlock): userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}/${maxRetries}, duration=${attemptDuration}ms`)
+                // Handle serialization failures (P2010 - concurrent update, P2034 - deadlock) - retry
+                if (transactionError instanceof Prisma.PrismaClientKnownRequestError &&
+                    (transactionError.code === 'P2010' || transactionError.code === 'P2034')) {
+                    const errorType = transactionError.code === 'P2010' ? 'concurrent update' : 'deadlock'
+                    logDebug(`[awardPoint] Serialization failure (${errorType}): userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}/${maxRetries}, duration=${attemptDuration}ms`)
                     if (attempt < maxRetries - 1) {
                         const delay = Math.min(100 * Math.pow(2, attempt), 1000)
                         logDebug(`[awardPoint] Retrying after ${delay}ms delay...`)
                         await new Promise(resolve => setTimeout(resolve, delay))
                         continue // Retry
                     }
-                    console.error(`Error awarding point: Serialization failure after ${maxRetries} attempts (userId=${userId}, messageId=${messageId})`, transactionError)
+                    console.error(`Error awarding point: Serialization failure (${errorType}) after ${maxRetries} attempts (userId=${userId}, messageId=${messageId})`, transactionError)
                     return {
                         awarded: false,
                         pointsEarned: 0,
