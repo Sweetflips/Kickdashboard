@@ -71,9 +71,10 @@ export async function refreshAccessToken(refreshToken?: string, kickUserId?: str
         }
     } catch (error) {
         console.error('Error refreshing token:', error)
+        const currentRefreshToken = getRefreshToken()
         return {
             access_token: '',
-            refresh_token: refreshToken,
+            refresh_token: currentRefreshToken || '',
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
         }
@@ -88,8 +89,9 @@ export async function fetchWithTokenRefresh(
     options: RequestInit = {},
     kickUserId?: string
 ): Promise<Response> {
-    const accessToken = typeof window !== 'undefined' ? localStorage.getItem('kick_access_token') : null
-    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('kick_refresh_token') : null
+    // Get tokens from cookies or localStorage (backward compatibility)
+    const accessToken = getAccessToken()
+    const refreshToken = getRefreshToken()
 
     if (!accessToken) {
         throw new Error('No access token available')
