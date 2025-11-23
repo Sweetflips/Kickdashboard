@@ -42,12 +42,52 @@ export default function StreamsPage() {
     const [expandedSession, setExpandedSession] = useState<string | null>(null)
     const [sessionLeaderboards, setSessionLeaderboards] = useState<Record<string, StreamLeaderboardEntry[]>>({})
     const [loadingLeaderboards, setLoadingLeaderboards] = useState<Set<string>>(new Set())
+    const [isAdmin, setIsAdmin] = useState<boolean>(false)
+    const [adminCheckLoading, setAdminCheckLoading] = useState(true)
     const limit = 20
     const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
 
+    // Check admin status on mount
     useEffect(() => {
-        fetchStreams()
-    }, [offset])
+        const checkAdminStatus = async () => {
+            try {
+                const token = localStorage.getItem('kick_access_token')
+                if (!token) {
+                    setIsAdmin(false)
+                    setAdminCheckLoading(false)
+                    router.push('/')
+                    return
+                }
+
+                const response = await fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setIsAdmin(data.is_admin === true)
+                    if (!data.is_admin) {
+                        router.push('/')
+                        return
+                    }
+                } else {
+                    setIsAdmin(false)
+                    router.push('/')
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error)
+                setIsAdmin(false)
+                router.push('/')
+            } finally {
+                setAdminCheckLoading(false)
+            }
+        }
+
+        checkAdminStatus()
+    }, [router])
+
+    useEffect(() => {
+        if (isAdmin) {
+            fetchStreams()
+        }
+    }, [offset, isAdmin])
 
     const fetchStreams = async () => {
         try {
