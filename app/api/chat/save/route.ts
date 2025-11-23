@@ -596,14 +596,9 @@ export async function POST(request: Request) {
 
             const duration = Date.now() - startTime
 
-            // Log when NEW points are earned (not duplicates) or when Kick account is not connected
-            if (isNewMessage) {
-                if (pointsEarned > 0) {
-                    logRequest(`[chat/save] user=${senderUsername} duration=${duration}ms points=${pointsEarned}`)
-                } else if (pointsReason === 'Kick account not connected') {
-                    logRequest(`[chat/save] user=${senderUsername} duration=${duration}ms points=0 reason="Kick account not connected"`)
-                }
-            }
+            // Only log when NEW points are earned (not duplicates)
+            // The actual point award is logged in lib/points.ts, so we don't need to duplicate here
+            // This keeps logs cleaner - only successful point awards are logged
 
             return NextResponse.json({
                 success: true,

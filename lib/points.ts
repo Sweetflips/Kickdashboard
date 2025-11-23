@@ -46,7 +46,7 @@ export async function awardPoint(
         })
 
         if (!user) {
-            console.log(`⏸️ Point not awarded to kick_user_id ${kickUserId}: User not found`)
+            logDebug(`⏸️ Point not awarded to kick_user_id ${kickUserId}: User not found`)
             return {
                 awarded: false,
                 reason: 'User not found',
@@ -56,7 +56,7 @@ export async function awardPoint(
         // Block only if explicitly marked as not connected
         // Allow points for users who chat (even if they haven't logged in via OAuth)
         if (user.kick_connected === false) {
-            console.log(`⏸️ Point not awarded to ${user.username}: Kick account not connected`)
+            logDebug(`⏸️ Point not awarded to ${user.username}: Kick account not connected`)
             return {
                 awarded: false,
                 pointsEarned: 0,
@@ -101,7 +101,7 @@ export async function awardPoint(
 
         // If no stream session, award 0 points (offline)
         if (!streamSessionId) {
-            console.log(`⏸️ Point not awarded to ${user.username}: Stream is offline`)
+            logDebug(`⏸️ Point not awarded to ${user.username}: Stream is offline`)
             return {
                 awarded: false,
                 pointsEarned: 0,
@@ -122,7 +122,7 @@ export async function awardPoint(
 
         // If session doesn't exist or has ended, don't award points
         if (!session || session.ended_at !== null) {
-            console.log(`⏸️ Point not awarded to ${user.username}: Stream session has ended`)
+            logDebug(`⏸️ Point not awarded to ${user.username}: Stream session has ended`)
             return {
                 awarded: false,
                 pointsEarned: 0,
@@ -137,7 +137,7 @@ export async function awardPoint(
             const remainingSeconds = Math.ceil(STREAM_START_COOLDOWN_SECONDS - timeSinceStreamStart)
             const remainingMinutes = Math.floor(remainingSeconds / 60)
             const remainingSecs = remainingSeconds % 60
-            console.log(`⏸️ Point not awarded to ${user.username}: Stream must be live for 10 minutes (${remainingMinutes}m ${remainingSecs}s remaining)`)
+            logDebug(`⏸️ Point not awarded to ${user.username}: Stream must be live for 10 minutes (${remainingMinutes}m ${remainingSecs}s remaining)`)
             return {
                 awarded: false,
                 pointsEarned: 0,
@@ -153,7 +153,7 @@ export async function awardPoint(
             })
 
             if (existingPointHistory) {
-                console.log(`⏸️ Point not awarded to ${user.username}: Message already processed for points`)
+                logDebug(`⏸️ Point not awarded to ${user.username}: Message already processed for points`)
                 return {
                     awarded: false,
                     pointsEarned: existingPointHistory.points_earned ?? 0,
@@ -261,7 +261,7 @@ export async function awardPoint(
                 // Check if rate limit was hit (transaction completed but no writes happened)
                 if (rateLimitHit !== null) {
                     const { remainingMinutes, remainingSecs } = rateLimitHit
-                    console.log(`⏸️ Point not awarded to ${user.username}: Rate limit (${remainingMinutes}m ${remainingSecs}s remaining)`)
+                    logDebug(`⏸️ Point not awarded to ${user.username}: Rate limit (${remainingMinutes}m ${remainingSecs}s remaining)`)
                     return {
                         awarded: false,
                         pointsEarned: 0,
@@ -278,7 +278,7 @@ export async function awardPoint(
                 // Handle unique constraint violation (race condition on message_id)
                 if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2002') {
                     logDebug(`[awardPoint] Unique constraint violation (race condition): userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}, duration=${attemptDuration}ms`)
-                    console.log(`⏸️ Point not awarded to ${user.username}: Message already processed for points (race condition)`)
+                    logDebug(`⏸️ Point not awarded to ${user.username}: Message already processed for points (race condition)`)
                     return {
                         awarded: false,
                         pointsEarned: 0,
@@ -338,9 +338,9 @@ export async function awardPoint(
             }
         }
 
-        // Log successful point award
+        // Log successful point award - this is the main log we want to see
         const subscriberText = isSub ? ' (subscriber)' : ''
-        console.log(`✅ Awarded ${pointsToAward} point(s) to ${user.username}${subscriberText} [kick_user_id: ${kickUserId}]`)
+        console.log(`✅ +${pointsToAward} point${pointsToAward > 1 ? 's' : ''} → ${user.username}${subscriberText}`)
 
         return {
             awarded: true,
