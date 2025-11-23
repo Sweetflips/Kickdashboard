@@ -28,7 +28,14 @@ export async function refreshAccessToken(refreshToken: string, kickUserId?: stri
 
         if (!response.ok) {
             const errorData = await response.json()
-            console.error('Token refresh failed:', errorData)
+            
+            // Only log refresh failures (these are the ones we care about)
+            if (response.status === 401) {
+                console.warn(`⚠️ Token refresh failed: Refresh token expired or invalid (401)`)
+            } else {
+                console.error('Token refresh failed:', errorData)
+            }
+            
             return {
                 access_token: '',
                 refresh_token: refreshToken,
