@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import ProfileDropdown from './ProfileDropdown'
 import ThemeToggle from './ThemeToggle'
+import { getAccessToken, getRefreshToken, setAuthTokens } from '@/lib/cookies'
 
 interface UserData {
     id?: number
@@ -47,7 +48,6 @@ export default function AppLayout({ children }: LayoutProps) {
                     // Kick uses opaque tokens, not JWTs - just validate it's not empty
                     if (accessToken.trim().length > 0) {
                         // Set tokens in cookies (with 3-month expiration) and localStorage (backward compatibility)
-                        const { setAuthTokens } = await import('@/lib/cookies')
                         setAuthTokens(accessToken, refreshToken || undefined)
                         setIsAuthenticated(true)
                         // Clean URL
@@ -149,7 +149,7 @@ export default function AppLayout({ children }: LayoutProps) {
                 setUserData(data)
             } else if (response.status === 401) {
                 // Token expired, try to refresh
-                const refreshToken = localStorage.getItem('kick_refresh_token')
+                const refreshToken = getRefreshToken()
                 if (refreshToken) {
                     try {
                         const refreshResponse = await fetch('/api/auth/refresh', {
@@ -162,7 +162,6 @@ export default function AppLayout({ children }: LayoutProps) {
                         })
                         if (refreshResponse.ok) {
                             const refreshData = await refreshResponse.json()
-                            const { setAuthTokens } = await import('@/lib/cookies')
                             setAuthTokens(refreshData.access_token, refreshData.refresh_token)
                             // Retry user fetch
                             const retryResponse = await fetch(`/api/user?access_token=${encodeURIComponent(refreshData.access_token)}`)
