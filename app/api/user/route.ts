@@ -224,7 +224,7 @@ export async function GET(request: Request) {
             } else {
                 const errorText = await response.text()
                 lastError = `${response.status} - ${errorText}`
-                
+
                 // Only log 401 errors at warning level (expected when tokens expire)
                 // Full error logging happens in token refresh handler
                 if (response.status === 401) {
