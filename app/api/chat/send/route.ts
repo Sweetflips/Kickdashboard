@@ -1,6 +1,57 @@
 import { NextResponse } from 'next/server'
 
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
+const SLOW_MODE_RETRY_DELAY = 3000 // 3 seconds delay for slow mode
+const MAX_SLOW_MODE_RETRIES = 2
+
+async function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function sendMessageWithRetry(
+    accessToken: string,
+    broadcasterUserId: string,
+    content: string,
+    type: string,
+    retries = MAX_SLOW_MODE_RETRIES
+): Promise<Response> {
+    const response = await fetch(`${KICK_API_BASE}/chat`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+            broadcaster_user_id: broadcasterUserId,
+            content: content.trim(),
+            type: type,
+        }),
+    })
+
+    // Check for slow mode error
+    if (!response.ok && response.status === 500) {
+        const errorText = await response.text()
+        try {
+            const errorJson = JSON.parse(errorText)
+            const errorData = errorJson.data || errorJson.error || ''
+
+            // Check if it's a slow mode error
+            if (typeof errorData === 'string' && errorData.includes('SLOW_MODE_ERROR')) {
+                if (retries > 0) {
+                    console.log(`⏳ Slow mode detected, retrying in ${SLOW_MODE_RETRY_DELAY}ms... (${MAX_SLOW_MODE_RETRIES - retries + 1}/${MAX_SLOW_MODE_RETRIES})`)
+                    await sleep(SLOW_MODE_RETRY_DELAY)
+                    return sendMessageWithRetry(accessToken, broadcasterUserId, content, type, retries - 1)
+                } else {
+                    console.error(`❌ Slow mode error: Max retries exceeded`)
+                }
+            }
+        } catch {
+            // Not JSON or can't parse, continue with normal error handling
+        }
+    }
+
+    return response
+}
 
 export async function POST(request: Request) {
     try {
@@ -47,19 +98,8 @@ export async function POST(request: Request) {
         console.log(`📤 Sending chat message to broadcaster ${broadcasterUserId}: ${content.substring(0, 50)}...`)
         console.log(`🔑 Access token (first 20 chars): ${accessToken.substring(0, 20)}...`)
 
-        // Send message to Kick API
-        const response = await fetch(`${KICK_API_BASE}/chat`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-                broadcaster_user_id: broadcasterUserId,
-                content: content.trim(),
-                type: type,
-            }),
-        })
+        // Send message to Kick API with slow mode retry logic
+        const response = await sendMessageWithRetry(accessToken, broadcasterUserId, content, type)
 
         if (!response.ok) {
             const errorText = await response.text()
@@ -73,15 +113,27 @@ export async function POST(request: Request) {
 
             // Try to parse error response
             let errorDetails = errorText
+            let isSlowMode = false
             try {
                 const errorJson = JSON.parse(errorText)
+                const errorData = errorJson.data || errorJson.error || ''
                 errorDetails = errorJson.message || errorJson.error || errorText
+
+                // Check if it's a slow mode error
+                if (typeof errorData === 'string' && errorData.includes('SLOW_MODE_ERROR')) {
+                    isSlowMode = true
+                    errorDetails = 'Message sent too quickly. Please wait a moment before sending another message.'
+                }
             } catch {
                 // Keep original error text
             }
 
             return NextResponse.json(
-                { error: `Failed to send message: ${response.status}`, details: errorDetails },
+                {
+                    error: `Failed to send message: ${response.status}`,
+                    details: errorDetails,
+                    isSlowMode: isSlowMode,
+                },
                 { status: response.status }
             )
         }

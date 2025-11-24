@@ -137,9 +137,14 @@ export default function EmotePicker({ emotes, categorizedEmotes, onEmoteSelect, 
 
     if (!isOpen) return null
 
+    // Helper function to get proxied emote URL (bypasses ad blockers)
+    const getProxiedEmoteUrl = (originalUrl: string): string => {
+        return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`
+    }
+
     const getEmoteUrl = (emote: Emote) => {
-        if (emote.url) return emote.url
-        return `https://files.kick.com/emotes/${emote.id}/fullsize`
+        const originalUrl = emote.url || `https://files.kick.com/emotes/${emote.id}/fullsize`
+        return getProxiedEmoteUrl(originalUrl)
     }
 
     const handleEmoteClick = (emote: Emote, event?: React.MouseEvent) => {

@@ -103,6 +103,12 @@ function extractTextFromContentEditable(element: HTMLElement): string {
     return text
 }
 
+// Helper function to get proxied emote URL (bypasses ad blockers)
+function getProxiedEmoteUrl(originalUrl: string): string {
+    // Use image proxy to bypass ad blockers and CORS issues
+    return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`
+}
+
 // Helper function to insert emote as image in contenteditable div
 function insertEmoteAsImage(input: HTMLDivElement, emote: { id: string; name: string; url?: string }) {
     if (!input) return
@@ -150,13 +156,16 @@ function insertEmoteAsImage(input: HTMLDivElement, emote: { id: string; name: st
     const emoteText = emote.id.length > 10 ? emote.id : `[emote:${emote.id}:${emote.name}]`
     const emoteImg = document.createElement('img')
     const emoteUrl = emote.url || `https://files.kick.com/emotes/${emote.id}/fullsize`
-    emoteImg.src = emoteUrl
+    // Use proxied URL to bypass ad blockers
+    emoteImg.src = getProxiedEmoteUrl(emoteUrl)
     emoteImg.alt = emote.name
     emoteImg.className = 'inline-block mx-0.5 align-text-bottom'
     emoteImg.style.width = '20px'
     emoteImg.style.height = '20px'
     emoteImg.style.verticalAlign = 'text-bottom'
     emoteImg.style.display = 'inline-block'
+    emoteImg.crossOrigin = 'anonymous'
+    emoteImg.referrerPolicy = 'no-referrer'
     emoteImg.setAttribute('data-emote-id', emote.id)
     emoteImg.setAttribute('data-emote-name', emote.name)
     emoteImg.setAttribute('data-emote-code', emoteText)
@@ -354,6 +363,9 @@ function renderEmote(emoteId: string, emoteText: string, emoteMap?: Map<string, 
         }
     }
 
+    // Use proxied URL to bypass ad blockers
+    const proxiedUrl = getProxiedEmoteUrl(emoteUrl)
+
     // Kick emote URL formats (try multiple):
     const altUrls = [
         `https://files.kick.com/emotes/${emoteId}/fullsize`,
@@ -376,7 +388,7 @@ function renderEmote(emoteId: string, emoteText: string, emoteMap?: Map<string, 
             }}
         >
             <Image
-                src={emoteUrl}
+                src={proxiedUrl}
                 alt={emoteText}
                 width={28}
                 height={28}
@@ -388,15 +400,17 @@ function renderEmote(emoteId: string, emoteText: string, emoteMap?: Map<string, 
                     verticalAlign: 'bottom'
                 }}
                 unoptimized
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
                 onError={(e) => {
-                    // Try alternative URL formats
+                    // Try alternative URL formats via proxy
                     const target = e.target as HTMLImageElement
                     const currentSrc = target.src
                     const currentIndex = altUrls.findIndex(url => currentSrc.includes(url.split('/').pop() || ''))
                     const nextIndex = currentIndex >= 0 ? currentIndex + 1 : 0
 
                     if (nextIndex < altUrls.length && !currentSrc.includes(altUrls[nextIndex])) {
-                        target.src = altUrls[nextIndex]
+                        target.src = getProxiedEmoteUrl(altUrls[nextIndex])
                     } else {
                         // Fallback to text if all URLs fail
                         target.style.display = 'none'
@@ -1076,9 +1090,106 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             }
         }
 
+        // Poll for updated points on pending messages
+        const pollForUpdatedPoints = () => {
+            // Use functional update to get latest state
+            setChatMessages((currentMessages) => {
+                // Find messages that might need point updates
+                const pendingMessageIds = currentMessages
+                    .filter((msg) => {
+                        // Check if message is pending points
+                        return (
+                            !msg.sent_when_offline &&
+                            (msg.points_earned === undefined ||
+                                msg.points_earned === 0 ||
+                                msg.points_reason === 'pending')
+                        )
+                    })
+                    .map((msg) => msg.message_id)
+                    .slice(0, 100) // Limit to 100 messages per poll
+
+                if (pendingMessageIds.length === 0) {
+                    return currentMessages // No change
+                }
+
+                // Fetch updated points (async, don't await)
+                fetch('/api/chat/points', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ messageIds: pendingMessageIds }),
+                })
+                    .then((response) => {
+                        if (!response.ok) {
+                            return null
+                        }
+                        return response.json()
+                    })
+                    .then((data) => {
+                        if (!data || !data.points) {
+                            return
+                        }
+
+                        // Update messages with new points
+                        setChatMessages((prev) => {
+                            return prev.map((msg) => {
+                                const updated = data.points[msg.message_id]
+                                if (updated && updated.points_earned !== undefined) {
+                                    // Only update if points changed
+                                    if (
+                                        msg.points_earned !== updated.points_earned ||
+                                        msg.points_reason !== updated.points_reason
+                                    ) {
+                                        return {
+                                            ...msg,
+                                            points_earned: updated.points_earned,
+                                            points_reason: updated.points_reason || undefined,
+                                        }
+                                    }
+                                }
+                                return msg
+                            })
+                        })
+
+                        // Also update pinned messages
+                        setPinnedMessages((prev) => {
+                            return prev.map((msg) => {
+                                const updated = data.points[msg.message_id]
+                                if (updated && updated.points_earned !== undefined) {
+                                    if (
+                                        msg.points_earned !== updated.points_earned ||
+                                        msg.points_reason !== updated.points_reason
+                                    ) {
+                                        return {
+                                            ...msg,
+                                            points_earned: updated.points_earned,
+                                            points_reason: updated.points_reason || undefined,
+                                        }
+                                    }
+                                }
+                                return msg
+                            })
+                        })
+                    })
+                    .catch((error) => {
+                        // Silently handle errors - polling failures shouldn't break chat
+                        console.debug('Failed to poll for updated points:', error)
+                    })
+
+                return currentMessages // Return unchanged for now, updates happen in fetch callback
+            })
+        }
+
+        // Poll every 2 seconds for pending points
+        const pointsPollInterval = setInterval(pollForUpdatedPoints, 2000)
+
         return () => {
             // Use ref instead of closure variable to ensure we're cleaning up the right instance
             const currentPusher = pusherRef.current
+
+            // Clear polling interval
+            clearInterval(pointsPollInterval)
 
             // Cleanup channels first (use local variables from closure)
             if (channel) {
@@ -1224,6 +1335,18 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                 const errorData = await response.json()
                 const errorMessage = errorData.error || 'Failed to send message'
                 const errorDetails = errorData.details || ''
+                const isSlowMode = errorData.isSlowMode || false
+
+                // Handle slow mode error - backend already retried, just show user-friendly message
+                if (isSlowMode) {
+                    toastManager.show(
+                        errorDetails || 'Message sent too quickly. Please wait a moment before sending another message.',
+                        'warning',
+                        4000
+                    )
+                    setIsSending(false)
+                    return
+                }
 
                 // If 401, try to refresh token first
                 if (response.status === 401) {
@@ -1865,12 +1988,14 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                     title={emote.name}
                                 >
                                     <Image
-                                        src={emote.url || `https://files.kick.com/emotes/${emote.id}/fullsize`}
+                                        src={getProxiedEmoteUrl(emote.url || `https://files.kick.com/emotes/${emote.id}/fullsize`)}
                                         alt={emote.name}
                                         width={24}
                                         height={24}
                                         className="w-full h-full object-contain"
                                         unoptimized
+                                        crossOrigin="anonymous"
+                                        referrerPolicy="no-referrer"
                                     />
                                 </button>
                             ))
@@ -1890,12 +2015,14 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                     title={emote.name}
                                 >
                                     <Image
-                                        src={emote.url || `https://files.kick.com/emotes/${emote.id}/fullsize`}
+                                        src={getProxiedEmoteUrl(emote.url || `https://files.kick.com/emotes/${emote.id}/fullsize`)}
                                         alt={emote.name}
                                         width={24}
                                         height={24}
                                         className="w-full h-full object-contain"
                                         unoptimized
+                                        crossOrigin="anonymous"
+                                        referrerPolicy="no-referrer"
                                     />
                                 </button>
                             ))
