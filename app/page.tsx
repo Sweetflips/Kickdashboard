@@ -65,7 +65,6 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [streamLeaderboard, setStreamLeaderboard] = useState<StreamLeaderboardEntry[]>([])
-    const [leaderboardLoading, setLeaderboardLoading] = useState(false)
     const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
     const [hasActiveSession, setHasActiveSession] = useState<boolean>(false)
@@ -147,16 +146,11 @@ export default function Dashboard() {
                 unique_chatters: 0,
             })
             setHasActiveSession(false)
-            setLeaderboardLoading(false)
             return
         }
 
         const fetchStreamLeaderboard = async () => {
             try {
-                // Only show loading spinner on initial fetch when there's no existing data
-                if (streamLeaderboard.length === 0) {
-                    setLeaderboardLoading(true)
-                }
                 // Always fetch fresh data from database - add timestamp to prevent caching
                 const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}&_t=${Date.now()}`)
                 if (!response.ok) {
@@ -220,8 +214,6 @@ export default function Dashboard() {
                 }
             } catch (err) {
                 console.error('Error fetching stream leaderboard:', err)
-            } finally {
-                setLeaderboardLoading(false)
             }
         }
 
@@ -484,11 +476,7 @@ export default function Dashboard() {
                                 <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-4">
                                     🏆 Top Chatters This Stream
                                 </h3>
-                                {leaderboardLoading ? (
-                                    <div className="flex items-center justify-center h-32">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-kick-purple"></div>
-                                    </div>
-                                ) : streamLeaderboard.length === 0 ? (
+                                {streamLeaderboard.length === 0 ? (
                                     <div className="text-center py-8 text-gray-700 dark:text-kick-text-muted">
                                         <p className="text-body">No chatters yet.</p>
                                         <p className="text-small mt-2">Be the first to chat!</p>
