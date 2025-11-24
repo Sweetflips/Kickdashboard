@@ -74,13 +74,13 @@ export async function GET(request: Request) {
 
             // Redirect directly to Kick OAuth
             const response = NextResponse.redirect(authUrl)
-
             // Store code_verifier in a cookie for later use
             response.cookies.set('pkce_code_verifier', codeVerifier, {
                 httpOnly: true,
                 secure: !isLocalhost,
                 sameSite: 'lax',
-                maxAge: 600, // 10 minutes
+                maxAge: 7776000, // 3 months (90 days)
+                path: '/',
             })
 
             return response
