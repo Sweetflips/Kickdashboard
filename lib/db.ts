@@ -5,14 +5,15 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 // Configure connection pooling for Railway PostgreSQL
-// Railway PostgreSQL typically allows 100 connections
-// Use 60 per instance to handle high concurrency during live streams
+// Railway PostgreSQL typically allows 100 connections total
+// With multiple Next.js instances, each needs a smaller pool
+// Use 20 per instance: allows up to 5 instances (5 × 20 = 100)
 const getDatabaseUrl = () => {
   const url = process.env.DATABASE_URL || ''
   // Add connection_limit if not already present
   if (url && !url.includes('connection_limit=')) {
     const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}connection_limit=60&pool_timeout=30&connect_timeout=10`
+    return `${url}${separator}connection_limit=20&pool_timeout=20&connect_timeout=10`
   }
   return url
 }
