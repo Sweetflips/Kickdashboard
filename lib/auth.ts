@@ -14,6 +14,21 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
       accessToken = searchParams.get('access_token') || undefined
     }
 
+    // Fallback to cookies (for browser requests)
+    if (!accessToken) {
+      const cookieHeader = request.headers.get('cookie')
+      if (cookieHeader) {
+        const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+          const [key, value] = cookie.trim().split('=')
+          if (key && value) {
+            acc[key] = decodeURIComponent(value)
+          }
+          return acc
+        }, {} as Record<string, string>)
+        accessToken = cookies['kick_access_token'] || undefined
+      }
+    }
+
     if (!accessToken) {
       return null
     }

@@ -7,14 +7,18 @@ const globalForPrisma = globalThis as unknown as {
 // Configure connection pooling for Railway PostgreSQL
 // Railway PostgreSQL typically allows 100 connections total
 // With multiple Next.js instances + worker, each needs a very small pool
-// Use 10 per instance: allows up to 10 instances (10 × 10 = 100)
+// Use 5 per instance: allows up to 20 instances (20 × 5 = 100)
 // This is conservative but prevents "too many clients" errors
+// Worker processes should use even fewer connections (2-3)
 const getDatabaseUrl = () => {
   const url = process.env.DATABASE_URL || ''
   // Add connection_limit if not already present
   if (url && !url.includes('connection_limit=')) {
     const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}connection_limit=10&pool_timeout=15&connect_timeout=10`
+    // Use smaller pool for worker processes (detected by POINT_WORKER env var)
+    const isWorker = process.env.POINT_WORKER === 'true' || process.env.RAILWAY_SERVICE_NAME?.includes('worker')
+    const connectionLimit = isWorker ? 3 : 5
+    return `${url}${separator}connection_limit=${connectionLimit}&pool_timeout=10&connect_timeout=5`
   }
   return url
 }
@@ -32,8 +36,8 @@ export const db =
     },
     // Configure transaction timeout - shorter to release connections faster
     transactionOptions: {
-      maxWait: 10000, // Wait up to 10 seconds for transaction to start
-      timeout: 20000, // Transaction timeout of 20 seconds
+      maxWait: 5000, // Wait up to 5 seconds for transaction to start
+      timeout: 15000, // Transaction timeout of 15 seconds
     },
   })
 
