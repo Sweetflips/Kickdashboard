@@ -153,7 +153,10 @@ export default function Dashboard() {
 
         const fetchStreamLeaderboard = async () => {
             try {
-                setLeaderboardLoading(true)
+                // Only show loading spinner on initial fetch when there's no existing data
+                if (streamLeaderboard.length === 0) {
+                    setLeaderboardLoading(true)
+                }
                 // Always fetch fresh data from database - add timestamp to prevent caching
                 const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}&_t=${Date.now()}`)
                 if (!response.ok) {
@@ -170,10 +173,24 @@ export default function Dashboard() {
                     setCurrentSessionId(data.session_id)
                 }
 
-                // Update leaderboard with data
+                // Update leaderboard with data - smart merge to preserve unchanged entries
                 if (data.leaderboard && Array.isArray(data.leaderboard)) {
                     if (data.leaderboard.length > 0) {
-                        setStreamLeaderboard(data.leaderboard)
+                        setStreamLeaderboard(prev => {
+                            // Merge new data with existing, preserving unchanged entries
+                            return data.leaderboard.map(newEntry => {
+                                const existing = prev.find(e => e.user_id === newEntry.user_id)
+                                // Only create new object if data changed
+                                if (existing &&
+                                    existing.rank === newEntry.rank &&
+                                    existing.points_earned === newEntry.points_earned &&
+                                    existing.messages_sent === newEntry.messages_sent &&
+                                    existing.emotes_used === newEntry.emotes_used) {
+                                    return existing
+                                }
+                                return newEntry
+                            })
+                        })
                     } else {
                         // Clear if no leaderboard data
                         setStreamLeaderboard([])
@@ -481,10 +498,10 @@ export default function Dashboard() {
                                         {streamLeaderboard.map((entry) => (
                                             <div
                                                 key={entry.user_id}
-                                                className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors"
+                                                className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-all duration-300 ease-in-out"
                                             >
                                                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                    <span className="text-body font-semibold text-gray-600 dark:text-kick-text-secondary w-8 flex-shrink-0">
+                                                    <span className="text-body font-semibold text-gray-600 dark:text-kick-text-secondary w-8 flex-shrink-0 transition-all duration-300">
                                                         {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`}
                                                     </span>
                                                     {entry.profile_picture_url && !imageErrors.has(entry.user_id) ? (
@@ -511,7 +528,7 @@ export default function Dashboard() {
                                                 </div>
                                                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-body text-kick-purple">
+                                                        <span className="font-semibold text-body text-kick-purple transition-all duration-300">
                                                             {entry.points_earned.toLocaleString()}
                                                         </span>
                                                         <span className="text-xs text-gray-500 dark:text-kick-text-muted">pts</span>
