@@ -163,9 +163,9 @@ export async function POST(request: Request) {
 
         // Fetch thumbnail/check stream status asynchronously (don't block message saving)
         // This prevents holding DB connections during external API calls
+        // Use setImmediate to ensure connection is released before background task
         if (!activeSession || !activeSession.thumbnail_url) {
-            // Fire and forget - don't await to avoid blocking
-            Promise.resolve().then(async () => {
+            setImmediate(async () => {
                 try {
                     const broadcasterSlug = message.broadcaster.channel_slug || message.broadcaster.username.toLowerCase()
                     const controller = new AbortController()
@@ -226,7 +226,7 @@ export async function POST(request: Request) {
                     // Non-critical - just log and continue
                     logDebug(`⚠️ Could not check/update stream status:`, error)
                 }
-            }).catch(() => {}) // Swallow errors in background task
+            })
         }
 
         // Extract emotes from content if not provided separately
@@ -355,18 +355,29 @@ export async function POST(request: Request) {
                     // Use atomic update to check and set pending status
                     isNewMessage = true
 
-                    // Get recent messages from this user for duplicate detection (limit to reduce query time)
-                    const recentMessages = await db.chatMessage.findMany({
-                        where: {
-                            sender_user_id: senderUserId,
-                            broadcaster_user_id: broadcasterUserId,
-                        },
-                        orderBy: { timestamp: 'desc' },
-                        take: 10, // Check last 10 messages
-                        select: { content: true },
-                    })
-
-                    const recentMessageContents = recentMessages.map(msg => msg.content)
+                    // Get recent messages from this user for duplicate detection
+                    // Use a more efficient query with explicit index hint and limit
+                    // Only fetch content field to minimize data transfer
+                    let recentMessageContents: string[] = []
+                    try {
+                        const recentMessages = await db.chatMessage.findMany({
+                            where: {
+                                sender_user_id: senderUserId,
+                                broadcaster_user_id: broadcasterUserId,
+                                timestamp: {
+                                    // Only check messages from last hour to reduce query scope
+                                    gte: BigInt(Date.now() - 3600000),
+                                },
+                            },
+                            orderBy: { timestamp: 'desc' },
+                            take: 10, // Check last 10 messages
+                            select: { content: true },
+                        })
+                        recentMessageContents = recentMessages.map(msg => msg.content)
+                    } catch (error) {
+                        // If query fails, continue without bot detection (non-critical)
+                        logDebug(`⚠️ Failed to fetch recent messages for bot detection:`, error)
+                    }
 
                     // Detect bot patterns in message content
                     const botDetection = detectBotMessage(message.content, recentMessageContents)
@@ -377,23 +388,28 @@ export async function POST(request: Request) {
                         pointsEarned = 0
                         pointsReason = 'Bot detected'
 
-                        // Update with bot detection reason
-                        await db.chatMessage.update({
+                        // Update with bot detection reason (non-blocking)
+                        db.chatMessage.update({
                             where: { message_id: message.message_id },
                             data: {
                                 points_earned: 0,
                                 points_reason: pointsReason,
                             },
+                        }).catch(() => {
+                            // Ignore errors - non-critical
                         })
                     } else {
                         // Enqueue point award job for async processing
                         if (activeSession) {
-                            await enqueuePointJob({
+                            // Don't await - let it run async to avoid blocking
+                            enqueuePointJob({
                                 kickUserId: senderUserId,
                                 streamSessionId: activeSession.id,
                                 messageId: message.message_id,
                                 badges: message.sender.identity?.badges,
                                 emotes: emotesToSave.length > 0 ? emotesToSave : null,
+                            }).catch(() => {
+                                // Ignore errors - queue failures shouldn't break message saving
                             })
                         }
 
@@ -426,10 +442,11 @@ export async function POST(request: Request) {
             // Update stream session message count if session exists and is active
             // Only count messages that were sent when online
             // Do this asynchronously to avoid blocking the response
+            // Use setImmediate to ensure connection is released before background task
             if (isNewMessage && sessionIsActive && activeSession) {
-                // Fire and forget - don't await to avoid blocking
-                Promise.resolve().then(async () => {
+                setImmediate(async () => {
                     try {
+                        // Use a single connection for both queries
                         const messageCount = await db.chatMessage.count({
                             where: {
                                 stream_session_id: activeSession!.id,
@@ -446,15 +463,15 @@ export async function POST(request: Request) {
                         // Non-critical - just log
                         logDebug(`⚠️ Failed to update session message count:`, error)
                     }
-                }).catch(() => {}) // Swallow errors in background task
+                })
             }
 
             // Auto-entry for active giveaways - update entry points as user earns more
             // Only process for NEW messages when stream is active
             // Do this asynchronously to avoid blocking the response
+            // Use setImmediate to ensure connection is released before background task
             if (isNewMessage && !isBot(senderUsernameLower) && sessionIsActive && activeSession) {
-                // Fire and forget - don't await to avoid blocking
-                Promise.resolve().then(async () => {
+                setImmediate(async () => {
                     try {
                         const activeGiveaway = await getActiveGiveaway(broadcasterUserId, activeSession!.id)
                         if (activeGiveaway && activeGiveaway.stream_session_id === activeSession!.id) {
@@ -500,7 +517,7 @@ export async function POST(request: Request) {
                         // Don't fail the entire request if giveaway entry fails
                         console.error('Error processing giveaway auto-entry:', giveawayError)
                     }
-                }).catch(() => {}) // Swallow errors in background task
+                })
             }
 
             const duration = Date.now() - startTime
