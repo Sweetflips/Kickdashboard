@@ -163,8 +163,9 @@ export async function POST(request: Request) {
 
         // DISABLED: Thumbnail fetching disabled to prevent connection pool exhaustion
         // This can be handled by a separate worker process
-        // if (!activeSession || !activeSession.thumbnail_url) {
-        //     setImmediate(async () => {
+        /*
+        if (!activeSession || !activeSession.thumbnail_url) {
+            setImmediate(async () => {
                 try {
                     const broadcasterSlug = message.broadcaster.channel_slug || message.broadcaster.username.toLowerCase()
                     const controller = new AbortController()
@@ -226,7 +227,8 @@ export async function POST(request: Request) {
                     logDebug(`⚠️ Could not check/update stream status:`, error)
                 }
             })
-        // }
+        }
+        */
 
         // Extract emotes from content if not provided separately
         let emotesToSave = message.emotes || []
@@ -441,7 +443,7 @@ export async function POST(request: Request) {
             // DISABLED: Background operations disabled to prevent connection pool exhaustion
             // These operations can be handled by a separate worker process or done periodically
             // Message count updates and giveaway auto-entry are non-critical and can be deferred
-            
+
             // TODO: Re-enable via worker process or periodic job when connection pool is stable
             // if (isNewMessage && sessionIsActive && activeSession) {
             //     // Update stream session message count
