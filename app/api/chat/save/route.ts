@@ -4,7 +4,6 @@ import { isBot } from '@/lib/points'
 import { enqueuePointJob } from '@/lib/point-queue'
 import { getActiveGiveaway, isUserEligible } from '@/lib/giveaway'
 import { detectBotMessage } from '@/lib/bot-detection'
-import { Prisma } from '@prisma/client'
 import type { ChatMessage } from '@/lib/chat-store'
 
 const verboseChatLogging = process.env.CHAT_SAVE_VERBOSE_LOGS === 'true'
@@ -262,60 +261,35 @@ export async function POST(request: Request) {
             const senderUsernameLower = senderUsername.toLowerCase()
 
             if (sentWhenOffline) {
-                const existingOfflineMessage = await db.offlineChatMessage.findUnique({
+                // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
+                await db.offlineChatMessage.upsert({
                     where: { message_id: message.message_id },
+                    update: {
+                        sender_username: message.sender.username,
+                        content: message.content,
+                        emotes: emotesToSave,
+                        timestamp: BigInt(message.timestamp),
+                        sender_username_color: message.sender.identity?.username_color || null,
+                        sender_badges: message.sender.identity?.badges || undefined,
+                        sender_is_verified: message.sender.is_verified || false,
+                        sender_is_anonymous: message.sender.is_anonymous || false,
+                    },
+                    create: {
+                        message_id: message.message_id,
+                        sender_user_id: senderUserId,
+                        sender_username: message.sender.username,
+                        broadcaster_user_id: broadcasterUserId,
+                        content: message.content,
+                        emotes: emotesToSave,
+                        timestamp: BigInt(message.timestamp),
+                        sender_username_color: message.sender.identity?.username_color || null,
+                        sender_badges: message.sender.identity?.badges || undefined,
+                        sender_is_verified: message.sender.is_verified || false,
+                        sender_is_anonymous: message.sender.is_anonymous || false,
+                    },
                 })
-
-                if (existingOfflineMessage) {
-                    await db.offlineChatMessage.update({
-                        where: { id: existingOfflineMessage.id },
-                        data: {
-                            sender_username: message.sender.username,
-                            content: message.content,
-                            emotes: emotesToSave,
-                            timestamp: BigInt(message.timestamp),
-                            sender_username_color: message.sender.identity?.username_color || null,
-                            sender_badges: message.sender.identity?.badges || undefined,
-                            sender_is_verified: message.sender.is_verified || false,
-                            sender_is_anonymous: message.sender.is_anonymous || false,
-                        },
-                    })
-                } else {
-                    try {
-                        await db.offlineChatMessage.create({
-                            data: {
-                                message_id: message.message_id,
-                                sender_user_id: senderUserId,
-                                sender_username: message.sender.username,
-                                broadcaster_user_id: broadcasterUserId,
-                                content: message.content,
-                                emotes: emotesToSave,
-                                timestamp: BigInt(message.timestamp),
-                                sender_username_color: message.sender.identity?.username_color || null,
-                                sender_badges: message.sender.identity?.badges || undefined,
-                                sender_is_verified: message.sender.is_verified || false,
-                                sender_is_anonymous: message.sender.is_anonymous || false,
-                            },
-                        })
-                        isNewMessage = true
-                        logDebug(`✅ Saved offline message to database: ${message.message_id}`)
-                    } catch (createError: any) {
-                        // Handle race condition: another request created the message between our check and create
-                        if (createError instanceof Prisma.PrismaClientKnownRequestError) {
-                            if (createError.code === 'P2002') {
-                                // Message was created by another request, silently continue
-                                // No points for offline messages anyway
-                            } else if (createError.code === 'P2028') {
-                                // Transaction timeout - log but don't fail
-                                console.error('Transaction timeout creating offline chat message:', createError)
-                            } else {
-                                throw createError
-                            }
-                        } else {
-                            throw createError
-                        }
-                    }
-                }
+                isNewMessage = true
+                logDebug(`✅ Saved offline message to database: ${message.message_id}`)
             } else {
                 // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
                 // Fetch existing message data in one query to check stream_session_id and points
