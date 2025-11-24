@@ -161,11 +161,10 @@ export async function POST(request: Request) {
         const sentWhenOffline = !activeSession
         const sessionIsActive = activeSession !== null && activeSession.ended_at === null
 
-        // Fetch thumbnail/check stream status asynchronously (don't block message saving)
-        // This prevents holding DB connections during external API calls
-        // Use setImmediate to ensure connection is released before background task
-        if (!activeSession || !activeSession.thumbnail_url) {
-            setImmediate(async () => {
+        // DISABLED: Thumbnail fetching disabled to prevent connection pool exhaustion
+        // This can be handled by a separate worker process
+        // if (!activeSession || !activeSession.thumbnail_url) {
+        //     setImmediate(async () => {
                 try {
                     const broadcasterSlug = message.broadcaster.channel_slug || message.broadcaster.username.toLowerCase()
                     const controller = new AbortController()
@@ -227,7 +226,7 @@ export async function POST(request: Request) {
                     logDebug(`⚠️ Could not check/update stream status:`, error)
                 }
             })
-        }
+        // }
 
         // Extract emotes from content if not provided separately
         let emotesToSave = message.emotes || []
@@ -439,86 +438,17 @@ export async function POST(request: Request) {
                 logDebug(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned}, isNew: ${isNewMessage})`)
             }
 
-            // Update stream session message count if session exists and is active
-            // Only count messages that were sent when online
-            // Do this asynchronously to avoid blocking the response
-            // Use setImmediate to ensure connection is released before background task
-            if (isNewMessage && sessionIsActive && activeSession) {
-                setImmediate(async () => {
-                    try {
-                        // Use a single connection for both queries
-                        const messageCount = await db.chatMessage.count({
-                            where: {
-                                stream_session_id: activeSession!.id,
-                            },
-                        })
-                        await db.streamSession.update({
-                            where: { id: activeSession!.id },
-                            data: {
-                                total_messages: messageCount,
-                                updated_at: new Date(),
-                            },
-                        })
-                    } catch (error) {
-                        // Non-critical - just log
-                        logDebug(`⚠️ Failed to update session message count:`, error)
-                    }
-                })
-            }
-
-            // Auto-entry for active giveaways - update entry points as user earns more
-            // Only process for NEW messages when stream is active
-            // Do this asynchronously to avoid blocking the response
-            // Use setImmediate to ensure connection is released before background task
-            if (isNewMessage && !isBot(senderUsernameLower) && sessionIsActive && activeSession) {
-                setImmediate(async () => {
-                    try {
-                        const activeGiveaway = await getActiveGiveaway(broadcasterUserId, activeSession!.id)
-                        if (activeGiveaway && activeGiveaway.stream_session_id === activeSession!.id) {
-                            // Check if user is eligible based on stream session points
-                            const eligible = await isUserEligible(senderUserId, activeGiveaway.entry_min_points, activeSession!.id)
-                            if (eligible) {
-                                // Get user's current points from this stream session
-                                const sessionPointsResult = await db.pointHistory.aggregate({
-                                    where: {
-                                        stream_session_id: activeSession!.id,
-                                        user_id: senderUser!.id,
-                                    },
-                                    _sum: {
-                                        points_earned: true,
-                                    },
-                                })
-
-                                const sessionPoints = sessionPointsResult._sum.points_earned || 0
-
-                                if (sessionPoints >= activeGiveaway.entry_min_points) {
-                                    // Upsert entry - update points if exists, create if not
-                                    await db.giveawayEntry.upsert({
-                                        where: {
-                                            giveaway_id_user_id: {
-                                                giveaway_id: activeGiveaway.id,
-                                                user_id: senderUser!.id,
-                                            },
-                                        },
-                                        update: {
-                                            points_at_entry: sessionPoints, // Update tickets as points increase
-                                        },
-                                        create: {
-                                            giveaway_id: activeGiveaway.id,
-                                            user_id: senderUser!.id,
-                                            points_at_entry: sessionPoints,
-                                        },
-                                    })
-                                    logDebug(`🎁 Updated ${senderUsername} giveaway entry: ${sessionPoints} tickets`)
-                                }
-                            }
-                        }
-                    } catch (giveawayError) {
-                        // Don't fail the entire request if giveaway entry fails
-                        console.error('Error processing giveaway auto-entry:', giveawayError)
-                    }
-                })
-            }
+            // DISABLED: Background operations disabled to prevent connection pool exhaustion
+            // These operations can be handled by a separate worker process or done periodically
+            // Message count updates and giveaway auto-entry are non-critical and can be deferred
+            
+            // TODO: Re-enable via worker process or periodic job when connection pool is stable
+            // if (isNewMessage && sessionIsActive && activeSession) {
+            //     // Update stream session message count
+            // }
+            // if (isNewMessage && !isBot(senderUsernameLower) && sessionIsActive && activeSession) {
+            //     // Auto-entry for active giveaways
+            // }
 
             const duration = Date.now() - startTime
 
