@@ -178,7 +178,7 @@ export default function Dashboard() {
                     if (data.leaderboard.length > 0) {
                         setStreamLeaderboard(prev => {
                             // Merge new data with existing, preserving unchanged entries
-                            return data.leaderboard.map(newEntry => {
+                            return data.leaderboard.map((newEntry: StreamLeaderboardEntry) => {
                                 const existing = prev.find(e => e.user_id === newEntry.user_id)
                                 // Only create new object if data changed
                                 if (existing &&
