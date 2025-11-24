@@ -78,7 +78,7 @@ export async function GET(request: Request) {
         const isStreamThumbnail = imageUrl.includes('stream.kick.com')
 
         // For stream thumbnails, use minimal headers initially to avoid 403s
-        const getInitialHeaders = () => {
+        const getInitialHeaders = (): Record<string, string> => {
             if (isStreamThumbnail) {
                 return {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
             }
         }
-
+        
         try {
             // First try with appropriate headers based on image type
             imageResponse = await fetch(imageUrl, {
