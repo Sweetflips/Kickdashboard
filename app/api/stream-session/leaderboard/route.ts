@@ -94,9 +94,31 @@ export async function GET(request: Request) {
             })
         }
 
+        // Helper function to execute queries with retry logic for serialization errors
+        const executeQueryWithRetry = async <T>(queryFn: () => Promise<T>, maxRetries = 3): Promise<T> => {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    return await queryFn()
+                } catch (error: any) {
+                    const isSerializationError = error?.code === 'P4001' ||
+                                                error?.code === 'P2034' ||
+                                                error?.message?.includes('could not serialize access') ||
+                                                error?.message?.includes('concurrent update')
+
+                    if (isSerializationError && attempt < maxRetries - 1) {
+                        const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                        await new Promise(resolve => setTimeout(resolve, delay))
+                        continue
+                    }
+                    throw error
+                }
+            }
+            throw new Error('Max retries exceeded')
+        }
+
         // Get all messages for this session to count per user
         // Filter out offline messages, invalid user IDs, and messages created before session started
-        const allMessages = await db.chatMessage.findMany({
+        const allMessages = await executeQueryWithRetry(() => db.chatMessage.findMany({
             where: {
                 stream_session_id: session.id,
                 sent_when_offline: false, // Only count messages sent during live stream
@@ -111,17 +133,17 @@ export async function GET(request: Request) {
                 sender_user_id: true, // This is kick_user_id
                 emotes: true,
             },
-        })
+        }))
 
         // Get total points earned in this session
-        const totalPointsResult = await db.pointHistory.aggregate({
+        const totalPointsResult = await executeQueryWithRetry(() => db.pointHistory.aggregate({
             where: {
                 stream_session_id: session.id,
             },
             _sum: {
                 points_earned: true,
             },
-        })
+        }))
 
         const totalPoints = totalPointsResult._sum.points_earned || 0
         const totalMessages = allMessages.length
@@ -133,7 +155,7 @@ export async function GET(request: Request) {
         ).size
 
         // Get points aggregated by user (user_id is internal ID)
-        const pointsByUser = await db.pointHistory.groupBy({
+        const pointsByUser = await executeQueryWithRetry(() => db.pointHistory.groupBy({
             by: ['user_id'],
             where: {
                 stream_session_id: session.id,
@@ -141,7 +163,7 @@ export async function GET(request: Request) {
             _sum: {
                 points_earned: true,
             },
-        })
+        }))
 
         // Create a map of kick_user_id to internal user_id for lookup
         const kickUserIdToInternalId = new Map<bigint, bigint>()
@@ -151,7 +173,7 @@ export async function GET(request: Request) {
 
         // Convert kick_user_ids to internal user IDs
         if (kickUserIds.length > 0) {
-            const users = await db.user.findMany({
+            const users = await executeQueryWithRetry(() => db.user.findMany({
                 where: {
                     kick_user_id: { in: kickUserIds },
                 },
@@ -159,7 +181,7 @@ export async function GET(request: Request) {
                     id: true,
                     kick_user_id: true,
                 },
-            })
+            }))
 
             for (const user of users) {
                 kickUserIdToInternalId.set(user.kick_user_id, user.id)

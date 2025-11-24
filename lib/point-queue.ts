@@ -24,31 +24,57 @@ export interface EnqueuePointJobParams {
  * Enqueue a point award job for async processing
  */
 export async function enqueuePointJob(params: EnqueuePointJobParams): Promise<void> {
-    try {
-        await db.pointAwardJob.upsert({
-            where: { message_id: params.messageId },
-            update: {
-                // Update if job already exists (idempotent)
-                kick_user_id: params.kickUserId,
-                stream_session_id: params.streamSessionId,
-                badges: params.badges as any,
-                emotes: params.emotes as any,
-                status: 'pending',
-                updated_at: new Date(),
-            },
-            create: {
-                kick_user_id: params.kickUserId,
-                stream_session_id: params.streamSessionId,
-                message_id: params.messageId,
-                badges: params.badges as any,
-                emotes: params.emotes as any,
-                status: 'pending',
-            },
-        })
-        logDebug(`[enqueuePointJob] Enqueued job for messageId=${params.messageId}`)
-    } catch (error) {
-        // Log but don't throw - queue failures shouldn't break message saving
-        console.error(`[enqueuePointJob] Failed to enqueue job for messageId=${params.messageId}:`, error)
+    const maxRetries = 3
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            await db.pointAwardJob.upsert({
+                where: { message_id: params.messageId },
+                update: {
+                    // Update if job already exists (idempotent)
+                    kick_user_id: params.kickUserId,
+                    stream_session_id: params.streamSessionId,
+                    badges: params.badges as any,
+                    emotes: params.emotes as any,
+                    status: 'pending',
+                    updated_at: new Date(),
+                },
+                create: {
+                    kick_user_id: params.kickUserId,
+                    stream_session_id: params.streamSessionId,
+                    message_id: params.messageId,
+                    badges: params.badges as any,
+                    emotes: params.emotes as any,
+                    status: 'pending',
+                },
+            })
+            logDebug(`[enqueuePointJob] Enqueued job for messageId=${params.messageId}`)
+            return // Success
+        } catch (error: any) {
+            // Check if it's a table missing error (P2021)
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+                // Table doesn't exist - log a clear error message
+                console.error(`[enqueuePointJob] Table 'point_award_jobs' does not exist. Run migration: npx prisma migrate deploy`)
+                console.error(`[enqueuePointJob] Or run fix script: node scripts/fix-point-award-jobs-table.js`)
+                return // Don't retry for missing table
+            }
+
+            // Handle serialization errors (P4001) and deadlocks (P2034) with retry
+            const isSerializationError = error?.code === 'P4001' ||
+                                        error?.code === 'P2034' ||
+                                        error?.message?.includes('could not serialize access') ||
+                                        error?.message?.includes('concurrent update')
+
+            if (isSerializationError && attempt < maxRetries - 1) {
+                const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                await new Promise(resolve => setTimeout(resolve, delay))
+                continue // Retry
+            }
+
+            // Log but don't throw - queue failures shouldn't break message saving
+            console.error(`[enqueuePointJob] Failed to enqueue job for messageId=${params.messageId}:`, error)
+            return // Give up after retries
+        }
     }
 }
 
@@ -65,42 +91,44 @@ export interface ClaimedJob {
 /**
  * Atomically claim a batch of pending jobs using FOR UPDATE SKIP LOCKED
  * This prevents multiple workers from processing the same job
+ * Uses a single atomic transaction with CTE to eliminate race conditions
  */
 export async function claimJobs(batchSize: number = 10, lockTimeoutSeconds: number = 300): Promise<ClaimedJob[]> {
     const lockExpiry = new Date(Date.now() - lockTimeoutSeconds * 1000)
 
     try {
-        // First, unlock any stale locks (jobs locked too long ago)
-        await db.$executeRaw`
-            UPDATE point_award_jobs
-            SET status = 'pending', locked_at = NULL
-            WHERE status = 'processing'
-            AND locked_at < ${lockExpiry}
-        `
+        // Use a single transaction to atomically unlock stale locks and claim new jobs
+        const jobs = await db.$transaction(async (tx) => {
+            // First, unlock any stale locks (jobs locked too long ago)
+            await tx.$executeRaw`
+                UPDATE point_award_jobs
+                SET status = 'pending', locked_at = NULL
+                WHERE status = 'processing'
+                AND locked_at < ${lockExpiry}
+            `
 
-        // Claim pending jobs atomically
-        const jobs = await db.$queryRaw<ClaimedJob[]>`
-            SELECT id, kick_user_id, stream_session_id, message_id, badges, emotes, attempts
-            FROM point_award_jobs
-            WHERE status = 'pending'
-            ORDER BY created_at ASC
-            LIMIT ${batchSize}
-            FOR UPDATE SKIP LOCKED
-        `
+            // Atomically claim and update jobs in a single query using CTE
+            const claimedJobs = await tx.$queryRaw<ClaimedJob[]>`
+                WITH cte AS (
+                    SELECT id
+                    FROM point_award_jobs
+                    WHERE status = 'pending'
+                    ORDER BY created_at ASC
+                    LIMIT ${batchSize}
+                    FOR UPDATE SKIP LOCKED
+                )
+                UPDATE point_award_jobs AS p
+                SET status = 'processing', locked_at = NOW(), attempts = attempts + 1
+                WHERE p.id IN (SELECT id FROM cte)
+                RETURNING p.id, p.kick_user_id, p.stream_session_id, p.message_id, p.badges, p.emotes, p.attempts
+            `
+
+            return claimedJobs || []
+        })
 
         if (jobs.length === 0) {
             return []
         }
-
-        // Mark jobs as processing and set lock timestamp
-        const jobIds = jobs.map(j => j.id)
-        const now = new Date()
-
-        await db.$executeRaw`
-            UPDATE point_award_jobs
-            SET status = 'processing', locked_at = ${now}, attempts = attempts + 1
-            WHERE id = ANY(${jobIds}::bigint[])
-        `
 
         logDebug(`[claimJobs] Claimed ${jobs.length} jobs`)
         return jobs

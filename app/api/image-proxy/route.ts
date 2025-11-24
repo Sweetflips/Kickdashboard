@@ -74,29 +74,115 @@ export async function GET(request: Request) {
         const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
         let imageResponse: Response
+        const isEmote = imageUrl.includes('files.kick.com/emotes')
+        const isStreamThumbnail = imageUrl.includes('stream.kick.com')
+
+        // For stream thumbnails, use minimal headers initially to avoid 403s
+        const getInitialHeaders = () => {
+            if (isStreamThumbnail) {
+                return {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'image/*,*/*;q=0.8'
+                }
+            }
+            return {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Referer': 'https://kick.com/',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+            }
+        }
+
         try {
-            // First try standard fetch
+            // First try with appropriate headers based on image type
             imageResponse = await fetch(imageUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Referer': 'https://kick.com/',
-                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
-                },
+                headers: getInitialHeaders(),
                 signal: controller.signal,
             })
 
-            // If 403 with stream.kick.com, try without Referer or with modified headers
-            if (imageResponse.status === 403 && imageUrl.includes('stream.kick.com')) {
-                console.log('⚠️ 403 Forbidden - Retrying without Referer header')
+            // Handle 403 errors with fallback strategies
+            if (imageResponse.status === 403) {
+                // For emotes, try alternate URL formats
+                if (isEmote) {
+                    const emoteIdMatch = imageUrl.match(/emotes\/(\d+)/)
+                    if (emoteIdMatch) {
+                        const emoteId = emoteIdMatch[1]
+                        const fullsizeUrl = `https://files.kick.com/emotes/${emoteId}/fullsize`
 
-                // Some CDNs block specific Referers, or require none
-                imageResponse = await fetch(imageUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Accept': '*/*'
-                    },
-                    signal: controller.signal,
-                })
+                        // Only try fullsize if different from original URL
+                        if (fullsizeUrl !== imageUrl) {
+                            console.log(`⚠️ Emote 403 - Trying fullsize format: ${fullsizeUrl}`)
+                            try {
+                                const fallbackResponse = await fetch(fullsizeUrl, {
+                                    headers: {
+                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                                        'Accept': 'image/*,*/*;q=0.8'
+                                    },
+                                    signal: controller.signal,
+                                })
+
+                                if (fallbackResponse.ok) {
+                                    imageResponse = fallbackResponse
+                                    clearTimeout(timeoutId)
+                                    // Continue to success path
+                                } else {
+                                    // Try 1x format as last resort
+                                    const onexUrl = `https://files.kick.com/emotes/${emoteId}/1x`
+                                    console.log(`⚠️ Fullsize failed - Trying 1x format: ${onexUrl}`)
+                                    const onexResponse = await fetch(onexUrl, {
+                                        headers: {
+                                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                                            'Accept': 'image/*,*/*;q=0.8'
+                                        },
+                                        signal: controller.signal,
+                                    })
+
+                                    if (onexResponse.ok) {
+                                        imageResponse = onexResponse
+                                        clearTimeout(timeoutId)
+                                    }
+                                }
+                            } catch (fallbackError) {
+                                // Fall through to error handling
+                            }
+                        }
+                    }
+                }
+
+                // For stream thumbnails, try additional header strategies
+                if (isStreamThumbnail && imageResponse.status === 403) {
+                    console.log('⚠️ Stream thumbnail 403 - Trying alternate header strategies')
+
+                    // Strategy 1: No headers at all
+                    try {
+                        imageResponse = await fetch(imageUrl, {
+                            signal: controller.signal,
+                        })
+                        if (imageResponse.ok) {
+                            clearTimeout(timeoutId)
+                            // Continue to success path
+                        }
+                    } catch {
+                        // Try next strategy
+                    }
+
+                    // Strategy 2: Minimal headers with different User-Agent
+                    if (!imageResponse.ok) {
+                        try {
+                            imageResponse = await fetch(imageUrl, {
+                                headers: {
+                                    'User-Agent': 'Mozilla/5.0',
+                                    'Accept': '*/*'
+                                },
+                                signal: controller.signal,
+                            })
+                            if (imageResponse.ok) {
+                                clearTimeout(timeoutId)
+                            }
+                        } catch {
+                            // Fall through to error handling
+                        }
+                    }
+                }
             }
 
             clearTimeout(timeoutId)
@@ -119,7 +205,24 @@ export async function GET(request: Request) {
                 failedImageCache.set(imageUrl, { timestamp: Date.now() })
             }
 
-            // Fetch default avatar image from public folder via HTTP
+            // For emotes, return transparent 1x1 PNG instead of default avatar
+            if (isEmote) {
+                // Transparent 1x1 PNG (base64 encoded)
+                const transparentPng = Buffer.from(
+                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+                    'base64'
+                )
+                console.log(`✅ Returning transparent PNG for failed emote: ${imageUrl.substring(0, 80)}...`)
+                return new NextResponse(transparentPng, {
+                    headers: {
+                        'Content-Type': 'image/png',
+                        'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
+                        'Access-Control-Allow-Origin': '*',
+                    },
+                })
+            }
+
+            // For stream thumbnails and other images, try default avatar
             try {
                 // Get base URL from headers (works in production with proxies)
                 const host = request.headers.get('host') || request.headers.get('x-forwarded-host')

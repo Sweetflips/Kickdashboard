@@ -110,21 +110,48 @@ export async function POST(request: Request) {
             const senderUserId = BigInt(message.sender.user_id)
             const broadcasterUserId = BigInt(message.broadcaster.user_id)
 
+            // Helper function to upsert user with retry logic for serialization errors
+            const upsertUserWithRetry = async (userId: bigint, username: string, profilePicture: string | null, maxRetries = 3) => {
+                for (let attempt = 0; attempt < maxRetries; attempt++) {
+                    try {
+                        return await db.user.upsert({
+                            where: { kick_user_id: userId },
+                            update: {
+                                username: username,
+                                profile_picture_url: profilePicture,
+                            },
+                            create: {
+                                kick_user_id: userId,
+                                username: username,
+                                profile_picture_url: profilePicture,
+                            },
+                        })
+                    } catch (error: any) {
+                        // Handle serialization errors (P4001) and deadlocks (P2034) with retry
+                        const isSerializationError = error?.code === 'P4001' ||
+                                                    error?.code === 'P2034' ||
+                                                    error?.message?.includes('could not serialize access') ||
+                                                    error?.message?.includes('concurrent update')
+
+                        if (isSerializationError && attempt < maxRetries - 1) {
+                            const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                            await new Promise(resolve => setTimeout(resolve, delay))
+                            continue
+                        }
+                        throw error
+                    }
+                }
+                throw new Error('Max retries exceeded for user upsert')
+            }
+
             // Find or create sender user
             let senderUser
             try {
-                senderUser = await db.user.upsert({
-                    where: { kick_user_id: senderUserId },
-                    update: {
-                        username: message.sender.username,
-                        profile_picture_url: message.sender.profile_picture || null,
-                    },
-                    create: {
-                        kick_user_id: senderUserId,
-                        username: message.sender.username,
-                        profile_picture_url: message.sender.profile_picture || null,
-                    },
-                })
+                senderUser = await upsertUserWithRetry(
+                    senderUserId,
+                    message.sender.username,
+                    message.sender.profile_picture || null
+                )
             } catch (error) {
                 console.error(`❌ Failed to upsert sender user ${senderUserId}:`, error)
                 throw error
@@ -133,18 +160,11 @@ export async function POST(request: Request) {
             // Find or create broadcaster user
             let broadcasterUser
             try {
-                broadcasterUser = await db.user.upsert({
-                    where: { kick_user_id: broadcasterUserId },
-                    update: {
-                        username: message.broadcaster.username,
-                        profile_picture_url: message.broadcaster.profile_picture || null,
-                    },
-                    create: {
-                        kick_user_id: broadcasterUserId,
-                        username: message.broadcaster.username,
-                        profile_picture_url: message.broadcaster.profile_picture || null,
-                    },
-                })
+                broadcasterUser = await upsertUserWithRetry(
+                    broadcasterUserId,
+                    message.broadcaster.username,
+                    message.broadcaster.profile_picture || null
+                )
             } catch (error) {
                 console.error(`❌ Failed to upsert broadcaster user ${broadcasterUserId}:`, error)
                 throw error
@@ -348,26 +368,49 @@ export async function POST(request: Request) {
                     updateData.stream_session_id = activeSession!.id
                 }
 
-                await db.chatMessage.upsert({
-                    where: { message_id: message.message_id },
-                    update: updateData,
-                    create: {
-                        message_id: message.message_id,
-                        stream_session_id: sessionIsActive ? activeSession!.id : null,
-                        sender_user_id: senderUserId,
-                        sender_username: message.sender.username,
-                        broadcaster_user_id: broadcasterUserId,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                        points_earned: pointsEarned,
-                        sent_when_offline: false,
-                    },
-                })
+                // Upsert message with retry logic for serialization errors
+                const upsertMessageWithRetry = async (maxRetries = 3) => {
+                    for (let attempt = 0; attempt < maxRetries; attempt++) {
+                        try {
+                            return await db.chatMessage.upsert({
+                                where: { message_id: message.message_id },
+                                update: updateData,
+                                create: {
+                                    message_id: message.message_id,
+                                    stream_session_id: sessionIsActive ? activeSession!.id : null,
+                                    sender_user_id: senderUserId,
+                                    sender_username: message.sender.username,
+                                    broadcaster_user_id: broadcasterUserId,
+                                    content: message.content,
+                                    emotes: emotesToSave,
+                                    timestamp: BigInt(message.timestamp),
+                                    sender_username_color: message.sender.identity?.username_color || null,
+                                    sender_badges: message.sender.identity?.badges || undefined,
+                                    sender_is_verified: message.sender.is_verified || false,
+                                    sender_is_anonymous: message.sender.is_anonymous || false,
+                                    points_earned: pointsEarned,
+                                    sent_when_offline: false,
+                                },
+                            })
+                        } catch (error: any) {
+                            // Handle serialization errors (P4001) and deadlocks (P2034) with retry
+                            const isSerializationError = error?.code === 'P4001' ||
+                                                        error?.code === 'P2034' ||
+                                                        error?.message?.includes('could not serialize access') ||
+                                                        error?.message?.includes('concurrent update')
+
+                            if (isSerializationError && attempt < maxRetries - 1) {
+                                const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                                await new Promise(resolve => setTimeout(resolve, delay))
+                                continue
+                            }
+                            throw error
+                        }
+                    }
+                    throw new Error('Max retries exceeded for message upsert')
+                }
+
+                await upsertMessageWithRetry()
                 console.log(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
             }
 

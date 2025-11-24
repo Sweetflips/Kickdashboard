@@ -101,37 +101,48 @@ export async function POST(request: Request) {
         }
 
         // Batch user upserts in parallel to reduce connection usage
+        // Add retry logic for serialization errors (P4001)
         let senderUser: { id: bigint } | null = null
         let broadcasterUser: { id: bigint } | null = null
 
+        const upsertUserWithRetry = async (userId: bigint, username: string, profilePicture: string | null, maxRetries = 3) => {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    return await db.user.upsert({
+                        where: { kick_user_id: userId },
+                        update: {
+                            username: username,
+                            profile_picture_url: profilePicture,
+                        },
+                        create: {
+                            kick_user_id: userId,
+                            username: username,
+                            profile_picture_url: profilePicture,
+                        },
+                        select: { id: true },
+                    })
+                } catch (error: any) {
+                    // Handle serialization errors (P4001) and deadlocks (P2034) with retry
+                    const isSerializationError = error?.code === 'P4001' ||
+                                                error?.code === 'P2034' ||
+                                                error?.message?.includes('could not serialize access') ||
+                                                error?.message?.includes('concurrent update')
+
+                    if (isSerializationError && attempt < maxRetries - 1) {
+                        const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                        await new Promise(resolve => setTimeout(resolve, delay))
+                        continue
+                    }
+                    throw error
+                }
+            }
+            throw new Error('Max retries exceeded for user upsert')
+        }
+
         try {
             const [senderResult, broadcasterResult] = await Promise.all([
-                db.user.upsert({
-                    where: { kick_user_id: senderUserId },
-                    update: {
-                        username: message.sender.username,
-                        profile_picture_url: message.sender.profile_picture || null,
-                    },
-                    create: {
-                        kick_user_id: senderUserId,
-                        username: message.sender.username,
-                        profile_picture_url: message.sender.profile_picture || null,
-                    },
-                    select: { id: true }, // Only fetch id to reduce data transfer
-                }),
-                db.user.upsert({
-                    where: { kick_user_id: broadcasterUserId },
-                    update: {
-                        username: message.broadcaster.username,
-                        profile_picture_url: message.broadcaster.profile_picture || null,
-                    },
-                    create: {
-                        kick_user_id: broadcasterUserId,
-                        username: message.broadcaster.username,
-                        profile_picture_url: message.broadcaster.profile_picture || null,
-                    },
-                    select: { id: true }, // Only fetch id to reduce data transfer
-                }),
+                upsertUserWithRetry(senderUserId, message.sender.username, message.sender.profile_picture || null),
+                upsertUserWithRetry(broadcasterUserId, message.broadcaster.username, message.broadcaster.profile_picture || null),
             ])
             senderUser = senderResult
             broadcasterUser = broadcasterResult
@@ -263,32 +274,54 @@ export async function POST(request: Request) {
 
             if (sentWhenOffline) {
                 // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
-                await db.offlineChatMessage.upsert({
-                    where: { message_id: message.message_id },
-                    update: {
-                        sender_username: message.sender.username,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                    },
-                    create: {
-                        message_id: message.message_id,
-                        sender_user_id: senderUserId,
-                        sender_username: message.sender.username,
-                        broadcaster_user_id: broadcasterUserId,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                    },
-                })
+                // Add retry logic for serialization errors
+                const upsertOfflineMessageWithRetry = async (maxRetries = 3) => {
+                    for (let attempt = 0; attempt < maxRetries; attempt++) {
+                        try {
+                            return await db.offlineChatMessage.upsert({
+                                where: { message_id: message.message_id },
+                                update: {
+                                    sender_username: message.sender.username,
+                                    content: message.content,
+                                    emotes: emotesToSave,
+                                    timestamp: BigInt(message.timestamp),
+                                    sender_username_color: message.sender.identity?.username_color || null,
+                                    sender_badges: message.sender.identity?.badges || undefined,
+                                    sender_is_verified: message.sender.is_verified || false,
+                                    sender_is_anonymous: message.sender.is_anonymous || false,
+                                },
+                                create: {
+                                    message_id: message.message_id,
+                                    sender_user_id: senderUserId,
+                                    sender_username: message.sender.username,
+                                    broadcaster_user_id: broadcasterUserId,
+                                    content: message.content,
+                                    emotes: emotesToSave,
+                                    timestamp: BigInt(message.timestamp),
+                                    sender_username_color: message.sender.identity?.username_color || null,
+                                    sender_badges: message.sender.identity?.badges || undefined,
+                                    sender_is_verified: message.sender.is_verified || false,
+                                    sender_is_anonymous: message.sender.is_anonymous || false,
+                                },
+                            })
+                        } catch (error: any) {
+                            const isSerializationError = error?.code === 'P4001' ||
+                                                        error?.code === 'P2034' ||
+                                                        error?.message?.includes('could not serialize access') ||
+                                                        error?.message?.includes('concurrent update')
+
+                            if (isSerializationError && attempt < maxRetries - 1) {
+                                const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                                await new Promise(resolve => setTimeout(resolve, delay))
+                                continue
+                            }
+                            throw error
+                        }
+                    }
+                    throw new Error('Max retries exceeded for offline message upsert')
+                }
+
+                await upsertOfflineMessageWithRetry()
                 isNewMessage = true
                 logDebug(`✅ Saved offline message to database: ${message.message_id}`)
             } else {
@@ -307,44 +340,66 @@ export async function POST(request: Request) {
                 const shouldUpdateSessionId = !existingMessage?.stream_session_id && sessionIsActive && activeSession !== null
                 const wasExistingMessage = existingMessage !== null && existingMessage.points_earned > 0
 
-                // Upsert message - upsert returns the result, so we can use it directly
-                const upsertResult = await db.chatMessage.upsert({
-                    where: { message_id: message.message_id },
-                    update: {
-                        // Only update stream_session_id if it was null (don't reassign messages from previous sessions)
-                        ...(shouldUpdateSessionId && activeSession ? { stream_session_id: activeSession.id } : {}),
-                        sender_username: message.sender.username,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                        sent_when_offline: false,
-                        // Preserve existing points_earned and points_reason on update
-                    },
-                    create: {
-                        message_id: message.message_id,
-                        stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
-                        sender_user_id: senderUserId,
-                        sender_username: message.sender.username,
-                        broadcaster_user_id: broadcasterUserId,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                        points_earned: 0,
-                        sent_when_offline: false,
-                    },
-                    select: {
-                        points_earned: true,
-                        points_reason: true,
-                    },
-                })
+                // Upsert message with retry logic for serialization errors
+                const upsertMessageWithRetry = async (maxRetries = 3) => {
+                    for (let attempt = 0; attempt < maxRetries; attempt++) {
+                        try {
+                            return await db.chatMessage.upsert({
+                                where: { message_id: message.message_id },
+                                update: {
+                                    // Only update stream_session_id if it was null (don't reassign messages from previous sessions)
+                                    ...(shouldUpdateSessionId && activeSession ? { stream_session_id: activeSession.id } : {}),
+                                    sender_username: message.sender.username,
+                                    content: message.content,
+                                    emotes: emotesToSave,
+                                    timestamp: BigInt(message.timestamp),
+                                    sender_username_color: message.sender.identity?.username_color || null,
+                                    sender_badges: message.sender.identity?.badges || undefined,
+                                    sender_is_verified: message.sender.is_verified || false,
+                                    sender_is_anonymous: message.sender.is_anonymous || false,
+                                    sent_when_offline: false,
+                                    // Preserve existing points_earned and points_reason on update
+                                },
+                                create: {
+                                    message_id: message.message_id,
+                                    stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
+                                    sender_user_id: senderUserId,
+                                    sender_username: message.sender.username,
+                                    broadcaster_user_id: broadcasterUserId,
+                                    content: message.content,
+                                    emotes: emotesToSave,
+                                    timestamp: BigInt(message.timestamp),
+                                    sender_username_color: message.sender.identity?.username_color || null,
+                                    sender_badges: message.sender.identity?.badges || undefined,
+                                    sender_is_verified: message.sender.is_verified || false,
+                                    sender_is_anonymous: message.sender.is_anonymous || false,
+                                    points_earned: 0,
+                                    sent_when_offline: false,
+                                },
+                                select: {
+                                    points_earned: true,
+                                    points_reason: true,
+                                },
+                            })
+                        } catch (error: any) {
+                            // Handle serialization errors (P4001) and deadlocks (P2034) with retry
+                            const isSerializationError = error?.code === 'P4001' ||
+                                                        error?.code === 'P2034' ||
+                                                        error?.message?.includes('could not serialize access') ||
+                                                        error?.message?.includes('concurrent update')
+
+                            if (isSerializationError && attempt < maxRetries - 1) {
+                                const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                                await new Promise(resolve => setTimeout(resolve, delay))
+                                continue
+                            }
+                            throw error
+                        }
+                    }
+                    throw new Error('Max retries exceeded for message upsert')
+                }
+
+                const upsertResult = await upsertMessageWithRetry()
 
                 // If message already has points, it's definitely an existing message
                 if (wasExistingMessage) {

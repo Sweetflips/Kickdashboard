@@ -1,10 +1,59 @@
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
-// Simple in-memory cache
+// Simple in-memory cache with stale-while-revalidate
 const cache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_TTL = 5000 // 5 seconds cache
+const CACHE_TTL = 30000 // 30 seconds cache (increased from 5s to reduce API calls)
+const STALE_TTL = 60000 // Return stale data for 60s while refreshing
+const MAX_RETRIES = 3
+const INITIAL_RETRY_DELAY = 1000 // 1 second
 const lastStreamState = new Map<string, { isLive: boolean; sessionId?: bigint }>()
+
+// Exponential backoff helper
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promise<Response> {
+    const url = `https://kick.com/api/v2/channels/${slug}`
+
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                },
+                signal: controller.signal,
+            })
+
+            clearTimeout(timeoutId)
+
+            // If successful or client error (4xx), return immediately
+            if (response.ok || (response.status >= 400 && response.status < 500)) {
+                return response
+            }
+
+            // For server errors (5xx), retry with exponential backoff
+            if (response.status >= 500 && attempt < retries - 1) {
+                const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt)
+                await sleep(delay)
+                continue
+            }
+
+            return response
+        } catch (error) {
+            if (attempt === retries - 1) {
+                throw error
+            }
+            const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt)
+            await sleep(delay)
+        }
+    }
+
+    throw new Error('Max retries exceeded')
+}
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
@@ -13,26 +62,26 @@ export async function GET(request: Request) {
 
     // Check cache first
     const cached = cache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    const now = Date.now()
+    const cacheAge = cached ? now - cached.timestamp : Infinity
+
+    // Return fresh cache immediately
+    if (cached && cacheAge < CACHE_TTL) {
+        return NextResponse.json(cached.data)
+    }
+
+    // Stale-while-revalidate: return stale cache immediately, refresh in background
+    const isStale = cached && cacheAge < STALE_TTL
+    if (isStale) {
+        // Trigger background refresh (don't await)
+        fetchChannelWithRetry(slug).catch(() => {
+            // Silently fail background refresh
+        })
         return NextResponse.json(cached.data)
     }
 
     try {
-        const url = `https://kick.com/api/v2/channels/${slug}`
-
-        // Add timeout to prevent hanging
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
-
-        const response = await fetch(url, {
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
-            signal: controller.signal,
-        })
-
-        clearTimeout(timeoutId)
+        const response = await fetchChannelWithRetry(slug)
 
         if (!response.ok) {
             const errorText = await response.text().catch(() => 'Unknown error')
@@ -232,9 +281,18 @@ export async function GET(request: Request) {
         const errorMessage = error instanceof Error
             ? (error.name === 'AbortError' ? 'Request timed out' : error.message)
             : 'Unknown error'
-        console.error(`❌ Channel API error for ${slug}:`, errorMessage)
 
-        // Return cached data if available even if expired
+        // Log timeout errors less verbosely (they're expected during high traffic)
+        if (error instanceof Error && error.name === 'AbortError') {
+            // Only log if we don't have cached data to return
+            if (!cached) {
+                console.error(`❌ Channel API timeout for ${slug}`)
+            }
+        } else {
+            console.error(`❌ Channel API error for ${slug}:`, errorMessage)
+        }
+
+        // Return cached data if available even if expired (stale-while-revalidate)
         if (cached) {
             return NextResponse.json(cached.data)
         }

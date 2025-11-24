@@ -198,7 +198,7 @@ export async function awardPoint(
                     } : null
 
                     // Log transaction attempt details (behind verbose flag)
-                    logDebug(`[awardPoint] Transaction attempt ${attempt + 1}: userId=${userId}, messageId=${messageId}, last_point_earned_at=${freshUserPoints?.last_point_earned_at || 'null'}, isolation=SERIALIZABLE`)
+                    logDebug(`[awardPoint] Transaction attempt ${attempt + 1}: userId=${userId}, messageId=${messageId}, last_point_earned_at=${freshUserPoints?.last_point_earned_at || 'null'}, isolation=READ_COMMITTED`)
 
                     if (freshUserPoints?.last_point_earned_at) {
                         const timeSinceLastPoint = (transactionNow.getTime() - freshUserPoints.last_point_earned_at.getTime()) / 1000
@@ -255,7 +255,7 @@ export async function awardPoint(
                 }, {
                     maxWait: 20000, // Wait up to 20 seconds for transaction to start (increased for high contention)
                     timeout: 30000, // Transaction timeout of 30 seconds (increased for high contention)
-                    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, // Use REPEATABLE READ - sufficient for our use case, less contention than SERIALIZABLE
+                    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, // Use READ COMMITTED - less contention, sufficient for our use case
                 })
 
                 // Check if rate limit was hit (transaction completed but no writes happened)
@@ -304,10 +304,17 @@ export async function awardPoint(
                     }
                 }
 
-                // Handle serialization failures (P2010 - concurrent update, P2034 - deadlock) - retry
-                if (transactionError instanceof Prisma.PrismaClientKnownRequestError &&
-                    (transactionError.code === 'P2010' || transactionError.code === 'P2034')) {
-                    const errorType = transactionError.code === 'P2010' ? 'concurrent update' : 'deadlock'
+                // Handle serialization failures (P4001 - serialization, P2034 - deadlock, P2010 - concurrent update) - retry
+                const isSerializationError = transactionError instanceof Prisma.PrismaClientKnownRequestError &&
+                    (transactionError.code === 'P4001' || transactionError.code === 'P2034' || transactionError.code === 'P2010') ||
+                    (transactionError instanceof Error && (
+                        transactionError.message.includes('could not serialize access') ||
+                        transactionError.message.includes('concurrent update')
+                    ))
+
+                if (isSerializationError) {
+                    const errorCode = transactionError instanceof Prisma.PrismaClientKnownRequestError ? transactionError.code : 'UNKNOWN'
+                    const errorType = errorCode === 'P4001' ? 'serialization' : errorCode === 'P2034' ? 'deadlock' : 'concurrent update'
                     logDebug(`[awardPoint] Serialization failure (${errorType}): userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}/${maxRetries}, duration=${attemptDuration}ms`)
                     if (attempt < maxRetries - 1) {
                         const delay = Math.min(100 * Math.pow(2, attempt), 1000)

@@ -49,7 +49,14 @@ export async function POST(request: Request) {
             points: Object.fromEntries(pointsMap),
         })
     } catch (error) {
-        console.error('Error fetching message points:', error)
+        // Filter out ECONNRESET errors (client disconnects) - not real errors
+        const isConnectionReset = error instanceof Error &&
+            (('code' in error && (error as any).code === 'ECONNRESET') || error.message.includes('aborted'))
+
+        if (!isConnectionReset) {
+            console.error('Error fetching message points:', error)
+        }
+
         return NextResponse.json(
             {
                 error: 'Failed to fetch message points',
@@ -59,4 +66,3 @@ export async function POST(request: Request) {
         )
     }
 }
-
