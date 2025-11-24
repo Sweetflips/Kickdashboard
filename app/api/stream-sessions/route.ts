@@ -36,26 +36,47 @@ export async function GET(request: Request) {
             }
         }
 
-        const [sessions, total] = await Promise.all([
-            db.streamSession.findMany({
-                where,
-                orderBy: { started_at: 'desc' },
-                take: limit,
-                skip: offset,
-                include: {
-                    broadcaster: {
-                        select: {
-                            username: true,
-                            profile_picture_url: true,
-                        },
+        // Fetch all sessions (or a reasonable limit) to deduplicate properly
+        const allSessions = await db.streamSession.findMany({
+            where,
+            orderBy: { started_at: 'desc' },
+            take: 1000, // Reasonable limit for deduplication
+            include: {
+                broadcaster: {
+                    select: {
+                        username: true,
+                        profile_picture_url: true,
                     },
                 },
-            }),
-            db.streamSession.count({ where }),
-        ])
+            },
+        })
+
+        // Deduplicate sessions: same broadcaster, same started_at (within 1 minute), keep the one with most messages
+        const deduplicatedSessions = allSessions.reduce((acc, session) => {
+            const existingIndex = acc.findIndex(s => 
+                s.broadcaster_user_id === session.broadcaster_user_id &&
+                Math.abs(s.started_at.getTime() - session.started_at.getTime()) < 60000 // Within 1 minute
+            )
+            
+            if (existingIndex === -1) {
+                acc.push(session)
+            } else {
+                // Keep the session with more messages, or if equal, the one with lower ID (created first)
+                const existing = acc[existingIndex]
+                if (session.total_messages > existing.total_messages ||
+                    (session.total_messages === existing.total_messages && session.id < existing.id)) {
+                    acc[existingIndex] = session
+                }
+            }
+            return acc
+        }, [] as typeof allSessions)
+
+        // Paginate after deduplication
+        const total = deduplicatedSessions.length
+        const paginatedSessions = deduplicatedSessions.slice(offset, offset + limit)
 
         // Calculate duration for completed streams with null safety
-        const sessionsWithDuration = sessions.map(session => {
+        const sessionsWithDuration = paginatedSessions.map(session => {
             let duration: number | null = null
             if (session.ended_at && session.started_at) {
                 try {
