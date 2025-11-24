@@ -6,13 +6,13 @@ const globalForPrisma = globalThis as unknown as {
 
 // Configure connection pooling for Railway PostgreSQL
 // Railway PostgreSQL typically allows 100 connections
-// Use 30 per instance to allow for better concurrency while leaving headroom
+// Use 60 per instance to handle high concurrency during live streams
 const getDatabaseUrl = () => {
   const url = process.env.DATABASE_URL || ''
   // Add connection_limit if not already present
   if (url && !url.includes('connection_limit=')) {
     const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}connection_limit=30&pool_timeout=20&connect_timeout=10`
+    return `${url}${separator}connection_limit=60&pool_timeout=30&connect_timeout=10`
   }
   return url
 }
@@ -30,8 +30,8 @@ export const db =
     },
     // Configure transaction timeout (default is 5 seconds, increase for high concurrency)
     transactionOptions: {
-      maxWait: 10000, // Wait up to 10 seconds for transaction to start
-      timeout: 20000, // Transaction timeout of 20 seconds
+      maxWait: 15000, // Wait up to 15 seconds for transaction to start
+      timeout: 30000, // Transaction timeout of 30 seconds
     },
   })
 

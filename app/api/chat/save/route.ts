@@ -411,31 +411,10 @@ export async function POST(request: Request) {
                     // Use atomic update to check and set pending status
                     isNewMessage = true
 
-                    // Get recent messages from this user for duplicate detection
-                    // Use a more efficient query with explicit index hint and limit
-                    // Only fetch content field to minimize data transfer
+                    // Bot detection disabled temporarily to reduce connection pool pressure
+                    // This query can be slow and holds connections unnecessarily
+                    // TODO: Re-enable via async worker or make it optional
                     let recentMessageContents: string[] = []
-                    try {
-                        const recentMessages = await db.chatMessage.findMany({
-                            where: {
-                                sender_user_id: senderUserId,
-                                broadcaster_user_id: broadcasterUserId,
-                                timestamp: {
-                                    // Only check messages from last hour to reduce query scope
-                                    gte: BigInt(Date.now() - 3600000),
-                                },
-                            },
-                            orderBy: { timestamp: 'desc' },
-                            take: 10, // Check last 10 messages
-                            select: { content: true },
-                        })
-                        recentMessageContents = recentMessages.map(msg => msg.content)
-                    } catch (error) {
-                        // If query fails, continue without bot detection (non-critical)
-                        logDebug(`⚠️ Failed to fetch recent messages for bot detection:`, error)
-                    }
-
-                    // Detect bot patterns in message content
                     const botDetection = detectBotMessage(message.content, recentMessageContents)
 
                     if (botDetection.isBot) {
@@ -444,16 +423,8 @@ export async function POST(request: Request) {
                         pointsEarned = 0
                         pointsReason = 'Bot detected'
 
-                        // Update with bot detection reason (non-blocking)
-                        db.chatMessage.update({
-                            where: { message_id: message.message_id },
-                            data: {
-                                points_earned: 0,
-                                points_reason: pointsReason,
-                            },
-                        }).catch(() => {
-                            // Ignore errors - non-critical
-                        })
+                        // Update with bot detection reason - removed to reduce connection usage
+                        // Worker will handle this if needed
                     } else {
                         // Enqueue point award job for async processing
                         if (activeSession) {
@@ -473,18 +444,7 @@ export async function POST(request: Request) {
                         pointsEarned = 0
                         pointsReason = 'pending'
 
-                        // Update message with pending status (non-blocking - if it fails, worker will handle it)
-                        db.chatMessage.updateMany({
-                            where: {
-                                message_id: message.message_id,
-                                points_earned: 0, // Only update if still 0
-                            },
-                            data: {
-                                points_reason: 'pending',
-                            },
-                        }).catch(() => {
-                            // Ignore errors - worker will handle point updates
-                        })
+                        // Removed updateMany to reduce connection usage - worker will set pending status
                     }
                 } else {
                     // Not a new message or conditions not met - use existing points
