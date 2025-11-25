@@ -267,7 +267,9 @@ export default function AnalyticsPage() {
             const messagesData = messagesResponse.ok ? await messagesResponse.json() : { total: 0 }
 
             // Fetch total streams
-            const streamsResponse = await fetch('/api/stream-sessions?limit=1')
+            const streamsResponse = await fetch('/api/stream-sessions?limit=1', {
+                credentials: 'include', // Include cookies for authentication
+            })
             const streamsData = streamsResponse.ok ? await streamsResponse.json() : { total: 0 }
 
             // Fetch total users and points
@@ -283,7 +285,9 @@ export default function AnalyticsPage() {
             const activeUsers = leaderboardData.total || 0
 
             // Calculate total views from stream sessions
-            const streamsDetailResponse = await fetch('/api/stream-sessions?limit=1000')
+            const streamsDetailResponse = await fetch('/api/stream-sessions?limit=1000', {
+                credentials: 'include', // Include cookies for authentication
+            })
             const streamsDetailData = streamsDetailResponse.ok ? await streamsDetailResponse.json() : { sessions: [] }
             const totalViews = streamsDetailData.sessions.reduce((sum: number, session: any) => sum + session.peak_viewer_count, 0)
 

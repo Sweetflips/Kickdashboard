@@ -52,7 +52,9 @@ export default function AdminStreamsPage() {
     const fetchStreams = async () => {
         try {
             setLoading(true)
-            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}`)
+            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}`, {
+                credentials: 'include', // Include cookies for authentication
+            })
             if (response.ok) {
                 const data = await response.json()
                 setSessions(data.sessions || [])
@@ -76,7 +78,8 @@ export default function AdminStreamsPage() {
             let success = false
             try {
                 const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
-                    method: 'POST'
+                    method: 'POST',
+                    credentials: 'include', // Include cookies for authentication
                 })
                 
                 const result = await response.json()
@@ -111,7 +114,8 @@ export default function AdminStreamsPage() {
                     const syncResponse = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ videos })
+                        body: JSON.stringify({ videos }),
+                        credentials: 'include', // Include cookies for authentication
                     })
                     
                     const result = await syncResponse.json()
@@ -162,7 +166,8 @@ export default function AdminStreamsPage() {
             const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ videos })
+                body: JSON.stringify({ videos }),
+                credentials: 'include', // Include cookies for authentication
             })
 
             const result = await response.json()

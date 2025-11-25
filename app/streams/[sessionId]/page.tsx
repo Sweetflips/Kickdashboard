@@ -165,7 +165,9 @@ export default function StreamDetailPage() {
 
     const fetchStreamData = async () => {
         try {
-            const response = await fetch(`/api/stream-session/leaderboard?session_id=${sessionId}`)
+            const response = await fetch(`/api/stream-session/leaderboard?session_id=${sessionId}`, {
+                credentials: 'include', // Include cookies for authentication
+            })
             if (!response.ok) throw new Error('Failed to fetch stream data')
             const data = await response.json()
             setSession({
@@ -185,7 +187,9 @@ export default function StreamDetailPage() {
     const fetchLeaderboard = async () => {
         try {
             setLoadingLeaderboard(true)
-            const response = await fetch(`/api/stream-session/leaderboard?session_id=${sessionId}`)
+            const response = await fetch(`/api/stream-session/leaderboard?session_id=${sessionId}`, {
+                credentials: 'include', // Include cookies for authentication
+            })
             if (!response.ok) throw new Error('Failed to fetch leaderboard')
             const data = await response.json()
             setLeaderboard(data.leaderboard || [])
@@ -205,7 +209,9 @@ export default function StreamDetailPage() {
                 setLoadingMore(true)
             }
             setError(null)
-            const response = await fetch(`/api/stream-session/${sessionId}/chats?limit=${limit}&offset=${offset}`)
+            const response = await fetch(`/api/stream-session/${sessionId}/chats?limit=${limit}&offset=${offset}`, {
+                credentials: 'include', // Include cookies for authentication
+            })
             if (!response.ok) {
                 throw new Error('Failed to fetch chats')
             }

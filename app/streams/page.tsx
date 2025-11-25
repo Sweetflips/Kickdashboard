@@ -93,7 +93,9 @@ export default function StreamsPage() {
         try {
             setLoading(true)
             setError(null)
-            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}`)
+            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}`, {
+                credentials: 'include', // Include cookies for authentication
+            })
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Failed to fetch streams' }))
                 throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch streams`)
@@ -129,7 +131,9 @@ export default function StreamsPage() {
 
         try {
             setLoadingLeaderboards(prev => new Set(prev).add(sessionId))
-            const response = await fetch(`/api/stream-session/leaderboard?session_id=${sessionId}`)
+            const response = await fetch(`/api/stream-session/leaderboard?session_id=${sessionId}`, {
+                credentials: 'include', // Include cookies for authentication
+            })
             if (!response.ok) {
                 throw new Error('Failed to fetch leaderboard')
             }

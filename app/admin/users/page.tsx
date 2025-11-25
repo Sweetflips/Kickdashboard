@@ -84,6 +84,7 @@ export default function UsersPage() {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include', // Include cookies for authentication
       })
 
       if (response.ok) {
@@ -115,6 +116,7 @@ export default function UsersPage() {
           kick_user_id: kickUserId,
           is_admin: !currentStatus,
         }),
+        credentials: 'include', // Include cookies for authentication
       })
 
       if (response.ok) {

@@ -66,6 +66,7 @@ export default function GiveawayAdmin({
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include', // Include cookies for authentication
       })
 
       if (response.ok) {
