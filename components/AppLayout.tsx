@@ -27,6 +27,7 @@ export default function AppLayout({ children }: LayoutProps) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [userData, setUserData] = useState<UserData | null>(null)
+    const [isAdmin, setIsAdmin] = useState<boolean>(false) // Persist admin status to prevent glitching
 
     useEffect(() => {
         // Check authentication
@@ -148,6 +149,10 @@ export default function AppLayout({ children }: LayoutProps) {
             if (response.ok) {
                 const data = await response.json()
                 setUserData(data)
+                // Persist admin status to prevent sidebar glitching
+                if (data.is_admin !== undefined) {
+                    setIsAdmin(data.is_admin === true)
+                }
             } else if (response.status === 401) {
                 // Token expired, try to refresh
                 const refreshToken = getRefreshToken()
@@ -169,6 +174,10 @@ export default function AppLayout({ children }: LayoutProps) {
                             if (retryResponse.ok) {
                                 const retryData = await retryResponse.json()
                                 setUserData(retryData)
+                                // Persist admin status to prevent sidebar glitching
+                                if (retryData.is_admin !== undefined) {
+                                    setIsAdmin(retryData.is_admin === true)
+                                }
                             } else {
                                 // Retry failed, clear tokens and redirect to login
                                 console.error('❌ Failed to fetch user after token refresh')
@@ -267,7 +276,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                 <span className="ml-3 text-body font-medium">Leaderboard</span>
                             </Link>
                         </li>
-                        {userData?.is_admin && (
+                        {isAdmin && (
                             <li>
                                 <Link href="/streams" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -281,7 +290,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                 </Link>
                             </li>
                         )}
-                        {userData?.is_admin && (
+                        {isAdmin && (
                             <>
                                 <li className="mt-4 mb-2">
                                     <div className="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-secondary uppercase tracking-wider">
