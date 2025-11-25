@@ -23,6 +23,7 @@ export default function AdminStreamsPage() {
     const [loading, setLoading] = useState(true)
     const [syncing, setSyncing] = useState(false)
     const [syncResult, setSyncResult] = useState<any>(null)
+    const [fetchingThumbnails, setFetchingThumbnails] = useState(false)
     const [offset, setOffset] = useState(0)
     const [showManualSync, setShowManualSync] = useState(false)
     const [manualJson, setManualJson] = useState('')
@@ -81,7 +82,7 @@ export default function AdminStreamsPage() {
                     method: 'POST',
                     credentials: 'include', // Include cookies for authentication
                 })
-                
+
                 const result = await response.json()
                 if (response.ok && result.success) {
                     setSyncResult(result)
@@ -105,11 +106,11 @@ export default function AdminStreamsPage() {
             try {
                 console.log('Attempting client-side fetch...')
                 const kickResponse = await fetch(`https://kick.com/api/v2/channels/${channelSlug}/videos`)
-                
+
                 if (kickResponse.ok) {
                     const videos = await kickResponse.json()
                     console.log(`Fetched ${videos.length} videos client-side`)
-                    
+
                     // Send data to backend
                     const syncResponse = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
                         method: 'POST',
@@ -117,7 +118,7 @@ export default function AdminStreamsPage() {
                         body: JSON.stringify({ videos }),
                         credentials: 'include', // Include cookies for authentication
                     })
-                    
+
                     const result = await syncResponse.json()
                     setSyncResult(result)
                     if (syncResponse.ok) {
@@ -132,9 +133,9 @@ export default function AdminStreamsPage() {
                 console.error('Client-side sync failed (likely CORS):', clientError)
                 // Fallback to manual mode
                 setShowManualSync(true)
-                setSyncResult({ 
-                    success: false, 
-                    error: 'Auto-sync blocked by Kick security. Please use the manual sync below.' 
+                setSyncResult({
+                    success: false,
+                    error: 'Auto-sync blocked by Kick security. Please use the manual sync below.'
                 })
             }
 
@@ -148,7 +149,7 @@ export default function AdminStreamsPage() {
 
     const handleManualSync = async () => {
         if (!manualJson) return
-        
+
         try {
             setSyncing(true)
             setSyncResult(null)
@@ -172,7 +173,7 @@ export default function AdminStreamsPage() {
 
             const result = await response.json()
             setSyncResult(result)
-            
+
             if (response.ok) {
                 setShowManualSync(false)
                 setManualJson('')
@@ -183,6 +184,33 @@ export default function AdminStreamsPage() {
             setSyncResult({ success: false, error: 'Failed to process manual sync' })
         } finally {
             setSyncing(false)
+        }
+    }
+
+    const handleFetchThumbnails = async () => {
+        if (fetchingThumbnails) return
+
+        try {
+            setFetchingThumbnails(true)
+            setSyncResult(null)
+            const channelSlug = userData?.username || 'sweetflips'
+
+            const response = await fetch(`/api/admin/fetch-thumbnails?slug=${channelSlug}&limit=50`, {
+                method: 'POST',
+                credentials: 'include', // Include cookies for authentication
+            })
+
+            const result = await response.json()
+            setSyncResult(result)
+
+            if (response.ok) {
+                await fetchStreams()
+            }
+        } catch (error) {
+            console.error('Fetch thumbnails error:', error)
+            setSyncResult({ success: false, error: 'Failed to fetch thumbnails' })
+        } finally {
+            setFetchingThumbnails(false)
         }
     }
 
@@ -203,25 +231,46 @@ export default function AdminStreamsPage() {
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-kick-text">Stream Management</h1>
-                    <button
-                        onClick={handleSync}
-                        disabled={syncing}
-                        className="flex items-center gap-2 px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 disabled:opacity-50 transition-colors"
-                    >
-                        {syncing ? (
-                            <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                Syncing...
-                            </>
-                        ) : (
-                            <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                Sync from Kick
-                            </>
-                        )}
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleFetchThumbnails}
+                            disabled={fetchingThumbnails}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                        >
+                            {fetchingThumbnails ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    Fetching...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    Fetch Thumbnails
+                                </>
+                            )}
+                        </button>
+                        <button
+                            onClick={handleSync}
+                            disabled={syncing}
+                            className="flex items-center gap-2 px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 disabled:opacity-50 transition-colors"
+                        >
+                            {syncing ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    Syncing...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Sync from Kick
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Sync Result Message */}
@@ -303,8 +352,8 @@ export default function AdminStreamsPage() {
                                             <div className="w-24 h-14 bg-gray-100 dark:bg-kick-surface-hover rounded overflow-hidden relative">
                                                 {session.thumbnail_url ? (
                                                     <Image
-                                                        src={session.thumbnail_url.startsWith('http') 
-                                                            ? `/api/image-proxy?url=${encodeURIComponent(session.thumbnail_url)}` 
+                                                        src={session.thumbnail_url.startsWith('http')
+                                                            ? `/api/image-proxy?url=${encodeURIComponent(session.thumbnail_url)}`
                                                             : session.thumbnail_url}
                                                         alt="Thumbnail"
                                                         fill
@@ -334,7 +383,7 @@ export default function AdminStreamsPage() {
                                         </td>
                                         <td className="py-3 px-4">
                                             <span className={`px-2 py-1 rounded text-xs ${
-                                                session.ended_at 
+                                                session.ended_at
                                                     ? 'bg-gray-100 dark:bg-kick-dark text-gray-600 dark:text-kick-text-secondary'
                                                     : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 animate-pulse'
                                             }`}>
