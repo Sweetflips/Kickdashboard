@@ -272,7 +272,6 @@ export async function GET(request: Request) {
                 ? (lastPointEarnedMap.get(userId) || null)
                 : (user.points?.last_point_earned_at || null)
 
-            const totalMessages = messagesMap.get(kickUserId) || 0
             const streamsWatched = streamsMap.get(kickUserId) || 0
 
             // Determine verification methods
