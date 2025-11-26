@@ -275,15 +275,34 @@ export default function AdminStreamsPage() {
 
                 {/* Sync Result Message */}
                 {syncResult && (
-                    <div className={`p-4 rounded-lg ${syncResult.success ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
-                        <h3 className="font-bold">{syncResult.success ? 'Sync Completed' : 'Sync Failed'}</h3>
-                        {syncResult.stats && (
-                            <div className="text-sm mt-1 space-x-4">
-                                <span>Processed: {syncResult.stats.processed}</span>
-                                <span>Matched: {syncResult.stats.matched}</span>
-                                <span>Updated: {syncResult.stats.updated}</span>
-                                <span>Errors: {syncResult.stats.errors}</span>
+                    <div className={`p-4 rounded-lg ${
+                        syncResult.success && (syncResult.stats?.updated > 0 || syncResult.stats?.liveStreamUpdated > 0)
+                            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                            : syncResult.success
+                                ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200'
+                                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                    }`}>
+                        <h3 className="font-bold">
+                            {syncResult.success && (syncResult.stats?.updated > 0 || syncResult.stats?.liveStreamUpdated > 0)
+                                ? '✓ Sync Completed'
+                                : syncResult.success
+                                    ? 'ℹ️ No Updates Available'
+                                    : '✕ Sync Failed'}
+                        </h3>
+                        {syncResult.message && (
+                            <p className="text-sm mt-1">{syncResult.message}</p>
+                        )}
+                        {syncResult.stats && (syncResult.stats.processed > 0 || syncResult.stats.liveStreamUpdated > 0) && (
+                            <div className="text-sm mt-2 space-x-4">
+                                {syncResult.stats.liveStreamUpdated > 0 && <span>Live: {syncResult.stats.liveStreamUpdated}</span>}
+                                {syncResult.stats.processed > 0 && <span>Processed: {syncResult.stats.processed}</span>}
+                                {syncResult.stats.matched > 0 && <span>Matched: {syncResult.stats.matched}</span>}
+                                {syncResult.stats.updated > 0 && <span>Updated: {syncResult.stats.updated}</span>}
+                                {syncResult.stats.errors > 0 && <span className="text-red-600 dark:text-red-400">Errors: {syncResult.stats.errors}</span>}
                             </div>
+                        )}
+                        {syncResult.note && (
+                            <p className="text-xs mt-2 opacity-75">{syncResult.note}</p>
                         )}
                         {syncResult.error && <p className="text-sm mt-1">{syncResult.error}</p>}
                     </div>

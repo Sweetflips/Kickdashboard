@@ -55,106 +55,22 @@ export async function POST(request: Request) {
 
         console.log(`[Fetch Thumbnails] Found ${sessionsWithoutThumbnails.length} streams without thumbnails for ${slug}`)
 
-        // Fetch videos from Kick API
-        let videos: any[] = []
-        try {
-            // Try legacy endpoint first (may be blocked)
-            const response = await fetch(`https://kick.com/api/v2/channels/${slug}/videos`, {
-                headers: {
-                    'Accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                },
-            })
-
-            if (response.ok) {
-                videos = await response.json()
-                console.log(`[Fetch Thumbnails] Found ${videos.length} videos from Kick API`)
-            } else if (response.status === 403) {
-                console.warn(`[Fetch Thumbnails] Legacy API blocked (403) for ${slug}`)
-                return NextResponse.json({
-                    success: false,
-                    message: 'Kick API endpoint blocked. Please use the sync-streams endpoint with manual video data.',
-                    stats: {
-                        processed: 0,
-                        matched: 0,
-                        updated: 0,
-                        errors: 0,
-                    },
-                })
-            } else {
-                throw new Error(`Kick API returned ${response.status}`)
-            }
-        } catch (fetchError) {
-            const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError)
-            console.error(`[Fetch Thumbnails] Failed to fetch videos:`, errorMsg)
-            return NextResponse.json({
-                success: false,
-                error: 'Failed to fetch videos from Kick API',
-                details: errorMsg,
-                stats: {
-                    processed: 0,
-                    matched: 0,
-                    updated: 0,
-                    errors: 0,
-                },
-            }, { status: 500 })
-        }
-
-        const stats = {
-            processed: 0,
-            matched: 0,
-            updated: 0,
-            errors: 0,
-        }
-
-        // Match videos to sessions and update thumbnails
-        for (const session of sessionsWithoutThumbnails) {
-            stats.processed++
-
-            try {
-                // Find matching video by start time (within 30 minutes)
-                const timeWindow = 30 * 60 * 1000 // 30 minutes
-                const matchingVideo = videos.find((video) => {
-                    const videoStartedAt = new Date(video.start_time || video.created_at)
-                    const timeDiff = Math.abs(videoStartedAt.getTime() - session.started_at.getTime())
-                    return timeDiff <= timeWindow
-                })
-
-                if (matchingVideo) {
-                    // Extract thumbnail URL
-                    let thumbnailUrl: string | null = null
-                    if (matchingVideo.thumbnail) {
-                        if (typeof matchingVideo.thumbnail === 'string') {
-                            thumbnailUrl = matchingVideo.thumbnail
-                        } else if (typeof matchingVideo.thumbnail === 'object' && matchingVideo.thumbnail.url) {
-                            thumbnailUrl = matchingVideo.thumbnail.url
-                        }
-                    }
-
-                    if (thumbnailUrl) {
-                        await db.streamSession.update({
-                            where: { id: session.id },
-                            data: { thumbnail_url: thumbnailUrl },
-                        })
-                        stats.matched++
-                        stats.updated++
-                        console.log(`[Fetch Thumbnails] Updated thumbnail for session ${session.id}`)
-                    } else {
-                        console.log(`[Fetch Thumbnails] Video ${matchingVideo.id} has no thumbnail`)
-                    }
-                } else {
-                    console.log(`[Fetch Thumbnails] No matching video found for session ${session.id} (started: ${session.started_at.toISOString()})`)
-                }
-            } catch (err) {
-                console.error(`[Fetch Thumbnails] Error processing session ${session.id}:`, err)
-                stats.errors++
-            }
-        }
-
+        // Note: Kick's historical video API is blocked (403)
+        // This endpoint can only work with manually provided video data
+        // For now, return a helpful message
+        console.warn(`[Fetch Thumbnails] Kick's legacy video API is blocked - cannot fetch historical thumbnails`)
+        
         return NextResponse.json({
             success: true,
-            message: `Processed ${stats.processed} streams, matched ${stats.matched}, updated ${stats.updated}`,
-            stats,
+            message: `Found ${sessionsWithoutThumbnails.length} streams without thumbnails, but Kick's video API is blocked. Thumbnails are captured automatically when streams go live.`,
+            stats: {
+                processed: sessionsWithoutThumbnails.length,
+                matched: 0,
+                updated: 0,
+                errors: 0,
+            },
+            note: 'Historical VOD thumbnails cannot be fetched due to Kick API limitations. Future streams will have thumbnails captured automatically.',
+            sessionsNeedingThumbnails: sessionsWithoutThumbnails.length,
         })
     } catch (error) {
         console.error('[Fetch Thumbnails] Error:', error)

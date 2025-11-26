@@ -9,6 +9,8 @@ export async function POST(request: Request) {
         const slug = searchParams.get('slug') || 'sweetflips'
 
         let videos: any[] = []
+        let liveStreamUpdated = false
+        let liveStreamError: string | null = null
 
         // Try to parse body for provided videos (manual sync fallback)
         try {
@@ -49,54 +51,32 @@ export async function POST(request: Request) {
                                 data: { thumbnail_url: livestreamData.thumbnailUrl },
                             })
                             console.log(`[Sync] Updated thumbnail for active session ${activeSession.id}`)
+                            liveStreamUpdated = true
                         } else {
                             console.log(`[Sync] Thumbnail already up to date for session ${activeSession.id}`)
                         }
                     } else {
                         console.log(`[Sync] No active session found for channel ${slug}`)
+                        liveStreamError = 'No active stream session found'
                     }
                 } else {
                     console.log(`[Sync] No livestream data or thumbnail found for channel ${slug}`)
+                    liveStreamError = 'Channel is not currently live'
                 }
             } catch (apiError) {
                 const errorMsg = apiError instanceof Error ? apiError.message : String(apiError)
                 console.warn(`[Sync] Failed to fetch from Kick Dev API for ${slug}:`, errorMsg)
                 // Check if it's a configuration error
                 if (errorMsg.includes('KICK_CLIENT_ID') || errorMsg.includes('KICK_CLIENT_SECRET')) {
-                    console.warn(`[Sync] Kick Dev API credentials not configured. Set KICK_CLIENT_ID and KICK_CLIENT_SECRET environment variables to use official API.`)
-                }
-            }
-
-            // Fallback to legacy endpoint for historical videos (may be blocked)
-            // Note: This endpoint is unofficial and may return 403
-            try {
-                console.log(`[Sync] Attempting to fetch historical videos from legacy endpoint for ${slug}`)
-                const response = await fetch(`https://kick.com/api/v2/channels/${slug}/videos`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    },
-                    next: { revalidate: 0 } // Don't cache
-                })
-
-                if (!response.ok) {
-                    if (response.status === 403) {
-                        console.warn(`[Sync] Legacy API endpoint blocked (403) for ${slug}. This is expected - use Kick Dev API for thumbnails.`)
-                        // Don't throw - allow sync to complete without videos
-                        videos = []
-                    } else {
-                        throw new Error(`Kick API returned ${response.status}`)
-                    }
+                    liveStreamError = 'Kick API credentials not configured'
                 } else {
-                    videos = await response.json()
-                    console.log(`[Sync] Found ${videos.length} videos from legacy Kick API`)
+                    liveStreamError = errorMsg
                 }
-            } catch (fetchError) {
-                const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError)
-                console.warn(`[Sync] Legacy endpoint fetch failed for ${slug}:`, errorMsg)
-                // Don't throw - allow sync to complete gracefully
-                videos = []
             }
+
+            // Note: Legacy endpoint for historical videos is blocked by Kick
+            // We no longer attempt to fetch from it as it always returns 403
+            console.log(`[Sync] Skipping legacy API - endpoint is blocked by Kick`)
         }
 
         const stats = {
@@ -187,18 +167,31 @@ export async function POST(request: Request) {
 
         // Determine success status
         const hasErrors = stats.errors > 0
-        const hasUpdates = stats.updated > 0 || stats.matched > 0
+        const hasUpdates = stats.updated > 0 || stats.matched > 0 || liveStreamUpdated
+
+        // Build appropriate message
+        let message = ''
+        if (videos.length > 0) {
+            message = hasUpdates
+                ? `Synced ${stats.updated} streams from provided video data`
+                : 'No updates needed from provided video data'
+        } else if (liveStreamUpdated) {
+            message = 'Successfully updated live stream thumbnail'
+        } else if (liveStreamError) {
+            message = `Live stream sync: ${liveStreamError}. Historical VOD sync is not available - Kick API blocks this endpoint.`
+        } else {
+            message = 'No updates made. Note: Kick blocks historical VOD data. Thumbnails are captured automatically when streams go live.'
+        }
 
         return NextResponse.json({
-            success: !hasErrors || hasUpdates, // Success if we updated something or had no errors
-            message: hasUpdates
-                ? 'Sync completed successfully'
-                : videos.length === 0
-                    ? 'No videos found to sync. Legacy API may be blocked - use Kick Dev API for thumbnails.'
-                    : 'Sync completed with no updates needed',
-            stats,
-            note: videos.length === 0
-                ? 'Tip: Set KICK_CLIENT_ID and KICK_CLIENT_SECRET environment variables to use the official Kick Dev API for fetching thumbnails.'
+            success: !hasErrors || hasUpdates,
+            message,
+            stats: {
+                ...stats,
+                liveStreamUpdated: liveStreamUpdated ? 1 : 0,
+            },
+            note: !liveStreamUpdated && videos.length === 0
+                ? 'Thumbnails are captured automatically when streams are live. Historical VOD thumbnails cannot be synced due to Kick API limitations.'
                 : undefined
         })
 
