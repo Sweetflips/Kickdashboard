@@ -22,8 +22,8 @@ model User {
   access_token_hash           String?
   refresh_token_hash          String?
   // Encrypted tokens (can be decrypted for API calls)
-  encrypted_access_token      String?   @db.Text
-  encrypted_refresh_token     String?   @db.Text
+  access_token_encrypted      String?   @db.Text
+  refresh_token_encrypted     String?   @db.Text
   notifications_enabled       Boolean   @default(true)
   email_notifications_enabled Boolean   @default(false)
   chat_font_size              String?   @default("14px")

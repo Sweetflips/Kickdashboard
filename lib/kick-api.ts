@@ -87,15 +87,15 @@ async function getBroadcasterToken(): Promise<string> {
                 },
             },
             select: {
-                encrypted_access_token: true,
-                encrypted_refresh_token: true,
+                access_token_encrypted: true,
+                refresh_token_encrypted: true,
                 username: true,
             },
         })
 
-        if (broadcaster?.encrypted_access_token) {
+        if (broadcaster?.access_token_encrypted) {
             try {
-                const accessToken = decryptToken(broadcaster.encrypted_access_token)
+                const accessToken = decryptToken(broadcaster.access_token_encrypted)
                 console.log(`[Kick API] Successfully retrieved token for broadcaster: ${broadcaster.username}`)
                 
                 // Cache the token (assume 1 hour validity, will be refreshed on next call if expired)
