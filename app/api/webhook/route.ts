@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isBot, awardPoint, awardEmotes } from '@/lib/points'
 import { getActiveGiveaway, isUserEligible } from '@/lib/giveaway'
+import { getChannelWithLivestream } from '@/lib/kick-api'
 import type { ChatMessage } from '@/lib/chat-store'
 
 // Helper function to extract emotes from message content [emote:ID:Name] format
@@ -185,61 +186,30 @@ export async function POST(request: Request) {
                 try {
                     // Get broadcaster username from message or fetch from database
                     const broadcasterSlug = message.broadcaster.channel_slug || broadcasterUser.username.toLowerCase()
-                    console.log(`📡 Checking Kick API for channel: ${broadcasterSlug}`)
+                    console.log(`📡 Checking Kick Dev API for channel: ${broadcasterSlug}`)
 
-                    // Check Kick API to see if stream is live
-                    const controller = new AbortController()
-                    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+                    // Use official Kick Dev API to check stream status
+                    const livestreamData = await getChannelWithLivestream(broadcasterSlug)
 
-                    const channelResponse = await fetch(
-                        `https://kick.com/api/v2/channels/${broadcasterSlug}`,
-                        {
-                            headers: {
-                                'Accept': 'application/json',
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    if (livestreamData) {
+                        // Stream is live - official API returned data
+                        console.log(`📊 Stream status: LIVE (thumbnail: ${livestreamData.thumbnailUrl ? 'YES' : 'NO'})`)
+
+                        // Stream is live but no session exists - create one
+                        activeSession = await db.streamSession.create({
+                            data: {
+                                broadcaster_user_id: broadcasterUserId,
+                                channel_slug: broadcasterSlug,
+                                session_title: null, // Official API doesn't return title in this endpoint
+                                thumbnail_url: livestreamData.thumbnailUrl,
+                                started_at: new Date(),
+                                peak_viewer_count: 0,
                             },
-                            signal: controller.signal,
-                        }
-                    )
-
-                    clearTimeout(timeoutId)
-
-                    if (channelResponse.ok) {
-                        const channelData = await channelResponse.json()
-                        const livestream = channelData.livestream
-                        const isLive = livestream?.is_live === true
-                        const viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
-                        const streamTitle = livestream?.session_title || ''
-
-                        console.log(`📊 Stream status: ${isLive ? 'LIVE' : 'OFFLINE'} (viewers: ${viewerCount})`)
-
-                        let thumbnailUrl: string | null = null
-                        if (livestream?.thumbnail) {
-                            if (typeof livestream.thumbnail === 'string') {
-                                thumbnailUrl = livestream.thumbnail
-                            } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
-                                thumbnailUrl = livestream.thumbnail.url
-                            }
-                        }
-
-                        if (isLive) {
-                            // Stream is live but no session exists - create one
-                            activeSession = await db.streamSession.create({
-                                data: {
-                                    broadcaster_user_id: broadcasterUserId,
-                                    channel_slug: broadcasterSlug,
-                                    session_title: streamTitle || null,
-                                    thumbnail_url: thumbnailUrl,
-                                    started_at: new Date(),
-                                    peak_viewer_count: viewerCount,
-                                },
-                            })
-                            console.log(`✅ Stream is LIVE - created session ${activeSession.id} - points will now count!`)
-                        } else {
-                            console.log(`ℹ️ Stream is OFFLINE - no session created, points will not be awarded`)
-                        }
+                        })
+                        console.log(`✅ Stream is LIVE - created session ${activeSession.id} with thumbnail - points will now count!`)
                     } else {
-                        console.warn(`⚠️ Kick API returned ${channelResponse.status} - cannot verify stream status`)
+                        // No livestream data means stream is offline or API failed
+                        console.log(`ℹ️ No livestream data from Kick Dev API - stream may be offline, points will not be awarded`)
                     }
                 } catch (checkError) {
                     // If we can't check stream status, assume offline

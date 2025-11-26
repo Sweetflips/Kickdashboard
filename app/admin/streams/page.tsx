@@ -193,15 +193,23 @@ export default function AdminStreamsPage() {
         try {
             setFetchingThumbnails(true)
             setSyncResult(null)
-            const channelSlug = userData?.username || 'sweetflips'
 
-            const response = await fetch(`/api/admin/fetch-thumbnails?slug=${channelSlug}&limit=50`, {
+            // Use sync-thumbnails endpoint which uses official Kick Dev API
+            // This only works for ACTIVE/LIVE streams
+            const response = await fetch(`/api/admin/sync-thumbnails`, {
                 method: 'POST',
-                credentials: 'include', // Include cookies for authentication
+                credentials: 'include',
             })
 
             const result = await response.json()
-            setSyncResult(result)
+            setSyncResult({
+                ...result,
+                message: result.stats?.updated > 0 
+                    ? `Updated thumbnails for ${result.stats.updated} active stream(s)`
+                    : result.stats?.processed > 0
+                        ? 'Active stream thumbnails are already up to date'
+                        : 'No active streams found to update thumbnails',
+            })
 
             if (response.ok) {
                 await fetchStreams()
@@ -235,19 +243,20 @@ export default function AdminStreamsPage() {
                         <button
                             onClick={handleFetchThumbnails}
                             disabled={fetchingThumbnails}
+                            title="Update thumbnails for currently live streams using Kick Dev API"
                             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                         >
                             {fetchingThumbnails ? (
                                 <>
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                    Fetching...
+                                    Updating...
                                 </>
                             ) : (
                                 <>
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
-                                    Fetch Thumbnails
+                                    Update Live Thumbnails
                                 </>
                             )}
                         </button>
