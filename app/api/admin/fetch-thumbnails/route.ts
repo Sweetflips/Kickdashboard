@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         // This endpoint can only work with manually provided video data
         // For now, return a helpful message
         console.warn(`[Fetch Thumbnails] Kick's legacy video API is blocked - cannot fetch historical thumbnails`)
-        
+
         return NextResponse.json({
             success: true,
             message: `Found ${sessionsWithoutThumbnails.length} streams without thumbnails, but Kick's video API is blocked. Thumbnails are captured automatically when streams go live.`,
@@ -83,4 +83,3 @@ export async function POST(request: Request) {
         )
     }
 }
-
