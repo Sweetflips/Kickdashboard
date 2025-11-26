@@ -8,8 +8,8 @@
 // Kick Dev API endpoints
 // Base URL for Kick Dev API v1
 const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/v1'
-// OAuth token endpoint for App Access Tokens
-const KICK_AUTH_URL = process.env.KICK_AUTH_URL || 'https://api.kick.com/v1/oauth/token'
+// OAuth token endpoint for App Access Tokens (hosted on id.kick.com, not api.kick.com)
+const KICK_AUTH_URL = process.env.KICK_AUTH_URL || 'https://id.kick.com/oauth/token'
 
 interface AppAccessTokenResponse {
     access_token: string

@@ -73,7 +73,8 @@ export default function AdminStreamsPage() {
         try {
             setSyncing(true)
             setSyncResult(null)
-            const channelSlug = userData?.username || 'sweetflips'
+            // Always sync the monitored channel, not the logged-in user's channel
+            const channelSlug = 'sweetflips'
 
             // Strategy 1: Try Server-side sync first (simplest if it works)
             let success = false
@@ -163,7 +164,7 @@ export default function AdminStreamsPage() {
                 return
             }
 
-            const channelSlug = userData?.username || 'sweetflips'
+            const channelSlug = 'sweetflips'
             const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -204,7 +205,7 @@ export default function AdminStreamsPage() {
             const result = await response.json()
             setSyncResult({
                 ...result,
-                message: result.stats?.updated > 0 
+                message: result.stats?.updated > 0
                     ? `Updated thumbnails for ${result.stats.updated} active stream(s)`
                     : result.stats?.processed > 0
                         ? 'Active stream thumbnails are already up to date'
@@ -232,7 +233,7 @@ export default function AdminStreamsPage() {
         )
     }
 
-    const kickApiUrl = `https://kick.com/api/v2/channels/${userData?.username || 'sweetflips'}/videos`
+    const kickApiUrl = `https://kick.com/api/v2/channels/sweetflips/videos`
 
     return (
         <AppLayout>
