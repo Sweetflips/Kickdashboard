@@ -91,7 +91,7 @@ async function ensurePointAwardJobsTable() {
   await ensurePointAwardJobsTable();
 
   const port = process.env.PORT || '3000';
-  const enableWorker = process.env.ENABLE_POINT_WORKER !== 'false'; // Default to true, set to 'false' to disable
+  const enableWorker = process.env.ENABLE_POINT_WORKER === 'true'; // Default to false, set to 'true' to enable
 
   // Start Next.js server
   const nextProcess = spawn('next', ['start', '-p', port], {

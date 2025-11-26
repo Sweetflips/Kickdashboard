@@ -58,7 +58,7 @@ export async function GET(request: Request) {
             }))
         }
 
-        // Sort users by points (descending), then by last login (descending)
+        // Sort users by points (descending), then by messages (descending)
         const sortedUsers = usersWithPoints.sort((a, b) => {
             const aPoints = hasDateFilter && dateFilter
                 ? (a as any)._calculatedPoints || 0
@@ -72,7 +72,8 @@ export async function GET(request: Request) {
                 return bPoints - aPoints
             }
 
-            // Then by last login time (most recent first)
+            // Then by message count (will be resolved after batch query)
+            // For now, fallback to last login as initial sort - will re-sort after getting messages
             const aLogin = a.last_login_at?.getTime() || 0
             const bLogin = b.last_login_at?.getTime() || 0
             return bLogin - aLogin
@@ -236,14 +237,32 @@ export async function GET(request: Request) {
             })
         }
 
-        // Build formatted leaderboard from batch data
-        const formattedLeaderboard = users.map((user, index) => {
-            const kickUserId = Number(user.kick_user_id)
-            const userId = Number(user.id)
+        // Now re-sort by points, then messages
+        const sortedFormatted = users
+            .map((user, index) => {
+                const kickUserId = Number(user.kick_user_id)
+                const userId = Number(user.id)
 
-            const totalPoints = hasDateFilter && dateFilter
-                ? (pointsMap.get(userId) || 0)
-                : (user.points?.total_points || 0)
+                const totalPoints = hasDateFilter && dateFilter
+                    ? (pointsMap.get(userId) || 0)
+                    : (user.points?.total_points || 0)
+
+                const totalMessages = messagesMap.get(kickUserId) || 0
+
+                return { user, userId, kickUserId, totalPoints, totalMessages }
+            })
+            .sort((a, b) => {
+                // Primary: Points (descending)
+                if (b.totalPoints !== a.totalPoints) {
+                    return b.totalPoints - a.totalPoints
+                }
+                // Secondary: Messages (descending)
+                return b.totalMessages - a.totalMessages
+            })
+
+        // Build formatted leaderboard from sorted data
+        const formattedLeaderboard = sortedFormatted.map((item, index) => {
+            const { user, userId, kickUserId, totalPoints, totalMessages } = item
 
             const totalEmotes = hasDateFilter && dateFilter
                 ? (emotesMap.get(kickUserId) || 0)

@@ -53,11 +53,11 @@ export async function GET(request: Request) {
 
         // Deduplicate sessions: same broadcaster, same started_at (within 1 minute), keep the one with most messages
         const deduplicatedSessions = allSessions.reduce((acc, session) => {
-            const existingIndex = acc.findIndex(s => 
+            const existingIndex = acc.findIndex(s =>
                 s.broadcaster_user_id === session.broadcaster_user_id &&
                 Math.abs(s.started_at.getTime() - session.started_at.getTime()) < 60000 // Within 1 minute
             )
-            
+
             if (existingIndex === -1) {
                 acc.push(session)
             } else {

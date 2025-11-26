@@ -4,7 +4,7 @@
  * - Were created before the session started
  * - Have invalid user IDs (<= 0)
  * - Were sent when offline
- * 
+ *
  * Usage: node scripts/cleanup-session-messages.js <session_id> [--dry-run]
  */
 
@@ -95,7 +95,7 @@ async function cleanupSessionMessages(sessionId, dryRun = false) {
         console.log(`\n🗑️  Removing stream_session_id from ${messagesToRemove.length} messages...`)
 
         const messageIds = messagesToRemove.map(m => m.id)
-        
+
         const result = await prisma.chatMessage.updateMany({
             where: {
                 id: { in: messageIds },
@@ -152,4 +152,12 @@ if (!sessionId) {
 }
 
 cleanupSessionMessages(sessionId, dryRun)
+
+
+
+
+
+
+
+
 

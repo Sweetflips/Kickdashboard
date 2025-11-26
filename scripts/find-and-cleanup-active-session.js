@@ -28,7 +28,7 @@ async function findAndCleanupActiveSession(dryRun = false) {
 
         if (!activeSession) {
             console.log('❌ No active session found')
-            
+
             // Try to find the most recent session (even if ended)
             const recentSession = await prisma.streamSession.findFirst({
                 orderBy: {
@@ -53,7 +53,7 @@ async function findAndCleanupActiveSession(dryRun = false) {
                 console.log(`\n💡 To cleanup this session, run:`)
                 console.log(`   node scripts/cleanup-session-messages.js ${recentSession.id}${dryRun ? ' --dry-run' : ''}`)
             }
-            
+
             process.exit(1)
         }
 
@@ -96,7 +96,7 @@ async function findAndCleanupActiveSession(dryRun = false) {
 
         if (messagesToRemove.length === 0) {
             console.log(`\n✅ No messages need to be removed! Session is clean.`)
-            
+
             // Show current stats
             const validMessages = await prisma.chatMessage.count({
                 where: {
@@ -145,7 +145,7 @@ async function findAndCleanupActiveSession(dryRun = false) {
         console.log(`\n🗑️  Removing stream_session_id from ${messagesToRemove.length} messages...`)
 
         const messageIds = messagesToRemove.map(m => m.id)
-        
+
         const result = await prisma.chatMessage.updateMany({
             where: {
                 id: { in: messageIds },
@@ -195,4 +195,12 @@ const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
 
 findAndCleanupActiveSession(dryRun)
+
+
+
+
+
+
+
+
 

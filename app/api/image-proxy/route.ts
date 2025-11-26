@@ -91,7 +91,7 @@ export async function GET(request: Request) {
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
             }
         }
-        
+
         try {
             // First try with appropriate headers based on image type
             imageResponse = await fetch(imageUrl, {

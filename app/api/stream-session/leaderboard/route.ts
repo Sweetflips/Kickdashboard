@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { NextResponse } from 'next/server'
 
 /**
  * Get top 10 chatters for stream session
@@ -101,9 +101,9 @@ export async function GET(request: Request) {
                     return await queryFn()
                 } catch (error: any) {
                     const isSerializationError = error?.code === 'P4001' ||
-                                                error?.code === 'P2034' ||
-                                                error?.message?.includes('could not serialize access') ||
-                                                error?.message?.includes('concurrent update')
+                        error?.code === 'P2034' ||
+                        error?.message?.includes('could not serialize access') ||
+                        error?.message?.includes('concurrent update')
 
                     if (isSerializationError && attempt < maxRetries - 1) {
                         const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
@@ -262,7 +262,7 @@ export async function GET(request: Request) {
                 }
                 return b.emotes - a.emotes
             })
-            // No limit - show all users
+        // No limit - show all users
 
         // Get user details for each chatter
         const leaderboard = await Promise.all(
