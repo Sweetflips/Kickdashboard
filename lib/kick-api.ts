@@ -2,14 +2,19 @@
  * Kick Dev API Client
  *
  * Handles authentication and API calls to the official Kick Dev API.
- * Uses App Access Tokens for authentication.
+ * Uses broadcaster's User Access Token from database for API calls.
  */
+
+import { db } from '@/lib/db'
+import { decryptToken } from '@/lib/encryption'
 
 // Kick Dev API endpoints
 // Base URL for Kick Dev API v1
 const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/v1'
-// OAuth token endpoint for App Access Tokens (hosted on id.kick.com, not api.kick.com)
+// OAuth token endpoint (hosted on id.kick.com)
 const KICK_AUTH_URL = process.env.KICK_AUTH_URL || 'https://id.kick.com/oauth/token'
+// Broadcaster channel slug to use for API calls
+const BROADCASTER_SLUG = process.env.KICK_CHANNEL_SLUG || 'sweetflips'
 
 interface AppAccessTokenResponse {
     access_token: string
@@ -56,10 +61,69 @@ interface StreamThumbnail {
 let cachedToken: {
     token: string
     expiresAt: number
+    source: 'user' | 'app'
 } | null = null
 
 /**
- * Get or refresh App Access Token
+ * Get broadcaster's User Access Token from database
+ * Falls back to App Access Token if user token not available
+ */
+async function getBroadcasterToken(): Promise<string> {
+    // Check if cached token is still valid (with 5 minute buffer)
+    if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60 * 1000) {
+        console.log(`[Kick API] Using cached ${cachedToken.source} token`)
+        return cachedToken.token
+    }
+
+    // Try to get broadcaster's token from database
+    try {
+        console.log(`[Kick API] Looking for broadcaster token for: ${BROADCASTER_SLUG}`)
+        
+        const broadcaster = await db.user.findFirst({
+            where: {
+                username: {
+                    equals: BROADCASTER_SLUG,
+                    mode: 'insensitive',
+                },
+            },
+            select: {
+                encrypted_access_token: true,
+                encrypted_refresh_token: true,
+                username: true,
+            },
+        })
+
+        if (broadcaster?.encrypted_access_token) {
+            try {
+                const accessToken = decryptToken(broadcaster.encrypted_access_token)
+                console.log(`[Kick API] Successfully retrieved token for broadcaster: ${broadcaster.username}`)
+                
+                // Cache the token (assume 1 hour validity, will be refreshed on next call if expired)
+                cachedToken = {
+                    token: accessToken,
+                    expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
+                    source: 'user',
+                }
+                
+                return accessToken
+            } catch (decryptError) {
+                console.warn(`[Kick API] Failed to decrypt broadcaster token:`, decryptError instanceof Error ? decryptError.message : 'Unknown error')
+            }
+        } else {
+            console.log(`[Kick API] No encrypted token found for broadcaster: ${BROADCASTER_SLUG}`)
+        }
+    } catch (dbError) {
+        console.warn(`[Kick API] Error fetching broadcaster from database:`, dbError instanceof Error ? dbError.message : 'Unknown error')
+    }
+
+    // Fallback to App Access Token
+    console.log(`[Kick API] Falling back to App Access Token`)
+    return getAppAccessToken()
+}
+
+/**
+ * Get App Access Token (client credentials flow)
+ * Used as fallback when user token not available
  */
 async function getAppAccessToken(): Promise<string> {
     const clientId = process.env.KICK_CLIENT_ID
@@ -67,11 +131,6 @@ async function getAppAccessToken(): Promise<string> {
 
     if (!clientId || !clientSecret) {
         throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set in environment variables')
-    }
-
-    // Check if cached token is still valid (with 5 minute buffer)
-    if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60 * 1000) {
-        return cachedToken.token
     }
 
     try {
@@ -100,6 +159,7 @@ async function getAppAccessToken(): Promise<string> {
         cachedToken = {
             token: data.access_token,
             expiresAt: Date.now() + (data.expires_in * 1000),
+            source: 'app',
         }
 
         console.log(`[Kick API] Successfully obtained App Access Token (expires in ${data.expires_in}s)`)
@@ -119,7 +179,7 @@ async function kickApiRequest<T>(
     options: RequestInit = {},
     retries = 2
 ): Promise<T> {
-    const token = await getAppAccessToken()
+    const token = await getBroadcasterToken()
 
     const url = endpoint.startsWith('http') ? endpoint : `${KICK_API_BASE}${endpoint}`
 

@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { encryptToken, hashToken } from '@/lib/encryption'
 
 const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID!
 const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET!
@@ -11,10 +12,6 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sweetflipsreward
 
 if (!KICK_CLIENT_ID || !KICK_CLIENT_SECRET) {
     throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set in environment variables')
-}
-
-function hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex')
 }
 
 /**
@@ -216,6 +213,20 @@ export async function GET(request: Request) {
                         console.warn('⚠️ Could not fetch channel data for additional profile info:', channelError instanceof Error ? channelError.message : 'Unknown error')
                     }
 
+                    // Encrypt tokens for storage (can be decrypted for API calls)
+                    let encryptedAccessToken: string | null = null
+                    let encryptedRefreshToken: string | null = null
+                    try {
+                        if (tokenData.access_token) {
+                            encryptedAccessToken = encryptToken(tokenData.access_token)
+                        }
+                        if (tokenData.refresh_token) {
+                            encryptedRefreshToken = encryptToken(tokenData.refresh_token)
+                        }
+                    } catch (encryptError) {
+                        console.warn('⚠️ Could not encrypt tokens:', encryptError instanceof Error ? encryptError.message : 'Unknown error')
+                    }
+
                     // Prepare update data (always update these fields)
                     const updateData: any = {
                         username,
@@ -223,6 +234,8 @@ export async function GET(request: Request) {
                         profile_picture_url: profilePictureUrl,
                         access_token_hash: tokenData.access_token ? hashToken(tokenData.access_token) : null,
                         refresh_token_hash: tokenData.refresh_token ? hashToken(tokenData.refresh_token) : null,
+                        encrypted_access_token: encryptedAccessToken,
+                        encrypted_refresh_token: encryptedRefreshToken,
                         last_login_at: new Date(),
                         last_ip_address: ipAddress,
                         last_user_agent: userAgent,
@@ -243,6 +256,8 @@ export async function GET(request: Request) {
                         profile_picture_url: profilePictureUrl,
                         access_token_hash: tokenData.access_token ? hashToken(tokenData.access_token) : null,
                         refresh_token_hash: tokenData.refresh_token ? hashToken(tokenData.refresh_token) : null,
+                        encrypted_access_token: encryptedAccessToken,
+                        encrypted_refresh_token: encryptedRefreshToken,
                         last_login_at: new Date(),
                         last_ip_address: ipAddress,
                         last_user_agent: userAgent,
