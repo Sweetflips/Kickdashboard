@@ -977,34 +977,62 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
             const endpoint = `/users?${params.toString()}`
             const url = `${KICK_API_BASE}${endpoint}`
 
-            // Try with authentication (Users API requires auth)
-            const token = await getBroadcasterToken()
             const clientId = process.env.KICK_CLIENT_ID
+            let token = await getBroadcasterToken()
+            let retryCount = 0
+            const maxRetries = 2
+            let batchSuccess = false
 
-            const headers: Record<string, string> = {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            }
+            // Retry loop for handling 401 errors with token refresh
+            while (retryCount <= maxRetries && !batchSuccess) {
+                const headers: Record<string, string> = {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                }
 
-            if (clientId) {
-                headers['Client-Id'] = clientId
-            }
+                if (clientId) {
+                    headers['Client-Id'] = clientId
+                }
 
-            const response = await fetch(url, { headers })
+                const response = await fetch(url, { headers })
 
-            if (!response.ok) {
-                const errorText = await response.text()
-                console.warn(`[Kick API] Failed to fetch users batch: ${response.status} ${errorText}`)
-                continue
-            }
+                if (response.ok) {
+                    const apiResponse: { data: KickUser[] } = await response.json()
 
-            const apiResponse: { data: KickUser[] } = await response.json()
+                    if (apiResponse.data && Array.isArray(apiResponse.data)) {
+                        apiResponse.data.forEach(user => {
+                            result.set(user.user_id, user)
+                        })
+                    }
+                    batchSuccess = true
+                } else if (response.status === 401 && retryCount < maxRetries) {
+                    // Token expired - try to refresh
+                    console.warn(`[Kick API] Got 401 for users batch, attempting token refresh (attempt ${retryCount + 1})`)
+                    clearTokenCache()
 
-            if (apiResponse.data && Array.isArray(apiResponse.data)) {
-                apiResponse.data.forEach(user => {
-                    result.set(user.user_id, user)
-                })
+                    const refreshedToken = await refreshBroadcasterToken()
+                    if (refreshedToken) {
+                        token = refreshedToken
+                        retryCount++
+                        // Small delay before retry
+                        await new Promise(resolve => setTimeout(resolve, 500))
+                        continue
+                    } else {
+                        // Refresh failed, fall back to app token
+                        console.warn(`[Kick API] Token refresh failed, falling back to app token`)
+                        clearTokenCache()
+                        token = await getBroadcasterToken()
+                        retryCount++
+                        await new Promise(resolve => setTimeout(resolve, 500))
+                        continue
+                    }
+                } else {
+                    // Other error or max retries reached
+                    const errorText = await response.text()
+                    console.warn(`[Kick API] Failed to fetch users batch: ${response.status} ${errorText}`)
+                    break
+                }
             }
 
             // Small delay between batches to avoid rate limits
