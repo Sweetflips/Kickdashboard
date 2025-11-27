@@ -13,7 +13,7 @@
 DATABASE_URL          - Already set by Railway PostgreSQL service (copy from service)
 KICK_CLIENT_ID        - Your Kick OAuth client ID
 KICK_CLIENT_SECRET    - Your Kick OAuth client secret
-NEXT_PUBLIC_APP_URL   - https://www.sweetflipsrewards.com
+NEXT_PUBLIC_APP_URL   - https://kickdashboard.com
 NEXT_PUBLIC_PUSHER_KEY - Your Pusher app key
 NEXT_PUBLIC_PUSHER_CLUSTER - us2 (or your cluster)
 NEXT_PUBLIC_PUSHER_WS_HOST - ws-us2.pusher.com (or your host)
@@ -69,4 +69,3 @@ railway variables --file .env.production
 - All variables are case-sensitive
 - Never commit `.env.production` with real credentials to git
 - Use Railway's built-in secrets management for security
-

@@ -3,7 +3,7 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sweetflipsrewards.com'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://kickdashboard.com'
 
 if (!TELEGRAM_BOT_TOKEN) {
     throw new Error('TELEGRAM_BOT_TOKEN must be set in environment variables')

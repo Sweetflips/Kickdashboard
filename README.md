@@ -84,7 +84,7 @@ See `.env.example` for all available environment variables.
 - `DATABASE_URL` - PostgreSQL connection string
 - `KICK_CLIENT_ID` - Kick OAuth client ID
 - `KICK_CLIENT_SECRET` - Kick OAuth client secret
-- `NEXT_PUBLIC_APP_URL` - Application URL (e.g., `https://www.sweetflipsrewards.com`)
+- `NEXT_PUBLIC_APP_URL` - Application URL (e.g., `https://kickdashboard.com`)
 
 ### Optional
 - `EXTERNAL_WEBHOOK_URL` - External webhook forwarding URL

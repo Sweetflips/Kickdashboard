@@ -20,12 +20,12 @@ KICK_CLIENT_SECRET=your_kick_client_secret_here
 # ============================================
 # APPLICATION URL (Required)
 # ============================================
-NEXT_PUBLIC_APP_URL=https://www.sweetflipsrewards.com
+NEXT_PUBLIC_APP_URL=https://kickdashboard.com
 
 # ============================================
 # WEBHOOK CONFIGURATION (Optional)
 # ============================================
-EXTERNAL_WEBHOOK_URL=https://www.sweetflipsrewards.com/api/webhooks/kick
+EXTERNAL_WEBHOOK_URL=https://kickdashboard.com/api/webhooks/kick
 WEBHOOK_TUNNEL_URL=
 NEXT_PUBLIC_WEBHOOK_TUNNEL_URL=
 
@@ -34,7 +34,7 @@ NEXT_PUBLIC_WEBHOOK_TUNNEL_URL=
 # ============================================
 DISCORD_CLIENT_ID=1416857158640865340
 DISCORD_CLIENT_SECRET=fqW5kionWqu-nZ0QTvq_Ykh43ZyorWjx
-DISCORD_REDIRECT_URI=https://www.sweetflipsrewards.com/api/oauth/discord/callback
+DISCORD_REDIRECT_URI=https://kickdashboard.com/api/oauth/discord/callback
 
 # ============================================
 # TELEGRAM BOT (Optional)

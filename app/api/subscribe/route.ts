@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sweetflipsrewards.com'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://kickdashboard.com'
 const EXTERNAL_WEBHOOK_URL = process.env.EXTERNAL_WEBHOOK_URL || `${APP_URL}/api/webhooks/kick`
 
 interface SubscribeEventRequest {

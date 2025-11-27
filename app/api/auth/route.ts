@@ -5,7 +5,7 @@ const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID!
 const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET!
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
 const KICK_OAUTH_BASE = 'https://id.kick.com'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sweetflipsrewards.com'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://kickdashboard.com'
 
 if (!KICK_CLIENT_ID || !KICK_CLIENT_SECRET) {
     throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set in environment variables')

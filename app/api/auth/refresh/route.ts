@@ -35,7 +35,7 @@ function buildRedirectUri(request: Request): string {
     }
 
     // Use consistent APP_URL from env (most reliable for production)
-    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://www.sweetflipsrewards.com'
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://kickdashboard.com'
     const cleanAppUrl = APP_URL.replace(/\/$/, '')
 
     // In production, always use the env var URL to ensure consistency

@@ -45,10 +45,10 @@
      - `DATABASE_URL` (from PostgreSQL service)
      - `KICK_CLIENT_ID`
      - `KICK_CLIENT_SECRET`
-     - `NEXT_PUBLIC_APP_URL=https://www.sweetflipsrewards.com`
+     - `NEXT_PUBLIC_APP_URL=https://kickdashboard.com`
      - Any other optional variables from `.env.example`
    - Run migrations: `npx prisma migrate deploy`
-   - Configure custom domain: `www.sweetflipsrewards.com`
+   - Configure custom domain: `kickdashboard.com`
 
 4. **Verify Deployment**:
    - Test OAuth flow

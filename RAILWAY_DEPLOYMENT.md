@@ -4,7 +4,7 @@
 
 1. Railway account at https://railway.app
 2. PostgreSQL database (Railway provides this)
-3. Domain configured: sweetflipsrewards.com
+3. Domain configured: kickdashboard.com
 
 ## Environment Variables
 
@@ -14,7 +14,7 @@ Set these in Railway dashboard:
 - `DATABASE_URL` - PostgreSQL connection string (provided by Railway PostgreSQL service)
 - `KICK_CLIENT_ID` - Your Kick OAuth client ID
 - `KICK_CLIENT_SECRET` - Your Kick OAuth client secret
-- `NEXT_PUBLIC_APP_URL` - `https://www.sweetflipsrewards.com`
+- `NEXT_PUBLIC_APP_URL` - `https://kickdashboard.com`
 
 ### Optional
 - `EXTERNAL_WEBHOOK_URL` - External webhook forwarding URL (defaults to APP_URL/api/webhooks/kick)
@@ -41,7 +41,7 @@ Set these in Railway dashboard:
 3. **Set Environment Variables**
    - Go to project settings
    - Add all environment variables listed above
-   - Make sure `NEXT_PUBLIC_APP_URL` is set to `https://www.sweetflipsrewards.com`
+   - Make sure `NEXT_PUBLIC_APP_URL` is set to `https://kickdashboard.com`
 
 4. **Run Database Migrations**
    - In Railway, go to your service
@@ -52,7 +52,7 @@ Set these in Railway dashboard:
 5. **Configure Domain**
    - In Railway, go to your service settings
    - Click "Generate Domain" or add custom domain
-   - Add `www.sweetflipsrewards.com` as custom domain
+   - Add `kickdashboard.com` as custom domain
    - Configure DNS records as instructed by Railway
 
 6. **Deploy**

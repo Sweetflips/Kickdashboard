@@ -29,7 +29,7 @@ function extractEmotesFromContent(content: string): Array<{ emote_id: string; po
     }))
 }
 
-const EXTERNAL_WEBHOOK_URL = process.env.EXTERNAL_WEBHOOK_URL || 'https://www.sweetflipsrewards.com/api/webhooks/kick'
+const EXTERNAL_WEBHOOK_URL = process.env.EXTERNAL_WEBHOOK_URL || 'https://kickdashboard.com/api/webhooks/kick'
 
 // GET endpoint to verify webhook is accessible
 export async function GET(request: Request) {

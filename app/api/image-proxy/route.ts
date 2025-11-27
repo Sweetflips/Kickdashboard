@@ -46,7 +46,7 @@ export async function GET(request: Request) {
             // Return default avatar immediately for recently failed URLs
             const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
             const proto = request.headers.get('x-forwarded-proto') || 'https'
-            const baseUrl = host ? `${proto}://${host}` : 'https://www.sweetflipsrewards.com'
+            const baseUrl = host ? `${proto}://${host}` : 'https://kickdashboard.com'
             const defaultImageUrl = `${baseUrl}/kick.jpg`
 
             try {
@@ -227,7 +227,7 @@ export async function GET(request: Request) {
                 // Get base URL from headers (works in production with proxies)
                 const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
                 const proto = request.headers.get('x-forwarded-proto') || 'https'
-                const baseUrl = host ? `${proto}://${host}` : 'https://www.sweetflipsrewards.com'
+                const baseUrl = host ? `${proto}://${host}` : 'https://kickdashboard.com'
                 const defaultImageUrl = `${baseUrl}/kick.jpg`
 
                 console.log(`🔄 Fetching default avatar: ${defaultImageUrl}`)
