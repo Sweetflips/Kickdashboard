@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { Prisma } from '@prisma/client'
 import { getChannelWithLivestream } from '@/lib/kick-api'
+import { Prisma } from '@prisma/client'
+import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
     try {
@@ -55,41 +55,129 @@ export async function POST(request: Request) {
                         const broadcasterUserId = BigInt(broadcaster.kick_user_id)
 
                         // Find active session for this channel
-                        const activeSession = await db.streamSession.findFirst({
-                            where: {
-                                channel_slug: slug,
-                                ended_at: null, // Active session
-                            },
-                            orderBy: { started_at: 'desc' },
-                        })
+                        // Use transaction with retry logic to prevent race condition when creating sessions
+                        // If multiple requests run concurrently, only one will create the session
+                        const maxRetries = 3
+                        let retryCount = 0
+                        let sessionHandled = false
 
-                        if (activeSession) {
-                            // Update thumbnail if different
-                            if (activeSession.thumbnail_url !== livestreamData.thumbnailUrl) {
-                                await db.streamSession.update({
-                                    where: { id: activeSession.id },
-                                    data: { thumbnail_url: livestreamData.thumbnailUrl },
+                        while (retryCount < maxRetries && !sessionHandled) {
+                            try {
+                                await db.$transaction(async (tx) => {
+                                    // Check for active session within transaction
+                                    const activeSession = await tx.streamSession.findFirst({
+                                        where: {
+                                            broadcaster_user_id: broadcasterUserId,
+                                            ended_at: null, // Active session
+                                        },
+                                        orderBy: { started_at: 'desc' },
+                                    })
+
+                                    if (activeSession) {
+                                        // Update thumbnail if different
+                                        if (activeSession.thumbnail_url !== livestreamData.thumbnailUrl) {
+                                            await tx.streamSession.update({
+                                                where: { id: activeSession.id },
+                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                            })
+                                            console.log(`[Sync] Updated thumbnail for active session ${activeSession.id}`)
+                                            liveStreamUpdated = true
+                                        } else {
+                                            console.log(`[Sync] Thumbnail already up to date for session ${activeSession.id}`)
+                                        }
+                                        sessionHandled = true
+                                    } else {
+                                        // Stream is live but no session exists - create one atomically
+                                        // Transaction ensures only one session is created even with concurrent requests
+                                        const newSession = await tx.streamSession.create({
+                                            data: {
+                                                broadcaster_user_id: broadcasterUserId,
+                                                channel_slug: slug,
+                                                session_title: null, // Could fetch from livestreams API if needed
+                                                thumbnail_url: livestreamData.thumbnailUrl,
+                                                started_at: new Date(),
+                                                peak_viewer_count: 0,
+                                            },
+                                        })
+                                        console.log(`[Sync] Created new active session ${newSession.id} with thumbnail`)
+                                        liveStreamUpdated = true
+                                        sessionHandled = true
+                                    }
+                                }, {
+                                    // Use ReadCommitted with retry on conflict
+                                    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+                                    timeout: 5000, // 5 second timeout
                                 })
-                                console.log(`[Sync] Updated thumbnail for active session ${activeSession.id}`)
-                                liveStreamUpdated = true
-                            } else {
-                                console.log(`[Sync] Thumbnail already up to date for session ${activeSession.id}`)
+                            } catch (transactionError) {
+                                retryCount++
+
+                                // Handle unique constraint violation (P2002) - another request created the session
+                                if (transactionError instanceof Prisma.PrismaClientKnownRequestError &&
+                                    transactionError.code === 'P2002') {
+                                    // Database-level unique constraint prevented duplicate - find and update existing session
+                                    const existingSession = await db.streamSession.findFirst({
+                                        where: {
+                                            broadcaster_user_id: broadcasterUserId,
+                                            ended_at: null,
+                                        },
+                                        orderBy: { started_at: 'desc' },
+                                    })
+
+                                    if (existingSession) {
+                                        // Another request created the session - update thumbnail
+                                        if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
+                                            await db.streamSession.update({
+                                                where: { id: existingSession.id },
+                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                            })
+                                            console.log(`[Sync] Unique constraint violation - updated thumbnail for session ${existingSession.id}`)
+                                            liveStreamUpdated = true
+                                        } else {
+                                            console.log(`[Sync] Unique constraint violation - session ${existingSession.id} already has correct thumbnail`)
+                                        }
+                                        sessionHandled = true
+                                    } else {
+                                        // Should not happen, but handle gracefully
+                                        console.warn(`[Sync] Unique constraint violation but no session found - retrying`)
+                                        if (retryCount >= maxRetries) {
+                                            throw transactionError
+                                        }
+                                    }
+                                } else {
+                                    // Other transaction errors - check if session exists and retry
+                                    const existingSession = await db.streamSession.findFirst({
+                                        where: {
+                                            broadcaster_user_id: broadcasterUserId,
+                                            ended_at: null,
+                                        },
+                                        orderBy: { started_at: 'desc' },
+                                    })
+
+                                    if (existingSession) {
+                                        // Another request created the session - update thumbnail
+                                        if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
+                                            await db.streamSession.update({
+                                                where: { id: existingSession.id },
+                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                            })
+                                            console.log(`[Sync] Race condition detected - updated thumbnail for session ${existingSession.id}`)
+                                            liveStreamUpdated = true
+                                        } else {
+                                            console.log(`[Sync] Race condition detected - session ${existingSession.id} already has correct thumbnail`)
+                                        }
+                                        sessionHandled = true
+                                    } else if (retryCount >= maxRetries) {
+                                        // Max retries reached and no session exists - log error
+                                        console.error(`[Sync] Failed to create/update session after ${maxRetries} retries:`, transactionError)
+                                        throw transactionError
+                                    } else {
+                                        // Retry with exponential backoff
+                                        const delay = Math.min(100 * Math.pow(2, retryCount - 1), 500)
+                                        await new Promise(resolve => setTimeout(resolve, delay))
+                                        console.log(`[Sync] Retrying session creation (attempt ${retryCount + 1}/${maxRetries})`)
+                                    }
+                                }
                             }
-                        } else {
-                            // Stream is live but no session exists - create one
-                            console.log(`[Sync] Stream is live but no active session found - creating new session for ${slug}`)
-                            const newSession = await db.streamSession.create({
-                                data: {
-                                    broadcaster_user_id: broadcasterUserId,
-                                    channel_slug: slug,
-                                    session_title: null, // Could fetch from livestreams API if needed
-                                    thumbnail_url: livestreamData.thumbnailUrl,
-                                    started_at: new Date(),
-                                    peak_viewer_count: 0,
-                                },
-                            })
-                            console.log(`[Sync] Created new active session ${newSession.id} with thumbnail`)
-                            liveStreamUpdated = true
                         }
                     }
                 } else {
