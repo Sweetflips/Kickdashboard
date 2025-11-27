@@ -6,7 +6,7 @@
  */
 
 import { db } from '@/lib/db'
-import { decryptToken } from '@/lib/encryption'
+import { decryptToken, encryptToken } from '@/lib/encryption'
 
 // Kick Dev API endpoints
 // Base URL for Kick Dev API v1 (public endpoint)
@@ -122,6 +122,94 @@ async function getBroadcasterToken(): Promise<string> {
 }
 
 /**
+ * Refresh broadcaster's access token using refresh token from database
+ */
+async function refreshBroadcasterToken(): Promise<string | null> {
+    try {
+        const broadcaster = await db.user.findFirst({
+            where: {
+                username: {
+                    equals: BROADCASTER_SLUG,
+                    mode: 'insensitive',
+                },
+            },
+            select: {
+                refresh_token_encrypted: true,
+                kick_user_id: true,
+                username: true,
+            },
+        })
+
+        if (!broadcaster?.refresh_token_encrypted) {
+            console.log(`[Kick API] No refresh token found for broadcaster: ${BROADCASTER_SLUG}`)
+            return null
+        }
+
+        const refreshToken = decryptToken(broadcaster.refresh_token_encrypted)
+        const clientId = process.env.KICK_CLIENT_ID
+        const clientSecret = process.env.KICK_CLIENT_SECRET
+
+        if (!clientId || !clientSecret) {
+            console.warn(`[Kick API] KICK_CLIENT_ID and KICK_CLIENT_SECRET required for token refresh`)
+            return null
+        }
+
+        // Build redirect URI (use a default one for server-side refresh)
+        const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
+
+        console.log(`[Kick API] Attempting to refresh token for broadcaster: ${broadcaster.username}`)
+
+        const params = new URLSearchParams({
+            grant_type: 'refresh_token',
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            redirect_uri: redirectUri,
+        })
+
+        const response = await fetch(KICK_AUTH_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+        })
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            console.warn(`[Kick API] Token refresh failed: ${response.status} ${errorText}`)
+            return null
+        }
+
+        const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
+
+        // Update tokens in database
+        await db.user.update({
+            where: { kick_user_id: broadcaster.kick_user_id },
+            data: {
+                access_token_encrypted: encryptToken(data.access_token),
+                ...(data.refresh_token && {
+                    refresh_token_encrypted: encryptToken(data.refresh_token),
+                }),
+            },
+        })
+
+        // Update cache
+        cachedToken = {
+            token: data.access_token,
+            expiresAt: Date.now() + (data.expires_in * 1000),
+            source: 'user',
+        }
+
+        console.log(`[Kick API] Successfully refreshed token for broadcaster: ${broadcaster.username}`)
+        return data.access_token
+    } catch (error) {
+        console.error(`[Kick API] Error refreshing broadcaster token:`, error instanceof Error ? error.message : 'Unknown error')
+        return null
+    }
+}
+
+/**
  * Get App Access Token (client credentials flow)
  * Used as fallback when user token not available
  */
@@ -179,19 +267,28 @@ async function kickApiRequest<T>(
     options: RequestInit = {},
     retries = 2
 ): Promise<T> {
-    const token = await getBroadcasterToken()
-
+    const clientId = process.env.KICK_CLIENT_ID
     const url = endpoint.startsWith('http') ? endpoint : `${KICK_API_BASE}${endpoint}`
 
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
+            // Get fresh token on each attempt (especially after 401)
+            const token = await getBroadcasterToken()
+
+            const headers: HeadersInit = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                ...options.headers,
+            }
+
+            // Add Client-Id header if available (required by Kick API)
+            if (clientId) {
+                headers['Client-Id'] = clientId
+            }
+
             const response = await fetch(url, {
                 ...options,
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                    ...options.headers,
-                },
+                headers,
             })
 
             // Handle rate limiting (429)
@@ -206,10 +303,19 @@ async function kickApiRequest<T>(
                 }
             }
 
-            // Handle 401 - token might be expired, clear cache and retry once
+            // Handle 401 - token might be expired, try to refresh if it's a user token
             if (response.status === 401 && attempt === 0) {
-                console.warn('Got 401, clearing token cache and retrying')
+                console.warn('Got 401, attempting token refresh')
                 clearTokenCache()
+
+                // Try to refresh broadcaster token if it was a user token
+                const refreshedToken = await refreshBroadcasterToken()
+                if (refreshedToken) {
+                    // Retry with refreshed token (will be fetched fresh on next iteration)
+                    continue
+                }
+
+                // If refresh failed, fall back to app token and retry
                 continue
             }
 
@@ -255,15 +361,49 @@ function extractThumbnailUrl(thumbnail: string | KickThumbnail | null | undefine
 /**
  * Get channel with livestream info by slug
  * Uses GET /public/v1/channels?slug={slug} endpoint
+ * Tries without auth first, then with auth if needed
  */
 export async function getChannelWithLivestream(slug: string): Promise<StreamThumbnail | null> {
     try {
         const startTime = Date.now()
         console.log(`[Kick API] Fetching channel data for: ${slug}`)
 
-        // Try the official Kick Dev API endpoint
-        // Format: GET /public/v1/channels?slug={slug}
-        const channel: KickChannel = await kickApiRequest(`/channels?slug=${encodeURIComponent(slug)}`)
+        const endpoint = `/channels?slug=${encodeURIComponent(slug)}`
+        const url = `${KICK_API_BASE}${endpoint}`
+
+        // Try without authentication first (public endpoint might not require auth)
+        let response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+        })
+
+        // If we get 401, try with authentication
+        if (response.status === 401) {
+            console.log(`[Kick API] Got 401 without auth, retrying with authentication`)
+            const token = await getBroadcasterToken()
+            const clientId = process.env.KICK_CLIENT_ID
+
+            const headers: HeadersInit = {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            }
+
+            if (clientId) {
+                headers['Client-Id'] = clientId
+            }
+
+            response = await fetch(url, { headers })
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Kick API error: ${response.status} ${errorText}`)
+        }
+
+        const channel: KickChannel = await response.json()
         const duration = Date.now() - startTime
 
         console.log(`[Kick API] Fetched channel ${slug} in ${duration}ms`)

@@ -26,12 +26,12 @@ export function encryptToken(token: string): string {
         const key = getEncryptionKey()
         const iv = crypto.randomBytes(IV_LENGTH)
         const cipher = crypto.createCipheriv(ALGORITHM, key, iv)
-        
+
         let encrypted = cipher.update(token, 'utf8', 'hex')
         encrypted += cipher.final('hex')
-        
+
         const authTag = cipher.getAuthTag()
-        
+
         // Format: iv:authTag:encrypted (all in hex)
         return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`
     } catch (error) {
@@ -47,21 +47,21 @@ export function decryptToken(encryptedData: string): string {
     try {
         const key = getEncryptionKey()
         const parts = encryptedData.split(':')
-        
+
         if (parts.length !== 3) {
             throw new Error('Invalid encrypted token format')
         }
-        
+
         const [ivHex, authTagHex, encrypted] = parts
         const iv = Buffer.from(ivHex, 'hex')
         const authTag = Buffer.from(authTagHex, 'hex')
-        
+
         const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
         decipher.setAuthTag(authTag)
-        
+
         let decrypted = decipher.update(encrypted, 'hex', 'utf8')
         decrypted += decipher.final('utf8')
-        
+
         return decrypted
     } catch (error) {
         console.error('Error decrypting token:', error)
@@ -75,4 +75,3 @@ export function decryptToken(encryptedData: string): string {
 export function hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex')
 }
-
