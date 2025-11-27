@@ -256,11 +256,11 @@ export async function GET(request: Request) {
         const userStatsArray = Array.from(userStatsMap.entries())
             .map(([user_id, stats]) => ({ user_id, ...stats }))
             .sort((a, b) => {
-                // Sort by points first, then by emotes if points are equal
+                // Sort by points first, then by messages if points are equal
                 if (b.points !== a.points) {
                     return b.points - a.points
                 }
-                return b.emotes - a.emotes
+                return b.messages - a.messages
             })
         // No limit - show all users
 
