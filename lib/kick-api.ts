@@ -9,8 +9,8 @@ import { db } from '@/lib/db'
 import { decryptToken } from '@/lib/encryption'
 
 // Kick Dev API endpoints
-// Base URL for Kick Dev API v1
-const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/v1'
+// Base URL for Kick Dev API v1 (public endpoint)
+const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/public/v1'
 // OAuth token endpoint (hosted on id.kick.com)
 const KICK_AUTH_URL = process.env.KICK_AUTH_URL || 'https://id.kick.com/oauth/token'
 // Broadcaster channel slug to use for API calls
@@ -78,7 +78,7 @@ async function getBroadcasterToken(): Promise<string> {
     // Try to get broadcaster's token from database
     try {
         console.log(`[Kick API] Looking for broadcaster token for: ${BROADCASTER_SLUG}`)
-        
+
         const broadcaster = await db.user.findFirst({
             where: {
                 username: {
@@ -97,14 +97,14 @@ async function getBroadcasterToken(): Promise<string> {
             try {
                 const accessToken = decryptToken(broadcaster.access_token_encrypted)
                 console.log(`[Kick API] Successfully retrieved token for broadcaster: ${broadcaster.username}`)
-                
+
                 // Cache the token (assume 1 hour validity, will be refreshed on next call if expired)
                 cachedToken = {
                     token: accessToken,
                     expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
                     source: 'user',
                 }
-                
+
                 return accessToken
             } catch (decryptError) {
                 console.warn(`[Kick API] Failed to decrypt broadcaster token:`, decryptError instanceof Error ? decryptError.message : 'Unknown error')
@@ -254,7 +254,7 @@ function extractThumbnailUrl(thumbnail: string | KickThumbnail | null | undefine
 
 /**
  * Get channel with livestream info by slug
- * Uses GET /v1/channels/{slug} endpoint
+ * Uses GET /public/v1/channels?slug={slug} endpoint
  */
 export async function getChannelWithLivestream(slug: string): Promise<StreamThumbnail | null> {
     try {
@@ -262,8 +262,8 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
         console.log(`[Kick API] Fetching channel data for: ${slug}`)
 
         // Try the official Kick Dev API endpoint
-        // Format: GET /v1/channels/{slug}
-        const channel: KickChannel = await kickApiRequest(`/channels/${slug}`)
+        // Format: GET /public/v1/channels?slug={slug}
+        const channel: KickChannel = await kickApiRequest(`/channels?slug=${encodeURIComponent(slug)}`)
         const duration = Date.now() - startTime
 
         console.log(`[Kick API] Fetched channel ${slug} in ${duration}ms`)
