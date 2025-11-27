@@ -32,9 +32,9 @@ interface KickLivestream {
     broadcaster_user_id: number
     channel_id: number
     slug: string
-    stream_title: string
+    stream_title?: string
     thumbnail: string | KickThumbnail | null
-    viewer_count: number
+    viewer_count?: number
     started_at: string
     category?: {
         id: number
@@ -52,12 +52,19 @@ interface KickLivestream {
     duration?: number
 }
 
+interface KickChannelStream {
+    is_live: boolean
+    custom_tags?: string[]
+}
+
 interface KickChannel {
-    id: number
-    user_id: number
+    id?: number
+    broadcaster_user_id?: number
     slug: string
-    livestream: KickLivestream | null
-    thumbnail?: string | KickThumbnail | null
+    banner_picture?: string | null
+    stream?: KickChannelStream | null
+    livestream?: KickLivestream | null // Legacy v2 API format
+    thumbnail?: string | KickThumbnail | null // Legacy v2 API format
     user?: {
         id: number
         username: string
@@ -394,8 +401,8 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
         const startTime = Date.now()
         console.log(`[Kick API] Fetching channel data for: ${slug}`)
 
-        // Try public v1 API first
-        const endpoint = `/channels?slug=${encodeURIComponent(slug)}`
+        // Try public v1 API first - use slug[] array syntax as per official API docs
+        const endpoint = `/channels?slug[]=${encodeURIComponent(slug)}`
         const url = `${KICK_API_BASE}${endpoint}`
 
         let response: Response | null = null
@@ -434,8 +441,13 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             }
         }
 
-        // Fallback to legacy v2 API if v1 fails
+        // Fallback to legacy v2 API if v1 fails or returns 401
         if (useV2Fallback || !response || !response.ok) {
+            // If response exists but not ok, log the error
+            if (response && !response.ok) {
+                const errorText = await response.text().catch(() => 'Could not read error')
+                console.warn(`[Kick API] V1 API failed: ${response.status} ${errorText.substring(0, 200)}`)
+            }
             console.log(`[Kick API] Using legacy v2 API fallback for ${slug}`)
             const v2Url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
 
@@ -487,61 +499,177 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
         const responseData: any = await response.json()
         const duration = Date.now() - startTime
 
-        // Handle both single object and wrapped response formats
-        // API might return { data: [...] } or just a single channel object
-        let channel: KickChannel
+        // Log raw response for debugging
+        console.log(`[Kick API] Raw response for ${slug}:`, JSON.stringify(responseData, null, 2).substring(0, 500))
+
+        // Handle v1 API response format: { data: [channel1, channel2, ...] }
+        let channel: KickChannel | null = null
+
         if (Array.isArray(responseData.data)) {
-            channel = responseData.data[0]
-        } else if (responseData.data && typeof responseData.data === 'object') {
+            // Response is { data: [channel1, channel2, ...] }
+            if (responseData.data.length > 0) {
+                channel = responseData.data[0]
+                console.log(`[Kick API] Found channel in array format, using first item`)
+            } else {
+                console.warn(`[Kick API] Response has empty data array`)
+            }
+        } else if (responseData.data && typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
+            // Response is { data: { channel object } }
             channel = responseData.data
-        } else {
+            console.log(`[Kick API] Found channel in data object format`)
+        } else if (responseData.id || responseData.broadcaster_user_id) {
+            // Response is directly a channel object (legacy format)
             channel = responseData
+            console.log(`[Kick API] Found channel in direct object format`)
+        } else {
+            console.warn(`[Kick API] Unknown response format. Keys:`, Object.keys(responseData))
         }
 
-        if (!channel || !channel.id) {
-            console.warn(`[Kick API] Invalid channel response format for ${slug}`)
+        if (!channel || (!channel.id && !channel.broadcaster_user_id)) {
+            console.warn(`[Kick API] Invalid channel response format for ${slug}. Response structure:`, {
+                hasData: !!responseData.data,
+                dataIsArray: Array.isArray(responseData.data),
+                dataType: typeof responseData.data,
+                hasId: !!responseData.id,
+                hasBroadcasterUserId: !!responseData.broadcaster_user_id,
+                keys: Object.keys(responseData),
+                fullResponse: JSON.stringify(responseData).substring(0, 300),
+            })
+            // Try v2 API as fallback
+            console.log(`[Kick API] Falling back to v2 API due to invalid response format`)
+            const v2Url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
+            const v2Response = await fetch(v2Url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                },
+            })
+
+            if (v2Response.ok) {
+                const v2Data: any = await v2Response.json()
+                const livestream = v2Data.livestream
+                if (livestream && livestream.is_live) {
+                    let thumbnailUrl: string | null = null
+                    if (livestream.thumbnail) {
+                        thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
+                    }
+                    return {
+                        streamId: livestream.id?.toString() || v2Data.id?.toString() || 'unknown',
+                        channelSlug: slug,
+                        thumbnailUrl,
+                        fetchedAt: new Date(),
+                    }
+                }
+            }
             return null
         }
 
         console.log(`[Kick API] Fetched channel ${slug} in ${duration}ms`)
+
         console.log(`[Kick API] Channel data:`, JSON.stringify({
             id: channel.id,
+            broadcaster_user_id: channel.broadcaster_user_id,
             slug: channel.slug,
-            hasLivestream: !!channel.livestream,
-            livestreamIsLive: channel.livestream?.is_live ?? (channel.livestream ? true : false),
+            hasStream: !!channel.stream,
+            streamIsLive: channel.stream?.is_live,
         }, null, 2))
 
-        // Check if channel has livestream
-        const livestream = channel.livestream
-        // If livestream exists, return it (new API format doesn't always have is_live field)
-        // If livestream is null, channel is offline
-        if (!livestream) {
-            console.log(`[Kick API] Channel ${slug} has no active livestream`)
+        // Use /livestreams endpoint as the source of truth for live status and thumbnails
+        // According to docs.kick.com/apis/livestreams, this endpoint returns thumbnail directly
+        // If it returns data, the stream is live; if empty array, stream is offline
+        let thumbnailUrl: string | null = null
+        const broadcasterUserId = channel.broadcaster_user_id
+        let streamId: string = (channel.id?.toString() || broadcasterUserId?.toString() || 'unknown')
+
+        // Fetch from livestreams endpoint - this is the authoritative source for live streams and thumbnails
+        if (broadcasterUserId) {
+            try {
+                // Fetch thumbnail from /livestreams endpoint using broadcaster_user_id
+                // Note: /livestreams endpoint doesn't support slug, only broadcaster_user_id[]
+                const livestreamsEndpoint = `/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
+                const livestreamsUrl = `${KICK_API_BASE}${livestreamsEndpoint}`
+
+                let livestreamsResponse: Response | null = null
+
+                // Try without authentication first
+                livestreamsResponse = await fetch(livestreamsUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                })
+
+                // If we get 401, try with authentication
+                if (livestreamsResponse.status === 401) {
+                    const token = await getBroadcasterToken()
+                    const clientId = process.env.KICK_CLIENT_ID
+
+                    const headers: Record<string, string> = {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    }
+
+                    if (clientId) {
+                        headers['Client-Id'] = clientId
+                    }
+
+                    livestreamsResponse = await fetch(livestreamsUrl, { headers })
+                }
+
+                if (livestreamsResponse && livestreamsResponse.ok) {
+                    const livestreamsData: any = await livestreamsResponse.json()
+
+                    // Livestreams API returns { data: [...] }
+                    // If data array has items, stream is live and contains thumbnail
+                    if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
+                        const livestream = livestreamsData.data[0]
+
+                        // Extract thumbnail from livestream (per docs.kick.com/apis/livestreams)
+                        if (livestream.thumbnail) {
+                            thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
+                            console.log(`[Kick API] Extracted thumbnail from livestreams endpoint: ${thumbnailUrl?.substring(0, 80)}...`)
+                        }
+
+                        // Use broadcaster_user_id or channel_id for streamId
+                        if (livestream.broadcaster_user_id) {
+                            streamId = livestream.broadcaster_user_id.toString()
+                        } else if (livestream.channel_id) {
+                            streamId = livestream.channel_id.toString()
+                        }
+
+                        console.log(`[Kick API] Stream is LIVE (found in /livestreams endpoint)`)
+                    } else {
+                        // Empty data array means stream is not live
+                        console.log(`[Kick API] Channel ${slug} has no active livestream (empty livestreams response)`)
+                        return null
+                    }
+                } else {
+                    const errorText = livestreamsResponse ? await livestreamsResponse.text().catch(() => '') : 'no response'
+                    console.warn(`[Kick API] Livestreams endpoint returned ${livestreamsResponse?.status || 'no response'}: ${errorText.substring(0, 200)}`)
+                    // If livestreams endpoint fails, we can't determine if stream is live
+                    return null
+                }
+            } catch (livestreamsError) {
+                console.warn(`[Kick API] Failed to fetch thumbnail from livestreams endpoint:`,
+                    livestreamsError instanceof Error ? livestreamsError.message : 'Unknown error')
+                // If livestreams fetch fails, we can't determine if stream is live
+                return null
+            }
+        } else {
+            console.warn(`[Kick API] No broadcaster_user_id found in channel response, cannot fetch thumbnail from livestreams endpoint`)
+            // Without broadcaster_user_id, we can't query /livestreams, so return null
             return null
         }
 
-        // Extract thumbnail from livestream or channel
-        let thumbnailUrl: string | null = null
-
-        if (livestream.thumbnail) {
-            thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
-            console.log(`[Kick API] Extracted thumbnail from livestream object`)
-        } else if (channel.thumbnail) {
-            thumbnailUrl = extractThumbnailUrl(channel.thumbnail)
-            console.log(`[Kick API] Extracted thumbnail from channel object`)
-        }
-
-        if (thumbnailUrl) {
-            console.log(`[Kick API] Found thumbnail for ${slug}: ${thumbnailUrl.substring(0, 80)}...`)
+        // If we got here, livestreams endpoint returned data (stream is live)
+        // But check if we actually got a thumbnail
+        if (!thumbnailUrl) {
+            console.warn(`[Kick API] Stream is live but no thumbnail found in livestreams response for ${slug} (streamId: ${streamId})`)
+            // Still return the data even without thumbnail, as stream is confirmed live
         } else {
-            const livestreamId = livestream.id || livestream.broadcaster_user_id || channel.id
-            console.warn(`[Kick API] No thumbnail found for channel ${slug} (livestream ID: ${livestreamId})`)
+            console.log(`[Kick API] Successfully found thumbnail for live stream ${slug}: ${thumbnailUrl.substring(0, 80)}...`)
         }
-
-        // Use broadcaster_user_id or id for streamId
-        const streamId = livestream.id?.toString() ||
-                        livestream.broadcaster_user_id?.toString() ||
-                        channel.id.toString()
 
         return {
             streamId,
@@ -637,14 +765,167 @@ export async function getLivestreams(filters?: {
 
 /**
  * Sync thumbnails for active streams
- * Fetches thumbnails for all active stream sessions
+ * Optimized to batch fetch channels and livestreams (up to 50 at once per API limit)
  */
 export async function syncThumbnailsForActiveStreams(
     channelSlugs: string[]
 ): Promise<Map<string, string | null>> {
     const results = new Map<string, string | null>()
 
-    // Process in parallel with rate limiting (max 5 concurrent)
+    if (channelSlugs.length === 0) {
+        return results
+    }
+
+    try {
+        // Step 1: Batch fetch channels to get broadcaster_user_ids (up to 50 at once)
+        const channelBatchSize = 50
+        const slugToBroadcasterId = new Map<string, number>()
+        const slugToChannelId = new Map<string, number>()
+
+        for (let i = 0; i < channelSlugs.length; i += channelBatchSize) {
+            const batch = channelSlugs.slice(i, i + channelBatchSize)
+
+            try {
+                // Build query with slug[] array syntax
+                const params = new URLSearchParams()
+                batch.forEach(slug => {
+                    params.append('slug[]', slug)
+                })
+
+                const endpoint = `/channels?${params.toString()}`
+                const url = `${KICK_API_BASE}${endpoint}`
+
+                let response: Response | null = null
+
+                // Try without authentication first
+                response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                })
+
+                // If we get 401, try with authentication
+                if (response.status === 401) {
+                    const token = await getBroadcasterToken()
+                    const clientId = process.env.KICK_CLIENT_ID
+
+                    const headers: Record<string, string> = {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    }
+
+                    if (clientId) {
+                        headers['Client-Id'] = clientId
+                    }
+
+                    response = await fetch(url, { headers })
+                }
+
+                if (response && response.ok) {
+                    const channelData: any = await response.json()
+
+                    if (Array.isArray(channelData.data)) {
+                        channelData.data.forEach((channel: any) => {
+                            if (channel.slug && channel.broadcaster_user_id) {
+                                slugToBroadcasterId.set(channel.slug.toLowerCase(), channel.broadcaster_user_id)
+                                if (channel.id) {
+                                    slugToChannelId.set(channel.slug.toLowerCase(), channel.id)
+                                }
+                            }
+                        })
+                    }
+                } else {
+                    console.warn(`[Kick API] Failed to batch fetch channels: ${response?.status || 'no response'}`)
+                }
+            } catch (error) {
+                console.error(`[Kick API] Error batch fetching channels:`, error)
+            }
+
+            // Small delay between batches
+            if (i + channelBatchSize < channelSlugs.length) {
+                await new Promise(resolve => setTimeout(resolve, 100))
+            }
+        }
+
+        // Step 2: Batch fetch livestreams using broadcaster_user_ids (up to 50 at once)
+        const broadcasterIds = Array.from(slugToBroadcasterId.values())
+
+        if (broadcasterIds.length === 0) {
+            console.warn(`[Kick API] No broadcaster_user_ids found for any channels`)
+            // Fallback to individual fetches
+            return await syncThumbnailsFallback(channelSlugs)
+        }
+
+        const livestreamBatchSize = 50
+        for (let i = 0; i < broadcasterIds.length; i += livestreamBatchSize) {
+            const batch = broadcasterIds.slice(i, i + livestreamBatchSize)
+
+            try {
+                const livestreamsData = await getLivestreams({
+                    broadcaster_user_id: batch,
+                    limit: 100,
+                })
+
+                // Map livestreams back to slugs using broadcaster_user_id or slug
+                livestreamsData.forEach(livestream => {
+                    // First try to match by slug (most reliable)
+                    if (livestream.channelSlug) {
+                        const matchingSlug = channelSlugs.find(s => s.toLowerCase() === livestream.channelSlug.toLowerCase())
+                        if (matchingSlug) {
+                            results.set(matchingSlug, livestream.thumbnailUrl)
+                            return
+                        }
+                    }
+
+                    // Fallback: match by broadcaster_user_id
+                    const broadcasterIdStr = livestream.streamId
+                    for (const [slug, broadcasterId] of slugToBroadcasterId.entries()) {
+                        if (broadcasterId.toString() === broadcasterIdStr) {
+                            results.set(slug, livestream.thumbnailUrl)
+                            break
+                        }
+                    }
+                })
+            } catch (error) {
+                console.error(`[Kick API] Error batch fetching livestreams:`, error)
+            }
+
+            // Small delay between batches
+            if (i + livestreamBatchSize < broadcasterIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 100))
+            }
+        }
+
+        // Step 3: Ensure all slugs have a result (set null for missing ones)
+        channelSlugs.forEach(slug => {
+            if (!results.has(slug)) {
+                results.set(slug, null)
+            }
+        })
+
+        console.log(`[Kick API] Synced thumbnails for ${results.size} channels (${Array.from(results.values()).filter(v => v !== null).length} with thumbnails)`)
+
+    } catch (error) {
+        console.error(`[Kick API] Error in syncThumbnailsForActiveStreams:`, error)
+        // Fallback to individual fetches
+        return await syncThumbnailsFallback(channelSlugs)
+    }
+
+    return results
+}
+
+/**
+ * Fallback: Fetch thumbnails one by one (used if batch fetch fails)
+ */
+async function syncThumbnailsFallback(
+    channelSlugs: string[]
+): Promise<Map<string, string | null>> {
+    const results = new Map<string, string | null>()
+
+    console.log(`[Kick API] Using fallback: fetching thumbnails individually`)
+
     const batchSize = 5
     for (let i = 0; i < channelSlugs.length; i += batchSize) {
         const batch = channelSlugs.slice(i, i + batchSize)
