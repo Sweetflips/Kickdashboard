@@ -387,19 +387,22 @@ function extractThumbnailUrl(thumbnail: string | KickThumbnail | null | undefine
 
 /**
  * Get channel with livestream info by slug
- * Uses GET /public/v1/channels?slug={slug} endpoint
- * Tries without auth first, then with auth if needed
+ * Tries public v1 API first, falls back to legacy v2 API if needed
  */
 export async function getChannelWithLivestream(slug: string): Promise<StreamThumbnail | null> {
     try {
         const startTime = Date.now()
         console.log(`[Kick API] Fetching channel data for: ${slug}`)
 
+        // Try public v1 API first
         const endpoint = `/channels?slug=${encodeURIComponent(slug)}`
         const url = `${KICK_API_BASE}${endpoint}`
 
-        // Try without authentication first (public endpoint might not require auth)
-        let response = await fetch(url, {
+        let response: Response | null = null
+        let useV2Fallback = false
+
+        // Try without authentication first
+        response = await fetch(url, {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
@@ -423,6 +426,57 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             }
 
             response = await fetch(url, { headers })
+
+            // If still 401, fall back to v2 API
+            if (response.status === 401) {
+                console.log(`[Kick API] Still 401 with auth, falling back to v2 API`)
+                useV2Fallback = true
+            }
+        }
+
+        // Fallback to legacy v2 API if v1 fails
+        if (useV2Fallback || !response || !response.ok) {
+            console.log(`[Kick API] Using legacy v2 API fallback for ${slug}`)
+            const v2Url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
+
+            response = await fetch(v2Url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                },
+            })
+
+            if (!response.ok) {
+                const errorText = await response.text()
+                console.warn(`[Kick API] V2 API also failed: ${response.status} ${errorText}`)
+                return null
+            }
+
+            // Parse v2 API response
+            const v2Data: any = await response.json()
+            const livestream = v2Data.livestream
+
+            if (!livestream || !livestream.is_live) {
+                console.log(`[Kick API] Channel ${slug} has no active livestream (v2 API)`)
+                return null
+            }
+
+            let thumbnailUrl: string | null = null
+            if (livestream.thumbnail) {
+                thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
+            }
+
+            const streamId = livestream.id?.toString() ||
+                            livestream.broadcaster_user_id?.toString() ||
+                            v2Data.id?.toString() ||
+                            'unknown'
+
+            return {
+                streamId,
+                channelSlug: slug,
+                thumbnailUrl,
+                fetchedAt: new Date(),
+            }
         }
 
         if (!response.ok) {

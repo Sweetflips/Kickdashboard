@@ -60,8 +60,17 @@ export async function GET(request: Request) {
 
             const state = crypto.randomUUID()
             const { codeVerifier, codeChallenge } = generatePKCE()
-            // Add chat:write scope for sending messages
-            const scopes = ['events:subscribe', 'user:read', 'chat:write']
+            // Request all necessary scopes for full functionality:
+            // - events:subscribe: Subscribe to webhook events (chat, follows, subscriptions)
+            // - user:read: Read user information (including email)
+            // - chat:write: Send chat messages
+            // - channel:read: Read channel information (for thumbnails, stream status)
+            const scopes = [
+                'events:subscribe',
+                'user:read',
+                'chat:write',
+                'channel:read',
+            ]
 
             const authUrl = `${KICK_OAUTH_BASE}/oauth/authorize?` +
                 `response_type=code&` +
