@@ -171,11 +171,29 @@ export async function POST(request: Request) {
         // Update tokens in database if kick_user_id is provided
         if (kickUserId && tokenData.access_token) {
             try {
+                const { encryptToken } = await import('@/lib/encryption')
+
+                let encryptedAccessToken: string | null = null
+                let encryptedRefreshToken: string | null = null
+
+                try {
+                    if (tokenData.access_token) {
+                        encryptedAccessToken = encryptToken(tokenData.access_token)
+                    }
+                    if (tokenData.refresh_token) {
+                        encryptedRefreshToken = encryptToken(tokenData.refresh_token)
+                    }
+                } catch (encryptError) {
+                    console.warn('⚠️ Could not encrypt tokens during refresh:', encryptError instanceof Error ? encryptError.message : 'Unknown error')
+                }
+
                 await db.user.update({
                     where: { kick_user_id: kickUserId },
                     data: {
                         access_token_hash: hashToken(tokenData.access_token),
                         refresh_token_hash: tokenData.refresh_token ? hashToken(tokenData.refresh_token) : undefined,
+                        access_token_encrypted: encryptedAccessToken || undefined,
+                        refresh_token_encrypted: encryptedRefreshToken || undefined,
                         updated_at: new Date(),
                     },
                 })

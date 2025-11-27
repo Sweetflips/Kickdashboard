@@ -6,7 +6,7 @@
  */
 
 import { db } from '@/lib/db'
-import { decryptToken, encryptToken } from '@/lib/encryption'
+import { decryptToken, encryptToken, hashToken } from '@/lib/encryption'
 
 // Kick Dev API endpoints
 // Base URL for Kick Dev API v1 (public endpoint)
@@ -29,14 +29,26 @@ interface KickThumbnail {
 }
 
 interface KickLivestream {
-    id: number
-    slug: string
+    broadcaster_user_id: number
     channel_id: number
-    session_title: string | null
-    is_live: boolean
-    thumbnail: KickThumbnail | null
+    slug: string
+    stream_title: string
+    thumbnail: string | KickThumbnail | null
     viewer_count: number
-    created_at: string
+    started_at: string
+    category?: {
+        id: number
+        name: string
+        thumbnail: string
+    }
+    custom_tags?: string[]
+    has_mature_content?: boolean
+    language?: string
+    // Legacy fields for backward compatibility
+    id?: number
+    session_title?: string | null
+    is_live?: boolean
+    created_at?: string
     duration?: number
 }
 
@@ -46,6 +58,19 @@ interface KickChannel {
     slug: string
     livestream: KickLivestream | null
     thumbnail?: string | KickThumbnail | null
+    user?: {
+        id: number
+        username: string
+        profile_picture?: string | null
+        bio?: string | null
+    }
+}
+
+interface KickUser {
+    user_id: number
+    name: string
+    email: string | null
+    profile_picture: string | null
 }
 
 interface StreamThumbnail {
@@ -183,10 +208,12 @@ async function refreshBroadcasterToken(): Promise<string | null> {
 
         const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
 
-        // Update tokens in database
+        // Update tokens in database (both encrypted and hashed)
         await db.user.update({
             where: { kick_user_id: broadcaster.kick_user_id },
             data: {
+                access_token_hash: hashToken(data.access_token),
+                refresh_token_hash: data.refresh_token ? hashToken(data.refresh_token) : undefined,
                 access_token_encrypted: encryptToken(data.access_token),
                 ...(data.refresh_token && {
                     refresh_token_encrypted: encryptToken(data.refresh_token),
@@ -403,20 +430,38 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             throw new Error(`Kick API error: ${response.status} ${errorText}`)
         }
 
-        const channel: KickChannel = await response.json()
+        const responseData: any = await response.json()
         const duration = Date.now() - startTime
+
+        // Handle both single object and wrapped response formats
+        // API might return { data: [...] } or just a single channel object
+        let channel: KickChannel
+        if (Array.isArray(responseData.data)) {
+            channel = responseData.data[0]
+        } else if (responseData.data && typeof responseData.data === 'object') {
+            channel = responseData.data
+        } else {
+            channel = responseData
+        }
+
+        if (!channel || !channel.id) {
+            console.warn(`[Kick API] Invalid channel response format for ${slug}`)
+            return null
+        }
 
         console.log(`[Kick API] Fetched channel ${slug} in ${duration}ms`)
         console.log(`[Kick API] Channel data:`, JSON.stringify({
             id: channel.id,
             slug: channel.slug,
             hasLivestream: !!channel.livestream,
-            livestreamIsLive: channel.livestream?.is_live,
-        }))
+            livestreamIsLive: channel.livestream?.is_live ?? (channel.livestream ? true : false),
+        }, null, 2))
 
         // Check if channel has livestream
         const livestream = channel.livestream
-        if (!livestream || !livestream.is_live) {
+        // If livestream exists, return it (new API format doesn't always have is_live field)
+        // If livestream is null, channel is offline
+        if (!livestream) {
             console.log(`[Kick API] Channel ${slug} has no active livestream`)
             return null
         }
@@ -435,11 +480,17 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
         if (thumbnailUrl) {
             console.log(`[Kick API] Found thumbnail for ${slug}: ${thumbnailUrl.substring(0, 80)}...`)
         } else {
-            console.warn(`[Kick API] No thumbnail found for channel ${slug} (livestream ID: ${livestream.id})`)
+            const livestreamId = livestream.id || livestream.broadcaster_user_id || channel.id
+            console.warn(`[Kick API] No thumbnail found for channel ${slug} (livestream ID: ${livestreamId})`)
         }
 
+        // Use broadcaster_user_id or id for streamId
+        const streamId = livestream.id?.toString() ||
+                        livestream.broadcaster_user_id?.toString() ||
+                        channel.id.toString()
+
         return {
-            streamId: livestream.id.toString(),
+            streamId,
             channelSlug: slug,
             thumbnailUrl,
             fetchedAt: new Date(),
@@ -462,6 +513,8 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
 
 /**
  * Get livestreams (for bulk operations)
+ * Uses GET /public/v1/livestreams endpoint
+ * Tries without auth first, then with auth if needed
  */
 export async function getLivestreams(filters?: {
     broadcaster_user_id?: number[]
@@ -480,12 +533,45 @@ export async function getLivestreams(filters?: {
 
         const queryString = params.toString()
         const endpoint = `/livestreams${queryString ? `?${queryString}` : ''}`
+        const url = `${KICK_API_BASE}${endpoint}`
 
-        const response: { data: KickLivestream[] } = await kickApiRequest(endpoint)
+        // Try without authentication first (public endpoint might not require auth)
+        let response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+        })
 
-        return response.data.map(livestream => ({
-            streamId: livestream.id.toString(),
-            channelSlug: '', // Will need to be populated from channel_id lookup if needed
+        // If we get 401, try with authentication
+        if (response.status === 401) {
+            console.log(`[Kick API] Got 401 without auth for livestreams, retrying with authentication`)
+            const token = await getBroadcasterToken()
+            const clientId = process.env.KICK_CLIENT_ID
+
+            const headers: Record<string, string> = {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            }
+
+            if (clientId) {
+                headers['Client-Id'] = clientId
+            }
+
+            response = await fetch(url, { headers })
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Kick API error: ${response.status} ${errorText}`)
+        }
+
+        const apiResponse: { data: KickLivestream[] } = await response.json()
+
+        return apiResponse.data.map(livestream => ({
+            streamId: livestream.broadcaster_user_id.toString(),
+            channelSlug: livestream.slug || '',
             thumbnailUrl: extractThumbnailUrl(livestream.thumbnail),
             fetchedAt: new Date(),
         }))
@@ -527,6 +613,123 @@ export async function syncThumbnailsForActiveStreams(
     }
 
     return results
+}
+
+/**
+ * Get users by user IDs from Kick Users API
+ * Fetches email, name, and profile_picture
+ * Requires authentication (User Access Token)
+ * Can fetch up to 50 users at once
+ */
+export async function getUsersByIds(userIds: number[]): Promise<Map<number, KickUser>> {
+    const result = new Map<number, KickUser>()
+
+    if (userIds.length === 0) {
+        return result
+    }
+
+    try {
+        // Batch fetch in chunks of 50 (API limit)
+        const batchSize = 50
+        for (let i = 0; i < userIds.length; i += batchSize) {
+            const batch = userIds.slice(i, i + batchSize)
+
+            const params = new URLSearchParams()
+            batch.forEach(id => {
+                params.append('user_id[]', id.toString())
+            })
+
+            const endpoint = `/users?${params.toString()}`
+            const url = `${KICK_API_BASE}${endpoint}`
+
+            // Try with authentication (Users API requires auth)
+            const token = await getBroadcasterToken()
+            const clientId = process.env.KICK_CLIENT_ID
+
+            const headers: Record<string, string> = {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            }
+
+            if (clientId) {
+                headers['Client-Id'] = clientId
+            }
+
+            const response = await fetch(url, { headers })
+
+            if (!response.ok) {
+                const errorText = await response.text()
+                console.warn(`[Kick API] Failed to fetch users batch: ${response.status} ${errorText}`)
+                continue
+            }
+
+            const apiResponse: { data: KickUser[] } = await response.json()
+
+            if (apiResponse.data && Array.isArray(apiResponse.data)) {
+                apiResponse.data.forEach(user => {
+                    result.set(user.user_id, user)
+                })
+            }
+
+            // Small delay between batches to avoid rate limits
+            if (i + batchSize < userIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 100))
+            }
+        }
+    } catch (error) {
+        console.error(`[Kick API] Error fetching users by IDs:`, error)
+    }
+
+    return result
+}
+
+/**
+ * Get user info from channel API by username/slug
+ * Fetches profile picture and bio if available
+ * Uses the legacy v2 API which has more user info
+ * Fallback when Users API doesn't have the user
+ */
+export async function getUserInfoBySlug(slug: string): Promise<{
+    profile_picture_url: string | null
+    bio: string | null
+} | null> {
+    try {
+        // Use legacy v2 API which has user info
+        const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
+
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+        })
+
+        if (!response.ok) {
+            return null
+        }
+
+        const channelData: any = await response.json()
+
+        // Extract profile picture from user object
+        let profilePicture: string | null = null
+        if (channelData.user?.profile_picture) {
+            profilePicture = channelData.user.profile_picture
+        } else if (channelData.user?.profilepicture) {
+            profilePicture = channelData.user.profilepicture
+        }
+
+        // Extract bio
+        const bio = channelData.user?.bio || channelData.bio || null
+
+        return {
+            profile_picture_url: profilePicture,
+            bio: bio,
+        }
+    } catch (error) {
+        console.debug(`[Kick API] Error fetching user info for ${slug}:`, error)
+        return null
+    }
 }
 
 /**
