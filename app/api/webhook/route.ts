@@ -129,6 +129,7 @@ export async function POST(request: Request) {
                             select: {
                                 id: true,
                                 kick_user_id: true,
+                                username: true,
                                 profile_picture_url: true,
                                 bio: true,
                                 email: true,
