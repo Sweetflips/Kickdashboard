@@ -34,30 +34,63 @@ export async function POST(request: Request) {
 
                 if (livestreamData && livestreamData.thumbnailUrl) {
                     console.log(`[Sync] Successfully fetched thumbnail from Kick Dev API for ${slug}`)
-                    // Find active session for this channel
-                    const activeSession = await db.streamSession.findFirst({
+
+                    // Get broadcaster_user_id from database using slug
+                    const broadcaster = await db.user.findFirst({
                         where: {
-                            channel_slug: slug,
-                            ended_at: null, // Active session
+                            username: {
+                                equals: slug,
+                                mode: 'insensitive',
+                            },
                         },
-                        orderBy: { started_at: 'desc' },
+                        select: {
+                            kick_user_id: true,
+                        },
                     })
 
-                    if (activeSession) {
-                        // Update thumbnail if different
-                        if (activeSession.thumbnail_url !== livestreamData.thumbnailUrl) {
-                            await db.streamSession.update({
-                                where: { id: activeSession.id },
-                                data: { thumbnail_url: livestreamData.thumbnailUrl },
-                            })
-                            console.log(`[Sync] Updated thumbnail for active session ${activeSession.id}`)
-                            liveStreamUpdated = true
-                        } else {
-                            console.log(`[Sync] Thumbnail already up to date for session ${activeSession.id}`)
-                        }
+                    if (!broadcaster || !broadcaster.kick_user_id) {
+                        console.warn(`[Sync] Could not find broadcaster_user_id for channel ${slug}`)
+                        liveStreamError = 'Broadcaster not found in database'
                     } else {
-                        console.log(`[Sync] No active session found for channel ${slug}`)
-                        liveStreamError = 'No active stream session found'
+                        const broadcasterUserId = BigInt(broadcaster.kick_user_id)
+
+                        // Find active session for this channel
+                        const activeSession = await db.streamSession.findFirst({
+                            where: {
+                                channel_slug: slug,
+                                ended_at: null, // Active session
+                            },
+                            orderBy: { started_at: 'desc' },
+                        })
+
+                        if (activeSession) {
+                            // Update thumbnail if different
+                            if (activeSession.thumbnail_url !== livestreamData.thumbnailUrl) {
+                                await db.streamSession.update({
+                                    where: { id: activeSession.id },
+                                    data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                })
+                                console.log(`[Sync] Updated thumbnail for active session ${activeSession.id}`)
+                                liveStreamUpdated = true
+                            } else {
+                                console.log(`[Sync] Thumbnail already up to date for session ${activeSession.id}`)
+                            }
+                        } else {
+                            // Stream is live but no session exists - create one
+                            console.log(`[Sync] Stream is live but no active session found - creating new session for ${slug}`)
+                            const newSession = await db.streamSession.create({
+                                data: {
+                                    broadcaster_user_id: broadcasterUserId,
+                                    channel_slug: slug,
+                                    session_title: null, // Could fetch from livestreams API if needed
+                                    thumbnail_url: livestreamData.thumbnailUrl,
+                                    started_at: new Date(),
+                                    peak_viewer_count: 0,
+                                },
+                            })
+                            console.log(`[Sync] Created new active session ${newSession.id} with thumbnail`)
+                            liveStreamUpdated = true
+                        }
                     }
                 } else {
                     console.log(`[Sync] No livestream data or thumbnail found for channel ${slug}`)
