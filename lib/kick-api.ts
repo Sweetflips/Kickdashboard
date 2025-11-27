@@ -275,10 +275,10 @@ async function kickApiRequest<T>(
             // Get fresh token on each attempt (especially after 401)
             const token = await getBroadcasterToken()
 
-            const headers: HeadersInit = {
+            const headers: Record<string, string> = {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
-                ...options.headers,
+                ...(options.headers as Record<string, string>),
             }
 
             // Add Client-Id header if available (required by Kick API)
@@ -385,7 +385,7 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             const token = await getBroadcasterToken()
             const clientId = process.env.KICK_CLIENT_ID
 
-            const headers: HeadersInit = {
+            const headers: Record<string, string> = {
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
