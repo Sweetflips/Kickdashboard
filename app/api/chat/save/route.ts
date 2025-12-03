@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isBot } from '@/lib/points'
 import { enqueuePointJob } from '@/lib/point-queue'
-import { getActiveGiveaway, isUserEligible } from '@/lib/giveaway'
 import { detectBotMessage } from '@/lib/bot-detection'
 import type { ChatMessage } from '@/lib/chat-store'
 
