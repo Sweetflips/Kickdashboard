@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
-import Toast from '@/components/Toast'
+import { Toast } from '@/components/Toast'
 
 export default function CreateRafflePage() {
     const router = useRouter()

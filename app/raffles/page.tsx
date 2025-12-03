@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
 import RaffleCard from '@/components/RaffleCard'
 import HowToEarnPointsModal from '@/components/HowToEarnPointsModal'
-import Toast from '@/components/Toast'
+import { Toast } from '@/components/Toast'
 
 interface Raffle {
     id: string

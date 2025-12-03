@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
-import Toast from '@/components/Toast'
+import { Toast } from '@/components/Toast'
 
 interface Raffle {
     id: string
