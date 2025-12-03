@@ -65,7 +65,7 @@ export default function RaffleCard({ raffle, userBalance, isSubscriber, onPurcha
     }
 
     const canPurchase = raffle.status === 'active' && (!raffle.sub_only || isSubscriber)
-    const isSoldOut = raffle.total_tickets_cap !== null && raffle.total_tickets_sold >= raffle.total_tickets_cap
+    const isSoldOut = raffle.total_tickets_cap != null && raffle.total_tickets_sold >= raffle.total_tickets_cap
 
     return (
         <>
