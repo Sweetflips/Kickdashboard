@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isBot, awardPoint, awardEmotes } from '@/lib/points'
-import { getActiveGiveaway, isUserEligible } from '@/lib/giveaway'
 import { getChannelWithLivestream } from '@/lib/kick-api'
 import type { ChatMessage } from '@/lib/chat-store'
 
@@ -455,55 +454,6 @@ export async function POST(request: Request) {
                 })
             }
 
-            // Auto-entry for active giveaways - update entry points as user earns more
-            // Only process when stream is active
-            if (!isBot(senderUsername) && sessionIsActive && activeSession) {
-                try {
-                    const activeGiveaway = await getActiveGiveaway(broadcasterUserId, activeSession.id)
-                    if (activeGiveaway && activeGiveaway.stream_session_id === activeSession.id) {
-                        // Check if user is eligible based on stream session points
-                        const eligible = await isUserEligible(senderUserId, activeGiveaway.entry_min_points, activeSession.id)
-                        if (eligible) {
-                            // Get user's current points from this stream session
-                            const sessionPointsResult = await db.pointHistory.aggregate({
-                                where: {
-                                    stream_session_id: activeSession.id,
-                                    user_id: senderUser.id,
-                                },
-                                _sum: {
-                                    points_earned: true,
-                                },
-                            })
-
-                            const sessionPoints = sessionPointsResult._sum.points_earned || 0
-
-                            if (sessionPoints >= activeGiveaway.entry_min_points) {
-                                // Upsert entry - update points if exists, create if not
-                                await db.giveawayEntry.upsert({
-                                    where: {
-                                        giveaway_id_user_id: {
-                                            giveaway_id: activeGiveaway.id,
-                                            user_id: senderUser.id,
-                                        },
-                                    },
-                                    update: {
-                                        points_at_entry: sessionPoints, // Update tickets as points increase
-                                    },
-                                    create: {
-                                        giveaway_id: activeGiveaway.id,
-                                        user_id: senderUser.id,
-                                        points_at_entry: sessionPoints,
-                                    },
-                                })
-                                console.log(`🎁 Updated ${message.sender.username} giveaway entry: ${sessionPoints} tickets`)
-                            }
-                        }
-                    }
-                } catch (giveawayError) {
-                    // Don't fail the entire request if giveaway entry fails
-                    console.error('Error processing giveaway auto-entry:', giveawayError)
-                }
-            }
         } catch (dbError) {
             console.error('❌ Error saving message to database:', dbError)
             return NextResponse.json(
