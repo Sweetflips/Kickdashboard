@@ -15,6 +15,14 @@ interface Raffle {
     total_entries: number
     total_tickets_sold?: number
     prize_description: string
+    drawn_at?: string
+}
+
+interface Winner {
+    id: string
+    username: string
+    tickets: number
+    selected_at: string
 }
 
 export default function AdminRafflesPage() {
@@ -26,6 +34,8 @@ export default function AdminRafflesPage() {
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [editingRaffle, setEditingRaffle] = useState<Raffle | null>(null)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+    const [viewingWinners, setViewingWinners] = useState<{ raffle: Raffle; winners: Winner[] } | null>(null)
+    const [loadingWinners, setLoadingWinners] = useState(false)
 
     useEffect(() => {
         checkAdmin()
@@ -145,6 +155,33 @@ export default function AdminRafflesPage() {
         } catch (error) {
             console.error('Error drawing winners:', error)
             setToast({ message: 'Failed to draw winners. Try again or contact support.', type: 'error' })
+        }
+    }
+
+    const handleViewWinners = async (raffle: Raffle) => {
+        try {
+            setLoadingWinners(true)
+            const token = localStorage.getItem('kick_access_token')
+            if (!token) return
+
+            const response = await fetch(`/api/raffles/${raffle.id}/winners`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                setViewingWinners({ raffle, winners: data.winners || [] })
+            } else {
+                const error = await response.json()
+                setToast({ message: error.error || 'Failed to fetch winners', type: 'error' })
+            }
+        } catch (error) {
+            console.error('Error fetching winners:', error)
+            setToast({ message: 'Failed to fetch winners', type: 'error' })
+        } finally {
+            setLoadingWinners(false)
         }
     }
 
@@ -336,15 +373,13 @@ export default function AdminRafflesPage() {
                                                         Draw Winners
                                                     </button>
                                                 )}
-                                                {raffle.status === 'completed' && (
+                                                {raffle.status === 'completed' && raffle.drawn_at && (
                                                     <button
-                                                        onClick={() => {
-                                                            // View winners modal - implement this
-                                                            alert('View winners feature coming soon')
-                                                        }}
-                                                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                                        onClick={() => handleViewWinners(raffle)}
+                                                        disabled={loadingWinners}
+                                                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                                                     >
-                                                        View Winners
+                                                        {loadingWinners ? 'Loading...' : 'View Winners'}
                                                     </button>
                                                 )}
                                                 {raffle.total_entries === 0 && (
@@ -371,6 +406,80 @@ export default function AdminRafflesPage() {
                     type={toast.type}
                     onClose={() => setToast(null)}
                 />
+            )}
+
+            {/* View Winners Modal */}
+            {viewingWinners && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-kick-surface rounded-xl max-w-lg w-full max-h-[80vh] overflow-hidden">
+                        <div className="p-6 border-b border-gray-200 dark:border-kick-border">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text">
+                                        🎉 Raffle Winners
+                                    </h2>
+                                    <p className="text-small text-gray-600 dark:text-kick-text-secondary mt-1">
+                                        {viewingWinners.raffle.title}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setViewingWinners(null)}
+                                    className="text-gray-500 hover:text-gray-700 dark:text-kick-text-secondary dark:hover:text-kick-text"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6 overflow-y-auto max-h-[60vh]">
+                            {viewingWinners.winners.length === 0 ? (
+                                <p className="text-center text-gray-500 dark:text-kick-text-secondary py-8">
+                                    No winners have been drawn yet.
+                                </p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {viewingWinners.winners.map((winner, index) => (
+                                        <div
+                                            key={winner.id}
+                                            className="flex items-center justify-between p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-2xl">
+                                                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏆'}
+                                                </span>
+                                                <div>
+                                                    <p className="font-semibold text-gray-900 dark:text-kick-text">
+                                                        {winner.username}
+                                                    </p>
+                                                    <p className="text-small text-gray-500 dark:text-kick-text-secondary">
+                                                        {winner.tickets} ticket{winner.tickets !== 1 ? 's' : ''}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className="text-small text-gray-500 dark:text-kick-text-secondary">
+                                                #{index + 1}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {viewingWinners.raffle.drawn_at && (
+                                <p className="text-center text-small text-gray-500 dark:text-kick-text-secondary mt-4">
+                                    Drawn on {new Date(viewingWinners.raffle.drawn_at).toLocaleString()}
+                                </p>
+                            )}
+                        </div>
+                        <div className="p-4 border-t border-gray-200 dark:border-kick-border">
+                            <button
+                                onClick={() => setViewingWinners(null)}
+                                className="w-full py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-dark transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </AppLayout>
     )

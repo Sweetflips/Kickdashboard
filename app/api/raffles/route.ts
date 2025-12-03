@@ -112,6 +112,7 @@ export async function GET(request: Request) {
                     user_tickets: userTickets,
                     total_entries: raffle._count.entries,
                     created_at: raffle.created_at.toISOString(),
+                    drawn_at: raffle.drawn_at?.toISOString() || null,
                 }
             })
         )
