@@ -246,6 +246,7 @@ export async function awardPoint(
                                 increment: pointsToAward,
                             },
                             last_point_earned_at: transactionNow,
+                            is_subscriber: isSub,
                             updated_at: transactionNow,
                         },
                     })

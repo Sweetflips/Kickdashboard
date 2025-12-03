@@ -60,9 +60,9 @@ model User {
   offline_sent_messages        OfflineChatMessage[] @relation("OfflineSenderMessages")
   offline_broadcaster_messages OfflineChatMessage[] @relation("OfflineBroadcasterMessages")
   stream_sessions              StreamSession[]
-  giveaways                    Giveaway[]
-  giveaway_entries             GiveawayEntry[]
   user_sessions                UserSession[]
+  raffles_created              Raffle[]
+  raffle_entries               RaffleEntry[]
 
   @@map("users")
 }
@@ -84,7 +84,6 @@ model StreamSession {
   broadcaster   User           @relation(fields: [broadcaster_user_id], references: [kick_user_id])
   chat_messages ChatMessage[]
   point_history PointHistory[]
-  giveaways     Giveaway[]
 
   @@map("stream_sessions")
 }
@@ -144,6 +143,7 @@ model UserPoints {
   total_points         Int       @default(0)
   total_emotes         Int       @default(0)
   last_point_earned_at DateTime?
+  is_subscriber        Boolean   @default(false)
   created_at           DateTime  @default(now())
   updated_at           DateTime  @updatedAt
 
@@ -169,76 +169,58 @@ model PointHistory {
   @@map("point_history")
 }
 
-model Giveaway {
-  id                  BigInt    @id @default(autoincrement())
-  broadcaster_user_id BigInt
-  stream_session_id   BigInt?
-  title               String
-  description         String?   @db.Text
-  prize_amount        String? // Amount to giveaway (e.g., "$100", "1000 points")
-  number_of_winners   Int       @default(1) // How many winners to select
-  status              String    @default("draft") // draft, active, completed, cancelled
-  entry_min_points    Int       @default(0)
-  scheduled_start     DateTime?
-  scheduled_end       DateTime?
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
+model Raffle {
+  id                   BigInt    @id @default(autoincrement())
+  title                String
+  description          String?   @db.Text
+  type                 String    @default("general") // daily, weekly, special, sub_only, general
+  prize_description    String
+  ticket_cost          Int
+  max_tickets_per_user  Int?      // null = no limit
+  total_tickets_cap     Int?      // null = no cap
+  start_at             DateTime
+  end_at               DateTime
+  status               String    @default("upcoming") // upcoming, active, drawing, completed, cancelled
+  sub_only             Boolean   @default(false)
+  hidden_until_start   Boolean   @default(false)
+  draw_seed            String?   // For transparency
+  drawn_at             DateTime?
+  created_by           BigInt
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
 
-  // Relations
-  broadcaster    User              @relation(fields: [broadcaster_user_id], references: [kick_user_id])
-  stream_session StreamSession?    @relation(fields: [stream_session_id], references: [id])
-  segments       GiveawaySegment[]
-  entries        GiveawayEntry[]
-  winners        GiveawayWinner[]
+  creator User           @relation(fields: [created_by], references: [id])
+  entries RaffleEntry[]
+  winners RaffleWinner[]
 
-  @@map("giveaways")
+  @@map("raffles")
 }
 
-model GiveawaySegment {
+model RaffleEntry {
+  id         BigInt   @id @default(autoincrement())
+  raffle_id  BigInt
+  user_id    BigInt
+  tickets    Int      @default(1)
+  created_at DateTime @default(now())
+
+  raffle Raffle        @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [user_id], references: [id])
+  wins   RaffleWinner[]
+
+  @@unique([raffle_id, user_id])
+  @@map("raffle_entries")
+}
+
+model RaffleWinner {
   id          BigInt   @id @default(autoincrement())
-  giveaway_id BigInt
-  label       String
-  weight      Float    @default(1.0) // Probability weight (0.0 to 1.0)
-  color       String // Hex color code
-  order_index Int      @default(0)
-  created_at  DateTime @default(now())
-
-  // Relations
-  giveaway Giveaway         @relation(fields: [giveaway_id], references: [id], onDelete: Cascade)
-  winners  GiveawayWinner[]
-
-  @@map("giveaway_segments")
-}
-
-model GiveawayEntry {
-  id              BigInt   @id @default(autoincrement())
-  giveaway_id     BigInt
-  user_id         BigInt
-  points_at_entry Int
-  created_at      DateTime @default(now())
-
-  // Relations
-  giveaway Giveaway        @relation(fields: [giveaway_id], references: [id], onDelete: Cascade)
-  user     User            @relation(fields: [user_id], references: [kick_user_id])
-  winner   GiveawayWinner?
-
-  @@unique([giveaway_id, user_id])
-  @@map("giveaway_entries")
-}
-
-model GiveawayWinner {
-  id          BigInt   @id @default(autoincrement())
-  giveaway_id BigInt
-  entry_id    BigInt   @unique
-  segment_id  BigInt?
+  raffle_id   BigInt
+  entry_id    BigInt
   selected_at DateTime @default(now())
 
-  // Relations
-  giveaway Giveaway         @relation(fields: [giveaway_id], references: [id], onDelete: Cascade)
-  entry    GiveawayEntry    @relation(fields: [entry_id], references: [id], onDelete: Cascade)
-  segment  GiveawaySegment? @relation(fields: [segment_id], references: [id])
+  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
+  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
 
-  @@map("giveaway_winners")
+  @@map("raffle_winners")
 }
 
 model UserSession {
