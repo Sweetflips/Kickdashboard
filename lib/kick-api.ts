@@ -16,6 +16,121 @@ const KICK_AUTH_URL = process.env.KICK_AUTH_URL || 'https://id.kick.com/oauth/to
 // Broadcaster channel slug to use for API calls
 const BROADCASTER_SLUG = process.env.KICK_CHANNEL_SLUG || 'sweetflips'
 
+// ============================================================================
+// GLOBAL RATE LIMITER - Prevents overwhelming the Kick API
+// ============================================================================
+
+/**
+ * Global rate limiter state
+ * - Limits concurrent requests to avoid API hammering
+ * - Implements coordinated backoff when rate limited
+ */
+const rateLimiter = {
+    // Maximum concurrent API requests
+    maxConcurrent: 2,
+    // Current number of in-flight requests
+    currentRequests: 0,
+    // Queue of pending requests
+    queue: [] as Array<() => void>,
+    // Global backoff state - when rate limited, all requests wait
+    globalBackoffUntil: 0,
+    // Minimum delay between requests (ms)
+    minDelayBetweenRequests: 200,
+    // Last request timestamp
+    lastRequestTime: 0,
+    // Requests per minute tracking (for burst protection)
+    requestTimestamps: [] as number[],
+    // Max requests per minute
+    maxRequestsPerMinute: 30,
+}
+
+/**
+ * Acquire a slot to make an API request
+ * Returns a release function to call when done
+ */
+async function acquireRateLimitSlot(): Promise<() => void> {
+    // Wait for global backoff if we're rate limited
+    const now = Date.now()
+    if (rateLimiter.globalBackoffUntil > now) {
+        const waitTime = rateLimiter.globalBackoffUntil - now
+        console.log(`[Kick API Rate Limiter] Global backoff active, waiting ${waitTime}ms`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+
+    // Clean up old request timestamps (older than 1 minute)
+    const oneMinuteAgo = Date.now() - 60000
+    rateLimiter.requestTimestamps = rateLimiter.requestTimestamps.filter(t => t > oneMinuteAgo)
+
+    // Check if we've exceeded requests per minute
+    if (rateLimiter.requestTimestamps.length >= rateLimiter.maxRequestsPerMinute) {
+        const oldestRequest = rateLimiter.requestTimestamps[0]
+        const waitTime = oldestRequest + 60000 - Date.now() + 100 // Add 100ms buffer
+        if (waitTime > 0) {
+            console.log(`[Kick API Rate Limiter] Rate limit protection: waiting ${waitTime}ms (${rateLimiter.requestTimestamps.length} requests in last minute)`)
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+        }
+    }
+
+    // Enforce minimum delay between requests
+    const timeSinceLastRequest = Date.now() - rateLimiter.lastRequestTime
+    if (timeSinceLastRequest < rateLimiter.minDelayBetweenRequests) {
+        const waitTime = rateLimiter.minDelayBetweenRequests - timeSinceLastRequest
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+
+    // Wait for a slot if at max concurrent
+    if (rateLimiter.currentRequests >= rateLimiter.maxConcurrent) {
+        await new Promise<void>(resolve => {
+            rateLimiter.queue.push(resolve)
+        })
+    }
+
+    // Acquire the slot
+    rateLimiter.currentRequests++
+    rateLimiter.lastRequestTime = Date.now()
+    rateLimiter.requestTimestamps.push(Date.now())
+
+    // Return release function
+    return () => {
+        rateLimiter.currentRequests--
+        // Wake up next queued request
+        const next = rateLimiter.queue.shift()
+        if (next) {
+            next()
+        }
+    }
+}
+
+/**
+ * Trigger global backoff when rate limited
+ * All pending and new requests will wait
+ */
+function triggerGlobalBackoff(backoffMs: number): void {
+    const newBackoffUntil = Date.now() + backoffMs
+    // Only extend backoff, never shorten it
+    if (newBackoffUntil > rateLimiter.globalBackoffUntil) {
+        rateLimiter.globalBackoffUntil = newBackoffUntil
+        console.log(`[Kick API Rate Limiter] Global backoff triggered for ${backoffMs}ms`)
+    }
+}
+
+/**
+ * Get current rate limiter stats (for debugging)
+ */
+export function getRateLimiterStats(): {
+    currentRequests: number
+    queueLength: number
+    requestsInLastMinute: number
+    globalBackoffRemaining: number
+} {
+    return {
+        currentRequests: rateLimiter.currentRequests,
+        queueLength: rateLimiter.queue.length,
+        requestsInLastMinute: rateLimiter.requestTimestamps.filter(t => t > Date.now() - 60000).length,
+        globalBackoffRemaining: Math.max(0, rateLimiter.globalBackoffUntil - Date.now()),
+    }
+}
+
 interface AppAccessTokenResponse {
     access_token: string
     token_type: string
@@ -103,7 +218,7 @@ let cachedToken: {
 async function getBroadcasterToken(): Promise<string> {
     // Check if cached token is still valid (with 5 minute buffer)
     if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60 * 1000) {
-        console.log(`[Kick API] Using cached ${cachedToken.source} token`)
+        // Don't log every cache hit - too noisy
         return cachedToken.token
     }
 
@@ -955,6 +1070,8 @@ async function syncThumbnailsFallback(
  * Fetches email, name, and profile_picture
  * Requires authentication (User Access Token)
  * Can fetch up to 50 users at once
+ * 
+ * RATE LIMITED: Uses global rate limiter to prevent API hammering
  */
 export async function getUsersByIds(userIds: number[]): Promise<Map<number, KickUser>> {
     const result = new Map<number, KickUser>()
@@ -980,94 +1097,109 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
             const clientId = process.env.KICK_CLIENT_ID
             let token = await getBroadcasterToken()
             let retryCount = 0
-            const maxRetries = 5 // Increased for rate limit handling
+            const maxRetries = 3 // Reduced retries - rely on global backoff instead
             let batchSuccess = false
 
             // Retry loop for handling 401 and 429 errors
             while (retryCount <= maxRetries && !batchSuccess) {
-                const headers: Record<string, string> = {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                }
-
-                if (clientId) {
-                    headers['Client-Id'] = clientId
-                }
-
-                const response = await fetch(url, { headers })
-
-                if (response.ok) {
-                    const apiResponse: { data: KickUser[] } = await response.json()
-
-                    if (apiResponse.data && Array.isArray(apiResponse.data)) {
-                        apiResponse.data.forEach(user => {
-                            result.set(user.user_id, user)
-                        })
+                // ACQUIRE RATE LIMIT SLOT - This is the key change
+                const releaseSlot = await acquireRateLimitSlot()
+                
+                try {
+                    const headers: Record<string, string> = {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
                     }
-                    batchSuccess = true
-                } else if (response.status === 429) {
-                    // Rate limited - respect Retry-After header and use exponential backoff
-                    const retryAfter = response.headers.get('Retry-After')
-                    const waitTime = retryAfter 
-                        ? parseInt(retryAfter, 10) * 1000 
-                        : Math.min(1000 * Math.pow(2, retryCount), 30000) // Max 30 seconds
 
-                    if (retryCount < maxRetries) {
-                        console.warn(`[Kick API] Rate limited (429), waiting ${waitTime}ms before retry ${retryCount + 1}/${maxRetries}`)
-                        await new Promise(resolve => setTimeout(resolve, waitTime))
-                        retryCount++
-                        continue
+                    if (clientId) {
+                        headers['Client-Id'] = clientId
+                    }
+
+                    const response = await fetch(url, { headers })
+
+                    if (response.ok) {
+                        const apiResponse: { data: KickUser[] } = await response.json()
+
+                        if (apiResponse.data && Array.isArray(apiResponse.data)) {
+                            apiResponse.data.forEach(user => {
+                                result.set(user.user_id, user)
+                            })
+                        }
+                        batchSuccess = true
+                    } else if (response.status === 429) {
+                        // Rate limited - check for standard rate limit headers
+                        const retryAfter = response.headers.get('Retry-After')
+                        const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining')
+                        const rateLimitLimit = response.headers.get('X-RateLimit-Limit')
+                        const rateLimitReset = response.headers.get('X-RateLimit-Reset')
+                        
+                        // Calculate wait time - prefer Retry-After header (RFC 7231)
+                        let baseWaitTime = 5000 // Default 5 seconds
+                        if (retryAfter) {
+                            baseWaitTime = parseInt(retryAfter, 10) * 1000
+                        } else if (rateLimitReset) {
+                            // Calculate wait time until reset
+                            const resetTime = parseInt(rateLimitReset, 10) * 1000
+                            baseWaitTime = Math.max(0, resetTime - Date.now()) + 1000 // Add 1s buffer
+                        }
+                        
+                        // Log rate limit info if available
+                        if (rateLimitLimit && rateLimitRemaining) {
+                            console.warn(`[Kick API] Rate limited (429) - Limit: ${rateLimitLimit}, Remaining: ${rateLimitRemaining}, Reset: ${rateLimitReset || 'unknown'}`)
+                        }
+                        
+                        // Exponential backoff with jitter (max 60 seconds)
+                        const waitTime = Math.min(baseWaitTime * Math.pow(2, retryCount) + Math.random() * 1000, 60000)
+                        
+                        // Trigger global backoff - all other requests will wait too
+                        triggerGlobalBackoff(waitTime)
+
+                        if (retryCount < maxRetries) {
+                            console.warn(`[Kick API] Rate limited (429), global backoff ${waitTime}ms, retry ${retryCount + 1}/${maxRetries}`)
+                            await new Promise(resolve => setTimeout(resolve, waitTime))
+                            retryCount++
+                            continue
+                        } else {
+                            console.warn(`[Kick API] Rate limit exceeded after ${maxRetries} retries, skipping batch`)
+                            break
+                        }
+                    } else if (response.status === 401 && retryCount < maxRetries) {
+                        // Token expired - try to refresh
+                        console.warn(`[Kick API] Got 401 for users batch, attempting token refresh (attempt ${retryCount + 1})`)
+                        clearTokenCache()
+
+                        const refreshedToken = await refreshBroadcasterToken()
+                        if (refreshedToken) {
+                            token = refreshedToken
+                            retryCount++
+                            await new Promise(resolve => setTimeout(resolve, 1000))
+                            continue
+                        } else {
+                            console.warn(`[Kick API] Token refresh failed, falling back to app token`)
+                            clearTokenCache()
+                            token = await getBroadcasterToken()
+                            retryCount++
+                            await new Promise(resolve => setTimeout(resolve, 1000))
+                            continue
+                        }
+                    } else if (response.status === 404) {
+                        // 404 - endpoint might be wrong or users don't exist
+                        console.debug(`[Kick API] 404 for users batch, skipping`)
+                        break
                     } else {
-                        // Max retries reached for rate limit
-                        const errorText = await response.text().catch(() => 'Rate limit exceeded')
-                        console.warn(`[Kick API] Rate limit exceeded after ${maxRetries} retries, skipping batch`)
-                        // Skip this batch but continue with next batches
+                        const errorText = await response.text().catch(() => 'Unknown error')
+                        console.warn(`[Kick API] Failed to fetch users batch: ${response.status} ${errorText.substring(0, 100)}`)
                         break
                     }
-                } else if (response.status === 401 && retryCount < maxRetries) {
-                    // Token expired - try to refresh
-                    console.warn(`[Kick API] Got 401 for users batch, attempting token refresh (attempt ${retryCount + 1})`)
-                    clearTokenCache()
-
-                    const refreshedToken = await refreshBroadcasterToken()
-                    if (refreshedToken) {
-                        token = refreshedToken
-                        retryCount++
-                        // Small delay before retry
-                        await new Promise(resolve => setTimeout(resolve, 500))
-                        continue
-                    } else {
-                        // Refresh failed, fall back to app token
-                        console.warn(`[Kick API] Token refresh failed, falling back to app token`)
-                        clearTokenCache()
-                        token = await getBroadcasterToken()
-                        retryCount++
-                        await new Promise(resolve => setTimeout(resolve, 500))
-                        continue
-                    }
-                } else if (response.status === 404) {
-                    // 404 - endpoint might be wrong or users don't exist, skip this batch
-                    const errorText = await response.text().catch(() => 'Not found')
-                    console.warn(`[Kick API] 404 for users batch (endpoint might be wrong or users don't exist): ${errorText.substring(0, 200)}`)
-                    // Skip this batch but continue with next batches
-                    break
-                } else {
-                    // Other error or max retries reached
-                    const errorText = await response.text().catch(() => 'Unknown error')
-                    console.warn(`[Kick API] Failed to fetch users batch: ${response.status} ${errorText.substring(0, 200)}`)
-                    // Skip this batch but continue with next batches
-                    break
+                } finally {
+                    // ALWAYS release the slot
+                    releaseSlot()
                 }
-            }
-
-            // Increased delay between batches to avoid rate limits (500ms instead of 100ms)
-            if (i + batchSize < userIds.length) {
-                await new Promise(resolve => setTimeout(resolve, 500))
             }
         }
     } catch (error) {
-        console.error(`[Kick API] Error fetching users by IDs:`, error)
+        console.error(`[Kick API] Error fetching users by IDs:`, error instanceof Error ? error.message : 'Unknown error')
     }
 
     return result

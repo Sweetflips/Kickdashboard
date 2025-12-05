@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { isBot } from '@/lib/points'
 import { enqueuePointJob } from '@/lib/point-queue'
 import { detectBotMessage } from '@/lib/bot-detection'
+import { queueUserEnrichment } from '@/lib/user-enrichment'
 import type { ChatMessage } from '@/lib/chat-store'
 
 const verboseChatLogging = process.env.CHAT_SAVE_VERBOSE_LOGS === 'true'
@@ -127,48 +128,12 @@ export async function POST(request: Request) {
                         },
                     })
 
-                    // Enrich user in background if missing data
+                    // Queue user for batch enrichment if missing data
+                    // This is batched to avoid rate limiting the Kick API
                     const needsEnrichment = !result.email || !result.profile_picture_url || !result.bio
                     if (needsEnrichment && Number(result.kick_user_id) > 0) {
-                        // Don't await - fetch in background to avoid slowing down chat processing
-                        setImmediate(async () => {
-                            try {
-                                const { getUsersByIds, getUserInfoBySlug } = await import('@/lib/kick-api')
-
-                                // Try Users API first (has email)
-                                const usersData = await getUsersByIds([Number(result.kick_user_id)])
-                                const userData = usersData.get(Number(result.kick_user_id))
-
-                                if (userData) {
-                                    // Update with full user data from Users API
-                                    await db.user.update({
-                                        where: { kick_user_id: BigInt(result.kick_user_id) },
-                                        data: {
-                                            username: userData.name,
-                                            email: userData.email || undefined,
-                                            profile_picture_url: userData.profile_picture || undefined,
-                                        },
-                                    })
-                                } else if (username && username !== 'Unknown') {
-                                    // Fallback to channel API for profile picture/bio
-                                    const channelInfo = await getUserInfoBySlug(username.toLowerCase())
-                                    if (channelInfo) {
-                                        await db.user.update({
-                                            where: { kick_user_id: BigInt(result.kick_user_id) },
-                                            data: {
-                                                ...(channelInfo.profile_picture_url && {
-                                                    profile_picture_url: channelInfo.profile_picture_url
-                                                }),
-                                                ...(channelInfo.bio && { bio: channelInfo.bio }),
-                                            },
-                                        })
-                                    }
-                                }
-                            } catch (error) {
-                                // Silently fail - non-critical
-                                console.debug(`Failed to enrich user ${result.kick_user_id}:`, error)
-                            }
-                        })
+                        // Queue for batch processing - doesn't call API immediately
+                        queueUserEnrichment(BigInt(result.kick_user_id), username)
                     }
 
                     return result
