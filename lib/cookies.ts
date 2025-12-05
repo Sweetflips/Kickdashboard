@@ -95,13 +95,3 @@ export function clearAuthTokens() {
     localStorage.removeItem('kick_access_token')
     localStorage.removeItem('kick_refresh_token')
 }
-
-
-
-
-
-
-
-
-
-
