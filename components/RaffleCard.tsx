@@ -53,6 +53,31 @@ export default function RaffleCard({ raffle, userBalance, isSubscriber, onPurcha
         return `Ends in ${minutes}m`
     }
 
+    const formatStartTimeRemaining = (startDate: string) => {
+        const start = new Date(startDate)
+        const now = new Date()
+        const diff = start.getTime() - now.getTime()
+
+        if (diff <= 0) {
+            return null // Already started
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+
+        if (days > 0) {
+            return `Starts in ${days}d ${hours}h`
+        }
+        if (hours > 0) {
+            return `Starts in ${hours}h ${minutes}m`
+        }
+        return `Starts in ${minutes}m`
+    }
+
+    const startsInText = formatStartTimeRemaining(raffle.start_at)
+    const isScheduledForFuture = startsInText !== null
+
     const getTypeBadge = (type: string) => {
         const badges: Record<string, string> = {
             daily: 'Daily',
@@ -127,7 +152,11 @@ export default function RaffleCard({ raffle, userBalance, isSubscriber, onPurcha
 
                     <div>
                         <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary mb-1">
-                            {formatTimeRemaining(raffle.end_at)}
+                            {isScheduledForFuture ? (
+                                <span className="text-kick-purple font-semibold">{startsInText}</span>
+                            ) : (
+                                formatTimeRemaining(raffle.end_at)
+                            )}
                         </p>
                     </div>
                 </div>
