@@ -183,8 +183,10 @@ model Raffle {
   status               String    @default("upcoming") // upcoming, active, drawing, completed, cancelled
   sub_only             Boolean   @default(false)
   hidden_until_start   Boolean   @default(false)
+  hidden               Boolean   @default(false)  // Hidden from public view by admin
   draw_seed            String?   // For transparency
   drawn_at             DateTime?
+  claim_message        String?   @db.Text  // Custom instructions for winners to claim prize
   created_by           BigInt
   created_at           DateTime  @default(now())
   updated_at           DateTime  @updatedAt
