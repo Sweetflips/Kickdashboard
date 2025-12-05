@@ -17,6 +17,7 @@ export default function CreateRafflePage() {
         description: '',
         type: 'general',
         prize_description: '',
+        claim_message: '',
         ticket_cost: '',
         max_tickets_per_user: '',
         total_tickets_cap: '',
@@ -77,6 +78,7 @@ export default function CreateRafflePage() {
                     ticket_cost: parseInt(formData.ticket_cost),
                     max_tickets_per_user: formData.max_tickets_per_user ? parseInt(formData.max_tickets_per_user) : null,
                     total_tickets_cap: formData.total_tickets_cap ? parseInt(formData.total_tickets_cap) : null,
+                    claim_message: formData.claim_message.trim() || null,
                 }),
             })
 
@@ -195,6 +197,22 @@ export default function CreateRafflePage() {
                                 />
                                 <p className="mt-1 text-xs text-gray-500 dark:text-kick-text-muted">
                                     Displayed to users on the raffle card.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                                    Claim Instructions (optional)
+                                </label>
+                                <textarea
+                                    value={formData.claim_message}
+                                    onChange={(e) => setFormData({ ...formData, claim_message: e.target.value })}
+                                    placeholder="Contact @danielsweetflips on Telegram to claim your prize."
+                                    rows={3}
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                />
+                                <p className="mt-1 text-xs text-gray-500 dark:text-kick-text-muted">
+                                    Instructions shown to winners on how to claim their prize. Leave blank to use default message.
                                 </p>
                             </div>
                         </div>

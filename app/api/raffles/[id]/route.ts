@@ -77,6 +77,7 @@ export async function GET(
                 description: raffle.description,
                 type: raffle.type,
                 prize_description: raffle.prize_description,
+                claim_message: raffle.claim_message,
                 ticket_cost: raffle.ticket_cost,
                 max_tickets_per_user: raffle.max_tickets_per_user,
                 total_tickets_cap: raffle.total_tickets_cap,
@@ -147,6 +148,8 @@ export async function PUT(
             if (body.description !== undefined) allowedFields.description = body.description
             if (body.end_at !== undefined) allowedFields.end_at = new Date(body.end_at)
             if (body.hidden_until_start !== undefined) allowedFields.hidden_until_start = body.hidden_until_start
+            if (body.claim_message !== undefined) allowedFields.claim_message = body.claim_message || null
+            if (body.hidden !== undefined) allowedFields.hidden = body.hidden
 
             // Update status if end date changed
             if (body.end_at !== undefined) {
@@ -168,6 +171,7 @@ export async function PUT(
             if (body.description !== undefined) updateData.description = body.description
             if (body.type !== undefined) updateData.type = body.type
             if (body.prize_description !== undefined) updateData.prize_description = body.prize_description
+            if (body.claim_message !== undefined) updateData.claim_message = body.claim_message || null
             if (body.ticket_cost !== undefined) updateData.ticket_cost = parseInt(body.ticket_cost)
             if (body.max_tickets_per_user !== undefined) {
                 updateData.max_tickets_per_user = body.max_tickets_per_user ? parseInt(body.max_tickets_per_user) : null
@@ -179,6 +183,7 @@ export async function PUT(
             if (body.end_at !== undefined) updateData.end_at = new Date(body.end_at)
             if (body.sub_only !== undefined) updateData.sub_only = body.sub_only
             if (body.hidden_until_start !== undefined) updateData.hidden_until_start = body.hidden_until_start
+            if (body.hidden !== undefined) updateData.hidden = body.hidden
 
             // Update status based on dates
             if (body.start_at !== undefined || body.end_at !== undefined) {
@@ -234,18 +239,7 @@ export async function DELETE(
 
         const raffleId = BigInt(params.id)
 
-        // Check if raffle has entries
-        const entryCount = await db.raffleEntry.count({
-            where: { raffle_id: raffleId },
-        })
-
-        if (entryCount > 0) {
-            return NextResponse.json(
-                { error: 'Cannot delete raffle with entries' },
-                { status: 400 }
-            )
-        }
-
+        // Delete raffle - cascade will handle entries and winners due to onDelete: Cascade in schema
         await db.raffle.delete({
             where: { id: raffleId },
         })

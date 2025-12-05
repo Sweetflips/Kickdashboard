@@ -95,6 +95,20 @@ export default function RaffleCard({ raffle, userBalance, isSubscriber, onPurcha
     return (
         <>
             <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 shadow-sm hover:shadow-md transition-shadow">
+                {/* Scheduled banner - shown when raffle hasn't started yet */}
+                {isScheduledForFuture && (
+                    <div className="mb-4 -mt-2 -mx-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 rounded-t-lg">
+                        <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                                {startsInText}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex items-start justify-between mb-4">
                     <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text">
                         {raffle.title}
@@ -152,8 +166,11 @@ export default function RaffleCard({ raffle, userBalance, isSubscriber, onPurcha
 
                     <div>
                         <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary mb-1">
+                            Time remaining
+                        </p>
+                        <p className="text-body text-gray-900 dark:text-kick-text">
                             {isScheduledForFuture ? (
-                                <span className="text-kick-purple font-semibold">{startsInText}</span>
+                                <span className="text-amber-600 dark:text-amber-400">Not started yet</span>
                             ) : (
                                 formatTimeRemaining(raffle.end_at)
                             )}
@@ -175,10 +192,10 @@ export default function RaffleCard({ raffle, userBalance, isSubscriber, onPurcha
                 <div className="flex gap-2">
                     <button
                         onClick={() => setShowBuyModal(true)}
-                        disabled={!canPurchase || isSoldOut}
+                        disabled={!canPurchase || isSoldOut || isScheduledForFuture}
                         className="flex-1 px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                        {isSoldOut ? 'Sold Out' : 'Buy tickets'}
+                        {isScheduledForFuture ? 'Coming Soon' : isSoldOut ? 'Sold Out' : 'Buy tickets'}
                     </button>
                     <button
                         onClick={() => setShowDetailsModal(true)}

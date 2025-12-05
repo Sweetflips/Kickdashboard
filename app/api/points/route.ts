@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getUserPoints } from '@/lib/points'
 
 export async function GET(request: Request) {
     try {
@@ -14,27 +13,43 @@ export async function GET(request: Request) {
             )
         }
 
-        const points = await getUserPoints(BigInt(kickUserId))
+        // Parse kick_user_id as BigInt
+        let kickUserIdBigInt: bigint
+        try {
+            kickUserIdBigInt = BigInt(kickUserId)
+        } catch (e) {
+            return NextResponse.json(
+                { error: 'Invalid kick_user_id format' },
+                { status: 400 }
+            )
+        }
 
-        // Get subscriber status from user points
+        // Get user with points relation in a single query
         const user = await db.user.findUnique({
-            where: { kick_user_id: BigInt(kickUserId) },
-            select: { id: true },
+            where: { kick_user_id: kickUserIdBigInt },
+            include: {
+                points: {
+                    select: {
+                        total_points: true,
+                        is_subscriber: true,
+                    },
+                },
+            },
         })
 
-        let isSubscriber = false
-        if (user) {
-            const userPoints = await db.userPoints.findUnique({
-                where: { user_id: user.id },
-                select: { is_subscriber: true },
+        if (!user) {
+            // User not found - return 0 points (they may not have chatted yet)
+            return NextResponse.json({
+                kick_user_id: kickUserId,
+                total_points: 0,
+                is_subscriber: false,
             })
-            isSubscriber = userPoints?.is_subscriber || false
         }
 
         return NextResponse.json({
             kick_user_id: kickUserId,
-            total_points: points,
-            is_subscriber: isSubscriber,
+            total_points: user.points?.total_points || 0,
+            is_subscriber: user.points?.is_subscriber || false,
         })
     } catch (error) {
         console.error('Error fetching user points:', error)

@@ -16,6 +16,7 @@ interface Raffle {
     total_tickets_sold?: number
     prize_description: string
     drawn_at?: string
+    hidden?: boolean
 }
 
 interface Winner {
@@ -185,8 +186,12 @@ export default function AdminRafflesPage() {
         }
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Delete raffle?\n\nThis raffle has no entries yet. Deleting it will remove it permanently.')) {
+    const handleDelete = async (id: string, hasEntries: boolean) => {
+        const message = hasEntries
+            ? 'Delete raffle?\n\nWARNING: This raffle has entries. Deleting it will remove all ticket purchases. Consider hiding it instead.\n\nThis action cannot be undone.'
+            : 'Delete raffle?\n\nThis raffle has no entries yet. Deleting it will remove it permanently.'
+
+        if (!confirm(message)) {
             return
         }
 
@@ -211,6 +216,38 @@ export default function AdminRafflesPage() {
         } catch (error) {
             console.error('Error deleting raffle:', error)
             setToast({ message: 'Failed to delete raffle', type: 'error' })
+        }
+    }
+
+    const handleToggleHidden = async (id: string, currentlyHidden: boolean) => {
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            if (!token) return
+
+            const response = await fetch(`/api/raffles/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    hidden: !currentlyHidden,
+                }),
+            })
+
+            if (response.ok) {
+                setToast({
+                    message: currentlyHidden ? 'Raffle is now visible to users.' : 'Raffle hidden from public view.',
+                    type: 'success',
+                })
+                await fetchRaffles()
+            } else {
+                const error = await response.json()
+                setToast({ message: error.error || 'Failed to update raffle', type: 'error' })
+            }
+        } catch (error) {
+            console.error('Error toggling raffle visibility:', error)
+            setToast({ message: 'Failed to update raffle', type: 'error' })
         }
     }
 
@@ -329,10 +366,19 @@ export default function AdminRafflesPage() {
                                 {raffles.map((raffle) => (
                                     <tr
                                         key={raffle.id}
-                                        className="border-b border-gray-200 dark:border-kick-border hover:bg-gray-50 dark:hover:bg-kick-surface-hover"
+                                        className={`border-b border-gray-200 dark:border-kick-border hover:bg-gray-50 dark:hover:bg-kick-surface-hover ${raffle.hidden ? 'opacity-60' : ''}`}
                                     >
-                                        <td className="px-6 py-4 text-body text-gray-900 dark:text-kick-text">
-                                            {raffle.title}
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-body text-gray-900 dark:text-kick-text">
+                                                    {raffle.title}
+                                                </span>
+                                                {raffle.hidden && (
+                                                    <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                                        Hidden
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-body text-gray-900 dark:text-kick-text">
                                             {raffle.type}
@@ -350,7 +396,7 @@ export default function AdminRafflesPage() {
                                             {raffle.total_entries || 0}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="flex gap-2">
+                                            <div className="flex flex-wrap gap-2">
                                                 <button
                                                     onClick={() => router.push(`/admin/raffles/edit/${raffle.id}`)}
                                                     className="px-3 py-1 text-xs bg-gray-200 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text rounded hover:bg-gray-300 dark:hover:bg-kick-dark"
@@ -365,7 +411,7 @@ export default function AdminRafflesPage() {
                                                         End Now
                                                     </button>
                                                 )}
-                                                {(raffle.status === 'active' || raffle.status === 'completed') && (
+                                                {(raffle.status === 'active' || raffle.status === 'completed') && !raffle.drawn_at && (
                                                     <button
                                                         onClick={() => handleDrawWinners(raffle.id)}
                                                         className="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700"
@@ -382,14 +428,24 @@ export default function AdminRafflesPage() {
                                                         {loadingWinners ? 'Loading...' : 'View Winners'}
                                                     </button>
                                                 )}
-                                                {raffle.total_entries === 0 && (
+                                                {(raffle.status === 'completed' || raffle.status === 'cancelled') && (
                                                     <button
-                                                        onClick={() => handleDelete(raffle.id)}
-                                                        className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                        onClick={() => handleToggleHidden(raffle.id, raffle.hidden || false)}
+                                                        className={`px-3 py-1 text-xs rounded ${
+                                                            raffle.hidden
+                                                                ? 'bg-green-600 text-white hover:bg-green-700'
+                                                                : 'bg-gray-500 text-white hover:bg-gray-600'
+                                                        }`}
                                                     >
-                                                        Delete
+                                                        {raffle.hidden ? 'Unhide' : 'Hide'}
                                                     </button>
                                                 )}
+                                                <button
+                                                    onClick={() => handleDelete(raffle.id, (raffle.total_entries || 0) > 0)}
+                                                    className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                >
+                                                    Delete
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>

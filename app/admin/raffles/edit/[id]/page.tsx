@@ -21,6 +21,7 @@ export default function EditRafflePage() {
         description: '',
         type: 'general',
         prize_description: '',
+        claim_message: '',
         ticket_cost: '',
         max_tickets_per_user: '',
         total_tickets_cap: '',
@@ -90,6 +91,7 @@ export default function EditRafflePage() {
                     description: raffle.description || '',
                     type: raffle.type || 'general',
                     prize_description: raffle.prize_description || '',
+                    claim_message: raffle.claim_message || '',
                     ticket_cost: raffle.ticket_cost?.toString() || '',
                     max_tickets_per_user: raffle.max_tickets_per_user?.toString() || '',
                     total_tickets_cap: raffle.total_tickets_cap?.toString() || '',
@@ -126,6 +128,7 @@ export default function EditRafflePage() {
                     total_tickets_cap: formData.total_tickets_cap ? parseInt(formData.total_tickets_cap) : null,
                     start_at: new Date(formData.start_at).toISOString(),
                     end_at: new Date(formData.end_at).toISOString(),
+                    claim_message: formData.claim_message.trim() || null,
                 }),
             })
 
@@ -247,6 +250,22 @@ export default function EditRafflePage() {
                                     placeholder="$10 USDT tip (5 winners)"
                                     className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                                    Claim Instructions (optional)
+                                </label>
+                                <textarea
+                                    value={formData.claim_message}
+                                    onChange={(e) => setFormData({ ...formData, claim_message: e.target.value })}
+                                    placeholder="Contact @danielsweetflips on Telegram to claim your prize."
+                                    rows={3}
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                />
+                                <p className="mt-1 text-xs text-gray-500 dark:text-kick-text-muted">
+                                    Instructions shown to winners on how to claim their prize. Leave blank to use default message.
+                                </p>
                             </div>
                         </div>
                     </div>

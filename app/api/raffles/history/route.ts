@@ -17,6 +17,7 @@ export async function GET(request: Request) {
 
         const where: any = {
             status: 'completed',
+            hidden: false, // Don't show hidden raffles in public history
         }
 
         // If filter is 'entered', only show raffles the user entered

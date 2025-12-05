@@ -48,11 +48,17 @@ export async function GET(request: Request) {
             }
         }
 
-        // Filter out hidden raffles unless explicitly requested
+        // Filter out hidden raffles unless explicitly requested (admin only)
         if (!includeHidden) {
-            where.OR = [
-                { hidden_until_start: false },
-                { hidden_until_start: true, start_at: { lte: now } },
+            // For regular users: hide raffles that are marked as hidden OR hidden_until_start before start time
+            where.AND = [
+                { hidden: false }, // Always exclude raffles marked as hidden
+                {
+                    OR: [
+                        { hidden_until_start: false },
+                        { hidden_until_start: true, start_at: { lte: now } },
+                    ],
+                },
             ]
         }
 
@@ -108,6 +114,7 @@ export async function GET(request: Request) {
                     status: raffle.status,
                     sub_only: raffle.sub_only,
                     hidden_until_start: raffle.hidden_until_start,
+                    hidden: raffle.hidden,
                     total_tickets_sold: totalTickets,
                     user_tickets: userTickets,
                     total_entries: raffle._count.entries,
@@ -154,6 +161,7 @@ export async function POST(request: Request) {
             description,
             type,
             prize_description,
+            claim_message,
             ticket_cost,
             max_tickets_per_user,
             total_tickets_cap,
@@ -218,6 +226,7 @@ export async function POST(request: Request) {
                 description: description || null,
                 type: type || 'general',
                 prize_description,
+                claim_message: claim_message || null,
                 ticket_cost: parseInt(ticket_cost),
                 max_tickets_per_user: max_tickets_per_user ? parseInt(max_tickets_per_user) : null,
                 total_tickets_cap: total_tickets_cap ? parseInt(total_tickets_cap) : null,

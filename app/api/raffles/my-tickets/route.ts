@@ -63,6 +63,8 @@ export async function GET(request: Request) {
                         prize_description: entry.raffle.prize_description,
                         status: entry.raffle.status,
                         end_at: entry.raffle.end_at.toISOString(),
+                        drawn_at: entry.raffle.drawn_at?.toISOString() || null,
+                        claim_message: entry.raffle.claim_message || null,
                         total_tickets_sold: totalTickets,
                         total_entries: entry.raffle._count.entries,
                         is_winner: isWinner,

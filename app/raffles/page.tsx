@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
 import RaffleCard from '@/components/RaffleCard'
 import HowToEarnPointsModal from '@/components/HowToEarnPointsModal'
+import WinnerClaimModal from '@/components/WinnerClaimModal'
 import { Toast } from '@/components/Toast'
 
 interface Raffle {
@@ -37,6 +38,8 @@ interface MyTicket {
         prize_description: string
         status: string
         end_at: string
+        drawn_at?: string | null
+        claim_message?: string | null
         total_tickets_sold: number
         total_entries: number
         is_winner: boolean
@@ -73,6 +76,12 @@ export default function RafflesPage() {
     const [showHowToModal, setShowHowToModal] = useState(false)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
     const [historyFilter, setHistoryFilter] = useState<'all' | 'entered'>('all')
+    const [selectedWinningRaffle, setSelectedWinningRaffle] = useState<{
+        title: string
+        prize_description: string
+        claim_message?: string | null
+        drawn_at?: string | null
+    } | null>(null)
 
     useEffect(() => {
         checkAuth()
@@ -118,11 +127,15 @@ export default function RafflesPage() {
             const response = await fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
             if (response.ok) {
                 const data = await response.json()
-                const pointsResponse = await fetch(`/api/points?kick_user_id=${data.id}`)
-                if (pointsResponse.ok) {
-                    const pointsData = await pointsResponse.json()
-                    setUserBalance(pointsData.total_points || 0)
-                    setIsSubscriber(pointsData.is_subscriber || false)
+                if (data.id) {
+                    const pointsResponse = await fetch(`/api/points?kick_user_id=${data.id}`)
+                    if (pointsResponse.ok) {
+                        const pointsData = await pointsResponse.json()
+                        setUserBalance(pointsData.total_points || 0)
+                        setIsSubscriber(pointsData.is_subscriber || false)
+                    } else {
+                        console.error('Failed to fetch points:', await pointsResponse.text())
+                    }
                 }
             }
         } catch (error) {
@@ -411,14 +424,22 @@ export default function RafflesPage() {
                                                             Pending
                                                         </span>
                                                     ) : ticket.raffle.is_winner ? (
-                                                        <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setSelectedWinningRaffle({
+                                                                title: ticket.raffle.title,
+                                                                prize_description: ticket.raffle.prize_description,
+                                                                claim_message: ticket.raffle.claim_message,
+                                                                drawn_at: ticket.raffle.drawn_at,
+                                                            })}
+                                                            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+                                                        >
                                                             <span className="text-body text-green-600 dark:text-green-400 font-medium">
                                                                 Won
                                                             </span>
                                                             <span className="px-2 py-1 text-xs font-medium rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400">
-                                                                Winner
+                                                                Click to Claim
                                                             </span>
-                                                        </div>
+                                                        </button>
                                                     ) : (
                                                         <span className="text-body text-gray-600 dark:text-kick-text-secondary">
                                                             Not selected
@@ -525,6 +546,12 @@ export default function RafflesPage() {
             </div>
 
             <HowToEarnPointsModal isOpen={showHowToModal} onClose={() => setShowHowToModal(false)} />
+
+            <WinnerClaimModal
+                isOpen={selectedWinningRaffle !== null}
+                onClose={() => setSelectedWinningRaffle(null)}
+                raffle={selectedWinningRaffle}
+            />
 
             {toast && (
                 <Toast
