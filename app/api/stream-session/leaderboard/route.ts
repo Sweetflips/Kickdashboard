@@ -188,8 +188,8 @@ export async function GET(request: Request) {
             }
         }
 
-        // Create a map of internal user_id to stats
-        const userStatsMap = new Map<bigint, {
+        // Create a map of internal user_id to stats (use string keys for consistent BigInt comparison)
+        const userStatsMap = new Map<string, {
             points: number
             messages: number
             emotes: number
@@ -203,7 +203,8 @@ export async function GET(request: Request) {
             const internalUserId = kickUserIdToInternalId.get(msg.sender_user_id)
             if (!internalUserId) continue // Skip if user not found
 
-            const existing = userStatsMap.get(internalUserId) || { points: 0, messages: 0, emotes: 0 }
+            const key = internalUserId.toString()
+            const existing = userStatsMap.get(key) || { points: 0, messages: 0, emotes: 0 }
             existing.messages = (existing.messages || 0) + 1
 
             // Count emotes if present - handle Prisma JSON field
@@ -241,20 +242,21 @@ export async function GET(request: Request) {
                 }
             }
 
-            userStatsMap.set(internalUserId, existing)
+            userStatsMap.set(key, existing)
         }
 
         // Add points (preserve existing messages and emotes)
         for (const pt of pointsByUser) {
-            const existing = userStatsMap.get(pt.user_id) || { points: 0, messages: 0, emotes: 0 }
+            const key = pt.user_id.toString()
+            const existing = userStatsMap.get(key) || { points: 0, messages: 0, emotes: 0 }
             // Preserve existing emotes and messages when updating points
             existing.points = pt._sum.points_earned || 0
-            userStatsMap.set(pt.user_id, existing)
+            userStatsMap.set(key, existing)
         }
 
         // Convert to array and sort by points (descending), but include users with emotes even if no points
         const userStatsArray = Array.from(userStatsMap.entries())
-            .map(([user_id, stats]) => ({ user_id, ...stats }))
+            .map(([user_id, stats]) => ({ user_id: BigInt(user_id), ...stats }))
             .sort((a, b) => {
                 // Sort by points first, then by messages if points are equal
                 if (b.points !== a.points) {

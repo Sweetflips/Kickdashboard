@@ -1,3 +1,7 @@
 {
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "terminal.integrated.defaultProfile.windows": "Windows PowerShell",
+    "cursor.terminal.enableAiChecks": false,
+    "terminal.integrated.hideOnLastClosed": false,
+    "terminal.integrated.initialHint": false
 }
