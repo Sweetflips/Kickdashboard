@@ -980,10 +980,10 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
             const clientId = process.env.KICK_CLIENT_ID
             let token = await getBroadcasterToken()
             let retryCount = 0
-            const maxRetries = 2
+            const maxRetries = 5 // Increased for rate limit handling
             let batchSuccess = false
 
-            // Retry loop for handling 401 errors with token refresh
+            // Retry loop for handling 401 and 429 errors
             while (retryCount <= maxRetries && !batchSuccess) {
                 const headers: Record<string, string> = {
                     'Authorization': `Bearer ${token}`,
@@ -1006,6 +1006,25 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
                         })
                     }
                     batchSuccess = true
+                } else if (response.status === 429) {
+                    // Rate limited - respect Retry-After header and use exponential backoff
+                    const retryAfter = response.headers.get('Retry-After')
+                    const waitTime = retryAfter 
+                        ? parseInt(retryAfter, 10) * 1000 
+                        : Math.min(1000 * Math.pow(2, retryCount), 30000) // Max 30 seconds
+
+                    if (retryCount < maxRetries) {
+                        console.warn(`[Kick API] Rate limited (429), waiting ${waitTime}ms before retry ${retryCount + 1}/${maxRetries}`)
+                        await new Promise(resolve => setTimeout(resolve, waitTime))
+                        retryCount++
+                        continue
+                    } else {
+                        // Max retries reached for rate limit
+                        const errorText = await response.text().catch(() => 'Rate limit exceeded')
+                        console.warn(`[Kick API] Rate limit exceeded after ${maxRetries} retries, skipping batch`)
+                        // Skip this batch but continue with next batches
+                        break
+                    }
                 } else if (response.status === 401 && retryCount < maxRetries) {
                     // Token expired - try to refresh
                     console.warn(`[Kick API] Got 401 for users batch, attempting token refresh (attempt ${retryCount + 1})`)
@@ -1027,17 +1046,24 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
                         await new Promise(resolve => setTimeout(resolve, 500))
                         continue
                     }
+                } else if (response.status === 404) {
+                    // 404 - endpoint might be wrong or users don't exist, skip this batch
+                    const errorText = await response.text().catch(() => 'Not found')
+                    console.warn(`[Kick API] 404 for users batch (endpoint might be wrong or users don't exist): ${errorText.substring(0, 200)}`)
+                    // Skip this batch but continue with next batches
+                    break
                 } else {
                     // Other error or max retries reached
-                    const errorText = await response.text()
-                    console.warn(`[Kick API] Failed to fetch users batch: ${response.status} ${errorText}`)
+                    const errorText = await response.text().catch(() => 'Unknown error')
+                    console.warn(`[Kick API] Failed to fetch users batch: ${response.status} ${errorText.substring(0, 200)}`)
+                    // Skip this batch but continue with next batches
                     break
                 }
             }
 
-            // Small delay between batches to avoid rate limits
+            // Increased delay between batches to avoid rate limits (500ms instead of 100ms)
             if (i + batchSize < userIds.length) {
-                await new Promise(resolve => setTimeout(resolve, 100))
+                await new Promise(resolve => setTimeout(resolve, 500))
             }
         }
     } catch (error) {
