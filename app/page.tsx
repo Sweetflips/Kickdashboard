@@ -179,7 +179,7 @@ export default function Dashboard() {
                                     existing.rank === newEntry.rank &&
                                     existing.points_earned === newEntry.points_earned &&
                                     existing.messages_sent === newEntry.messages_sent &&
-                                    existing.emotes_used === newEntry.emotes_sent) {
+                                    existing.emotes_used === newEntry.emotes_used) {
                                     return existing
                                 }
                                 return newEntry
