@@ -41,7 +41,7 @@ export async function GET(request: Request) {
             },
           },
           user_sessions: {
-            take: 5, // Get last 5 sessions
+            take: 10, // Get last 10 sessions for better diagnostics
             orderBy: {
               last_seen_at: 'desc',
             },
@@ -50,6 +50,8 @@ export async function GET(request: Request) {
               region: true,
               country: true,
               client_type: true,
+              user_agent: true,
+              ip_hash: true,
               last_seen_at: true,
               created_at: true,
             },
@@ -82,8 +84,9 @@ export async function GET(request: Request) {
         const latestSession = recentSessions[0] || null
         const totalSessions = sessionStatsMap.get(u.id.toString()) || 0
 
-        // Get unique regions and client types
+        // Get unique regions, countries, and client types
         const uniqueRegions = new Set(recentSessions.map(s => s.region).filter(Boolean))
+        const uniqueCountries = new Set(recentSessions.map(s => s.country).filter(Boolean))
         const uniqueClientTypes = new Set(recentSessions.map(s => s.client_type).filter(Boolean))
 
         return {
@@ -114,10 +117,13 @@ export async function GET(request: Request) {
               region: s.region,
               country: s.country,
               client_type: s.client_type,
+              user_agent: s.user_agent,
+              ip_hash: s.ip_hash,
               last_seen_at: s.last_seen_at.toISOString(),
               created_at: s.created_at.toISOString(),
             })),
             unique_regions: Array.from(uniqueRegions),
+            unique_countries: Array.from(uniqueCountries),
             unique_client_types: Array.from(uniqueClientTypes),
           },
         }

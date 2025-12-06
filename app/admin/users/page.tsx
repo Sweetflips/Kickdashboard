@@ -5,6 +5,17 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import AppLayout from '@/components/AppLayout'
 
+interface UserSession {
+  session_id: string
+  region: string | null
+  country: string | null
+  client_type: string | null
+  user_agent: string | null
+  ip_hash: string | null
+  last_seen_at: string
+  created_at: string
+}
+
 interface User {
   id: string
   kick_user_id: string
@@ -22,23 +33,79 @@ interface User {
   discord_username: string | null
   telegram_connected: boolean
   telegram_username: string | null
+  // Signup tracking
+  signup_ip_address: string | null
+  signup_region: string | null
+  signup_user_agent: string | null
+  signup_referrer: string | null
   session_diagnostics?: {
     total_sessions: number
     last_seen: string | null
     last_region: string | null
     last_country: string | null
     last_client_type: string | null
-    recent_sessions: Array<{
-      session_id: string
-      region: string | null
-      country: string | null
-      client_type: string | null
-      last_seen_at: string
-      created_at: string
-    }>
+    recent_sessions: UserSession[]
     unique_regions: string[]
+    unique_countries: string[]
     unique_client_types: string[]
   }
+}
+
+// Parse user agent to get device/browser info
+function parseUserAgent(ua: string | null): { device: string; browser: string } {
+  if (!ua) return { device: 'Unknown', browser: 'Unknown' }
+  
+  let device = 'Desktop'
+  let browser = 'Unknown'
+  
+  // Device detection
+  if (/Mobile|Android|iPhone|iPad|iPod/i.test(ua)) {
+    if (/iPad/i.test(ua)) device = 'iPad'
+    else if (/iPhone/i.test(ua)) device = 'iPhone'
+    else if (/Android/i.test(ua)) device = 'Android'
+    else device = 'Mobile'
+  } else if (/Windows/i.test(ua)) {
+    device = 'Windows'
+  } else if (/Mac/i.test(ua)) {
+    device = 'Mac'
+  } else if (/Linux/i.test(ua)) {
+    device = 'Linux'
+  }
+  
+  // Browser detection
+  if (/Chrome/i.test(ua) && !/Edge|Edg/i.test(ua)) browser = 'Chrome'
+  else if (/Firefox/i.test(ua)) browser = 'Firefox'
+  else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari'
+  else if (/Edge|Edg/i.test(ua)) browser = 'Edge'
+  else if (/Opera|OPR/i.test(ua)) browser = 'Opera'
+  
+  return { device, browser }
+}
+
+// Get client type icon
+function getClientTypeIcon(clientType: string | null): string {
+  switch (clientType?.toLowerCase()) {
+    case 'mobile': return '📱'
+    case 'web': return '🖥️'
+    case 'embedded': return '📺'
+    default: return '❓'
+  }
+}
+
+// Format time ago
+function formatTimeAgo(dateStr: string | null): string {
+  if (!dateStr) return 'Never'
+  const date = new Date(dateStr)
+  const diff = Date.now() - date.getTime()
+  const minutes = Math.floor(diff / (1000 * 60))
+  const hours = Math.floor(diff / (1000 * 60 * 60))
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes}m ago`
+  if (hours < 24) return `${hours}h ago`
+  if (days < 7) return `${days}d ago`
+  return date.toLocaleDateString()
 }
 
 export default function UsersPage() {
@@ -53,18 +120,14 @@ export default function UsersPage() {
   const limit = 50
 
   useEffect(() => {
-    // Check admin access using dedicated endpoint
     const token = localStorage.getItem('kick_access_token')
     if (!token) {
       router.push('/')
       return
     }
 
-    // SECURITY: Use dedicated admin verification endpoint
     fetch('/api/admin/verify', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
+      headers: { 'Authorization': `Bearer ${token}` },
     })
       .then(res => res.json())
       .then(data => {
@@ -92,10 +155,8 @@ export default function UsersPage() {
 
       const searchParam = search ? `&search=${encodeURIComponent(search)}` : ''
       const response = await fetch(`/api/admin/users?limit=${limit}&offset=${offset}${searchParam}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: 'include', // Include cookies for authentication
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       })
 
       if (response.ok) {
@@ -111,7 +172,7 @@ export default function UsersPage() {
   }
 
   const toggleAdmin = async (kickUserId: string, currentStatus: boolean) => {
-    if (!confirm(`Are you sure you want to ${currentStatus ? 'remove' : 'grant'} admin access for this user?`)) return
+    if (!confirm(`Are you sure you want to ${currentStatus ? 'remove' : 'grant'} admin access?`)) return
 
     try {
       const token = localStorage.getItem('kick_access_token')
@@ -123,23 +184,29 @@ export default function UsersPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          kick_user_id: kickUserId,
-          is_admin: !currentStatus,
-        }),
-        credentials: 'include', // Include cookies for authentication
+        body: JSON.stringify({ kick_user_id: kickUserId, is_admin: !currentStatus }),
+        credentials: 'include',
       })
 
       if (response.ok) {
         await fetchUsers()
       } else {
         const error = await response.json()
-        alert(`Failed to update user: ${error.error}`)
+        alert(`Failed: ${error.error}`)
       }
     } catch (error) {
-      console.error('Error updating user:', error)
       alert('Failed to update user')
     }
+  }
+
+  const toggleExpanded = (userId: string) => {
+    const newExpanded = new Set(expandedUsers)
+    if (newExpanded.has(userId)) {
+      newExpanded.delete(userId)
+    } else {
+      newExpanded.add(userId)
+    }
+    setExpandedUsers(newExpanded)
   }
 
   if (!userData || !userData.is_admin) {
@@ -155,282 +222,333 @@ export default function UsersPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-kick-text">User Management</h1>
-        </div>
-
-        {/* Search */}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Search by username or email..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setOffset(0)
-            }}
-            className="flex-1 px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text"
-          />
-        </div>
-
-        {/* Users Table */}
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple mx-auto"></div>
+        <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-kick-text">User Management</h1>
+            <div className="text-sm text-gray-600 dark:text-kick-text-secondary">
+              {total.toLocaleString()} total users
+            </div>
           </div>
-        ) : users.length === 0 ? (
-          <div className="text-center py-12 text-gray-600 dark:text-kick-text-secondary">
-            No users found.
+
+          {/* Search */}
+          <div className="mb-6">
+            <input
+              type="text"
+              placeholder="Search by username or email..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setOffset(0)
+              }}
+              className="w-full max-w-md px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:ring-2 focus:ring-kick-purple focus:border-transparent"
+            />
           </div>
-        ) : (
-          <>
-            <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-kick-border bg-gray-50 dark:bg-kick-dark">
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary"></th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">User</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Email</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Connected</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Points</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Emotes</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Admin</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Session Info</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Joined</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => {
-                      const isExpanded = expandedUsers.has(user.id)
-                      const diagnostics = user.session_diagnostics
-                      const lastSeen = diagnostics?.last_seen ? new Date(diagnostics.last_seen) : null
-                      const timeAgo = lastSeen ? (() => {
-                        const diff = Date.now() - lastSeen.getTime()
-                        const hours = Math.floor(diff / (1000 * 60 * 60))
-                        const days = Math.floor(hours / 24)
-                        if (days > 0) return `${days}d ago`
-                        if (hours > 0) return `${hours}h ago`
-                        const minutes = Math.floor(diff / (1000 * 60))
-                        return minutes > 0 ? `${minutes}m ago` : 'Just now'
-                      })() : 'Never'
 
-                      return (
-                        <>
-                          <tr
-                            key={user.id}
-                            className="border-b border-gray-100 dark:border-kick-border hover:bg-gray-50 dark:hover:bg-kick-dark transition-colors"
-                          >
-                            <td className="py-3 px-4">
-                              {diagnostics && diagnostics.total_sessions > 0 && (
-                                <button
-                                  onClick={() => {
-                                    const newExpanded = new Set(expandedUsers)
-                                    if (isExpanded) {
-                                      newExpanded.delete(user.id)
-                                    } else {
-                                      newExpanded.add(user.id)
-                                    }
-                                    setExpandedUsers(newExpanded)
-                                  }}
-                                  className="text-gray-500 hover:text-gray-700 dark:text-kick-text-secondary dark:hover:text-kick-text"
-                                >
-                                  {isExpanded ? '▼' : '▶'}
-                                </button>
-                              )}
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-3">
-                                {user.profile_picture_url ? (() => {
-                                  // CloudFront URLs might work directly, kick.com URLs need proxy
-                                  const isCloudFront = user.profile_picture_url.includes('cloudfront.net') || user.profile_picture_url.includes('amazonaws.com')
-                                  const imageSrc = isCloudFront
-                                    ? user.profile_picture_url
-                                    : `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center py-12 text-gray-600 dark:text-kick-text-secondary">
+              No users found.
+            </div>
+          ) : (
+            <>
+              {/* Users List */}
+              <div className="space-y-3">
+                {users.map((user) => {
+                  const isExpanded = expandedUsers.has(user.id)
+                  const diagnostics = user.session_diagnostics
+                  const latestSession = diagnostics?.recent_sessions?.[0]
+                  const { device, browser } = parseUserAgent(latestSession?.user_agent || null)
 
-                                  return (
-                                    <img
-                                      src={imageSrc}
-                                      alt={user.username}
-                                      width={32}
-                                      height={32}
-                                      className="rounded-full"
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement
-                                        // If direct URL failed and it's CloudFront, try proxy
-                                        if (isCloudFront && !target.src.includes('/api/image-proxy') && user.profile_picture_url) {
-                                          target.src = `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
-                                        } else {
-                                          target.src = '/kick.jpg'
-                                        }
-                                      }}
-                                    />
-                                  )
-                                })() : (
-                                  <Image
-                                    src="/kick.jpg"
-                                    alt={user.username}
-                                    width={32}
-                                    height={32}
-                                    className="rounded-full"
-                                    unoptimized
-                                  />
-                                )}
-                                <span className="font-medium text-gray-900 dark:text-kick-text">{user.username}</span>
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 text-gray-600 dark:text-kick-text-secondary">
-                              {user.email || '-'}
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1.5">
-                                {user.kick_connected && (
-                                  <span title="Kick Connected" className="inline-flex items-center justify-center w-6 h-6 rounded bg-kick-green/20 text-kick-green text-xs font-bold">
-                                    K
-                                  </span>
-                                )}
-                                {user.discord_connected && (
-                                  <span title={user.discord_username ? `Discord: ${user.discord_username}` : 'Discord Connected'} className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#5865F2]/20 text-[#5865F2] text-xs font-bold">
-                                    D
-                                  </span>
-                                )}
-                                {user.telegram_connected && (
-                                  <span title={user.telegram_username ? `Telegram: @${user.telegram_username}` : 'Telegram Connected'} className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#0088cc]/20 text-[#0088cc] text-xs font-bold">
-                                    T
-                                  </span>
-                                )}
-                                {!user.kick_connected && !user.discord_connected && !user.telegram_connected && (
-                                  <span className="text-xs text-gray-400">None</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
-                              {user.total_points.toLocaleString()}
-                            </td>
-                            <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
-                              {user.total_emotes.toLocaleString()}
-                            </td>
-                            <td className="py-3 px-4">
-                              {user.is_admin ? (
-                                <span className="px-2 py-1 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
-                                  Admin
-                                </span>
-                              ) : (
-                                <span className="px-2 py-1 rounded text-xs bg-gray-100 dark:bg-kick-dark text-gray-600 dark:text-kick-text-secondary">
-                                  User
-                                </span>
+                  return (
+                    <div
+                      key={user.id}
+                      className="border border-gray-200 dark:border-kick-border rounded-lg overflow-hidden"
+                    >
+                      {/* Main Row */}
+                      <div
+                        className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-kick-surface-hover cursor-pointer transition-colors"
+                        onClick={() => toggleExpanded(user.id)}
+                      >
+                        {/* Expand Arrow */}
+                        <div className="text-gray-400 dark:text-kick-text-secondary">
+                          {isExpanded ? '▼' : '▶'}
+                        </div>
+
+                        {/* Avatar */}
+                        <div className="flex-shrink-0">
+                          {user.profile_picture_url ? (
+                            <img
+                              src={user.profile_picture_url.includes('cloudfront.net') || user.profile_picture_url.includes('amazonaws.com')
+                                ? user.profile_picture_url
+                                : `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`}
+                              alt={user.username}
+                              className="w-10 h-10 rounded-full object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).src = '/kick.jpg' }}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
+                              <span className="text-gray-600 dark:text-kick-text-secondary font-medium">
+                                {user.username.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* User Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900 dark:text-kick-text truncate">
+                              {user.username}
+                            </span>
+                            {/* Connected Account Badges */}
+                            <div className="flex items-center gap-1">
+                              {user.kick_connected && (
+                                <img src="/imgi_144_kick-streaming-platform-logo-icon.svg" alt="Kick" title="Kick Connected" className="w-4 h-4" />
                               )}
-                            </td>
-                            <td className="py-3 px-4 text-gray-600 dark:text-kick-text-secondary text-sm">
-                              {diagnostics ? (
-                                <div className="space-y-1">
-                                  <div className="text-xs">
-                                    {diagnostics.last_region || diagnostics.last_country || 'Unknown'} • {diagnostics.last_client_type || 'Unknown'}
-                                  </div>
-                                  <div className="text-xs text-gray-500 dark:text-kick-text-muted">
-                                    {timeAgo} • {diagnostics.total_sessions} session{diagnostics.total_sessions !== 1 ? 's' : ''}
-                                  </div>
+                              {user.discord_connected && (
+                                <img src="/discord.png" alt="Discord" title={user.discord_username ? `Discord: ${user.discord_username}` : 'Discord Connected'} className="w-4 h-4" />
+                              )}
+                              {user.telegram_connected && (
+                                <img src="/Telegram-Logo-PNG-Image.png" alt="Telegram" title={user.telegram_username ? `@${user.telegram_username}` : 'Telegram Connected'} className="w-4 h-4" />
+                              )}
+                            </div>
+                            {user.is_admin && (
+                              <span className="px-1.5 py-0.5 rounded text-xs bg-kick-purple/20 text-kick-purple font-medium">
+                                Admin
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-kick-text-secondary">
+                            {user.email || 'No email'}
+                          </div>
+                        </div>
+
+                        {/* Quick Session Info */}
+                        <div className="hidden md:flex items-center gap-6 text-sm">
+                          {/* Last Seen */}
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Last Seen</div>
+                            <div className="text-gray-900 dark:text-kick-text font-medium">
+                              {formatTimeAgo(diagnostics?.last_seen)}
+                            </div>
+                          </div>
+
+                          {/* Location */}
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Location</div>
+                            <div className="text-gray-900 dark:text-kick-text font-medium">
+                              {diagnostics?.last_country || diagnostics?.last_region || 'Unknown'}
+                            </div>
+                          </div>
+
+                          {/* Client */}
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Client</div>
+                            <div className="text-gray-900 dark:text-kick-text font-medium">
+                              {getClientTypeIcon(diagnostics?.last_client_type)} {diagnostics?.last_client_type || 'Unknown'}
+                            </div>
+                          </div>
+
+                          {/* Sessions */}
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Sessions</div>
+                            <div className="text-gray-900 dark:text-kick-text font-medium">
+                              {diagnostics?.total_sessions || 0}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Points */}
+                        <div className="text-right">
+                          <div className="font-semibold text-kick-purple">{user.total_points.toLocaleString()}</div>
+                          <div className="text-xs text-gray-500 dark:text-kick-text-secondary">points</div>
+                        </div>
+
+                        {/* Admin Toggle */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleAdmin(user.kick_user_id, user.is_admin)
+                          }}
+                          className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                            user.is_admin
+                              ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
+                              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                          }`}
+                        >
+                          {user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                        </button>
+                      </div>
+
+                      {/* Expanded Details */}
+                      {isExpanded && (
+                        <div className="border-t border-gray-200 dark:border-kick-border bg-gray-50 dark:bg-kick-dark p-4">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Account Info */}
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text mb-3">Account Info</h4>
+                              <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">User ID:</span>
+                                  <span className="text-gray-900 dark:text-kick-text font-mono">{user.kick_user_id}</span>
                                 </div>
-                              ) : (
-                                <span className="text-xs text-gray-400">No data</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-gray-600 dark:text-kick-text-secondary text-sm">
-                              {new Date(user.created_at).toLocaleDateString()}
-                            </td>
-                            <td className="py-3 px-4">
-                              <button
-                                onClick={() => toggleAdmin(user.kick_user_id, user.is_admin)}
-                                className={`px-3 py-1 rounded text-sm ${
-                                  user.is_admin
-                                    ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-900/50'
-                                    : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-900/50'
-                                }`}
-                              >
-                                {user.is_admin ? 'Remove Admin' : 'Make Admin'}
-                              </button>
-                            </td>
-                          </tr>
-                          {isExpanded && diagnostics && diagnostics.recent_sessions.length > 0 && (
-                            <tr className="border-b border-gray-100 dark:border-kick-border bg-gray-50 dark:bg-kick-dark">
-                              <td colSpan={10} className="py-4 px-4">
-                                <div className="space-y-3">
-                                  <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text">Session Diagnostics</h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                      <span className="text-gray-600 dark:text-kick-text-secondary">Total Sessions: </span>
-                                      <span className="font-medium text-gray-900 dark:text-kick-text">{diagnostics.total_sessions}</span>
-                                    </div>
-                                    {diagnostics.unique_regions.length > 0 && (
-                                      <div>
-                                        <span className="text-gray-600 dark:text-kick-text-secondary">Regions: </span>
-                                        <span className="font-medium text-gray-900 dark:text-kick-text">{diagnostics.unique_regions.join(', ')}</span>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Joined:</span>
+                                  <span className="text-gray-900 dark:text-kick-text">{new Date(user.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Last Login:</span>
+                                  <span className="text-gray-900 dark:text-kick-text">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : 'Never'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Points:</span>
+                                  <span className="text-kick-purple font-semibold">{user.total_points.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Emotes:</span>
+                                  <span className="text-kick-green font-semibold">{user.total_emotes.toLocaleString()}</span>
+                                </div>
+                              </div>
+
+                              {/* Connected Accounts Detail */}
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text mt-4 mb-3">Connected Accounts</h4>
+                              <div className="space-y-2 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Kick:</span>
+                                  <span className={user.kick_connected ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}>
+                                    {user.kick_connected ? '✓ Connected' : '✗ Not connected'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Discord:</span>
+                                  <span className={user.discord_connected ? 'text-[#5865F2]' : 'text-gray-400'}>
+                                    {user.discord_connected ? `✓ ${user.discord_username || 'Connected'}` : '✗ Not connected'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Telegram:</span>
+                                  <span className={user.telegram_connected ? 'text-[#0088cc]' : 'text-gray-400'}>
+                                    {user.telegram_connected ? `✓ @${user.telegram_username || 'Connected'}` : '✗ Not connected'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Session Diagnostics */}
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text mb-3">
+                                Session Diagnostics ({diagnostics?.total_sessions || 0} sessions)
+                              </h4>
+                              
+                              {diagnostics && diagnostics.total_sessions > 0 ? (
+                                <>
+                                  {/* Summary */}
+                                  <div className="grid grid-cols-2 gap-3 mb-4">
+                                    {diagnostics.unique_countries && diagnostics.unique_countries.length > 0 && (
+                                      <div className="bg-white dark:bg-kick-surface rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Countries</div>
+                                        <div className="text-sm text-gray-900 dark:text-kick-text font-medium">
+                                          {diagnostics.unique_countries.slice(0, 3).join(', ')}
+                                          {diagnostics.unique_countries.length > 3 && ` +${diagnostics.unique_countries.length - 3}`}
+                                        </div>
                                       </div>
                                     )}
-                                    {diagnostics.unique_client_types.length > 0 && (
-                                      <div>
-                                        <span className="text-gray-600 dark:text-kick-text-secondary">Client Types: </span>
-                                        <span className="font-medium text-gray-900 dark:text-kick-text">{diagnostics.unique_client_types.join(', ')}</span>
+                                    {diagnostics.unique_regions && diagnostics.unique_regions.length > 0 && (
+                                      <div className="bg-white dark:bg-kick-surface rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Regions</div>
+                                        <div className="text-sm text-gray-900 dark:text-kick-text font-medium">
+                                          {diagnostics.unique_regions.slice(0, 3).join(', ')}
+                                          {diagnostics.unique_regions.length > 3 && ` +${diagnostics.unique_regions.length - 3}`}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {diagnostics.unique_client_types && diagnostics.unique_client_types.length > 0 && (
+                                      <div className="bg-white dark:bg-kick-surface rounded p-2">
+                                        <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Client Types</div>
+                                        <div className="text-sm text-gray-900 dark:text-kick-text font-medium">
+                                          {diagnostics.unique_client_types.map(t => `${getClientTypeIcon(t)} ${t}`).join(', ')}
+                                        </div>
                                       </div>
                                     )}
                                   </div>
-                                  <div>
-                                    <h5 className="text-xs font-semibold text-gray-700 dark:text-kick-text-secondary mb-2">Recent Sessions:</h5>
-                                    <div className="space-y-2">
-                                      {diagnostics.recent_sessions.map((session) => (
-                                        <div key={session.session_id} className="bg-white dark:bg-kick-surface rounded p-2 text-xs">
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-gray-600 dark:text-kick-text-secondary">
-                                              {session.region || session.country || 'Unknown'} • {session.client_type || 'Unknown'}
-                                            </span>
-                                            <span className="text-gray-500 dark:text-kick-text-muted">
-                                              {new Date(session.last_seen_at).toLocaleString()}
+
+                                  {/* Recent Sessions */}
+                                  <div className="text-xs font-semibold text-gray-700 dark:text-kick-text-secondary mb-2">Recent Sessions</div>
+                                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {diagnostics.recent_sessions.map((session, idx) => {
+                                      const { device, browser } = parseUserAgent(session.user_agent)
+                                      return (
+                                        <div key={session.session_id || idx} className="bg-white dark:bg-kick-surface rounded p-2 text-xs">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center gap-2">
+                                              <span>{getClientTypeIcon(session.client_type)}</span>
+                                              <span className="font-medium text-gray-900 dark:text-kick-text">
+                                                {session.country || session.region || 'Unknown'}
+                                              </span>
+                                              <span className="text-gray-500 dark:text-kick-text-secondary">
+                                                • {session.client_type || 'Unknown'}
+                                              </span>
+                                            </div>
+                                            <span className="text-gray-500 dark:text-kick-text-secondary">
+                                              {formatTimeAgo(session.last_seen_at)}
                                             </span>
                                           </div>
-                                          <div className="text-gray-400 dark:text-kick-text-muted mt-1 font-mono text-xs">
-                                            Session: {session.session_id.substring(0, 8)}...
+                                          <div className="text-gray-500 dark:text-kick-text-secondary">
+                                            {device} • {browser}
+                                            {session.ip_hash && (
+                                              <span className="ml-2 font-mono">IP: {session.ip_hash.substring(0, 8)}...</span>
+                                            )}
+                                          </div>
+                                          <div className="text-gray-400 dark:text-kick-text-muted font-mono mt-1">
+                                            Session: {session.session_id?.substring(0, 16) || 'N/A'}...
                                           </div>
                                         </div>
-                                      ))}
-                                    </div>
+                                      )
+                                    })}
                                   </div>
+                                </>
+                              ) : (
+                                <div className="text-sm text-gray-500 dark:text-kick-text-secondary">
+                                  No session data available
                                 </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            </div>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600 dark:text-kick-text-secondary">
-                Showing {offset + 1} to {Math.min(offset + limit, total)} of {total} users
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setOffset(Math.max(0, offset - limit))}
-                  disabled={offset === 0}
-                  className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-kick-surface text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setOffset(offset + limit)}
-                  disabled={offset + limit >= total}
-                  className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-kick-surface text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+              {/* Pagination */}
+              {total > limit && (
+                <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-kick-border">
+                  <button
+                    onClick={() => setOffset(Math.max(0, offset - limit))}
+                    disabled={offset === 0}
+                    className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-kick-surface text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm text-gray-600 dark:text-kick-text-secondary">
+                    Showing {offset + 1}-{Math.min(offset + limit, total)} of {total.toLocaleString()}
+                  </span>
+                  <button
+                    onClick={() => setOffset(offset + limit)}
+                    disabled={offset + limit >= total}
+                    className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-kick-surface text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </AppLayout>
   )
