@@ -242,7 +242,7 @@ export default function PayoutsPage() {
         rows.push(['Recipients', payoutData.summary.participant_count.toString()])
         rows.push(['Total Participants', payoutData.summary.total_participants.toString()])
         if (payoutData.summary.top_n) {
-            rows.push(['Top N Filter', `Top ${payoutData.summary.top_n}`])
+            rows.push(['Rank Filter', `Rank 1-${payoutData.summary.top_n}`])
         }
         if (payoutData.summary.rounding_difference !== 0) {
             rows.push(['Rounding Difference', `$${payoutData.summary.rounding_difference.toFixed(roundTo)}`])
@@ -359,14 +359,14 @@ export default function PayoutsPage() {
                                     className="flex-1 px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
                                 >
                                     <option value="">All Participants</option>
-                                    <option value="1">Top 1</option>
-                                    <option value="3">Top 3</option>
-                                    <option value="5">Top 5</option>
-                                    <option value="10">Top 10</option>
-                                    <option value="15">Top 15</option>
-                                    <option value="20">Top 20</option>
-                                    <option value="25">Top 25</option>
-                                    <option value="50">Top 50</option>
+                                    <option value="1">Rank #1 only</option>
+                                    <option value="3">Rank 1-3</option>
+                                    <option value="5">Rank 1-5</option>
+                                    <option value="10">Rank 1-10</option>
+                                    <option value="15">Rank 1-15</option>
+                                    <option value="20">Rank 1-20</option>
+                                    <option value="25">Rank 1-25</option>
+                                    <option value="50">Rank 1-50</option>
                                 </select>
                                 <input
                                     type="number"
@@ -600,11 +600,11 @@ export default function PayoutsPage() {
                             </div>
                         )}
 
-                        {/* Top N Info */}
+                        {/* Rank Filter Info */}
                         {payoutData.summary.top_n && payoutData.summary.total_participants > payoutData.summary.participant_count && (
                             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                                 <p className="text-blue-800 dark:text-blue-200 text-sm">
-                                    <strong>Top {payoutData.summary.top_n} Mode:</strong> Showing {payoutData.summary.participant_count} recipients out of {payoutData.summary.total_participants} total participants. The ${payoutData.summary.budget.toFixed(2)} budget is split only among the top performers.
+                                    <strong>Rank 1-{payoutData.summary.top_n} Filter:</strong> Showing {payoutData.summary.participant_count} recipients (ranks 1-{payoutData.summary.top_n}) out of {payoutData.summary.total_participants} total participants. The ${payoutData.summary.budget.toFixed(2)} budget is split only among these top ranks.
                                 </p>
                             </div>
                         )}
