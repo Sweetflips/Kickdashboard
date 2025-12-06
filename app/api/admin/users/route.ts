@@ -29,13 +29,11 @@ export async function GET(request: Request) {
       ]
     }
 
-    // Get users with pagination and session diagnostics
-    // Order by points descending (highest points first)
-    const [users, total] = await Promise.all([
+    // Get users with session diagnostics
+    // We'll sort by points in JavaScript since Prisma relation ordering is unreliable with optional relations
+    const [usersRaw, total] = await Promise.all([
       db.user.findMany({
         where,
-        take: limit,
-        skip: offset,
         include: {
           points: {
             select: {
@@ -60,19 +58,20 @@ export async function GET(request: Request) {
             },
           },
         },
-        orderBy: [
-          {
-            points: {
-              total_points: 'desc',
-            },
-          },
-          {
-            created_at: 'desc',
-          },
-        ],
       }),
       db.user.count({ where }),
     ])
+
+    // Sort by points descending, then by created_at descending
+    const sortedUsers = usersRaw.sort((a, b) => {
+      const pointsA = a.points?.total_points || 0
+      const pointsB = b.points?.total_points || 0
+      if (pointsB !== pointsA) return pointsB - pointsA
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+
+    // Apply pagination after sorting
+    const users = sortedUsers.slice(offset, offset + limit)
 
     // Get aggregated session stats for each user
     const userIds = users.map(u => u.id)

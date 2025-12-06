@@ -279,22 +279,16 @@ export default function UsersPage() {
 
                         {/* Avatar */}
                         <div className="flex-shrink-0">
-                          {user.profile_picture_url ? (
-                            <img
-                              src={user.profile_picture_url.includes('cloudfront.net') || user.profile_picture_url.includes('amazonaws.com')
-                                ? user.profile_picture_url
-                                : `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`}
-                              alt={user.username}
-                              className="w-10 h-10 rounded-full object-cover"
-                              onError={(e) => { (e.target as HTMLImageElement).src = '/kick.jpg' }}
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
-                              <span className="text-gray-600 dark:text-kick-text-secondary font-medium">
-                                {user.username.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                          )}
+                          <img
+                            src={user.profile_picture_url 
+                              ? (user.profile_picture_url.includes('cloudfront.net') || user.profile_picture_url.includes('amazonaws.com')
+                                  ? user.profile_picture_url
+                                  : `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`)
+                              : '/imgi_144_kick-streaming-platform-logo-icon.svg'}
+                            alt={user.username}
+                            className="w-10 h-10 rounded-full object-cover bg-kick-dark"
+                            onError={(e) => { (e.target as HTMLImageElement).src = '/imgi_144_kick-streaming-platform-logo-icon.svg' }}
+                          />
                         </div>
 
                         {/* User Info */}
