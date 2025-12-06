@@ -13,11 +13,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'SweetFlips Dashboard | Kick Rewards & Analytics',
+    default: 'SweetFlips | Earn Rewards Watching Kick Streams',
     template: '%s | SweetFlips',
   },
-  description: 'Earn points by chatting during SweetFlips streams on Kick. Join raffles, complete achievements, and climb the leaderboard. The official rewards dashboard for the SweetFlips community.',
-  keywords: ['SweetFlips', 'Kick', 'streaming', 'rewards', 'points', 'raffles', 'leaderboard', 'gambling', 'slots', 'community'],
+  description: 'Earn money by watching SweetFlips stream on Kick! Chat to collect points, enter raffles, win prizes, and climb the leaderboard. Join the SweetFlips community today.',
+  keywords: ['SweetFlips', 'Kick', 'streaming', 'rewards', 'points', 'raffles', 'leaderboard', 'gambling', 'slots', 'community', 'earn money', 'kick.com'],
   authors: [{ name: 'SweetFlips' }],
   creator: 'SweetFlips',
   publisher: 'SweetFlips',
@@ -27,33 +27,32 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/8 EMERALD (1).png', type: 'image/png' },
+      { url: '/icon.png', type: 'image/png', sizes: '192x192' },
     ],
-    apple: '/8 EMERALD (1).png',
-    shortcut: '/8 EMERALD (1).png',
+    apple: { url: '/icon.png', sizes: '180x180' },
+    shortcut: '/icon.png',
   },
   openGraph: {
     type: 'website',
     locale: 'en_US',
     url: 'https://www.kickdashboard.com',
-    siteName: 'SweetFlips Dashboard',
-    title: 'SweetFlips Dashboard | Kick Rewards & Analytics',
-    description: 'Earn points by chatting during SweetFlips streams on Kick. Join raffles, complete achievements, and climb the leaderboard.',
+    siteName: 'SweetFlips',
+    title: 'SweetFlips | Earn Rewards Watching Kick Streams',
+    description: 'Earn money by watching SweetFlips stream on Kick! Chat to collect points, enter raffles, win prizes, and climb the leaderboard.',
     images: [
       {
-        url: '/sweet_flips (2).png',
+        url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'SweetFlips Dashboard',
+        alt: 'SweetFlips - Earn Rewards on Kick',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SweetFlips Dashboard | Kick Rewards & Analytics',
-    description: 'Earn points by chatting during SweetFlips streams on Kick. Join raffles, complete achievements, and climb the leaderboard.',
-    images: ['/sweet_flips (2).png'],
+    title: 'SweetFlips | Earn Rewards Watching Kick Streams',
+    description: 'Earn money by watching SweetFlips stream on Kick! Chat to collect points, enter raffles, win prizes, and climb the leaderboard.',
+    images: ['/og-image.png'],
     creator: '@sweetflips',
   },
   robots: {

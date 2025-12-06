@@ -156,13 +156,13 @@ export default function PayoutsPage() {
             if (!token) return
 
             let url = `/api/admin/payouts?stream_session_id=${selectedSessionId}&budget=${budgetNum}&round_to=${roundTo}`
-            
+
             // Add top_n parameter if specified
             const topNNum = topN ? parseInt(topN) : null
             if (topNNum && topNNum > 0) {
                 url += `&top_n=${topNNum}`
             }
-            
+
             // Add rank bonus parameter
             if (rankBonus) {
                 url += `&rank_bonus=true`
@@ -206,7 +206,7 @@ export default function PayoutsPage() {
         const headers = payoutData.summary.rank_bonus
             ? ['Rank', 'Username', 'Points', 'Bonus', 'Weighted Points', 'Payout ($)', 'Percentage (%)']
             : ['Rank', 'Username', 'Points', 'Payout ($)', 'Percentage (%)']
-        
+
         const rows = payoutData.payouts.map(p => {
             if (payoutData.summary.rank_bonus) {
                 return [
