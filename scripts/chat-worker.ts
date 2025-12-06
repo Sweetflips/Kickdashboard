@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
  * CHAT WORKER - Handles ALL database writes
- * 
+ *
  * This worker processes chat jobs and performs:
  * 1. User upserts (sender + broadcaster)
  * 2. Message saves
  * 3. Point awards
  * 4. Emote counting
- * 
+ *
  * The main Kickdashboard app only READS from the database.
  * All writes go through this worker via the chat_jobs queue.
  */
@@ -271,7 +271,12 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
 
         const duration = Date.now() - startTime
         if (pointsEarned > 0) {
-            console.log(`✅ +${pointsEarned} point → ${payload.sender.username} (${duration}ms)`)
+            const isSub = payload.sender.badges?.some(b => 
+                b.type?.toLowerCase().includes('subscriber') || 
+                b.type?.toLowerCase().includes('sub') ||
+                b.text?.toLowerCase().includes('sub')
+            )
+            console.log(`✅ +${pointsEarned} pt → ${payload.sender.username}${isSub ? ' (sub)' : ''} [${duration}ms]`)
         }
 
     } catch (error) {
@@ -350,4 +355,3 @@ runWorker().catch(async (error) => {
     await releaseAdvisoryLock()
     process.exit(1)
 })
-

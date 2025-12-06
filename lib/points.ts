@@ -352,10 +352,6 @@ export async function awardPoint(
             }
         }
 
-        // Log successful point award - this is the main log we want to see
-        const subscriberText = isSub ? ' (subscriber)' : ''
-        console.log(`✅ +${pointsToAward} point${pointsToAward > 1 ? 's' : ''} → ${user.username}${subscriberText}`)
-
         return {
             awarded: true,
             pointsEarned: pointsToAward
