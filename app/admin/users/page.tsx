@@ -348,7 +348,7 @@ export default function UsersPage() {
                           <div className="text-center">
                             <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Client</div>
                             <div className="text-gray-900 dark:text-kick-text font-medium">
-                              {getClientTypeIcon(diagnostics?.last_client_type)} {diagnostics?.last_client_type || 'Unknown'}
+                              {getClientTypeIcon(diagnostics?.last_client_type ?? null)} {diagnostics?.last_client_type || 'Unknown'}
                             </div>
                           </div>
 
