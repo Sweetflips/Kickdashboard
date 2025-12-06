@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "sh -c 'next start -p ${PORT:-3000}'",
-    "start:custom": "node scripts/start.js",
+    "start": "node scripts/start.js",
     "start:worker": "node scripts/start-worker.js",
     "lint": "next lint",
     "postinstall": "prisma generate",

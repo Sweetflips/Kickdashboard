@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { spawn, execSync } = require('child_process');
+const { spawn, exec } = require('child_process');
 
 // Check if this should run as worker instead of web server
 if (process.env.RUN_AS_WORKER === 'true') {
@@ -13,22 +13,24 @@ if (process.env.RUN_AS_WORKER === 'true') {
 
 function startWebServer() {
   const port = process.env.PORT || '3000';
-  const path = require('path');
 
-  // Start Next.js server FIRST - migrations/checks run in background
+  // Start Next.js server FIRST - migrations run in background
   console.log('🚀 Starting Next.js server on port ' + port + '...');
   
-  // Use direct path to next binary with shell - npx may not work in container environment
-  const nextBin = path.join(process.cwd(), 'node_modules', '.bin', 'next');
-  const nextProcess = spawn(nextBin, ['start', '-p', port], {
+  // Use sh -c which works reliably in the container (same as npm script)
+  const nextProcess = spawn('sh', ['-c', `next start -p ${port}`], {
     stdio: 'inherit',
-    env: process.env,
-    shell: true
+    env: process.env
   });
 
   // Handle process exits
   nextProcess.on('exit', (code) => {
     process.exit(code || 0);
+  });
+
+  nextProcess.on('error', (err) => {
+    console.error('❌ Failed to start Next.js:', err.message);
+    process.exit(1);
   });
 
   // Handle graceful shutdown
@@ -41,22 +43,15 @@ function startWebServer() {
   process.on('SIGINT', () => shutdown('SIGINT'));
 
   // Run migrations in background (non-blocking) after 5 seconds
-  setTimeout(async () => {
+  setTimeout(() => {
     console.log('🔄 Running background migrations...');
-
-    try {
-      // Run migrations using direct path to prisma binary
-      const { promisify } = require('util');
-      const exec = promisify(require('child_process').exec);
-      const path = require('path');
-
-      // Use direct path to prisma - npx may not work in container environment
-      const prismaBin = path.join(process.cwd(), 'node_modules', '.bin', 'prisma');
-      const migrationPromise = exec(`"${prismaBin}" migrate deploy`, { timeout: 30000 });
-      await migrationPromise;
-      console.log('✅ Background migrations completed');
-    } catch (error) {
-      console.error('⚠️ Background migration failed (non-critical):', error.message);
-    }
+    
+    exec('prisma migrate deploy', { timeout: 30000 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('⚠️ Background migration failed (non-critical):', error.message);
+      } else {
+        console.log('✅ Background migrations completed');
+      }
+    });
   }, 5000);
 }

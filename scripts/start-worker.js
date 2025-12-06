@@ -1,15 +1,11 @@
 #!/usr/bin/env node
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const { PrismaClient } = require('@prisma/client');
-const path = require('path');
-
-// Use direct paths to binaries - npx may not work in container environment
-const prismaBin = path.join(process.cwd(), 'node_modules', '.bin', 'prisma');
 
 // Run migrations before starting the worker
 try {
   console.log('🔄 Running database migrations...');
-  execSync(`"${prismaBin}" migrate deploy`, { stdio: 'inherit' });
+  execSync('prisma migrate deploy', { stdio: 'inherit' });
   console.log('✅ Migrations completed');
 } catch (error) {
   console.error('⚠️ Migration failed (continuing anyway):', error.message);
@@ -80,14 +76,11 @@ async function ensureTables() {
 
   // Start chat worker (handles all writes: users, messages, points)
   console.log('🔄 Starting chat worker (handles all database writes)...');
-  const { spawn } = require('child_process');
   
-  // Use direct path to tsx binary with shell execution - npx may not work in container environment
-  const tsxBin = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
-  const workerProcess = spawn(tsxBin, ['scripts/chat-worker.ts'], {
+  // Use sh -c which works reliably in the container
+  const workerProcess = spawn('sh', ['-c', 'tsx scripts/chat-worker.ts'], {
     stdio: 'inherit',
-    env: process.env,
-    shell: true
+    env: process.env
   });
 
   workerProcess.on('exit', (code) => {
@@ -96,6 +89,11 @@ async function ensureTables() {
       process.exit(code);
     }
     process.exit(0);
+  });
+
+  workerProcess.on('error', (err) => {
+    console.error('❌ Failed to start worker:', err.message);
+    process.exit(1);
   });
 
   // Handle graceful shutdown
