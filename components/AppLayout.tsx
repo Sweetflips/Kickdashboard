@@ -94,9 +94,41 @@ export default function AppLayout({ children }: LayoutProps) {
         }
     }, [router, pathname])
 
+    // Check admin status separately using secure endpoint
+    const checkAdminStatus = async () => {
+        try {
+            const token = getAccessToken()
+            if (!token) {
+                setIsAdmin(false)
+                return
+            }
+
+            const response = await fetch('/api/admin/verify', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                const adminStatus = data.is_admin === true
+                setIsAdmin(adminStatus)
+                localStorage.setItem('is_admin', String(adminStatus))
+            } else {
+                setIsAdmin(false)
+                localStorage.setItem('is_admin', 'false')
+            }
+        } catch (error) {
+            console.error('Error checking admin status:', error)
+            setIsAdmin(false)
+            localStorage.setItem('is_admin', 'false')
+        }
+    }
+
     useEffect(() => {
         if (!isAuthenticated) return
         fetchUserData()
+        checkAdminStatus()
     }, [isAuthenticated])
 
     // Refresh user data when URL has success parameter (after OAuth callbacks)
@@ -110,6 +142,7 @@ export default function AppLayout({ children }: LayoutProps) {
             // Refresh user data after successful OAuth connection
             setTimeout(() => {
                 fetchUserData()
+                checkAdminStatus()
             }, 1000) // Delay to ensure DB has updated
         }
     }, [isAuthenticated, pathname])
@@ -154,12 +187,7 @@ export default function AppLayout({ children }: LayoutProps) {
             if (response.ok) {
                 const data = await response.json()
                 setUserData(data)
-                // Persist admin status to localStorage to prevent sidebar glitching
-                if (data.is_admin !== undefined) {
-                    const adminStatus = data.is_admin === true
-                    setIsAdmin(adminStatus)
-                    localStorage.setItem('is_admin', String(adminStatus))
-                }
+                // Admin status is checked separately via /api/admin/verify
             } else if (response.status === 401) {
                 // Token expired, try to refresh
                 const refreshToken = getRefreshToken()
@@ -181,12 +209,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             if (retryResponse.ok) {
                                 const retryData = await retryResponse.json()
                                 setUserData(retryData)
-                                // Persist admin status to localStorage to prevent sidebar glitching
-                                if (retryData.is_admin !== undefined) {
-                                    const adminStatus = retryData.is_admin === true
-                                    setIsAdmin(adminStatus)
-                                    localStorage.setItem('is_admin', String(adminStatus))
-                                }
+                                // Admin status is checked separately via /api/admin/verify
                             } else {
                                 // Retry failed, clear tokens and redirect to login
                                 console.error('❌ Failed to fetch user after token refresh')
