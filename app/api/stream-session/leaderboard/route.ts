@@ -266,6 +266,25 @@ export async function GET(request: Request) {
             })
         // No limit - show all users
 
+        // Calculate shared ranks (standard competition ranking)
+        // Users with the same points share the same rank, next rank skips ahead
+        const ranksArray: number[] = []
+        for (let i = 0; i < userStatsArray.length; i++) {
+            if (i === 0) {
+                ranksArray.push(1)
+            } else {
+                const prevEntry = userStatsArray[i - 1]
+                const currEntry = userStatsArray[i]
+                if (currEntry.points === prevEntry.points) {
+                    // Same points = same rank
+                    ranksArray.push(ranksArray[i - 1])
+                } else {
+                    // Different points = rank is position + 1
+                    ranksArray.push(i + 1)
+                }
+            }
+        }
+
         // Get user details for each chatter
         const leaderboard = await Promise.all(
             userStatsArray.map(async (entry, index) => {
@@ -280,7 +299,7 @@ export async function GET(request: Request) {
                 })
 
                 return {
-                    rank: index + 1,
+                    rank: ranksArray[index],
                     user_id: entry.user_id.toString(),
                     kick_user_id: user?.kick_user_id.toString() || '',
                     username: user?.username || 'Unknown',
