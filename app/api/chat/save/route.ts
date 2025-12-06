@@ -484,7 +484,7 @@ export async function POST(request: Request) {
                 const upsertResult = await upsertMessageWithRetry()
 
                 // If message already has points, it's definitely an existing message
-                if (wasExistingMessage) {
+                if (existingMessage !== null && existingMessage.points_earned > 0) {
                     // Existing message - use existing points
                     pointsEarned = existingMessage.points_earned ?? 0
                     pointsReason = existingMessage.points_reason || null
