@@ -4,17 +4,20 @@ import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://kickdashboard.com'
 
-if (!TELEGRAM_BOT_TOKEN) {
-    throw new Error('TELEGRAM_BOT_TOKEN must be set in environment variables')
+// Get bot token at runtime to avoid startup crashes
+function getTelegramBotToken(): string {
+    const token = process.env.TELEGRAM_BOT_TOKEN
+    if (!token) {
+        throw new Error('TELEGRAM_BOT_TOKEN must be set')
+    }
+    return token
 }
-
-const BOT_TOKEN = TELEGRAM_BOT_TOKEN
 
 export async function GET(request: Request) {
     try {
+        const botToken = getTelegramBotToken()
         console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
         console.log('📱 [TELEGRAM AUTH CALLBACK] Received callback request')
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
@@ -62,7 +65,7 @@ export async function GET(request: Request) {
         console.log(`   ├─ Received hash: ${hashReceived.slice(0, 16)}...${hashReceived.slice(-8)}`)
 
         // Compute secret key: SHA256 of bot token
-        const secretKey = crypto.createHash('sha256').update(BOT_TOKEN).digest()
+        const secretKey = crypto.createHash('sha256').update(botToken).digest()
 
         // Compute HMAC-SHA256
         const hmac = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex')

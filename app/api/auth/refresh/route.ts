@@ -4,12 +4,16 @@ import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
-const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID!
-const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET!
 const KICK_OAUTH_BASE = 'https://id.kick.com'
 
-if (!KICK_CLIENT_ID || !KICK_CLIENT_SECRET) {
-    throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set in environment variables')
+// Get credentials at runtime to avoid startup crashes
+function getKickCredentials() {
+    const clientId = process.env.KICK_CLIENT_ID
+    const clientSecret = process.env.KICK_CLIENT_SECRET
+    if (!clientId || !clientSecret) {
+        throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set')
+    }
+    return { clientId, clientSecret }
 }
 
 function hashToken(token: string): string {
@@ -74,6 +78,7 @@ function buildRedirectUri(request: Request): string {
  */
 export async function POST(request: Request) {
     try {
+        const { clientId, clientSecret } = getKickCredentials()
         const body = await request.json()
         const refreshToken = body.refresh_token
         const kickUserId = body.kick_user_id ? BigInt(body.kick_user_id) : null
@@ -110,8 +115,8 @@ export async function POST(request: Request) {
         // Exchange refresh token for new access token
         const params = new URLSearchParams({
             grant_type: 'refresh_token',
-            client_id: KICK_CLIENT_ID,
-            client_secret: KICK_CLIENT_SECRET,
+            client_id: clientId,
+            client_secret: clientSecret,
             refresh_token: refreshToken,
             redirect_uri: redirectUri,
         })
