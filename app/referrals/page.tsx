@@ -350,7 +350,7 @@ export default function ReferralsPage() {
                                     <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${tier.color} flex items-center justify-center text-3xl flex-shrink-0`}>
                                         {tier.icon}
                                     </div>
-                                    
+
                                     {/* Info */}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
@@ -486,4 +486,3 @@ export default function ReferralsPage() {
         </AppLayout>
     )
 }
-
