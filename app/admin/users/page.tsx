@@ -47,21 +47,26 @@ export default function UsersPage() {
   const limit = 50
 
   useEffect(() => {
-    // Check admin access
+    // Check admin access using dedicated endpoint
     const token = localStorage.getItem('kick_access_token')
     if (!token) {
       router.push('/')
       return
     }
 
-    fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
+    // SECURITY: Use dedicated admin verification endpoint
+    fetch('/api/admin/verify', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    })
       .then(res => res.json())
       .then(data => {
         if (!data.is_admin) {
           router.push('/')
           return
         }
-        setUserData(data)
+        setUserData({ is_admin: true })
         fetchUsers()
       })
       .catch(() => router.push('/'))

@@ -1,56 +1,39 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getAuthenticatedUser } from '@/lib/auth'
 
 export async function GET(request: Request) {
     try {
-        const { searchParams } = new URL(request.url)
-        const kickUserId = searchParams.get('kick_user_id')
-
-        if (!kickUserId) {
+        // SECURITY: Require authentication
+        const auth = await getAuthenticatedUser(request)
+        if (!auth) {
             return NextResponse.json(
-                { error: 'kick_user_id is required' },
-                { status: 400 }
+                { error: 'Unauthorized' },
+                { status: 401 }
             )
         }
 
-        // Validate kickUserId is a valid number
-        let kickUserIdBigInt
-        try {
-            kickUserIdBigInt = BigInt(kickUserId)
-        } catch (error) {
-            return NextResponse.json(
-                { error: 'Invalid kick_user_id format' },
-                { status: 400 }
-            )
-        }
+        // Only fetch preferences for the authenticated user
+        const user = await db.user.findUnique({
+            where: { kick_user_id: auth.kickUserId },
+            select: {
+                kick_user_id: true,
+                username: true,
+                // NOTE: email intentionally excluded - not needed for preferences
+                profile_picture_url: true,
+                custom_profile_picture_url: true,
+                notifications_enabled: true,
+                email_notifications_enabled: true,
+                chat_font_size: true,
+                chat_show_timestamps: true,
+            },
+        })
 
-        let user
-        try {
-            user = await db.user.findUnique({
-                where: { kick_user_id: kickUserIdBigInt },
-                select: {
-                    kick_user_id: true,
-                    username: true,
-                    email: true,
-                    profile_picture_url: true,
-                    custom_profile_picture_url: true,
-                    notifications_enabled: true,
-                    email_notifications_enabled: true,
-                    chat_font_size: true,
-                    chat_show_timestamps: true,
-                },
-            })
-        } catch (dbError) {
-            console.error('Database error fetching user preferences:', dbError)
-            throw dbError
-        }
-
-        // If user doesn't exist, return default values instead of error
+        // If user doesn't exist, return default values
         if (!user) {
             return NextResponse.json({
-                kick_user_id: kickUserId,
+                kick_user_id: auth.kickUserId.toString(),
                 username: null,
-                email: null,
                 profile_picture_url: null,
                 custom_profile_picture_url: null,
                 notifications_enabled: true,
@@ -63,7 +46,6 @@ export async function GET(request: Request) {
         return NextResponse.json({
             kick_user_id: user.kick_user_id.toString(),
             username: user.username,
-            email: user.email,
             profile_picture_url: user.profile_picture_url,
             custom_profile_picture_url: user.custom_profile_picture_url,
             notifications_enabled: user.notifications_enabled,
@@ -82,22 +64,25 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
     try {
+        // SECURITY: Require authentication
+        const auth = await getAuthenticatedUser(request)
+        if (!auth) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            )
+        }
+
         const body = await request.json()
         const {
-            kick_user_id,
+            // NOTE: kick_user_id from body is intentionally IGNORED
+            // Users can only modify their own preferences
             custom_profile_picture_url,
             notifications_enabled,
             email_notifications_enabled,
             chat_font_size,
             chat_show_timestamps,
         } = body
-
-        if (!kick_user_id) {
-            return NextResponse.json(
-                { error: 'kick_user_id is required' },
-                { status: 400 }
-            )
-        }
 
         const updateData: any = {}
         if (custom_profile_picture_url !== undefined) updateData.custom_profile_picture_url = custom_profile_picture_url
@@ -106,8 +91,9 @@ export async function PATCH(request: Request) {
         if (chat_font_size !== undefined) updateData.chat_font_size = chat_font_size
         if (chat_show_timestamps !== undefined) updateData.chat_show_timestamps = chat_show_timestamps
 
+        // Only update the authenticated user's preferences
         const user = await db.user.update({
-            where: { kick_user_id: BigInt(kick_user_id) },
+            where: { kick_user_id: auth.kickUserId },
             data: updateData,
             select: {
                 kick_user_id: true,

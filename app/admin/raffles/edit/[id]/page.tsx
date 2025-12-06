@@ -49,7 +49,12 @@ export default function EditRafflePage() {
                 return
             }
 
-            const response = await fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
+            // SECURITY: Use dedicated admin verification endpoint
+            const response = await fetch('/api/admin/verify', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            })
             if (response.ok) {
                 const data = await response.json()
                 if (!data.is_admin) {

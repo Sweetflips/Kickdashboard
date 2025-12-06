@@ -222,7 +222,14 @@ export default function ProfilePage() {
         if (userData?.id) {
             const loadPreferences = async () => {
                 try {
-                    const response = await fetch(`/api/user/preferences?kick_user_id=${userData.id}`)
+                    const token = localStorage.getItem('kick_access_token')
+                    if (!token) return
+                    
+                    const response = await fetch('/api/user/preferences', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                        },
+                    })
                     if (response.ok) {
                         const prefs = await response.json()
                         setCustomProfilePicture(prefs.custom_profile_picture_url || null)
@@ -256,11 +263,14 @@ export default function ProfilePage() {
                 const result = await response.json()
                 setCustomProfilePicture(result.url)
                 // Save to database
+                const token = localStorage.getItem('kick_access_token')
                 await fetch('/api/user/preferences', {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
                     body: JSON.stringify({
-                        kick_user_id: userData.id,
                         custom_profile_picture_url: result.url,
                     }),
                 })
@@ -289,11 +299,14 @@ export default function ProfilePage() {
 
         try {
             // Save preferences to database
+            const token = localStorage.getItem('kick_access_token')
             const response = await fetch('/api/user/preferences', {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
                 body: JSON.stringify({
-                    kick_user_id: userData.id,
                     notifications_enabled: notifications,
                     email_notifications_enabled: emailNotifications,
                 }),
@@ -323,11 +336,14 @@ export default function ProfilePage() {
     const handleRemoveProfilePicture = async () => {
         if (userData?.id) {
             try {
+                const token = localStorage.getItem('kick_access_token')
                 await fetch('/api/user/preferences', {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
                     body: JSON.stringify({
-                        kick_user_id: userData.id,
                         custom_profile_picture_url: null,
                     }),
                 })

@@ -155,22 +155,17 @@ export async function GET(request: Request) {
                         profilePictureUrl = null
                     }
 
-                    // Check if user exists to get admin status
+                    // SECURITY: Do NOT expose is_admin to client responses
+                    // Admin status is verified server-side via isAdmin() in lib/auth.ts
                     const kickUserId = BigInt(userData.user_id)
-                    const existingUser = await db.user.findUnique({
-                        where: { kick_user_id: kickUserId },
-                        select: {
-                            is_admin: true,
-                        },
-                    }).catch(() => null)
 
                     const extractedData = {
                         id: userData.user_id,
                         username: userData.name, // Kick uses "name" not "username"
                         email: userData.email,
                         profile_picture: profilePictureUrl,
-                        is_admin: existingUser?.is_admin || false,
-                        ...userData // Include all other fields
+                        // NOTE: is_admin intentionally NOT included - prevents client-side spoofing
+                        ...userData // Include all other fields from Kick API
                     }
 
                     // If we got valid data, save to database and return it
