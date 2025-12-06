@@ -2,6 +2,13 @@
 const { spawn, execSync } = require('child_process');
 const { PrismaClient } = require('@prisma/client');
 
+// Check if this should run as worker instead of web server
+if (process.env.RUN_AS_WORKER === 'true') {
+  console.log('🔧 RUN_AS_WORKER=true, starting worker mode...');
+  require('./start-worker.js');
+  return;
+}
+
 // Run migrations before starting the server
 try {
   console.log('🔄 Running database migrations...');
