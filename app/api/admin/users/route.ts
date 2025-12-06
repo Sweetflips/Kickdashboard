@@ -97,6 +97,12 @@ export async function GET(request: Request) {
           total_emotes: u.points?.total_emotes || 0,
           created_at: u.created_at.toISOString(),
           last_login_at: u.last_login_at?.toISOString() || null,
+          // Connected accounts
+          kick_connected: u.kick_connected,
+          discord_connected: u.discord_connected,
+          discord_username: u.discord_username,
+          telegram_connected: u.telegram_connected,
+          telegram_username: u.telegram_username,
           session_diagnostics: {
             total_sessions: totalSessions,
             last_seen: latestSession?.last_seen_at.toISOString() || null,

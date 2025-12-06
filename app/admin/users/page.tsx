@@ -16,6 +16,12 @@ interface User {
   total_emotes: number
   created_at: string
   last_login_at: string | null
+  // Connected accounts
+  kick_connected: boolean
+  discord_connected: boolean
+  discord_username: string | null
+  telegram_connected: boolean
+  telegram_username: string | null
   session_diagnostics?: {
     total_sessions: number
     last_seen: string | null
@@ -186,6 +192,7 @@ export default function UsersPage() {
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary"></th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">User</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Email</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Connected</th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Points</th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Emotes</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Admin</th>
@@ -276,6 +283,28 @@ export default function UsersPage() {
                             <td className="py-3 px-4 text-gray-600 dark:text-kick-text-secondary">
                               {user.email || '-'}
                             </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5">
+                                {user.kick_connected && (
+                                  <span title="Kick Connected" className="inline-flex items-center justify-center w-6 h-6 rounded bg-kick-green/20 text-kick-green text-xs font-bold">
+                                    K
+                                  </span>
+                                )}
+                                {user.discord_connected && (
+                                  <span title={user.discord_username ? `Discord: ${user.discord_username}` : 'Discord Connected'} className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#5865F2]/20 text-[#5865F2] text-xs font-bold">
+                                    D
+                                  </span>
+                                )}
+                                {user.telegram_connected && (
+                                  <span title={user.telegram_username ? `Telegram: @${user.telegram_username}` : 'Telegram Connected'} className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#0088cc]/20 text-[#0088cc] text-xs font-bold">
+                                    T
+                                  </span>
+                                )}
+                                {!user.kick_connected && !user.discord_connected && !user.telegram_connected && (
+                                  <span className="text-xs text-gray-400">None</span>
+                                )}
+                              </div>
+                            </td>
                             <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
                               {user.total_points.toLocaleString()}
                             </td>
@@ -325,7 +354,7 @@ export default function UsersPage() {
                           </tr>
                           {isExpanded && diagnostics && diagnostics.recent_sessions.length > 0 && (
                             <tr className="border-b border-gray-100 dark:border-kick-border bg-gray-50 dark:bg-kick-dark">
-                              <td colSpan={9} className="py-4 px-4">
+                              <td colSpan={10} className="py-4 px-4">
                                 <div className="space-y-3">
                                   <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text">Session Diagnostics</h4>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
