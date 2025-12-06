@@ -300,19 +300,33 @@ export default function UsersPage() {
                         {/* User Info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
+                            {/* Kick logo - always show since all users sign up via Kick */}
+                            <img 
+                              src="/imgi_144_kick-streaming-platform-logo-icon.svg" 
+                              alt="Kick" 
+                              title={`Kick: ${user.username}`} 
+                              className="w-5 h-5 flex-shrink-0" 
+                            />
                             <span className="font-medium text-gray-900 dark:text-kick-text truncate">
                               {user.username}
                             </span>
                             {/* Connected Account Badges */}
-                            <div className="flex items-center gap-1">
-                              {user.kick_connected && (
-                                <img src="/imgi_144_kick-streaming-platform-logo-icon.svg" alt="Kick" title="Kick Connected" className="w-4 h-4" />
-                              )}
+                            <div className="flex items-center gap-1.5">
                               {user.discord_connected && (
-                                <img src="/discord.png" alt="Discord" title={user.discord_username ? `Discord: ${user.discord_username}` : 'Discord Connected'} className="w-4 h-4" />
+                                <img 
+                                  src="/discord.png" 
+                                  alt="Discord" 
+                                  title={user.discord_username ? `Discord: ${user.discord_username}` : 'Discord Connected'} 
+                                  className="w-5 h-5 flex-shrink-0" 
+                                />
                               )}
                               {user.telegram_connected && (
-                                <img src="/Telegram-Logo-PNG-Image.png" alt="Telegram" title={user.telegram_username ? `@${user.telegram_username}` : 'Telegram Connected'} className="w-4 h-4" />
+                                <img 
+                                  src="/Telegram-Logo-PNG-Image.png" 
+                                  alt="Telegram" 
+                                  title={user.telegram_username ? `@${user.telegram_username}` : 'Telegram Connected'} 
+                                  className="w-5 h-5 flex-shrink-0" 
+                                />
                               )}
                             </div>
                             {user.is_admin && (
@@ -328,37 +342,43 @@ export default function UsersPage() {
 
                         {/* Quick Session Info */}
                         <div className="hidden md:flex items-center gap-6 text-sm">
-                          {/* Last Seen */}
-                          <div className="text-center">
-                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Last Seen</div>
+                          {/* Last Active */}
+                          <div className="text-center min-w-[80px]">
+                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Last Active</div>
                             <div className="text-gray-900 dark:text-kick-text font-medium">
-                              {formatTimeAgo(diagnostics?.last_seen ?? null)}
+                              {formatTimeAgo(diagnostics?.last_seen || user.last_login_at)}
                             </div>
                           </div>
 
-                          {/* Location */}
-                          <div className="text-center">
-                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Location</div>
-                            <div className="text-gray-900 dark:text-kick-text font-medium">
-                              {diagnostics?.last_country || diagnostics?.last_region || 'Unknown'}
+                          {/* Location - only show if we have data */}
+                          {(diagnostics?.last_country || diagnostics?.last_region) && (
+                            <div className="text-center min-w-[80px]">
+                              <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Location</div>
+                              <div className="text-gray-900 dark:text-kick-text font-medium">
+                                {diagnostics.last_country || diagnostics.last_region}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          {/* Client */}
-                          <div className="text-center">
-                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Client</div>
-                            <div className="text-gray-900 dark:text-kick-text font-medium">
-                              {getClientTypeIcon(diagnostics?.last_client_type ?? null)} {diagnostics?.last_client_type || 'Unknown'}
+                          {/* Client - only show if we have data */}
+                          {diagnostics?.last_client_type && (
+                            <div className="text-center min-w-[80px]">
+                              <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Client</div>
+                              <div className="text-gray-900 dark:text-kick-text font-medium">
+                                {getClientTypeIcon(diagnostics.last_client_type)} {diagnostics.last_client_type}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          {/* Sessions */}
-                          <div className="text-center">
-                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Sessions</div>
-                            <div className="text-gray-900 dark:text-kick-text font-medium">
-                              {diagnostics?.total_sessions || 0}
+                          {/* Sessions - only show if > 0 */}
+                          {diagnostics && diagnostics.total_sessions > 0 && (
+                            <div className="text-center min-w-[60px]">
+                              <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Sessions</div>
+                              <div className="text-gray-900 dark:text-kick-text font-medium">
+                                {diagnostics.total_sessions}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
 
                         {/* Points */}

@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     }
 
     // Get users with pagination and session diagnostics
+    // Order by points descending (highest points first)
     const [users, total] = await Promise.all([
       db.user.findMany({
         where,
@@ -57,9 +58,16 @@ export async function GET(request: Request) {
             },
           },
         },
-        orderBy: {
-          created_at: 'desc',
-        },
+        orderBy: [
+          {
+            points: {
+              total_points: 'desc',
+            },
+          },
+          {
+            created_at: 'desc',
+          },
+        ],
       }),
       db.user.count({ where }),
     ])
