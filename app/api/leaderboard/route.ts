@@ -260,8 +260,8 @@ export async function GET(request: Request) {
                 return b.totalMessages - a.totalMessages
             })
 
-        // Calculate shared ranks (standard competition ranking)
-        // Users with the same points share the same rank, next rank skips ahead
+        // Calculate shared ranks (dense ranking)
+        // Users with the same points share the same rank, next rank is consecutive (1,1,2 not 1,1,3)
         const ranksMap = new Map<number, number>()
         let currentRank = offset + 1
         for (let i = 0; i < sortedFormatted.length; i++) {
@@ -274,8 +274,9 @@ export async function GET(request: Request) {
                     // Same points = same rank
                     ranksMap.set(i, ranksMap.get(i - 1)!)
                 } else {
-                    // Different points = rank is position + offset + 1
-                    ranksMap.set(i, offset + i + 1)
+                    // Different points = next consecutive rank
+                    currentRank++
+                    ranksMap.set(i, currentRank)
                 }
             }
         }

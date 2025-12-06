@@ -266,12 +266,13 @@ export async function GET(request: Request) {
             })
         // No limit - show all users
 
-        // Calculate shared ranks (standard competition ranking)
-        // Users with the same points share the same rank, next rank skips ahead
+        // Calculate shared ranks (dense ranking)
+        // Users with the same points share the same rank, next rank is consecutive (1,1,2 not 1,1,3)
         const ranksArray: number[] = []
+        let currentRank = 1
         for (let i = 0; i < userStatsArray.length; i++) {
             if (i === 0) {
-                ranksArray.push(1)
+                ranksArray.push(currentRank)
             } else {
                 const prevEntry = userStatsArray[i - 1]
                 const currEntry = userStatsArray[i]
@@ -279,8 +280,9 @@ export async function GET(request: Request) {
                     // Same points = same rank
                     ranksArray.push(ranksArray[i - 1])
                 } else {
-                    // Different points = rank is position + 1
-                    ranksArray.push(i + 1)
+                    // Different points = next consecutive rank
+                    currentRank++
+                    ranksArray.push(currentRank)
                 }
             }
         }
