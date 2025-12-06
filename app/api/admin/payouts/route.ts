@@ -18,6 +18,7 @@ export async function GET(request: Request) {
         const budget = parseFloat(searchParams.get('budget') || '100')
         const roundTo = parseInt(searchParams.get('round_to') || '2')
         const topN = searchParams.get('top_n') ? parseInt(searchParams.get('top_n')!) : null // null = all participants
+        const rankBonus = searchParams.get('rank_bonus') === 'true' // Apply rank-based multipliers
 
         if (!streamSessionId) {
             return NextResponse.json(
@@ -102,6 +103,15 @@ export async function GET(request: Request) {
 
         const userMap = new Map(users.map(u => [u.id.toString(), u]))
 
+        // Rank bonus multipliers (1st gets 50% bonus, 2nd 30%, 3rd 15%, 4th 8%, 5th 4%)
+        const RANK_MULTIPLIERS: Record<number, number> = {
+            1: 1.50,
+            2: 1.30,
+            3: 1.15,
+            4: 1.08,
+            5: 1.04,
+        }
+
         // Build initial sorted list by points
         const sortedByPoints = pointsByUser
             .map(p => ({
@@ -110,18 +120,38 @@ export async function GET(request: Request) {
             }))
             .sort((a, b) => b.points - a.points)
 
+        // Assign ranks (dense ranking - same points = same rank)
+        let currentRank = 1
+        const withRanks = sortedByPoints.map((p, index) => {
+            if (index > 0 && p.points < sortedByPoints[index - 1].points) {
+                currentRank++
+            }
+            return { ...p, rank: currentRank }
+        })
+
         // Apply top N filter if specified
         // When filtering, we include all users with the same points as the Nth user (tie handling)
-        let eligibleUsers = sortedByPoints
-        let totalParticipants = sortedByPoints.length
+        let eligibleUsers = withRanks
+        let totalParticipants = withRanks.length
 
-        if (topN && topN > 0 && topN < sortedByPoints.length) {
-            const cutoffPoints = sortedByPoints[topN - 1].points
+        if (topN && topN > 0 && topN < withRanks.length) {
+            const cutoffPoints = withRanks[topN - 1].points
             // Include everyone with points >= cutoff (handles ties at the boundary)
-            eligibleUsers = sortedByPoints.filter(u => u.points >= cutoffPoints)
+            eligibleUsers = withRanks.filter(u => u.points >= cutoffPoints)
         }
 
-        // Calculate total points only from eligible users
+        // Calculate weighted points (with rank bonus if enabled)
+        const usersWithWeightedPoints = eligibleUsers.map(u => {
+            const multiplier = rankBonus ? (RANK_MULTIPLIERS[u.rank] || 1.0) : 1.0
+            return {
+                ...u,
+                multiplier,
+                weightedPoints: u.points * multiplier,
+            }
+        })
+
+        // Calculate total weighted points
+        const totalWeightedPoints = usersWithWeightedPoints.reduce((sum, p) => sum + p.weightedPoints, 0)
         const totalPoints = eligibleUsers.reduce((sum, p) => sum + p.points, 0)
 
         if (totalPoints === 0) {
@@ -143,43 +173,32 @@ export async function GET(request: Request) {
                     participant_count: 0,
                     total_participants: totalParticipants,
                     top_n: topN,
+                    rank_bonus: rankBonus,
                 },
             })
         }
 
-        // Calculate dollar per point based on eligible users only
-        const dollarPerPoint = budget / totalPoints
+        // Calculate dollar per weighted point (uses weighted points if rank bonus enabled)
+        const dollarPerWeightedPoint = budget / totalWeightedPoints
 
         // Build payouts array for eligible users only
-        const payoutsRaw = eligibleUsers.map(p => {
+        const payouts = usersWithWeightedPoints.map(p => {
             const user = userMap.get(p.user_id.toString())
-            const points = p.points
-            const rawPayout = points * dollarPerPoint
+            const rawPayout = p.weightedPoints * dollarPerWeightedPoint
             const payout = roundTo >= 0 ? Number(rawPayout.toFixed(roundTo)) : rawPayout
-            const percentage = (points / totalPoints) * 100
+            const percentage = (p.weightedPoints / totalWeightedPoints) * 100
 
             return {
+                rank: p.rank,
                 user_id: p.user_id.toString(),
                 kick_user_id: user?.kick_user_id.toString() || '',
                 username: user?.username || 'Unknown',
                 profile_picture_url: user?.custom_profile_picture_url || user?.profile_picture_url || null,
-                points,
+                points: p.points,
+                multiplier: p.multiplier,
+                weighted_points: Number(p.weightedPoints.toFixed(2)),
                 payout,
                 percentage: Number(percentage.toFixed(2)),
-            }
-        })
-
-        // Already sorted by points descending
-
-        // Assign ranks (dense ranking - same points = same rank)
-        let currentRank = 1
-        const payouts = payoutsRaw.map((p, index) => {
-            if (index > 0 && p.points < payoutsRaw[index - 1].points) {
-                currentRank++
-            }
-            return {
-                rank: currentRank,
-                ...p,
             }
         })
 
@@ -200,12 +219,15 @@ export async function GET(request: Request) {
             payouts,
             summary: {
                 total_points: totalPoints,
-                dollar_per_point: Number(dollarPerPoint.toFixed(6)),
+                total_weighted_points: Number(totalWeightedPoints.toFixed(2)),
+                dollar_per_point: Number((budget / totalPoints).toFixed(6)),
+                dollar_per_weighted_point: Number(dollarPerWeightedPoint.toFixed(6)),
                 total_payout: Number(actualTotalPayout.toFixed(roundTo)),
                 budget,
                 participant_count: payouts.length,
                 total_participants: totalParticipants,
                 top_n: topN,
+                rank_bonus: rankBonus,
                 rounding_difference: Number((budget - actualTotalPayout).toFixed(roundTo)),
             },
         })

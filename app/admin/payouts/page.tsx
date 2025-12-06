@@ -26,18 +26,23 @@ interface PayoutEntry {
     username: string
     profile_picture_url: string | null
     points: number
+    multiplier: number
+    weighted_points: number
     payout: number
     percentage: number
 }
 
 interface PayoutSummary {
     total_points: number
+    total_weighted_points: number
     dollar_per_point: number
+    dollar_per_weighted_point: number
     total_payout: number
     budget: number
     participant_count: number
     total_participants: number
     top_n: number | null
+    rank_bonus: boolean
     rounding_difference: number
 }
 
@@ -69,6 +74,7 @@ export default function PayoutsPage() {
     const [budget, setBudget] = useState<string>('100')
     const [roundTo, setRoundTo] = useState<number>(2)
     const [topN, setTopN] = useState<string>('') // empty = all participants
+    const [rankBonus, setRankBonus] = useState<boolean>(true) // Enable rank multipliers by default
     const [payoutData, setPayoutData] = useState<PayoutData | null>(null)
     const [payoutLoading, setPayoutLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -150,11 +156,16 @@ export default function PayoutsPage() {
             if (!token) return
 
             let url = `/api/admin/payouts?stream_session_id=${selectedSessionId}&budget=${budgetNum}&round_to=${roundTo}`
-
+            
             // Add top_n parameter if specified
             const topNNum = topN ? parseInt(topN) : null
             if (topNNum && topNNum > 0) {
                 url += `&top_n=${topNNum}`
+            }
+            
+            // Add rank bonus parameter
+            if (rankBonus) {
+                url += `&rank_bonus=true`
             }
 
             const response = await fetch(url, {
@@ -176,7 +187,7 @@ export default function PayoutsPage() {
         } finally {
             setPayoutLoading(false)
         }
-    }, [selectedSessionId, budget, roundTo, topN])
+    }, [selectedSessionId, budget, roundTo, topN, rankBonus])
 
     // Auto-calculate when parameters change
     useEffect(() => {
@@ -186,25 +197,45 @@ export default function PayoutsPage() {
             }, 300)
             return () => clearTimeout(timer)
         }
-    }, [selectedSessionId, budget, roundTo, topN, calculatePayouts])
+    }, [selectedSessionId, budget, roundTo, topN, rankBonus, calculatePayouts])
 
     // Export to CSV
     const exportToCSV = () => {
         if (!payoutData || payoutData.payouts.length === 0) return
 
-        const headers = ['Rank', 'Username', 'Points', 'Payout ($)', 'Percentage (%)']
-        const rows = payoutData.payouts.map(p => [
-            p.rank.toString(),
-            p.username,
-            p.points.toString(),
-            p.payout.toFixed(roundTo),
-            p.percentage.toFixed(2),
-        ])
+        const headers = payoutData.summary.rank_bonus
+            ? ['Rank', 'Username', 'Points', 'Bonus', 'Weighted Points', 'Payout ($)', 'Percentage (%)']
+            : ['Rank', 'Username', 'Points', 'Payout ($)', 'Percentage (%)']
+        
+        const rows = payoutData.payouts.map(p => {
+            if (payoutData.summary.rank_bonus) {
+                return [
+                    p.rank.toString(),
+                    p.username,
+                    p.points.toString(),
+                    p.multiplier > 1 ? `+${((p.multiplier - 1) * 100).toFixed(0)}%` : '-',
+                    p.weighted_points.toFixed(2),
+                    p.payout.toFixed(roundTo),
+                    p.percentage.toFixed(2),
+                ]
+            }
+            return [
+                p.rank.toString(),
+                p.username,
+                p.points.toString(),
+                p.payout.toFixed(roundTo),
+                p.percentage.toFixed(2),
+            ]
+        })
 
         // Add summary rows
         rows.push([])
         rows.push(['Summary'])
         rows.push(['Total Points', payoutData.summary.total_points.toString()])
+        if (payoutData.summary.rank_bonus) {
+            rows.push(['Total Weighted Points', payoutData.summary.total_weighted_points.toString()])
+            rows.push(['Rank Bonus', 'Enabled (1st +50%, 2nd +30%, 3rd +15%, 4th +8%, 5th +4%)'])
+        }
         rows.push(['Dollar per Point', `$${payoutData.summary.dollar_per_point.toFixed(6)}`])
         rows.push(['Total Payout', `$${payoutData.summary.total_payout.toFixed(roundTo)}`])
         rows.push(['Budget', `$${payoutData.summary.budget.toFixed(2)}`])
@@ -378,6 +409,32 @@ export default function PayoutsPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Rank Bonus Toggle */}
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-kick-border">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-kick-text-secondary">
+                                    Rank Bonus
+                                </label>
+                                <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-0.5">
+                                    Higher ranks get multipliers: 1st +50%, 2nd +30%, 3rd +15%, 4th +8%, 5th +4%
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setRankBonus(!rankBonus)}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                    rankBonus ? 'bg-kick-green' : 'bg-gray-300 dark:bg-kick-surface-hover'
+                                }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                        rankBonus ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                />
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Error */}
@@ -466,6 +523,9 @@ export default function PayoutsPage() {
                                                 <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Rank</th>
                                                 <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">User</th>
                                                 <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Points</th>
+                                                {payoutData.summary.rank_bonus && (
+                                                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Bonus</th>
+                                                )}
                                                 <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Payout</th>
                                                 <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">% of Pot</th>
                                             </tr>
@@ -511,6 +571,17 @@ export default function PayoutsPage() {
                                                             {entry.points.toLocaleString()}
                                                         </span>
                                                     </td>
+                                                    {payoutData.summary.rank_bonus && (
+                                                        <td className="py-4 px-4 text-right">
+                                                            {entry.multiplier > 1 ? (
+                                                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200">
+                                                                    +{((entry.multiplier - 1) * 100).toFixed(0)}%
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-gray-400 dark:text-kick-text-muted text-sm">—</span>
+                                                            )}
+                                                        </td>
+                                                    )}
                                                     <td className="py-4 px-4 text-right">
                                                         <span className="font-bold text-kick-green text-lg">
                                                             ${entry.payout.toFixed(roundTo)}
