@@ -87,6 +87,96 @@ export async function GET(request: Request) {
 
     const sessionStatsMap = new Map(sessionStats.map(s => [s.user_id.toString(), s._count.id]))
 
+    // Duplicate detection: Find users sharing IP addresses
+    const userIdsForDuplicates = users.map(u => u.id)
+    const userSignupIPs = users.filter(u => u.signup_ip_address).map(u => ({
+      id: u.id,
+      signup_ip: u.signup_ip_address,
+    }))
+
+    // Group users by signup IP
+    const signupIPMap = new Map<string, bigint[]>()
+    userSignupIPs.forEach(({ id, signup_ip }) => {
+      if (signup_ip) {
+        if (!signupIPMap.has(signup_ip)) {
+          signupIPMap.set(signup_ip, [])
+        }
+        signupIPMap.get(signup_ip)!.push(id)
+      }
+    })
+
+    // Get all IP hashes from sessions for these users
+    const allSessions = await db.userSession.findMany({
+      where: {
+        user_id: { in: userIdsForDuplicates },
+        ip_hash: { not: null },
+      },
+      select: {
+        user_id: true,
+        ip_hash: true,
+      },
+    })
+
+    // Group users by session IP hash
+    const sessionIPMap = new Map<string, bigint[]>()
+    allSessions.forEach(session => {
+      if (session.ip_hash) {
+        if (!sessionIPMap.has(session.ip_hash)) {
+          sessionIPMap.set(session.ip_hash, [])
+        }
+        sessionIPMap.get(session.ip_hash)!.push(session.user_id)
+      }
+    })
+
+    // Build duplicate flags for each user
+    const duplicateFlagsMap = new Map<string, Array<{ user_id: string; username: string; reason: string }>>()
+
+    users.forEach(u => {
+      const flags: Array<{ user_id: string; username: string; reason: string }> = []
+
+      // Check signup IP matches
+      if (u.signup_ip_address) {
+        const signupIPMatches = signupIPMap.get(u.signup_ip_address) || []
+        signupIPMatches.forEach(matchId => {
+          if (matchId.toString() !== u.id.toString()) {
+            const matchedUser = users.find(usr => usr.id.toString() === matchId.toString())
+            if (matchedUser) {
+              flags.push({
+                user_id: matchedUser.id.toString(),
+                username: matchedUser.username,
+                reason: 'Same signup IP',
+              })
+            }
+          }
+        })
+      }
+
+      // Check session IP hash matches
+      const userSessions = u.user_sessions || []
+      const userIPHashes = new Set(userSessions.map(s => s.ip_hash).filter(Boolean))
+      userIPHashes.forEach(ipHash => {
+        if (ipHash) {
+          const sessionIPMatches = sessionIPMap.get(ipHash) || []
+          sessionIPMatches.forEach(matchId => {
+            if (matchId.toString() !== u.id.toString()) {
+              const matchedUser = users.find(usr => usr.id.toString() === matchId.toString())
+              if (matchedUser && !flags.some(f => f.user_id === matchedUser.id.toString())) {
+                flags.push({
+                  user_id: matchedUser.id.toString(),
+                  username: matchedUser.username,
+                  reason: 'Shared session IP',
+                })
+              }
+            }
+          })
+        }
+      })
+
+      if (flags.length > 0) {
+        duplicateFlagsMap.set(u.id.toString(), flags)
+      }
+    })
+
     return NextResponse.json({
       users: users.map(u => {
         const recentSessions = u.user_sessions || []
@@ -115,6 +205,8 @@ export async function GET(request: Request) {
           discord_username: u.discord_username,
           telegram_connected: u.telegram_connected,
           telegram_username: u.telegram_username,
+          signup_ip_address: u.signup_ip_address,
+          duplicate_flags: duplicateFlagsMap.get(u.id.toString()) || [],
           session_diagnostics: {
             total_sessions: totalSessions,
             last_seen: latestSession?.last_seen_at.toISOString() || null,

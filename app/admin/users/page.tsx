@@ -38,6 +38,7 @@ interface User {
   signup_region: string | null
   signup_user_agent: string | null
   signup_referrer: string | null
+  duplicate_flags: Array<{ user_id: string; username: string; reason: string }>
   session_diagnostics?: {
     total_sessions: number
     last_seen: string | null
@@ -117,6 +118,8 @@ export default function UsersPage() {
   const [offset, setOffset] = useState(0)
   const [total, setTotal] = useState(0)
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set())
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
+  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false)
   const limit = 50
 
   useEffect(() => {
@@ -230,8 +233,8 @@ export default function UsersPage() {
             </div>
           </div>
 
-          {/* Search */}
-          <div className="mb-6">
+          {/* Search and Filters */}
+          <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
             <input
               type="text"
               placeholder="Search by username or email..."
@@ -242,6 +245,20 @@ export default function UsersPage() {
               }}
               className="w-full max-w-md px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:ring-2 focus:ring-kick-purple focus:border-transparent"
             />
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showDuplicatesOnly}
+                onChange={(e) => {
+                  setShowDuplicatesOnly(e.target.checked)
+                  setOffset(0)
+                }}
+                className="w-4 h-4 rounded border-gray-300 dark:border-kick-border text-kick-purple focus:ring-kick-purple"
+              />
+              <span className="text-sm text-gray-700 dark:text-kick-text font-medium">
+                Show duplicates only
+              </span>
+            </label>
           </div>
 
           {loading ? (
@@ -256,11 +273,14 @@ export default function UsersPage() {
             <>
               {/* Users List */}
               <div className="space-y-3">
-                {users.map((user) => {
+                {users
+                  .filter(user => !showDuplicatesOnly || (user.duplicate_flags && user.duplicate_flags.length > 0))
+                  .map((user) => {
                   const isExpanded = expandedUsers.has(user.id)
                   const diagnostics = user.session_diagnostics
                   const latestSession = diagnostics?.recent_sessions?.[0]
                   const { device, browser } = parseUserAgent(latestSession?.user_agent || null)
+                  const hasDuplicates = user.duplicate_flags && user.duplicate_flags.length > 0
 
                   return (
                     <div
@@ -279,16 +299,22 @@ export default function UsersPage() {
 
                         {/* Avatar */}
                         <div className="flex-shrink-0">
-                          <img
-                            src={user.profile_picture_url
-                              ? (user.profile_picture_url.includes('cloudfront.net') || user.profile_picture_url.includes('amazonaws.com')
-                                  ? user.profile_picture_url
-                                  : `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`)
-                              : '/imgi_144_kick-streaming-platform-logo-icon.svg'}
-                            alt={user.username}
-                            className="w-10 h-10 rounded-full object-cover bg-kick-dark"
-                            onError={(e) => { (e.target as HTMLImageElement).src = '/imgi_144_kick-streaming-platform-logo-icon.svg' }}
-                          />
+                          {user.profile_picture_url && !imageErrors.has(user.id) ? (
+                            <img
+                              src={user.profile_picture_url}
+                              alt={user.username}
+                              className="w-10 h-10 rounded-full object-cover bg-kick-dark"
+                              onError={() => {
+                                setImageErrors(prev => new Set(prev).add(user.id))
+                              }}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
+                              <span className="text-gray-600 dark:text-kick-text-secondary text-sm font-medium">
+                                {user.username.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* User Info */}
@@ -304,6 +330,12 @@ export default function UsersPage() {
                             <span className="font-medium text-gray-900 dark:text-kick-text truncate">
                               {user.username}
                             </span>
+                            {/* Duplicate Flag Badge */}
+                            {hasDuplicates && (
+                              <span className="px-1.5 py-0.5 rounded text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 font-medium" title={`${user.duplicate_flags.length} potential duplicate account(s)`}>
+                                ⚠️ Duplicate
+                              </span>
+                            )}
                             {/* Connected Account Badges */}
                             <div className="flex items-center gap-1.5">
                               {user.discord_connected && (
@@ -449,6 +481,26 @@ export default function UsersPage() {
                                   </span>
                                 </div>
                               </div>
+
+                              {/* Duplicate Detection */}
+                              {hasDuplicates && (
+                                <>
+                                  <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300 mt-4 mb-3">⚠️ Potential Duplicate Accounts</h4>
+                                  <div className="space-y-2 text-sm">
+                                    {user.duplicate_flags.map((flag, idx) => (
+                                      <div key={idx} className="bg-yellow-50 dark:bg-yellow-900/20 rounded p-2 border border-yellow-200 dark:border-yellow-800">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-gray-700 dark:text-kick-text font-medium">{flag.username}</span>
+                                          <span className="text-yellow-700 dark:text-yellow-400 text-xs">{flag.reason}</span>
+                                        </div>
+                                        <div className="text-xs text-gray-500 dark:text-kick-text-secondary mt-1">
+                                          User ID: {flag.user_id}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
                             </div>
 
                             {/* Session Diagnostics */}
