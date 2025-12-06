@@ -27,7 +27,12 @@ export default function AppLayout({ children }: LayoutProps) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [userData, setUserData] = useState<UserData | null>(null)
-    const [isAdmin, setIsAdmin] = useState<boolean>(false) // Persist admin status to prevent glitching
+    const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('is_admin') === 'true'
+        }
+        return false
+    })
 
     useEffect(() => {
         // Check authentication
@@ -149,9 +154,11 @@ export default function AppLayout({ children }: LayoutProps) {
             if (response.ok) {
                 const data = await response.json()
                 setUserData(data)
-                // Persist admin status to prevent sidebar glitching
+                // Persist admin status to localStorage to prevent sidebar glitching
                 if (data.is_admin !== undefined) {
-                    setIsAdmin(data.is_admin === true)
+                    const adminStatus = data.is_admin === true
+                    setIsAdmin(adminStatus)
+                    localStorage.setItem('is_admin', String(adminStatus))
                 }
             } else if (response.status === 401) {
                 // Token expired, try to refresh
@@ -174,9 +181,11 @@ export default function AppLayout({ children }: LayoutProps) {
                             if (retryResponse.ok) {
                                 const retryData = await retryResponse.json()
                                 setUserData(retryData)
-                                // Persist admin status to prevent sidebar glitching
+                                // Persist admin status to localStorage to prevent sidebar glitching
                                 if (retryData.is_admin !== undefined) {
-                                    setIsAdmin(retryData.is_admin === true)
+                                    const adminStatus = retryData.is_admin === true
+                                    setIsAdmin(adminStatus)
+                                    localStorage.setItem('is_admin', String(adminStatus))
                                 }
                             } else {
                                 // Retry failed, clear tokens and redirect to login
@@ -413,6 +422,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                 onLogout={() => {
                                     localStorage.removeItem('kick_access_token')
                                     localStorage.removeItem('kick_refresh_token')
+                                    localStorage.removeItem('is_admin')
                                     router.push('/login')
                                 }}
                             />
