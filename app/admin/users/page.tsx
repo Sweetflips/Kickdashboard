@@ -54,10 +54,10 @@ interface User {
 // Parse user agent to get device/browser info
 function parseUserAgent(ua: string | null): { device: string; browser: string } {
   if (!ua) return { device: 'Unknown', browser: 'Unknown' }
-  
+
   let device = 'Desktop'
   let browser = 'Unknown'
-  
+
   // Device detection
   if (/Mobile|Android|iPhone|iPad|iPod/i.test(ua)) {
     if (/iPad/i.test(ua)) device = 'iPad'
@@ -71,14 +71,14 @@ function parseUserAgent(ua: string | null): { device: string; browser: string } 
   } else if (/Linux/i.test(ua)) {
     device = 'Linux'
   }
-  
+
   // Browser detection
   if (/Chrome/i.test(ua) && !/Edge|Edg/i.test(ua)) browser = 'Chrome'
   else if (/Firefox/i.test(ua)) browser = 'Firefox'
   else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari'
   else if (/Edge|Edg/i.test(ua)) browser = 'Edge'
   else if (/Opera|OPR/i.test(ua)) browser = 'Opera'
-  
+
   return { device, browser }
 }
 
@@ -100,7 +100,7 @@ function formatTimeAgo(dateStr: string | null): string {
   const minutes = Math.floor(diff / (1000 * 60))
   const hours = Math.floor(diff / (1000 * 60 * 60))
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  
+
   if (minutes < 1) return 'Just now'
   if (minutes < 60) return `${minutes}m ago`
   if (hours < 24) return `${hours}h ago`
@@ -332,7 +332,7 @@ export default function UsersPage() {
                           <div className="text-center">
                             <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Last Seen</div>
                             <div className="text-gray-900 dark:text-kick-text font-medium">
-                              {formatTimeAgo(diagnostics?.last_seen)}
+                              {formatTimeAgo(diagnostics?.last_seen ?? null)}
                             </div>
                           </div>
 
@@ -442,7 +442,7 @@ export default function UsersPage() {
                               <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text mb-3">
                                 Session Diagnostics ({diagnostics?.total_sessions || 0} sessions)
                               </h4>
-                              
+
                               {diagnostics && diagnostics.total_sessions > 0 ? (
                                 <>
                                   {/* Summary */}
