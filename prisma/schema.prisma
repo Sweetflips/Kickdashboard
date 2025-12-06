@@ -265,3 +265,30 @@ model PointAwardJob {
   @@index([status, locked_at])
   @@map("point_award_jobs")
 }
+
+// Full chat message job queue - worker handles ALL writes
+model ChatJob {
+  id                BigInt    @id @default(autoincrement())
+  message_id        String    @unique
+  
+  // Full message payload (stored as JSON for flexibility)
+  payload           Json      // Contains: sender, broadcaster, content, emotes, badges, timestamp, etc.
+  
+  // Denormalized fields for quick filtering
+  sender_user_id      BigInt
+  broadcaster_user_id BigInt
+  stream_session_id   BigInt?
+  
+  // Job status
+  status            String    @default("pending") // pending, processing, completed, failed
+  attempts          Int       @default(0)
+  locked_at         DateTime?
+  processed_at      DateTime?
+  last_error        String?   @db.Text
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@index([status, created_at])
+  @@index([status, locked_at])
+  @@map("chat_jobs")
+}

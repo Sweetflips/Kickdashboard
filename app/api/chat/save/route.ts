@@ -1,25 +1,21 @@
-import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { isBot } from '@/lib/points'
-import { enqueuePointJob } from '@/lib/point-queue'
-import { detectBotMessage } from '@/lib/bot-detection'
-import { queueUserEnrichment } from '@/lib/user-enrichment'
+import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue'
 import type { ChatMessage } from '@/lib/chat-store'
+import { db } from '@/lib/db'
+import { NextResponse } from 'next/server'
 
-const verboseChatLogging = process.env.CHAT_SAVE_VERBOSE_LOGS === 'true'
-const requestLoggingEnabled = process.env.CHAT_SAVE_LOG_REQUESTS !== 'false'
-
-const logDebug = (...args: Parameters<typeof console.debug>) => {
-    if (verboseChatLogging) {
-        console.debug(...args)
-    }
-}
-
-const logRequest = (...args: Parameters<typeof console.info>) => {
-    if (requestLoggingEnabled) {
-        console.info(...args)
-    }
-}
+/**
+ * SIMPLIFIED CHAT SAVE ROUTE
+ * 
+ * This route ONLY validates and enqueues messages.
+ * All writes (users, messages, points) are handled by the worker.
+ * 
+ * Flow:
+ * 1. Receive message from Kick WebSocket
+ * 2. Validate message structure
+ * 3. Check for active stream session (read-only)
+ * 4. Enqueue job for worker
+ * 5. Return immediately
+ */
 
 // Helper function to extract emotes from message content [emote:ID:Name] format
 function extractEmotesFromContent(content: string): Array<{ emote_id: string; positions: Array<{ s: number; e: number }> }> {
@@ -38,7 +34,6 @@ function extractEmotesFromContent(content: string): Array<{ emote_id: string; po
         emotesMap.get(emoteId)!.push({ s: start, e: end })
     }
 
-    // Convert map to array format
     return Array.from(emotesMap.entries()).map(([emote_id, positions]) => ({
         emote_id,
         positions,
@@ -51,534 +46,130 @@ export async function POST(request: Request) {
         const body = await request.json()
         const message = body as ChatMessage
 
-        // Validate message structure - message_id is required and must be non-empty
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 1: VALIDATE MESSAGE STRUCTURE
+        // ═══════════════════════════════════════════════════════════════
+
         if (!message.message_id || typeof message.message_id !== 'string' || message.message_id.trim() === '') {
-            console.error('Invalid message structure: missing or invalid message_id', {
-                has_message_id: !!message.message_id,
-                message_id_type: typeof message.message_id,
-                message_id_value: message.message_id ? message.message_id.substring(0, 50) : null,
-                has_sender: !!message.sender,
-                has_content: !!message.content,
-                sender_user_id: message.sender?.user_id,
-                content_preview: message.content ? message.content.substring(0, 50) : null,
-            })
             return NextResponse.json(
-                { error: 'Invalid message structure: message_id is required and must be a non-empty string' },
+                { error: 'Invalid message structure: message_id is required' },
                 { status: 400 }
             )
         }
 
-        if (!message.sender || !message.content) {
-            console.error('Invalid message structure:', {
-                has_message_id: !!message.message_id,
-                has_sender: !!message.sender,
-                has_content: !!message.content
-            })
+        if (!message.sender || !message.content || !message.broadcaster) {
             return NextResponse.json(
-                { error: 'Invalid message structure' },
+                { error: 'Invalid message structure: sender, content, and broadcaster are required' },
                 { status: 400 }
             )
         }
 
-        // Additional validation: check for suspicious message IDs (too short, repeated patterns)
-        const messageId = message.message_id.trim()
-        if (messageId.length < 5) {
-            console.warn('⚠️ Suspiciously short message_id detected:', {
-                message_id: messageId,
-                sender: message.sender?.username,
-                content_preview: message.content?.substring(0, 50),
-            })
-        }
-
-        const senderUserId = BigInt(message.sender.user_id)
-        const broadcasterUserId = BigInt(message.broadcaster.user_id)
-        const senderUsername = message.sender.username
-
-        // Skip if user_id is invalid (0 or negative)
         if (message.sender.user_id <= 0) {
-            console.warn('Invalid sender user_id:', message.sender.user_id)
-            return NextResponse.json({ success: false, message: 'Invalid sender user_id' }, { status: 400 })
-        }
-
-        // Batch user upserts in parallel to reduce connection usage
-        // Add retry logic for serialization errors (P4001)
-        let senderUser: { id: bigint } | null = null
-        let broadcasterUser: { id: bigint } | null = null
-
-        // Use transaction for user upserts - single connection instead of parallel
-        // Add retry logic for connection pool exhaustion (P2024) and serialization errors
-        const upsertUsersWithRetry = async (maxRetries = 5) => {
-            for (let attempt = 0; attempt < maxRetries; attempt++) {
-                try {
-                    // Transaction uses a single connection for both upserts
-                    const results = await db.$transaction(async (tx) => {
-                        const sender = await tx.user.upsert({
-                            where: { kick_user_id: senderUserId },
-                            update: {
-                                username: message.sender.username,
-                                profile_picture_url: message.sender.profile_picture || undefined,
-                            },
-                            create: {
-                                kick_user_id: senderUserId,
-                                username: message.sender.username,
-                                profile_picture_url: message.sender.profile_picture || null,
-                            },
-                            select: {
-                                id: true,
-                                kick_user_id: true,
-                                profile_picture_url: true,
-                                bio: true,
-                                email: true,
-                            },
-                        })
-
-                        const broadcaster = await tx.user.upsert({
-                            where: { kick_user_id: broadcasterUserId },
-                            update: {
-                                username: message.broadcaster.username,
-                                profile_picture_url: message.broadcaster.profile_picture || undefined,
-                            },
-                            create: {
-                                kick_user_id: broadcasterUserId,
-                                username: message.broadcaster.username,
-                                profile_picture_url: message.broadcaster.profile_picture || null,
-                            },
-                            select: {
-                                id: true,
-                                kick_user_id: true,
-                                profile_picture_url: true,
-                                bio: true,
-                                email: true,
-                            },
-                        })
-
-                        return { sender, broadcaster }
-                    }, {
-                        maxWait: 10000, // Wait up to 10s for connection
-                        timeout: 15000, // Transaction timeout 15s
-                    })
-
-                    // Queue user enrichment outside transaction to release connection faster
-                    const needsSenderEnrichment = !results.sender.email || !results.sender.profile_picture_url || !results.sender.bio
-                    if (needsSenderEnrichment && Number(results.sender.kick_user_id) > 0) {
-                        queueUserEnrichment(BigInt(results.sender.kick_user_id), message.sender.username)
-                    }
-                    const needsBroadcasterEnrichment = !results.broadcaster.email || !results.broadcaster.profile_picture_url || !results.broadcaster.bio
-                    if (needsBroadcasterEnrichment && Number(results.broadcaster.kick_user_id) > 0) {
-                        queueUserEnrichment(BigInt(results.broadcaster.kick_user_id), message.broadcaster.username)
-                    }
-
-                    return results
-                } catch (error: any) {
-                    // Handle connection pool exhaustion (P2024), serialization (P4001), deadlocks (P2034)
-                    const isRetryableError = error?.code === 'P2024' || // Connection pool timeout
-                                            error?.code === 'P4001' || // Serialization error
-                                            error?.code === 'P2034' || // Deadlock
-                                            error?.message?.includes('could not serialize access') ||
-                                            error?.message?.includes('concurrent update') ||
-                                            error?.message?.includes('connection pool')
-
-                    if (isRetryableError && attempt < maxRetries - 1) {
-                        // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms
-                        const delay = Math.min(100 * Math.pow(2, attempt), 2000)
-                        await new Promise(resolve => setTimeout(resolve, delay))
-                        continue
-                    }
-                    throw error
-                }
-            }
-            throw new Error('Max retries exceeded for user upsert')
-        }
-
-        try {
-            const { sender, broadcaster } = await upsertUsersWithRetry()
-            senderUser = sender
-            broadcasterUser = broadcaster
-        } catch (error) {
-            console.error('Failed to upsert users:', error)
             return NextResponse.json(
-                { error: 'Failed to create/update users' },
+                { error: 'Invalid sender user_id' },
+                { status: 400 }
+            )
+        }
+
+        const broadcasterUserId = BigInt(message.broadcaster.user_id)
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 2: CHECK FOR ACTIVE STREAM SESSION (READ-ONLY)
+        // ═══════════════════════════════════════════════════════════════
+
+        let activeSession: { id: bigint; ended_at: Date | null } | null = null
+        try {
+            activeSession = await db.streamSession.findFirst({
+                where: {
+                    broadcaster_user_id: broadcasterUserId,
+                    ended_at: null,
+                },
+                orderBy: { started_at: 'desc' },
+                select: { id: true, ended_at: true },
+            })
+        } catch (error) {
+            // Non-critical - continue without session info
+            console.warn('Failed to fetch stream session:', error)
+        }
+
+        const sessionIsActive = activeSession !== null && activeSession.ended_at === null
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 3: PREPARE JOB PAYLOAD
+        // ═══════════════════════════════════════════════════════════════
+
+        // Extract emotes from content if not provided
+        let emotesToSave = message.emotes || []
+        if (!Array.isArray(emotesToSave) || emotesToSave.length === 0) {
+            const extractedEmotes = extractEmotesFromContent(message.content)
+            if (extractedEmotes.length > 0) {
+                emotesToSave = extractedEmotes
+            }
+        }
+
+        const jobPayload: ChatJobPayload = {
+            message_id: message.message_id,
+            content: message.content,
+            timestamp: message.timestamp,
+            sender: {
+                kick_user_id: message.sender.user_id,
+                username: message.sender.username,
+                profile_picture: message.sender.profile_picture,
+                color: message.sender.identity?.username_color,
+                badges: message.sender.identity?.badges,
+                is_verified: message.sender.is_verified,
+                is_anonymous: message.sender.is_anonymous,
+            },
+            broadcaster: {
+                kick_user_id: message.broadcaster.user_id,
+                username: message.broadcaster.username,
+                profile_picture: message.broadcaster.profile_picture,
+            },
+            emotes: emotesToSave.length > 0 ? emotesToSave : null,
+            stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
+            is_stream_active: sessionIsActive,
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 4: ENQUEUE JOB (ONLY WRITE OPERATION)
+        // ═══════════════════════════════════════════════════════════════
+
+        const enqueueResult = await enqueueChatJob(jobPayload)
+
+        if (!enqueueResult.success) {
+            console.error(`Failed to enqueue chat job: ${enqueueResult.error}`)
+            return NextResponse.json(
+                { error: 'Failed to queue message for processing' },
                 { status: 500 }
             )
         }
 
-        // Find active stream session for this broadcaster (only fetch needed fields)
-        // Add retry logic for connection pool exhaustion
-        let activeSession: { id: bigint; ended_at: Date | null; thumbnail_url: string | null } | null = null
-        for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-                activeSession = await db.streamSession.findFirst({
-                    where: {
-                        broadcaster_user_id: broadcasterUserId,
-                        ended_at: null,
-                    },
-                    orderBy: { started_at: 'desc' },
-                    select: {
-                        id: true,
-                        ended_at: true,
-                        thumbnail_url: true,
-                    },
-                })
-                break
-            } catch (error: any) {
-                if (error?.code === 'P2024' && attempt < 2) {
-                    await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
-                    continue
-                }
-                // Non-critical - continue without session if we can't fetch it
-                console.warn('Failed to fetch stream session, continuing without:', error?.message)
-                break
-            }
-        }
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 5: RETURN IMMEDIATELY
+        // ═══════════════════════════════════════════════════════════════
 
-        // Determine if message was sent when offline
-        const sentWhenOffline = !activeSession
-        const sessionIsActive = activeSession !== null && activeSession.ended_at === null
+        const duration = Date.now() - startTime
 
-        // DISABLED: Thumbnail fetching disabled to prevent connection pool exhaustion
-        // This can be handled by a separate worker process
-        /*
-        if (!activeSession || !activeSession.thumbnail_url) {
-            setImmediate(async () => {
-                try {
-                    const broadcasterSlug = message.broadcaster.channel_slug || message.broadcaster.username.toLowerCase()
-                    const controller = new AbortController()
-                    const timeoutId = setTimeout(() => controller.abort(), 5000)
+        return NextResponse.json({
+            success: true,
+            message: 'Message queued for processing',
+            queued: true,
+            duration_ms: duration,
+        })
 
-                    const channelResponse = await fetch(
-                        `https://kick.com/api/v2/channels/${broadcasterSlug}`,
-                        {
-                            headers: {
-                                'Accept': 'application/json',
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                            },
-                            signal: controller.signal,
-                        }
-                    )
-
-                    clearTimeout(timeoutId)
-
-                    if (channelResponse.ok) {
-                        const channelData = await channelResponse.json()
-                        const livestream = channelData.livestream
-                        const isLive = livestream?.is_live === true
-                        const viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
-                        const streamTitle = livestream?.session_title || ''
-
-                        let thumbnailUrl: string | null = null
-                        if (livestream?.thumbnail) {
-                            if (typeof livestream.thumbnail === 'string') {
-                                thumbnailUrl = livestream.thumbnail
-                            } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
-                                thumbnailUrl = livestream.thumbnail.url
-                            }
-                        }
-
-                        if (activeSession && thumbnailUrl) {
-                            // Update existing session thumbnail
-                            await db.streamSession.update({
-                                where: { id: activeSession!.id },
-                                data: { thumbnail_url: thumbnailUrl },
-                            })
-                            logDebug(`✅ Updated thumbnail for session ${activeSession!.id}`)
-                        } else if (!activeSession && isLive) {
-                            // Stream is live but no session exists - create one
-                            await db.streamSession.create({
-                                data: {
-                                    broadcaster_user_id: broadcasterUserId,
-                                    channel_slug: broadcasterSlug,
-                                    session_title: streamTitle || null,
-                                    thumbnail_url: thumbnailUrl,
-                                    started_at: new Date(),
-                                    peak_viewer_count: viewerCount,
-                                },
-                            })
-                            logDebug(`✅ Stream is live but no session existed - created session`)
-                        }
-                    }
-                } catch (error) {
-                    // Non-critical - just log and continue
-                    logDebug(`⚠️ Could not check/update stream status:`, error)
-                }
-            })
-        }
-        */
-
-        // Extract emotes from content if not provided separately
-        let emotesToSave = message.emotes || []
-        if (!Array.isArray(emotesToSave) || emotesToSave.length === 0) {
-            // Try to extract emotes from content [emote:ID:Name] format
-            const extractedEmotes = extractEmotesFromContent(message.content)
-            if (extractedEmotes.length > 0) {
-                emotesToSave = extractedEmotes
-            } else {
-                emotesToSave = []
-            }
-        }
-
-        // Save message to database using create-first pattern for idempotency
-        // ALWAYS save messages, even when offline or if other operations fail
-        try {
-            // Log emotes structure for debugging (only occasionally)
-            if (emotesToSave.length > 0 && Math.random() < 0.01) {
-                logDebug('💾 Saving message with emotes:', {
-                    message_id: message.message_id,
-                    sender: message.sender.username,
-                    emotes_count: emotesToSave.length,
-                    emotes_structure: emotesToSave[0],
-                    has_positions: emotesToSave[0]?.positions?.length > 0,
-                })
-            }
-
-            let isNewMessage = false
-            let pointsEarned = 0
-            let pointsReason: string | null = null
-            const senderUsernameLower = senderUsername.toLowerCase()
-
-            if (sentWhenOffline) {
-                // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
-                // Add retry logic for serialization errors
-                const upsertOfflineMessageWithRetry = async (maxRetries = 5) => {
-                    for (let attempt = 0; attempt < maxRetries; attempt++) {
-                        try {
-                            return await db.offlineChatMessage.upsert({
-                                where: { message_id: message.message_id },
-                                update: {
-                                    sender_username: message.sender.username,
-                                    content: message.content,
-                                    emotes: emotesToSave,
-                                    timestamp: BigInt(message.timestamp),
-                                    sender_username_color: message.sender.identity?.username_color || null,
-                                    sender_badges: message.sender.identity?.badges || undefined,
-                                    sender_is_verified: message.sender.is_verified || false,
-                                    sender_is_anonymous: message.sender.is_anonymous || false,
-                                },
-                                create: {
-                                    message_id: message.message_id,
-                                    sender_user_id: senderUserId,
-                                    sender_username: message.sender.username,
-                                    broadcaster_user_id: broadcasterUserId,
-                                    content: message.content,
-                                    emotes: emotesToSave,
-                                    timestamp: BigInt(message.timestamp),
-                                    sender_username_color: message.sender.identity?.username_color || null,
-                                    sender_badges: message.sender.identity?.badges || undefined,
-                                    sender_is_verified: message.sender.is_verified || false,
-                                    sender_is_anonymous: message.sender.is_anonymous || false,
-                                },
-                            })
-                        } catch (error: any) {
-                            // Handle connection pool exhaustion (P2024), serialization (P4001), deadlocks (P2034)
-                            const isRetryableError = error?.code === 'P2024' ||
-                                                    error?.code === 'P4001' ||
-                                                    error?.code === 'P2034' ||
-                                                    error?.message?.includes('could not serialize access') ||
-                                                    error?.message?.includes('concurrent update') ||
-                                                    error?.message?.includes('connection pool')
-
-                            if (isRetryableError && attempt < maxRetries - 1) {
-                                const delay = Math.min(100 * Math.pow(2, attempt), 2000)
-                                await new Promise(resolve => setTimeout(resolve, delay))
-                                continue
-                            }
-                            throw error
-                        }
-                    }
-                    throw new Error('Max retries exceeded for offline message upsert')
-                }
-
-                await upsertOfflineMessageWithRetry()
-                isNewMessage = true
-                logDebug(`✅ Saved offline message to database: ${message.message_id}`)
-            } else {
-                // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
-                // Fetch existing message data in one query to check stream_session_id and points
-                // Add retry logic for connection pool exhaustion
-                let existingMessage: { stream_session_id: bigint | null; points_earned: number; points_reason: string | null } | null = null
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        existingMessage = await db.chatMessage.findUnique({
-                            where: { message_id: message.message_id },
-                            select: {
-                                stream_session_id: true,
-                                points_earned: true,
-                                points_reason: true,
-                            },
-                        })
-                        break
-                    } catch (error: any) {
-                        if (error?.code === 'P2024' && attempt < 2) {
-                            await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
-                            continue
-                        }
-                        // Non-critical - continue as if message doesn't exist
-                        break
-                    }
-                }
-
-                // Only update stream_session_id if message doesn't have one yet (preserve existing session assignment)
-                const shouldUpdateSessionId = !existingMessage?.stream_session_id && sessionIsActive && activeSession !== null
-                const wasExistingMessage = existingMessage !== null && existingMessage.points_earned > 0
-
-                // Upsert message with retry logic for connection pool and serialization errors
-                const upsertMessageWithRetry = async (maxRetries = 5) => {
-                    for (let attempt = 0; attempt < maxRetries; attempt++) {
-                        try {
-                            return await db.chatMessage.upsert({
-                                where: { message_id: message.message_id },
-                                update: {
-                                    // Only update stream_session_id if it was null (don't reassign messages from previous sessions)
-                                    ...(shouldUpdateSessionId && activeSession ? { stream_session_id: activeSession.id } : {}),
-                                    sender_username: message.sender.username,
-                                    content: message.content,
-                                    emotes: emotesToSave,
-                                    timestamp: BigInt(message.timestamp),
-                                    sender_username_color: message.sender.identity?.username_color || null,
-                                    sender_badges: message.sender.identity?.badges || undefined,
-                                    sender_is_verified: message.sender.is_verified || false,
-                                    sender_is_anonymous: message.sender.is_anonymous || false,
-                                    sent_when_offline: false,
-                                    // Preserve existing points_earned and points_reason on update
-                                },
-                                create: {
-                                    message_id: message.message_id,
-                                    stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
-                                    sender_user_id: senderUserId,
-                                    sender_username: message.sender.username,
-                                    broadcaster_user_id: broadcasterUserId,
-                                    content: message.content,
-                                    emotes: emotesToSave,
-                                    timestamp: BigInt(message.timestamp),
-                                    sender_username_color: message.sender.identity?.username_color || null,
-                                    sender_badges: message.sender.identity?.badges || undefined,
-                                    sender_is_verified: message.sender.is_verified || false,
-                                    sender_is_anonymous: message.sender.is_anonymous || false,
-                                    points_earned: 0,
-                                    sent_when_offline: false,
-                                },
-                                select: {
-                                    points_earned: true,
-                                    points_reason: true,
-                                },
-                            })
-                        } catch (error: any) {
-                            // Handle connection pool exhaustion (P2024), serialization (P4001), deadlocks (P2034)
-                            const isRetryableError = error?.code === 'P2024' ||
-                                                    error?.code === 'P4001' ||
-                                                    error?.code === 'P2034' ||
-                                                    error?.message?.includes('could not serialize access') ||
-                                                    error?.message?.includes('concurrent update') ||
-                                                    error?.message?.includes('connection pool')
-
-                            if (isRetryableError && attempt < maxRetries - 1) {
-                                const delay = Math.min(100 * Math.pow(2, attempt), 2000)
-                                await new Promise(resolve => setTimeout(resolve, delay))
-                                continue
-                            }
-                            throw error
-                        }
-                    }
-                    throw new Error('Max retries exceeded for message upsert')
-                }
-
-                const upsertResult = await upsertMessageWithRetry()
-
-                // If message already has points, it's definitely an existing message
-                if (existingMessage !== null && existingMessage.points_earned > 0) {
-                    // Existing message - use existing points
-                    pointsEarned = existingMessage.points_earned ?? 0
-                    pointsReason = existingMessage.points_reason || null
-                } else if (upsertResult.points_earned === 0 && sessionIsActive && !isBot(senderUsernameLower)) {
-                    // Message exists but has no points - check if we should award points
-                    // Use atomic update to check and set pending status
-                    isNewMessage = true
-
-                    // Bot detection disabled temporarily to reduce connection pool pressure
-                    // This query can be slow and holds connections unnecessarily
-                    // TODO: Re-enable via async worker or make it optional
-                    let recentMessageContents: string[] = []
-                    const botDetection = detectBotMessage(message.content, recentMessageContents)
-
-                    if (botDetection.isBot) {
-                        logDebug(`🤖 Bot detected for ${senderUsername}: ${botDetection.reasons.join(', ')} (score: ${botDetection.score})`)
-                        // Don't award points or emotes for bot messages
-                        pointsEarned = 0
-                        pointsReason = 'Bot detected'
-
-                        // Update with bot detection reason - removed to reduce connection usage
-                        // Worker will handle this if needed
-                    } else {
-                        // Enqueue point award job for async processing
-                        if (activeSession) {
-                            // Don't await - let it run async to avoid blocking
-                            enqueuePointJob({
-                                kickUserId: senderUserId,
-                                streamSessionId: activeSession.id,
-                                messageId: message.message_id,
-                                badges: message.sender.identity?.badges,
-                                emotes: emotesToSave.length > 0 ? emotesToSave : null,
-                            }).catch(() => {
-                                // Ignore errors - queue failures shouldn't break message saving
-                            })
-                        }
-
-                        // Set initial state - worker will update points_earned and points_reason when processing
-                        pointsEarned = 0
-                        pointsReason = 'pending'
-
-                        // Removed updateMany to reduce connection usage - worker will set pending status
-                    }
-                } else {
-                    // Not a new message or conditions not met - use existing points
-                    pointsEarned = upsertResult.points_earned ?? 0
-                    pointsReason = upsertResult.points_reason || null
-                }
-
-                logDebug(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned}, isNew: ${isNewMessage})`)
-            }
-
-            // DISABLED: Background operations disabled to prevent connection pool exhaustion
-            // These operations can be handled by a separate worker process or done periodically
-            // Message count updates and giveaway auto-entry are non-critical and can be deferred
-
-            // TODO: Re-enable via worker process or periodic job when connection pool is stable
-            // if (isNewMessage && sessionIsActive && activeSession) {
-            //     // Update stream session message count
-            // }
-            // if (isNewMessage && !isBot(senderUsernameLower) && sessionIsActive && activeSession) {
-            //     // Auto-entry for active giveaways
-            // }
-
-            const duration = Date.now() - startTime
-
-            // Only log when NEW points are earned (not duplicates)
-            // The actual point award is logged in lib/points.ts, so we don't need to duplicate here
-            // This keeps logs cleaner - only successful point awards are logged
-
-            return NextResponse.json({
-                success: true,
-                message: 'Message saved to database',
-                pointsEarned,
-                pointsReason
-            })
-        } catch (error) {
-            // For other errors, log them
-            console.error('Failed to save chat message:', error)
-            throw error
-        }
     } catch (error) {
         const duration = Date.now() - startTime
 
-        // Filter out ECONNRESET errors (client disconnects) - not real errors
+        // Filter out ECONNRESET errors (client disconnects)
         const isConnectionReset = error instanceof Error &&
             (('code' in error && (error as any).code === 'ECONNRESET') || error.message.includes('aborted'))
 
         if (!isConnectionReset) {
-            console.error(`/api/chat/save 500 in ${duration}ms - Chat message save failed:`, error)
+            console.error(`/api/chat/save error in ${duration}ms:`, error)
         }
 
         return NextResponse.json(
-            { error: 'Failed to save message', details: error instanceof Error ? error.message : 'Unknown error' },
+            { error: 'Failed to process message' },
             { status: 500 }
         )
     }
