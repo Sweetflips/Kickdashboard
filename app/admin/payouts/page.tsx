@@ -604,7 +604,7 @@ export default function PayoutsPage() {
                         {payoutData.summary.top_n && payoutData.summary.total_participants > payoutData.summary.participant_count && (
                             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                                 <p className="text-blue-800 dark:text-blue-200 text-sm">
-                                    <strong>Rank 1-{payoutData.summary.top_n} Filter:</strong> Showing {payoutData.summary.participant_count} recipients (ranks 1-{payoutData.summary.top_n}) out of {payoutData.summary.total_participants} total participants. The ${payoutData.summary.budget.toFixed(2)} budget is split only among these top ranks.
+                                    <strong>Rank Filter (up to rank {payoutData.summary.top_n}):</strong> Showing {payoutData.summary.participant_count} recipients out of {payoutData.summary.total_participants} total participants. All users with the same points share the same rank. The ${payoutData.summary.budget.toFixed(2)} budget is split only among these ranks.
                                 </p>
                             </div>
                         )}

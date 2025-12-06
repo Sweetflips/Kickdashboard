@@ -120,24 +120,24 @@ export async function GET(request: Request) {
             }))
             .sort((a, b) => b.points - a.points)
 
-        // Assign ranks (dense ranking - same points = same rank)
+        // Assign ranks using DENSE ranking (1, 1, 1, 2, 3, ...) - ties share rank, next unique value gets next rank
         let currentRank = 1
         const withRanks = sortedByPoints.map((p, index) => {
             if (index > 0 && p.points < sortedByPoints[index - 1].points) {
-                currentRank++
+                currentRank++ // Dense ranking: next different value gets next rank number
             }
             return { ...p, rank: currentRank }
         })
 
-        // Apply top N filter if specified
-        // When filtering, we include all users with the same points as the Nth user (tie handling)
+        // Apply rank filter if specified
+        // Filter by actual RANK, not by position - includes all users at each rank level
         let eligibleUsers = withRanks
         let totalParticipants = withRanks.length
 
-        if (topN && topN > 0 && topN < withRanks.length) {
-            const cutoffPoints = withRanks[topN - 1].points
-            // Include everyone with points >= cutoff (handles ties at the boundary)
-            eligibleUsers = withRanks.filter(u => u.points >= cutoffPoints)
+        if (topN && topN > 0) {
+            // Include ALL users whose rank is <= topN
+            // e.g., "Rank 1-3" shows everyone with rank 1, 2, or 3 (including all ties at each rank)
+            eligibleUsers = withRanks.filter(u => u.rank <= topN)
         }
 
         // Calculate weighted points (with rank bonus if enabled)
