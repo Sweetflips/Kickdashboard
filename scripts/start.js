@@ -91,38 +91,16 @@ async function ensurePointAwardJobsTable() {
   await ensurePointAwardJobsTable();
 
   const port = process.env.PORT || '3000';
-  const enableWorker = process.env.ENABLE_POINT_WORKER === 'true'; // Default to false, set to 'true' to enable
-  console.log(`📌 ENABLE_POINT_WORKER env var = "${process.env.ENABLE_POINT_WORKER}" (enableWorker=${enableWorker})`)
 
-  // Start Next.js server
+  // Start Next.js server only - worker runs separately via start-worker.js
+  console.log('🚀 Starting Next.js server (worker runs separately)...');
   const nextProcess = spawn('next', ['start', '-p', port], {
     stdio: 'inherit',
     env: process.env
   });
 
-  // Start chat worker if enabled (handles messages + points)
-  let workerProcess = null;
-  if (enableWorker) {
-    console.log('🔄 Starting chat worker (handles messages + points)...');
-    workerProcess = spawn('npx', ['tsx', 'scripts/chat-worker.ts'], {
-      stdio: 'inherit',
-      env: process.env
-    });
-
-    workerProcess.on('exit', (code) => {
-      if (code !== 0 && code !== null) {
-        console.error(`⚠️ Point worker exited with code ${code}`);
-      }
-    });
-  } else {
-    console.log('⏸️ Point worker disabled (ENABLE_POINT_WORKER=false)');
-  }
-
   // Handle process exits
   nextProcess.on('exit', (code) => {
-    if (workerProcess) {
-      workerProcess.kill('SIGTERM');
-    }
     process.exit(code || 0);
   });
 
@@ -130,9 +108,6 @@ async function ensurePointAwardJobsTable() {
   const shutdown = (signal) => {
     console.log(`\n${signal} received, shutting down...`);
     nextProcess.kill(signal);
-    if (workerProcess) {
-      workerProcess.kill(signal);
-    }
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
