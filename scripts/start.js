@@ -100,13 +100,11 @@ async function ensurePointAwardJobsTable() {
     env: process.env
   });
 
-  // Start point worker if enabled
+  // Start chat worker if enabled (handles messages + points)
   let workerProcess = null;
   if (enableWorker) {
-    console.log('🔄 Starting point award worker...');
-    // Use npx tsx to run TypeScript (tsx should be installed as dev dependency)
-    // If tsx is not available, the worker will fail to start (which is fine - it's optional)
-    workerProcess = spawn('npx', ['tsx', 'scripts/point-worker.ts'], {
+    console.log('🔄 Starting chat worker (handles messages + points)...');
+    workerProcess = spawn('npx', ['tsx', 'scripts/chat-worker.ts'], {
       stdio: 'inherit',
       env: process.env
     });
