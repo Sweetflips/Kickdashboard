@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 // Helper function to check if a user should be verified
 function isVerifiedUser(username: string, badges: Array<{ type: string }> = []): boolean {
     const verifiedUsernames = ['botrix', 'kickbot', 'sweetflips']

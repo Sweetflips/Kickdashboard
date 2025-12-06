@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import crypto from 'crypto'
 
+export const dynamic = 'force-dynamic'
+
 const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID!
 const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET!
 const KICK_OAUTH_BASE = 'https://id.kick.com'

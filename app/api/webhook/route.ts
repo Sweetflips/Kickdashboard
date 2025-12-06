@@ -5,6 +5,8 @@ import { getChannelWithLivestream } from '@/lib/kick-api'
 import { queueUserEnrichment } from '@/lib/user-enrichment'
 import type { ChatMessage } from '@/lib/chat-store'
 
+export const dynamic = 'force-dynamic'
+
 // Helper function to extract emotes from message content [emote:ID:Name] format
 function extractEmotesFromContent(content: string): Array<{ emote_id: string; positions: Array<{ s: number; e: number }> }> {
     const emotePattern = /\[emote:(\d+):([^\]]+)\]/g

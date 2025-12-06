@@ -3,6 +3,8 @@ import type { ChatMessage } from '@/lib/chat-store';
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic'
+
 /**
  * SIMPLIFIED CHAT SAVE ROUTE
  *

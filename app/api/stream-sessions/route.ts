@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { isAdmin } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
     try {
         // Check admin access - Past Streams are admin-only

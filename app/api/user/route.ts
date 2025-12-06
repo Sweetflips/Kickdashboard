@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
 
 // Decode JWT token without verification (just to get user info)
