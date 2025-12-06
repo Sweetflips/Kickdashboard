@@ -16,7 +16,10 @@ function startWebServer() {
 
   // Start Next.js server FIRST - migrations/checks run in background
   console.log('🚀 Starting Next.js server on port ' + port + '...');
-  const nextProcess = spawn('npx', ['next', 'start', '-p', port], {
+  
+  // Use direct path to next binary - npx may not work in container environment
+  const nextBin = require.resolve('next/dist/bin/next');
+  const nextProcess = spawn(process.execPath, [nextBin, 'start', '-p', port], {
     stdio: 'inherit',
     env: process.env
   });
@@ -40,11 +43,14 @@ function startWebServer() {
     console.log('🔄 Running background migrations...');
 
     try {
-      // Run migrations (5 second timeout)
+      // Run migrations using direct path to prisma binary
       const { promisify } = require('util');
       const exec = promisify(require('child_process').exec);
-
-      const migrationPromise = exec('npx prisma migrate deploy', { timeout: 30000 });
+      const path = require('path');
+      
+      // Use direct path to prisma - npx may not work in container environment
+      const prismaBin = path.join(process.cwd(), 'node_modules', '.bin', 'prisma');
+      const migrationPromise = exec(`"${prismaBin}" migrate deploy`, { timeout: 30000 });
       await migrationPromise;
       console.log('✅ Background migrations completed');
     } catch (error) {
