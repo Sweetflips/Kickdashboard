@@ -260,6 +260,26 @@ export async function GET(request: Request) {
                 return b.totalMessages - a.totalMessages
             })
 
+        // Calculate shared ranks (standard competition ranking)
+        // Users with the same points share the same rank, next rank skips ahead
+        const ranksMap = new Map<number, number>()
+        let currentRank = offset + 1
+        for (let i = 0; i < sortedFormatted.length; i++) {
+            const item = sortedFormatted[i]
+            if (i === 0) {
+                ranksMap.set(i, currentRank)
+            } else {
+                const prevItem = sortedFormatted[i - 1]
+                if (item.totalPoints === prevItem.totalPoints) {
+                    // Same points = same rank
+                    ranksMap.set(i, ranksMap.get(i - 1)!)
+                } else {
+                    // Different points = rank is position + offset + 1
+                    ranksMap.set(i, offset + i + 1)
+                }
+            }
+        }
+
         // Build formatted leaderboard from sorted data
         const formattedLeaderboard = sortedFormatted.map((item, index) => {
             const { user, userId, kickUserId, totalPoints, totalMessages } = item
@@ -281,7 +301,7 @@ export async function GET(request: Request) {
             const isVerified = hasKickLogin || hasDiscord || hasTelegram
 
             return {
-                rank: offset + index + 1,
+                rank: ranksMap.get(index) || (offset + index + 1),
                 user_id: userId.toString(),
                 kick_user_id: kickUserId.toString(),
                 username: user.username,

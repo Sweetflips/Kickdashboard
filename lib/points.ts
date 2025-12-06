@@ -11,7 +11,7 @@ const logDebug = (...args: Parameters<typeof console.debug>) => {
 
 const BOT_USERNAMES = ['botrix', 'kickbot']
 const POINTS_PER_MESSAGE_NORMAL = 1
-const POINTS_PER_MESSAGE_SUBSCRIBER = 2
+const POINTS_PER_MESSAGE_SUBSCRIBER = 1
 const RATE_LIMIT_SECONDS = 300 // 5 minutes
 const STREAM_START_COOLDOWN_SECONDS = 600 // 10 minutes
 
