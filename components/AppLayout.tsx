@@ -444,6 +444,21 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
+                            <Link href="/referrals" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/referrals' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                    setSidebarOpen(false)
+                                }
+                            }}>
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                                </svg>
+                                <span className="ml-3 text-body font-medium">Referrals</span>
+                                <span className="ml-auto bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-2 py-0.5 rounded-full">
+                                    Soon
+                                </span>
+                            </Link>
+                        </li>
+                        <li>
                             <Link href="/profile" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)

@@ -603,4 +603,3 @@ export default function AchievementsPage() {
         </AppLayout>
     )
 }
-
