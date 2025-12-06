@@ -237,4 +237,3 @@ export async function getChatQueueStats(): Promise<{
         return { pending: 0, processing: 0, completed: 0, failed: 0, staleLocks: 0 }
     }
 }
-

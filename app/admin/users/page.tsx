@@ -301,11 +301,11 @@ export default function UsersPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             {/* Kick logo - always show since all users sign up via Kick */}
-                            <img 
-                              src="/imgi_144_kick-streaming-platform-logo-icon.svg" 
-                              alt="Kick" 
-                              title={`Kick: ${user.username}`} 
-                              className="w-5 h-5 flex-shrink-0" 
+                            <img
+                              src="/imgi_144_kick-streaming-platform-logo-icon.svg"
+                              alt="Kick"
+                              title={`Kick: ${user.username}`}
+                              className="w-5 h-5 flex-shrink-0"
                             />
                             <span className="font-medium text-gray-900 dark:text-kick-text truncate">
                               {user.username}
@@ -313,19 +313,19 @@ export default function UsersPage() {
                             {/* Connected Account Badges */}
                             <div className="flex items-center gap-1.5">
                               {user.discord_connected && (
-                                <img 
-                                  src="/discord.png" 
-                                  alt="Discord" 
-                                  title={user.discord_username ? `Discord: ${user.discord_username}` : 'Discord Connected'} 
-                                  className="w-5 h-5 flex-shrink-0" 
+                                <img
+                                  src="/discord.png"
+                                  alt="Discord"
+                                  title={user.discord_username ? `Discord: ${user.discord_username}` : 'Discord Connected'}
+                                  className="w-5 h-5 flex-shrink-0"
                                 />
                               )}
                               {user.telegram_connected && (
-                                <img 
-                                  src="/Telegram-Logo-PNG-Image.png" 
-                                  alt="Telegram" 
-                                  title={user.telegram_username ? `@${user.telegram_username}` : 'Telegram Connected'} 
-                                  className="w-5 h-5 flex-shrink-0" 
+                                <img
+                                  src="/Telegram-Logo-PNG-Image.png"
+                                  alt="Telegram"
+                                  title={user.telegram_username ? `@${user.telegram_username}` : 'Telegram Connected'}
+                                  className="w-5 h-5 flex-shrink-0"
                                 />
                               )}
                             </div>

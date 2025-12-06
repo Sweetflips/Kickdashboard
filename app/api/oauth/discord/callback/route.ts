@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import crypto from 'crypto'
 
+export const dynamic = 'force-dynamic'
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
 function hashToken(token: string): string {

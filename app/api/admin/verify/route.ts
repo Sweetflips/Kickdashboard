@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { isAdmin } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * Dedicated admin verification endpoint
  * SECURITY: This endpoint verifies admin status server-side
@@ -9,7 +11,7 @@ import { isAdmin } from '@/lib/auth'
 export async function GET(request: Request) {
     try {
         const adminCheck = await isAdmin(request)
-        
+
         return NextResponse.json({
             is_admin: adminCheck,
         })
@@ -21,4 +23,3 @@ export async function GET(request: Request) {
         )
     }
 }
-

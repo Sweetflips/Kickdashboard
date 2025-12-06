@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getQueueStats } from '@/lib/point-queue'
 import { isAdmin } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * Get queue statistics for point award jobs
  * GET /api/admin/points/queue-stats
@@ -42,10 +44,3 @@ export async function GET(request: Request) {
         )
     }
 }
-
-
-
-
-
-
-

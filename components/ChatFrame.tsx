@@ -1316,6 +1316,11 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
         setIsSending(true)
 
+        // #region agent log
+        const storedToken = localStorage.getItem('kick_access_token');
+        fetch('http://127.0.0.1:7242/ingest/80522650-5b84-46a1-aef1-7229e5be0ce5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ChatFrame.tsx:handleSendMessage',message:'Sending message - token info',data:{stateTokenLength:accessToken?.length,stateTokenFirst20:accessToken?.substring(0,20),storedTokenLength:storedToken?.length,storedTokenFirst20:storedToken?.substring(0,20),tokensMatch:accessToken===storedToken,broadcasterUserId,messageLength:messageContent.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D,E'})}).catch(()=>{});
+        // #endregion agent log
+
         try {
             // Send message to Kick API
             const response = await fetch('/api/chat/send', {

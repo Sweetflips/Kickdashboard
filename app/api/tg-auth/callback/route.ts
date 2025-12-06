@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://kickdashboard.com'
 

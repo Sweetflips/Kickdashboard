@@ -102,10 +102,3 @@ async function ensureTables() {
   console.error('⚠️ Error starting worker:', err.message);
   process.exit(1);
 });
-
-
-
-
-
-
-

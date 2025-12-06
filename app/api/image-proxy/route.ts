@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 // Cache for failed image requests to avoid repeated attempts
 const failedImageCache = new Map<string, { timestamp: number }>()
 const FAILED_CACHE_TTL = 5 * 60 * 1000 // 5 minutes

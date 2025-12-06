@@ -1,14 +1,14 @@
-import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue'
-import type { ChatMessage } from '@/lib/chat-store'
-import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue';
+import type { ChatMessage } from '@/lib/chat-store';
+import { db } from '@/lib/db';
+import { NextResponse } from 'next/server';
 
 /**
  * SIMPLIFIED CHAT SAVE ROUTE
- * 
+ *
  * This route ONLY validates and enqueues messages.
  * All writes (users, messages, points) are handled by the worker.
- * 
+ *
  * Flow:
  * 1. Receive message from Kick WebSocket
  * 2. Validate message structure

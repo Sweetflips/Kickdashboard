@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
 
 /**

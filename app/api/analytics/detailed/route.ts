@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 // Helper function to extract emotes from message content [emote:ID:Name] format
 function extractEmotesFromContent(content: string): Array<{ emote_id: string; positions: Array<{ s: number; e: number }> }> {
     const emotePattern = /\[emote:(\d+):([^\]]+)\]/g

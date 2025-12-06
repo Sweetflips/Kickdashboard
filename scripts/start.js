@@ -12,7 +12,7 @@ const port = process.env.PORT || '3000';
 
 // Start Next.js server FIRST - migrations/checks run in background
 console.log('🚀 Starting Next.js server on port ' + port + '...');
-const nextProcess = spawn('next', ['start', '-p', port], {
+const nextProcess = spawn('npx', ['next', 'start', '-p', port], {
   stdio: 'inherit',
   env: process.env
 });
@@ -34,12 +34,12 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // Run migrations in background (non-blocking) after 5 seconds
 setTimeout(async () => {
   console.log('🔄 Running background migrations...');
-  
+
   try {
     // Run migrations (5 second timeout)
     const { promisify } = require('util');
     const exec = promisify(require('child_process').exec);
-    
+
     const migrationPromise = exec('npx prisma migrate deploy', { timeout: 30000 });
     await migrationPromise;
     console.log('✅ Background migrations completed');

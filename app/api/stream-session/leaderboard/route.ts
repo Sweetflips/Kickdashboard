@@ -2,6 +2,8 @@ import { isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * Get top 10 chatters for stream session
  * GET /api/stream-session/leaderboard?broadcaster_user_id=123&session_id=456

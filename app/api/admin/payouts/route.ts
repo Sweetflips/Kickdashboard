@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
     try {
         // Check admin access

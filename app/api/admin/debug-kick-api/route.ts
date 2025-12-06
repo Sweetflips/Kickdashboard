@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getChannelWithLivestream, clearTokenCache } from '@/lib/kick-api'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/admin/debug-kick-api?slug=channel-slug
  * Debug endpoint to test Kick Dev API integration

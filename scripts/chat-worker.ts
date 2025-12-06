@@ -271,8 +271,8 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
 
         const duration = Date.now() - startTime
         if (pointsEarned > 0) {
-            const isSub = payload.sender.badges?.some(b => 
-                b.type?.toLowerCase().includes('subscriber') || 
+            const isSub = payload.sender.badges?.some(b =>
+                b.type?.toLowerCase().includes('subscriber') ||
                 b.type?.toLowerCase().includes('sub') ||
                 b.text?.toLowerCase().includes('sub')
             )

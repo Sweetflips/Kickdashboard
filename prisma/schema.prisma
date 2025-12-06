@@ -270,15 +270,15 @@ model PointAwardJob {
 model ChatJob {
   id                BigInt    @id @default(autoincrement())
   message_id        String    @unique
-  
+
   // Full message payload (stored as JSON for flexibility)
   payload           Json      // Contains: sender, broadcaster, content, emotes, badges, timestamp, etc.
-  
+
   // Denormalized fields for quick filtering
   sender_user_id      BigInt
   broadcaster_user_id BigInt
   stream_session_id   BigInt?
-  
+
   // Job status
   status            String    @default("pending") // pending, processing, completed, failed
   attempts          Int       @default(0)
