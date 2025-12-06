@@ -379,6 +379,19 @@ export default function AppLayout({ children }: LayoutProps) {
                                         <span className="ml-3 text-body font-medium">User Management</span>
                                     </Link>
                                 </li>
+                                <li>
+                                    <Link href="/admin/payouts" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/payouts' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                            setSidebarOpen(false)
+                                        }
+                                    }}>
+                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4z" />
+                                            <path fillRule="evenodd" d="M8 8a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2h-6a2 2 0 01-2-2V8zm7 2a1 1 0 11-2 0 1 1 0 012 0zm-3 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="ml-3 text-body font-medium">Payouts</span>
+                                    </Link>
+                                </li>
                             </>
                         )}
                         <li className="mt-4 mb-2">
