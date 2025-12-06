@@ -32,6 +32,26 @@ export function isSubscriber(badges: Array<{ text: string; type: string; count?:
     )
 }
 
+/**
+ * Helper for DB queries with retry logic for connection pool exhaustion
+ */
+async function dbQueryWithRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            return await operation()
+        } catch (error: any) {
+            const isRetryableError = error?.code === 'P2024' ||
+                                    error?.message?.includes('connection pool')
+            if (isRetryableError && attempt < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
+                continue
+            }
+            throw error
+        }
+    }
+    throw new Error('Max retries exceeded')
+}
+
 export async function awardPoint(
     kickUserId: bigint,
     streamSessionId: bigint | null,
@@ -40,10 +60,10 @@ export async function awardPoint(
 ): Promise<{ awarded: boolean; pointsEarned?: number; reason?: string }> {
     try {
         // First, find the user by kick_user_id to get the internal id, kick_connected status, last_login_at, and username
-        const user = await db.user.findUnique({
+        const user = await dbQueryWithRetry(() => db.user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true, kick_connected: true, last_login_at: true, username: true },
-        })
+        }))
 
         if (!user) {
             logDebug(`⏸️ Point not awarded to kick_user_id ${kickUserId}: User not found`)
@@ -69,7 +89,7 @@ export async function awardPoint(
         // Get or create user points record (use upsert to handle race conditions)
         let userPoints
         try {
-            userPoints = await db.userPoints.upsert({
+            userPoints = await dbQueryWithRetry(() => db.userPoints.upsert({
                 where: { user_id: userId },
                 update: {},
                 create: {
@@ -77,14 +97,14 @@ export async function awardPoint(
                     total_points: 0,
                     total_emotes: 0,
                 },
-            })
+            }))
         } catch (error) {
             // Handle race condition where multiple requests try to create the same record
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 // Record already exists, fetch it
-                userPoints = await db.userPoints.findUnique({
+                userPoints = await dbQueryWithRetry(() => db.userPoints.findUnique({
                     where: { user_id: userId },
-                })
+                }))
                 if (!userPoints) {
                     // Shouldn't happen, but handle gracefully
                     return {
@@ -111,14 +131,14 @@ export async function awardPoint(
 
         // Verify the session exists and is actually active (not ended)
         // Fetch fresh from database to avoid race conditions
-        const session = await db.streamSession.findUnique({
+        const session = await dbQueryWithRetry(() => db.streamSession.findUnique({
             where: { id: streamSessionId },
             select: {
                 ended_at: true,
                 broadcaster_user_id: true,
                 started_at: true,
             },
-        })
+        }))
 
         // If session doesn't exist or has ended, don't award points
         if (!session || session.ended_at !== null) {
@@ -147,10 +167,10 @@ export async function awardPoint(
 
         // Early check for message_id uniqueness (quick exit before transaction)
         if (messageId) {
-            const existingPointHistory = await db.pointHistory.findUnique({
+            const existingPointHistory = await dbQueryWithRetry(() => db.pointHistory.findUnique({
                 where: { message_id: messageId },
                 select: { points_earned: true },
-            })
+            }))
 
             if (existingPointHistory) {
                 logDebug(`⏸️ Point not awarded to ${user.username}: Message already processed for points`)
@@ -305,12 +325,13 @@ export async function awardPoint(
                     }
                 }
 
-                // Handle serialization failures (P4001 - serialization, P2034 - deadlock, P2010 - concurrent update) - retry
+                // Handle connection pool (P2024), serialization (P4001), deadlock (P2034), concurrent update (P2010) - retry
                 const isSerializationError = transactionError instanceof Prisma.PrismaClientKnownRequestError &&
-                    (transactionError.code === 'P4001' || transactionError.code === 'P2034' || transactionError.code === 'P2010') ||
+                    (transactionError.code === 'P2024' || transactionError.code === 'P4001' || transactionError.code === 'P2034' || transactionError.code === 'P2010') ||
                     (transactionError instanceof Error && (
                         transactionError.message.includes('could not serialize access') ||
-                        transactionError.message.includes('concurrent update')
+                        transactionError.message.includes('concurrent update') ||
+                        transactionError.message.includes('connection pool')
                     ))
 
                 if (isSerializationError) {
@@ -384,10 +405,10 @@ export async function awardEmotes(
         }
 
         // Find the user by kick_user_id to get the internal id
-        const user = await db.user.findUnique({
+        const user = await dbQueryWithRetry(() => db.user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true },
-        })
+        }))
 
         if (!user) {
             return { counted: 0 }
@@ -398,7 +419,7 @@ export async function awardEmotes(
         // Get or create user points record (use upsert to handle race conditions)
         let userPoints
         try {
-            userPoints = await db.userPoints.upsert({
+            userPoints = await dbQueryWithRetry(() => db.userPoints.upsert({
                 where: { user_id: userId },
                 update: {},
                 create: {
@@ -406,14 +427,14 @@ export async function awardEmotes(
                     total_points: 0,
                     total_emotes: 0,
                 },
-            })
+            }))
         } catch (error) {
             // Handle race condition where multiple requests try to create the same record
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 // Record already exists, fetch it
-                userPoints = await db.userPoints.findUnique({
+                userPoints = await dbQueryWithRetry(() => db.userPoints.findUnique({
                     where: { user_id: userId },
-                })
+                }))
                 if (!userPoints) {
                     // Shouldn't happen, but handle gracefully
                     return { counted: 0 }
@@ -424,8 +445,8 @@ export async function awardEmotes(
             }
         }
 
-        // Update emote count
-        await db.userPoints.update({
+        // Update emote count (with retry for connection pool)
+        await dbQueryWithRetry(() => db.userPoints.update({
             where: { user_id: userId },
             data: {
                 total_emotes: {
@@ -433,7 +454,7 @@ export async function awardEmotes(
                 },
                 updated_at: new Date(),
             },
-        })
+        }))
 
         logDebug(`✅ Awarded ${totalEmotes} emote(s) to user ${kickUserId} (total_emotes incremented)`)
 
@@ -446,18 +467,18 @@ export async function awardEmotes(
 
 export async function getUserPoints(kickUserId: bigint): Promise<number> {
     try {
-        const user = await db.user.findUnique({
+        const user = await dbQueryWithRetry(() => db.user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true },
-        })
+        }))
 
         if (!user) {
             return 0
         }
 
-        const userPoints = await db.userPoints.findUnique({
+        const userPoints = await dbQueryWithRetry(() => db.userPoints.findUnique({
             where: { user_id: user.id },
-        })
+        }))
         return userPoints?.total_points || 0
     } catch (error) {
         console.error('Error getting user points:', error)

@@ -27,21 +27,37 @@ export async function GET(request: Request) {
 
         let session
 
+        // Helper function for session queries with retry logic
+        const findSessionWithRetry = async <T>(queryFn: () => Promise<T>, maxRetries = 3): Promise<T | null> => {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    return await queryFn()
+                } catch (error: any) {
+                    if ((error?.code === 'P2024' || error?.message?.includes('connection pool')) && attempt < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
+                        continue
+                    }
+                    throw error
+                }
+            }
+            return null
+        }
+
         if (sessionId) {
             // Get specific session
-            session = await db.streamSession.findUnique({
+            session = await findSessionWithRetry(() => db.streamSession.findUnique({
                 where: { id: BigInt(sessionId) },
-            })
+            }))
         } else if (broadcasterUserId) {
             // Find active stream session ONLY (no fallback to past sessions)
             // When stream is offline, return empty leaderboard
-            session = await db.streamSession.findFirst({
+            session = await findSessionWithRetry(() => db.streamSession.findFirst({
                 where: {
                     broadcaster_user_id: BigInt(broadcasterUserId),
                     ended_at: null,
                 },
                 orderBy: { started_at: 'desc' },
-            })
+            }))
 
             // If no active session, return empty leaderboard (stream is offline)
             if (!session) {
@@ -94,19 +110,22 @@ export async function GET(request: Request) {
             })
         }
 
-        // Helper function to execute queries with retry logic for serialization errors
-        const executeQueryWithRetry = async <T>(queryFn: () => Promise<T>, maxRetries = 3): Promise<T> => {
+        // Helper function to execute queries with retry logic for connection pool and serialization errors
+        const executeQueryWithRetry = async <T>(queryFn: () => Promise<T>, maxRetries = 5): Promise<T> => {
             for (let attempt = 0; attempt < maxRetries; attempt++) {
                 try {
                     return await queryFn()
                 } catch (error: any) {
-                    const isSerializationError = error?.code === 'P4001' ||
+                    // Handle connection pool exhaustion (P2024), serialization (P4001), deadlocks (P2034)
+                    const isRetryableError = error?.code === 'P2024' ||
+                        error?.code === 'P4001' ||
                         error?.code === 'P2034' ||
                         error?.message?.includes('could not serialize access') ||
-                        error?.message?.includes('concurrent update')
+                        error?.message?.includes('concurrent update') ||
+                        error?.message?.includes('connection pool')
 
-                    if (isSerializationError && attempt < maxRetries - 1) {
-                        const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                    if (isRetryableError && attempt < maxRetries - 1) {
+                        const delay = Math.min(100 * Math.pow(2, attempt), 2000)
                         await new Promise(resolve => setTimeout(resolve, delay))
                         continue
                     }

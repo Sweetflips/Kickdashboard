@@ -105,47 +105,82 @@ export async function POST(request: Request) {
         let senderUser: { id: bigint } | null = null
         let broadcasterUser: { id: bigint } | null = null
 
-        const upsertUserWithRetry = async (userId: bigint, username: string, profilePicture: string | null, maxRetries = 3) => {
+        // Use transaction for user upserts - single connection instead of parallel
+        // Add retry logic for connection pool exhaustion (P2024) and serialization errors
+        const upsertUsersWithRetry = async (maxRetries = 5) => {
             for (let attempt = 0; attempt < maxRetries; attempt++) {
                 try {
-                    const result = await db.user.upsert({
-                        where: { kick_user_id: userId },
-                        update: {
-                            username: username,
-                            profile_picture_url: profilePicture || undefined, // Only update if provided
-                        },
-                        create: {
-                            kick_user_id: userId,
-                            username: username,
-                            profile_picture_url: profilePicture,
-                        },
-                        select: {
-                            id: true,
-                            kick_user_id: true,
-                            profile_picture_url: true,
-                            bio: true,
-                            email: true,
-                        },
+                    // Transaction uses a single connection for both upserts
+                    const results = await db.$transaction(async (tx) => {
+                        const sender = await tx.user.upsert({
+                            where: { kick_user_id: senderUserId },
+                            update: {
+                                username: message.sender.username,
+                                profile_picture_url: message.sender.profile_picture || undefined,
+                            },
+                            create: {
+                                kick_user_id: senderUserId,
+                                username: message.sender.username,
+                                profile_picture_url: message.sender.profile_picture || null,
+                            },
+                            select: {
+                                id: true,
+                                kick_user_id: true,
+                                profile_picture_url: true,
+                                bio: true,
+                                email: true,
+                            },
+                        })
+
+                        const broadcaster = await tx.user.upsert({
+                            where: { kick_user_id: broadcasterUserId },
+                            update: {
+                                username: message.broadcaster.username,
+                                profile_picture_url: message.broadcaster.profile_picture || undefined,
+                            },
+                            create: {
+                                kick_user_id: broadcasterUserId,
+                                username: message.broadcaster.username,
+                                profile_picture_url: message.broadcaster.profile_picture || null,
+                            },
+                            select: {
+                                id: true,
+                                kick_user_id: true,
+                                profile_picture_url: true,
+                                bio: true,
+                                email: true,
+                            },
+                        })
+
+                        return { sender, broadcaster }
+                    }, {
+                        maxWait: 10000, // Wait up to 10s for connection
+                        timeout: 15000, // Transaction timeout 15s
                     })
 
-                    // Queue user for batch enrichment if missing data
-                    // This is batched to avoid rate limiting the Kick API
-                    const needsEnrichment = !result.email || !result.profile_picture_url || !result.bio
-                    if (needsEnrichment && Number(result.kick_user_id) > 0) {
-                        // Queue for batch processing - doesn't call API immediately
-                        queueUserEnrichment(BigInt(result.kick_user_id), username)
+                    // Queue user enrichment outside transaction to release connection faster
+                    const needsSenderEnrichment = !results.sender.email || !results.sender.profile_picture_url || !results.sender.bio
+                    if (needsSenderEnrichment && Number(results.sender.kick_user_id) > 0) {
+                        queueUserEnrichment(BigInt(results.sender.kick_user_id), message.sender.username)
+                    }
+                    const needsBroadcasterEnrichment = !results.broadcaster.email || !results.broadcaster.profile_picture_url || !results.broadcaster.bio
+                    if (needsBroadcasterEnrichment && Number(results.broadcaster.kick_user_id) > 0) {
+                        queueUserEnrichment(BigInt(results.broadcaster.kick_user_id), message.broadcaster.username)
                     }
 
-                    return result
+                    return results
                 } catch (error: any) {
-                    // Handle serialization errors (P4001) and deadlocks (P2034) with retry
-                    const isSerializationError = error?.code === 'P4001' ||
-                                                error?.code === 'P2034' ||
-                                                error?.message?.includes('could not serialize access') ||
-                                                error?.message?.includes('concurrent update')
+                    // Handle connection pool exhaustion (P2024), serialization (P4001), deadlocks (P2034)
+                    const isRetryableError = error?.code === 'P2024' || // Connection pool timeout
+                                            error?.code === 'P4001' || // Serialization error
+                                            error?.code === 'P2034' || // Deadlock
+                                            error?.message?.includes('could not serialize access') ||
+                                            error?.message?.includes('concurrent update') ||
+                                            error?.message?.includes('connection pool')
 
-                    if (isSerializationError && attempt < maxRetries - 1) {
-                        const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                    if (isRetryableError && attempt < maxRetries - 1) {
+                        // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms
+                        const delay = Math.min(100 * Math.pow(2, attempt), 2000)
                         await new Promise(resolve => setTimeout(resolve, delay))
                         continue
                     }
@@ -155,14 +190,10 @@ export async function POST(request: Request) {
             throw new Error('Max retries exceeded for user upsert')
         }
 
-
         try {
-            const [senderResult, broadcasterResult] = await Promise.all([
-                upsertUserWithRetry(senderUserId, message.sender.username, message.sender.profile_picture || null),
-                upsertUserWithRetry(broadcasterUserId, message.broadcaster.username, message.broadcaster.profile_picture || null),
-            ])
-            senderUser = senderResult
-            broadcasterUser = broadcasterResult
+            const { sender, broadcaster } = await upsertUsersWithRetry()
+            senderUser = sender
+            broadcasterUser = broadcaster
         } catch (error) {
             console.error('Failed to upsert users:', error)
             return NextResponse.json(
@@ -172,18 +203,33 @@ export async function POST(request: Request) {
         }
 
         // Find active stream session for this broadcaster (only fetch needed fields)
-        let activeSession = await db.streamSession.findFirst({
-            where: {
-                broadcaster_user_id: broadcasterUserId,
-                ended_at: null,
-            },
-            orderBy: { started_at: 'desc' },
-            select: {
-                id: true,
-                ended_at: true,
-                thumbnail_url: true,
-            },
-        })
+        // Add retry logic for connection pool exhaustion
+        let activeSession: { id: bigint; ended_at: Date | null; thumbnail_url: string | null } | null = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                activeSession = await db.streamSession.findFirst({
+                    where: {
+                        broadcaster_user_id: broadcasterUserId,
+                        ended_at: null,
+                    },
+                    orderBy: { started_at: 'desc' },
+                    select: {
+                        id: true,
+                        ended_at: true,
+                        thumbnail_url: true,
+                    },
+                })
+                break
+            } catch (error: any) {
+                if (error?.code === 'P2024' && attempt < 2) {
+                    await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
+                    continue
+                }
+                // Non-critical - continue without session if we can't fetch it
+                console.warn('Failed to fetch stream session, continuing without:', error?.message)
+                break
+            }
+        }
 
         // Determine if message was sent when offline
         const sentWhenOffline = !activeSession
@@ -292,7 +338,7 @@ export async function POST(request: Request) {
             if (sentWhenOffline) {
                 // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
                 // Add retry logic for serialization errors
-                const upsertOfflineMessageWithRetry = async (maxRetries = 3) => {
+                const upsertOfflineMessageWithRetry = async (maxRetries = 5) => {
                     for (let attempt = 0; attempt < maxRetries; attempt++) {
                         try {
                             return await db.offlineChatMessage.upsert({
@@ -322,13 +368,16 @@ export async function POST(request: Request) {
                                 },
                             })
                         } catch (error: any) {
-                            const isSerializationError = error?.code === 'P4001' ||
-                                                        error?.code === 'P2034' ||
-                                                        error?.message?.includes('could not serialize access') ||
-                                                        error?.message?.includes('concurrent update')
+                            // Handle connection pool exhaustion (P2024), serialization (P4001), deadlocks (P2034)
+                            const isRetryableError = error?.code === 'P2024' ||
+                                                    error?.code === 'P4001' ||
+                                                    error?.code === 'P2034' ||
+                                                    error?.message?.includes('could not serialize access') ||
+                                                    error?.message?.includes('concurrent update') ||
+                                                    error?.message?.includes('connection pool')
 
-                            if (isSerializationError && attempt < maxRetries - 1) {
-                                const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                            if (isRetryableError && attempt < maxRetries - 1) {
+                                const delay = Math.min(100 * Math.pow(2, attempt), 2000)
                                 await new Promise(resolve => setTimeout(resolve, delay))
                                 continue
                             }
@@ -344,21 +393,35 @@ export async function POST(request: Request) {
             } else {
                 // Use upsert to atomically handle race conditions - prevents duplicate message_id errors
                 // Fetch existing message data in one query to check stream_session_id and points
-                const existingMessage = await db.chatMessage.findUnique({
-                    where: { message_id: message.message_id },
-                    select: {
-                        stream_session_id: true,
-                        points_earned: true,
-                        points_reason: true,
-                    },
-                })
+                // Add retry logic for connection pool exhaustion
+                let existingMessage: { stream_session_id: bigint | null; points_earned: number; points_reason: string | null } | null = null
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        existingMessage = await db.chatMessage.findUnique({
+                            where: { message_id: message.message_id },
+                            select: {
+                                stream_session_id: true,
+                                points_earned: true,
+                                points_reason: true,
+                            },
+                        })
+                        break
+                    } catch (error: any) {
+                        if (error?.code === 'P2024' && attempt < 2) {
+                            await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
+                            continue
+                        }
+                        // Non-critical - continue as if message doesn't exist
+                        break
+                    }
+                }
 
                 // Only update stream_session_id if message doesn't have one yet (preserve existing session assignment)
                 const shouldUpdateSessionId = !existingMessage?.stream_session_id && sessionIsActive && activeSession !== null
                 const wasExistingMessage = existingMessage !== null && existingMessage.points_earned > 0
 
-                // Upsert message with retry logic for serialization errors
-                const upsertMessageWithRetry = async (maxRetries = 3) => {
+                // Upsert message with retry logic for connection pool and serialization errors
+                const upsertMessageWithRetry = async (maxRetries = 5) => {
                     for (let attempt = 0; attempt < maxRetries; attempt++) {
                         try {
                             return await db.chatMessage.upsert({
@@ -399,14 +462,16 @@ export async function POST(request: Request) {
                                 },
                             })
                         } catch (error: any) {
-                            // Handle serialization errors (P4001) and deadlocks (P2034) with retry
-                            const isSerializationError = error?.code === 'P4001' ||
-                                                        error?.code === 'P2034' ||
-                                                        error?.message?.includes('could not serialize access') ||
-                                                        error?.message?.includes('concurrent update')
+                            // Handle connection pool exhaustion (P2024), serialization (P4001), deadlocks (P2034)
+                            const isRetryableError = error?.code === 'P2024' ||
+                                                    error?.code === 'P4001' ||
+                                                    error?.code === 'P2034' ||
+                                                    error?.message?.includes('could not serialize access') ||
+                                                    error?.message?.includes('concurrent update') ||
+                                                    error?.message?.includes('connection pool')
 
-                            if (isSerializationError && attempt < maxRetries - 1) {
-                                const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
+                            if (isRetryableError && attempt < maxRetries - 1) {
+                                const delay = Math.min(100 * Math.pow(2, attempt), 2000)
                                 await new Promise(resolve => setTimeout(resolve, delay))
                                 continue
                             }

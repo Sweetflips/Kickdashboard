@@ -5,11 +5,9 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 // Configure connection pooling for Railway PostgreSQL
-// Railway PostgreSQL typically allows 100 connections total
-// With multiple Next.js instances + worker, each needs a very small pool
-// Use 5 per instance: allows up to 20 instances (20 × 5 = 100)
-// This is conservative but prevents "too many clients" errors
-// Worker processes should use even fewer connections (2-3)
+// Railway PostgreSQL allows 100 connections total by default
+// With high chat volume, we need larger pools and longer timeouts
+// Main service gets 20 connections, workers get 10
 const getDatabaseUrl = () => {
   const url = process.env.DATABASE_URL || ''
   // Add connection_limit if not already present
@@ -17,8 +15,10 @@ const getDatabaseUrl = () => {
     const separator = url.includes('?') ? '&' : '?'
     // Use smaller pool for worker processes (detected by POINT_WORKER env var)
     const isWorker = process.env.POINT_WORKER === 'true' || process.env.RAILWAY_SERVICE_NAME?.includes('worker')
-    const connectionLimit = isWorker ? 3 : 5
-    return `${url}${separator}connection_limit=${connectionLimit}&pool_timeout=10&connect_timeout=5`
+    // Increase pool size: 20 for main service, 10 for workers
+    // Increase timeouts: 30s pool timeout, 10s connect timeout
+    const connectionLimit = isWorker ? 10 : 20
+    return `${url}${separator}connection_limit=${connectionLimit}&pool_timeout=30&connect_timeout=10`
   }
   return url
 }

@@ -21,17 +21,29 @@ export async function POST(request: Request) {
         // Limit to 100 messages per request
         const limitedIds = messageIds.slice(0, 100)
 
-        // Fetch updated points for these messages
-        const messages = await db.chatMessage.findMany({
-            where: {
-                message_id: { in: limitedIds },
-            },
-            select: {
-                message_id: true,
-                points_earned: true,
-                points_reason: true,
-            },
-        })
+        // Fetch updated points for these messages with retry logic for connection pool exhaustion
+        let messages: { message_id: string; points_earned: number; points_reason: string | null }[] = []
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                messages = await db.chatMessage.findMany({
+                    where: {
+                        message_id: { in: limitedIds },
+                    },
+                    select: {
+                        message_id: true,
+                        points_earned: true,
+                        points_reason: true,
+                    },
+                })
+                break
+            } catch (error: any) {
+                if ((error?.code === 'P2024' || error?.message?.includes('connection pool')) && attempt < 2) {
+                    await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
+                    continue
+                }
+                throw error
+            }
+        }
 
         // Create a map for quick lookup
         const pointsMap = new Map(
