@@ -280,7 +280,7 @@ export default function UsersPage() {
                         {/* Avatar */}
                         <div className="flex-shrink-0">
                           <img
-                            src={user.profile_picture_url 
+                            src={user.profile_picture_url
                               ? (user.profile_picture_url.includes('cloudfront.net') || user.profile_picture_url.includes('amazonaws.com')
                                   ? user.profile_picture_url
                                   : `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`)
