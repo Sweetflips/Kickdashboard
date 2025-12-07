@@ -7,7 +7,7 @@ import AdventBuyModal from './AdventBuyModal'
 
 // Cache-busting version - increment this when images are updated
 // Updated to force reload of new images from Advent Calendar - Final folder
-const IMAGE_VERSION = '5'
+const IMAGE_VERSION = '7'
 
 interface AdventCardProps {
   item: {
