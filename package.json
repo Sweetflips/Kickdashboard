@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "start": "sh -c 'next start -p ${PORT:-3000}'",
     "start:web": "sh -c 'next start -p ${PORT:-3000}'",
-    "start:worker": "sh -c 'tsx scripts/chat-worker.ts'",
+    "start:worker": "node scripts/start-worker.js",
+    "start:all-workers": "node scripts/start-worker.js",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate"
