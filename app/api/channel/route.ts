@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
 
+// Kick Dev API base URL
+const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/public/v1'
+
 // Simple in-memory cache with stale-while-revalidate
 const cache = new Map<string, { data: any; timestamp: number }>()
 const CACHE_TTL = 30000 // 30 seconds cache (increased from 5s to reduce API calls)
@@ -13,6 +16,63 @@ const lastStreamState = new Map<string, { isLive: boolean; sessionId?: bigint }>
 
 // Exponential backoff helper
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Check live status using official Kick Dev API /livestreams endpoint
+ * This is the source of truth - if it returns data, stream is live
+ */
+async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promise<{
+    isLive: boolean
+    viewerCount: number
+    streamTitle: string
+    thumbnailUrl: string | null
+} | null> {
+    try {
+        const endpoint = `/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
+        const url = `${KICK_API_BASE}${endpoint}`
+
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+        })
+
+        if (!response.ok) {
+            console.warn(`[Channel API] Official livestreams endpoint returned ${response.status}`)
+            return null
+        }
+
+        const data = await response.json()
+
+        // If data array has items, stream is live
+        if (Array.isArray(data.data) && data.data.length > 0) {
+            const livestream = data.data[0]
+            let thumbnailUrl: string | null = null
+            
+            if (livestream.thumbnail) {
+                if (typeof livestream.thumbnail === 'string') {
+                    thumbnailUrl = livestream.thumbnail
+                } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
+                    thumbnailUrl = livestream.thumbnail.url
+                }
+            }
+
+            return {
+                isLive: true,
+                viewerCount: livestream.viewer_count || 0,
+                streamTitle: livestream.stream_title || livestream.session_title || '',
+                thumbnailUrl,
+            }
+        }
+
+        // Empty array = stream is offline
+        return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null }
+    } catch (error) {
+        console.warn(`[Channel API] Failed to check official livestreams API:`, error instanceof Error ? error.message : 'Unknown error')
+        return null
+    }
+}
 
 async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promise<Response> {
     const url = `https://kick.com/api/v2/channels/${slug}`
@@ -106,12 +166,9 @@ export async function GET(request: Request) {
             )
         }
 
-        // Extract stream data from livestream object
+        // Extract stream data from livestream object (v2 API)
         const livestream = channelData.livestream
-        const isLive = livestream?.is_live === true
-        const viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
-        const streamTitle = livestream?.session_title || ''
-
+        
         // Extract thumbnail URL - handle both string and object formats
         let thumbnailUrl: string | null = null
         if (livestream?.thumbnail) {
@@ -120,6 +177,46 @@ export async function GET(request: Request) {
             } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
                 thumbnailUrl = livestream.thumbnail.url
             }
+        }
+
+        // Ensure broadcaster_user_id is available (try multiple possible locations)
+        const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
+
+        // Use official Kick Dev API /livestreams endpoint as source of truth for live status
+        // This is more reliable than the v2 API's is_live field
+        let isLive = false
+        let viewerCount = 0
+        let streamTitle = livestream?.session_title || ''
+
+        if (broadcasterUserId) {
+            const officialStatus = await checkLiveStatusFromOfficialAPI(broadcasterUserId)
+            
+            if (officialStatus !== null) {
+                // Official API responded - use it as source of truth
+                isLive = officialStatus.isLive
+                viewerCount = officialStatus.viewerCount
+                if (officialStatus.streamTitle) {
+                    streamTitle = officialStatus.streamTitle
+                }
+                if (officialStatus.thumbnailUrl) {
+                    thumbnailUrl = officialStatus.thumbnailUrl
+                }
+                
+                // Log mismatch between v2 API and official API
+                const v2IsLive = livestream?.is_live === true
+                if (v2IsLive !== isLive) {
+                    console.log(`[Channel API] Live status mismatch for ${slug}: v2 API says ${v2IsLive}, official API says ${isLive} (using official)`)
+                }
+            } else {
+                // Official API failed - fall back to v2 API
+                isLive = livestream?.is_live === true
+                viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
+                console.log(`[Channel API] Official API unavailable, using v2 API fallback: isLive=${isLive}`)
+            }
+        } else {
+            // No broadcaster_user_id - fall back to v2 API
+            isLive = livestream?.is_live === true
+            viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
         }
 
         // Extract category from multiple possible locations:
@@ -142,9 +239,6 @@ export async function GET(request: Request) {
         if (isLive && !category) {
             console.warn(`⚠️ No category found for live stream ${slug}. Checking livestream.subcategory, livestream.category, or channelData.category`)
         }
-
-        // Ensure broadcaster_user_id is available (try multiple possible locations)
-        const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
 
         // Extract chatroom_id if available
         const chatroomId = channelData.chatroom?.id || channelData.chatroom_id || null
