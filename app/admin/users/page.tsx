@@ -16,6 +16,14 @@ interface UserSession {
   created_at: string
 }
 
+interface GeoLocation {
+  country: string
+  countryCode: string
+  city: string
+  region: string
+  isp: string
+}
+
 interface User {
   id: string
   kick_user_id: string
@@ -33,8 +41,10 @@ interface User {
   discord_username: string | null
   telegram_connected: boolean
   telegram_username: string | null
-  // Signup tracking
+  // IP addresses
+  last_ip_address: string | null
   signup_ip_address: string | null
+  // Signup tracking
   signup_region: string | null
   signup_user_agent: string | null
   signup_referrer: string | null
@@ -109,6 +119,43 @@ function formatTimeAgo(dateStr: string | null): string {
   return date.toLocaleDateString()
 }
 
+// IP Geolocation cache
+const geoCache = new Map<string, GeoLocation | null>()
+
+// Lookup IP geolocation using free API
+async function lookupGeoLocation(ip: string): Promise<GeoLocation | null> {
+  if (!ip) return null
+  
+  // Check cache first
+  if (geoCache.has(ip)) {
+    return geoCache.get(ip) || null
+  }
+  
+  try {
+    // Using ip-api.com (free, no API key needed, 45 requests/minute)
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,isp`)
+    if (!response.ok) return null
+    
+    const data = await response.json()
+    if (data.status === 'success') {
+      const geo: GeoLocation = {
+        country: data.country || 'Unknown',
+        countryCode: data.countryCode || '',
+        city: data.city || '',
+        region: data.regionName || '',
+        isp: data.isp || '',
+      }
+      geoCache.set(ip, geo)
+      return geo
+    }
+    geoCache.set(ip, null)
+    return null
+  } catch {
+    geoCache.set(ip, null)
+    return null
+  }
+}
+
 export default function UsersPage() {
   const router = useRouter()
   const [userData, setUserData] = useState<any>(null)
@@ -120,6 +167,7 @@ export default function UsersPage() {
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set())
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
   const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false)
+  const [geoLocations, setGeoLocations] = useState<Map<string, GeoLocation | null>>(new Map())
   const limit = 50
 
   useEffect(() => {
@@ -149,6 +197,39 @@ export default function UsersPage() {
       fetchUsers()
     }
   }, [offset, search, userData])
+
+  // Fetch geolocation for users with IPs
+  useEffect(() => {
+    const fetchGeoLocations = async () => {
+      const ipsToLookup = new Set<string>()
+      users.forEach(user => {
+        if (user.last_ip_address && !geoLocations.has(user.last_ip_address)) {
+          ipsToLookup.add(user.last_ip_address)
+        }
+        if (user.signup_ip_address && !geoLocations.has(user.signup_ip_address)) {
+          ipsToLookup.add(user.signup_ip_address)
+        }
+      })
+
+      if (ipsToLookup.size === 0) return
+
+      const newGeoLocations = new Map(geoLocations)
+      
+      // Batch lookup with small delay to avoid rate limiting
+      for (const ip of ipsToLookup) {
+        const geo = await lookupGeoLocation(ip)
+        newGeoLocations.set(ip, geo)
+        // Small delay to respect rate limits (45 req/min)
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      
+      setGeoLocations(newGeoLocations)
+    }
+
+    if (users.length > 0) {
+      fetchGeoLocations()
+    }
+  }, [users])
 
   const fetchUsers = async () => {
     try {
@@ -374,14 +455,26 @@ export default function UsersPage() {
 
                         {/* Quick Session Info */}
                         <div className="hidden md:flex items-center gap-6 text-sm">
-                          {/* Location - always show */}
-                          <div className="text-center min-w-[100px]">
-                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Location</div>
-                            <div className="text-gray-900 dark:text-kick-text font-medium">
-                              {diagnostics?.last_country || diagnostics?.last_region || (
-                                <span className="text-gray-400 dark:text-kick-text-muted">Unknown</span>
-                              )}
-                            </div>
+                          {/* IP & Location - always show */}
+                          <div className="text-center min-w-[140px]">
+                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">IP / Location</div>
+                            {user.last_ip_address ? (
+                              <div>
+                                <div className="text-gray-900 dark:text-kick-text font-mono text-xs">
+                                  {user.last_ip_address}
+                                </div>
+                                {geoLocations.get(user.last_ip_address) ? (
+                                  <div className="text-kick-purple font-medium text-xs">
+                                    {geoLocations.get(user.last_ip_address)?.city && `${geoLocations.get(user.last_ip_address)?.city}, `}
+                                    {geoLocations.get(user.last_ip_address)?.countryCode || geoLocations.get(user.last_ip_address)?.country}
+                                  </div>
+                                ) : (
+                                  <div className="text-gray-400 dark:text-kick-text-muted text-xs">Loading...</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 dark:text-kick-text-muted">No IP</span>
+                            )}
                           </div>
 
                           {/* Last Active */}
@@ -462,6 +555,55 @@ export default function UsersPage() {
                                 <div className="flex justify-between">
                                   <span className="text-gray-500 dark:text-kick-text-secondary">Emotes:</span>
                                   <span className="text-kick-green font-semibold">{user.total_emotes.toLocaleString()}</span>
+                                </div>
+                              </div>
+
+                              {/* IP Address Details */}
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text mt-4 mb-3">IP Addresses</h4>
+                              <div className="space-y-2 text-sm">
+                                <div>
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Last IP:</span>
+                                  {user.last_ip_address ? (
+                                    <div className="mt-1">
+                                      <span className="text-gray-900 dark:text-kick-text font-mono bg-gray-100 dark:bg-kick-surface-hover px-2 py-0.5 rounded">
+                                        {user.last_ip_address}
+                                      </span>
+                                      {geoLocations.get(user.last_ip_address) && (
+                                        <div className="text-xs text-kick-purple mt-1">
+                                          📍 {geoLocations.get(user.last_ip_address)?.city && `${geoLocations.get(user.last_ip_address)?.city}, `}
+                                          {geoLocations.get(user.last_ip_address)?.region && `${geoLocations.get(user.last_ip_address)?.region}, `}
+                                          {geoLocations.get(user.last_ip_address)?.country}
+                                          {geoLocations.get(user.last_ip_address)?.isp && (
+                                            <span className="text-gray-500 dark:text-kick-text-muted"> • {geoLocations.get(user.last_ip_address)?.isp}</span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 dark:text-kick-text-muted ml-2">None</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Signup IP:</span>
+                                  {user.signup_ip_address ? (
+                                    <div className="mt-1">
+                                      <span className="text-gray-900 dark:text-kick-text font-mono bg-gray-100 dark:bg-kick-surface-hover px-2 py-0.5 rounded">
+                                        {user.signup_ip_address}
+                                      </span>
+                                      {geoLocations.get(user.signup_ip_address) && (
+                                        <div className="text-xs text-kick-purple mt-1">
+                                          📍 {geoLocations.get(user.signup_ip_address)?.city && `${geoLocations.get(user.signup_ip_address)?.city}, `}
+                                          {geoLocations.get(user.signup_ip_address)?.region && `${geoLocations.get(user.signup_ip_address)?.region}, `}
+                                          {geoLocations.get(user.signup_ip_address)?.country}
+                                          {geoLocations.get(user.signup_ip_address)?.isp && (
+                                            <span className="text-gray-500 dark:text-kick-text-muted"> • {geoLocations.get(user.signup_ip_address)?.isp}</span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 dark:text-kick-text-muted ml-2">None</span>
+                                  )}
                                 </div>
                               </div>
 

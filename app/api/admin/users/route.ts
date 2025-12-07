@@ -207,6 +207,9 @@ export async function GET(request: Request) {
           telegram_username: u.telegram_username,
           signup_ip_address: u.signup_ip_address,
           duplicate_flags: duplicateFlagsMap.get(u.id.toString()) || [],
+          // IP addresses for admin view
+          last_ip_address: u.last_ip_address || null,
+          signup_ip_address: u.signup_ip_address || null,
           session_diagnostics: {
             total_sessions: totalSessions,
             last_seen: latestSession?.last_seen_at.toISOString() || null,
