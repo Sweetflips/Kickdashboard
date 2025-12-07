@@ -404,6 +404,19 @@ export default function AppLayout({ children }: LayoutProps) {
                                         <span className="ml-3 text-body font-medium">Payouts</span>
                                     </Link>
                                 </li>
+                                <li>
+                                    <Link href="/admin/purchases" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/purchases' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                            setSidebarOpen(false)
+                                        }
+                                    }}>
+                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1z" clipRule="evenodd" />
+                                            <path d="M11 4a1 1 0 10-2 0v1a1 1 0 002 0V4zM10 7a1 1 0 011 1v1h2a1 1 0 110 2h-3a1 1 0 01-1-1V8a1 1 0 011-1zM16 9a1 1 0 100 2 1 1 0 000-2zM9 13a1 1 0 011-1h1a1 1 0 110 2v2a1 1 0 11-2 0v-3zM7 11a1 1 0 100-2H4a1 1 0 100 2h3zM17 13a1 1 0 01-1 1h-2a1 1 0 110-2h2a1 1 0 011 1zM16 17a1 1 0 100-2h-3a1 1 0 100 2h3z" />
+                                        </svg>
+                                        <span className="ml-3 text-body font-medium">Purchases</span>
+                                    </Link>
+                                </li>
                             </>
                         )}
                         <li className="mt-4 mb-2">
@@ -434,9 +447,6 @@ export default function AppLayout({ children }: LayoutProps) {
                                     <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
                                 </svg>
                                 <span className="ml-3 text-body font-medium">Shop</span>
-                                <span className="ml-auto bg-kick-purple/20 text-kick-purple text-xs font-semibold px-2 py-0.5 rounded-full">
-                                    Soon
-                                </span>
                             </Link>
                         </li>
                         <li>
