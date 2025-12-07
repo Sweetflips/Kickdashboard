@@ -2,8 +2,11 @@
 
 import { getUnlockCountdown } from '@/lib/advent-calendar'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import AdventBuyModal from './AdventBuyModal'
+
+// Cache-busting version - increment this when images are updated
+const IMAGE_VERSION = '2'
 
 interface AdventCardProps {
   item: {
@@ -24,6 +27,7 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
   const [showModal, setShowModal] = useState(false)
   const [imageError, setImageError] = useState(false)
   const countdown = getUnlockCountdown(item.day)
+  const imageUrl = useMemo(() => `${item.image}?v=${IMAGE_VERSION}`, [item.image])
 
   const handleBuy = async (quantity: number) => {
     const response = await fetch(`/api/advent/${item.id}/buy`, {
@@ -61,7 +65,7 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
             </div>
           ) : (
             <Image
-              src={item.image}
+              src={imageUrl}
               alt={`Day ${item.day} prize`}
               width={240}
               height={240}

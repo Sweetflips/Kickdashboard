@@ -43,9 +43,13 @@ function startWebServer() {
     process.stdout.write('📂 PATH includes: ' + binPath + '\n');
 
     // Use sh -c which works reliably in the container
-    const nextProcess = spawn('sh', ['-c', `next start -p ${port}`], {
+    // Add HOSTNAME=0.0.0.0 to ensure Next.js listens on all interfaces
+    const nextProcess = spawn('sh', ['-c', `HOSTNAME=0.0.0.0 next start -p ${port}`], {
       stdio: 'inherit',
-      env: envWithPath
+      env: {
+        ...envWithPath,
+        HOSTNAME: '0.0.0.0',
+      }
     });
 
     nextProcess.on('exit', (code) => {
