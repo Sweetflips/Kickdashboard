@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 // Note: Since this is a client component, metadata must be set via head tags
 // The page title will be handled by the parent layout
@@ -151,7 +152,7 @@ export default function LoginPage() {
                         ) : (
                             <>
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                                 </svg>
                                 <span>Continue with Kick</span>
                             </>
@@ -167,6 +168,21 @@ export default function LoginPage() {
                             <span>Secure OAuth 2.0 authentication</span>
                         </div>
                     </div>
+                </div>
+
+                {/* Legal Links */}
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-kick-text-secondary">
+                    <Link href="/legal/terms" className="hover:text-gray-700 dark:hover:text-kick-text transition-colors">
+                        Terms of Service
+                    </Link>
+                    <span className="text-gray-300 dark:text-kick-border">•</span>
+                    <Link href="/legal/privacy" className="hover:text-gray-700 dark:hover:text-kick-text transition-colors">
+                        Privacy Policy
+                    </Link>
+                    <span className="text-gray-300 dark:text-kick-border">•</span>
+                    <Link href="/legal/cookies" className="hover:text-gray-700 dark:hover:text-kick-text transition-colors">
+                        Cookies
+                    </Link>
                 </div>
             </div>
         </div>

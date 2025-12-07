@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import Footer from './Footer'
 import ProfileDropdown from './ProfileDropdown'
 import ThemeToggle from './ThemeToggle'
 
@@ -268,7 +269,7 @@ export default function AppLayout({ children }: LayoutProps) {
     }
 
     return (
-        <div className="min-h-screen bg-white dark:bg-kick-dark">
+        <div className="min-h-screen flex flex-col bg-white dark:bg-kick-dark">
             {/* Sidebar */}
             <aside className={`fixed top-0 left-0 z-40 w-64 h-screen transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 bg-white dark:bg-kick-surface border-r border-gray-200 dark:border-kick-border`}>
                 <div className="h-full px-3 py-4 overflow-y-auto">
@@ -497,7 +498,7 @@ export default function AppLayout({ children }: LayoutProps) {
             </aside>
 
             {/* Main Content */}
-            <div className="lg:ml-64">
+            <div className="lg:ml-64 flex-1 flex flex-col">
                 {/* Top Navigation */}
                 <nav className="bg-white dark:bg-kick-surface border-b border-gray-200 dark:border-kick-border px-4 py-3 shadow-sm">
                     <div className="flex items-center justify-between">
@@ -540,9 +541,12 @@ export default function AppLayout({ children }: LayoutProps) {
                 </nav>
 
                 {/* Page Content */}
-                <main className="p-6">
+                <main className="p-6 flex-1">
                     {children}
                 </main>
+
+                {/* Footer */}
+                <Footer />
             </div>
 
             {/* Sidebar Overlay */}
