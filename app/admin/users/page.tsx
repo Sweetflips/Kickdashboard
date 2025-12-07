@@ -122,28 +122,31 @@ function formatTimeAgo(dateStr: string | null): string {
 // IP Geolocation cache
 const geoCache = new Map<string, GeoLocation | null>()
 
-// Lookup IP geolocation using free API
+// Lookup IP geolocation using free HTTPS API
 async function lookupGeoLocation(ip: string): Promise<GeoLocation | null> {
   if (!ip) return null
-
+  
   // Check cache first
   if (geoCache.has(ip)) {
     return geoCache.get(ip) || null
   }
-
+  
   try {
-    // Using ip-api.com (free, no API key needed, 45 requests/minute)
-    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,isp`)
-    if (!response.ok) return null
-
+    // Using ipapi.co (free HTTPS, 1000 requests/day)
+    const response = await fetch(`https://ipapi.co/${ip}/json/`)
+    if (!response.ok) {
+      geoCache.set(ip, null)
+      return null
+    }
+    
     const data = await response.json()
-    if (data.status === 'success') {
+    if (!data.error) {
       const geo: GeoLocation = {
-        country: data.country || 'Unknown',
-        countryCode: data.countryCode || '',
+        country: data.country_name || 'Unknown',
+        countryCode: data.country_code || '',
         city: data.city || '',
-        region: data.regionName || '',
-        isp: data.isp || '',
+        region: data.region || '',
+        isp: data.org || '',
       }
       geoCache.set(ip, geo)
       return geo
