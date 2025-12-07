@@ -14,7 +14,7 @@ export const ADVENT_ITEMS: AdventItem[] = [
   { id: 'day-5', day: 5, pointsCost: 20, image: '/advent/Day 5.png', maxTickets: 25 },
   { id: 'day-6', day: 6, pointsCost: 20, image: '/advent/Day 6.png', maxTickets: 25 },
   { id: 'day-7', day: 7, pointsCost: 20, image: '/advent/Day 7.png', maxTickets: 25 },
-  { id: 'day-8', day: 8, pointsCost: 20, image: '/advent/Day 8.png', maxTickets: 25 },
+  { id: 'day-8', day: 8, pointsCost: 300, image: '/advent/Day 8.png', maxTickets: 25 },
   { id: 'day-9', day: 9, pointsCost: 20, image: '/advent/Day 9.png', maxTickets: 25 },
   { id: 'day-10', day: 10, pointsCost: 100, image: '/advent/Day 10.png', maxTickets: 25 },
   { id: 'day-11', day: 11, pointsCost: 100, image: '/advent/Day 11.png', maxTickets: 25 },
