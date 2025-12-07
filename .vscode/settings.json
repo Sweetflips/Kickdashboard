@@ -3,5 +3,6 @@
     "terminal.integrated.defaultProfile.windows": "Windows PowerShell",
     "cursor.terminal.enableAiChecks": false,
     "terminal.integrated.hideOnLastClosed": false,
-    "terminal.integrated.initialHint": false
+    "terminal.integrated.initialHint": false,
+    "json.schemaDownload.enable": true
 }
