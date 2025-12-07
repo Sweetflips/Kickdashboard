@@ -205,11 +205,10 @@ export async function GET(request: Request) {
           discord_username: u.discord_username,
           telegram_connected: u.telegram_connected,
           telegram_username: u.telegram_username,
-          signup_ip_address: u.signup_ip_address,
-          duplicate_flags: duplicateFlagsMap.get(u.id.toString()) || [],
           // IP addresses for admin view
           last_ip_address: u.last_ip_address || null,
           signup_ip_address: u.signup_ip_address || null,
+          duplicate_flags: duplicateFlagsMap.get(u.id.toString()) || [],
           session_diagnostics: {
             total_sessions: totalSessions,
             last_seen: latestSession?.last_seen_at.toISOString() || null,

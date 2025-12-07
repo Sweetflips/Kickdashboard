@@ -125,17 +125,17 @@ const geoCache = new Map<string, GeoLocation | null>()
 // Lookup IP geolocation using free API
 async function lookupGeoLocation(ip: string): Promise<GeoLocation | null> {
   if (!ip) return null
-  
+
   // Check cache first
   if (geoCache.has(ip)) {
     return geoCache.get(ip) || null
   }
-  
+
   try {
     // Using ip-api.com (free, no API key needed, 45 requests/minute)
     const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,isp`)
     if (!response.ok) return null
-    
+
     const data = await response.json()
     if (data.status === 'success') {
       const geo: GeoLocation = {
@@ -214,7 +214,7 @@ export default function UsersPage() {
       if (ipsToLookup.size === 0) return
 
       const newGeoLocations = new Map(geoLocations)
-      
+
       // Batch lookup with small delay to avoid rate limiting
       for (const ip of ipsToLookup) {
         const geo = await lookupGeoLocation(ip)
@@ -222,7 +222,7 @@ export default function UsersPage() {
         // Small delay to respect rate limits (45 req/min)
         await new Promise(resolve => setTimeout(resolve, 100))
       }
-      
+
       setGeoLocations(newGeoLocations)
     }
 
