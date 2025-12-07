@@ -1,4 +1,4 @@
-import { ADVENT_ITEMS, isDayUnlocked } from '@/lib/advent-calendar'
+import { ADVENT_ITEMS, isDayPast, isDayUnlocked } from '@/lib/advent-calendar'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
@@ -34,6 +34,7 @@ export async function GET(request: Request) {
       image: item.image,
       maxTickets: item.maxTickets,
       unlocked: isDayUnlocked(item.day),
+      isPast: isDayPast(item.day),
       userTickets: purchaseMap.get(item.id) || 0,
     }))
 

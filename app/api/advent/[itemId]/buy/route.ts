@@ -1,4 +1,4 @@
-import { ADVENT_ITEMS, isDayUnlocked } from '@/lib/advent-calendar'
+import { ADVENT_ITEMS, isDayPast, isDayUnlocked } from '@/lib/advent-calendar'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
@@ -37,7 +37,15 @@ export async function POST(
       )
     }
 
-    // Check if day is unlocked
+    // Check if day is past (drawn/closed)
+    if (isDayPast(item.day)) {
+      return NextResponse.json(
+        { error: `Day ${item.day} has already passed and is closed` },
+        { status: 400 }
+      )
+    }
+
+    // Check if day is unlocked (only current day is unlocked)
     if (!isDayUnlocked(item.day)) {
       return NextResponse.json(
         { error: `Day ${item.day} has not unlocked yet` },

@@ -13,6 +13,7 @@ interface AdventCardProps {
     image: string
     maxTickets: number
     unlocked: boolean
+    isPast?: boolean
     userTickets: number
   }
   userBalance: number
@@ -21,6 +22,7 @@ interface AdventCardProps {
 
 export default function AdventCard({ item, userBalance, onPurchase }: AdventCardProps) {
   const [showModal, setShowModal] = useState(false)
+  const [imageError, setImageError] = useState(false)
   const countdown = getUnlockCountdown(item.day)
 
   const handleBuy = async (quantity: number) => {
@@ -59,28 +61,45 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
 
         {/* Prize image */}
         <div className="relative aspect-square bg-white/10 flex items-center justify-center p-4">
-          <Image
-            src={item.image}
-            alt={`Day ${item.day} prize`}
-            width={200}
-            height={200}
-            className="object-contain max-w-full max-h-full"
-            unoptimized
-          />
+          {imageError ? (
+            <div className="text-white/60 text-center">
+              <div className="text-4xl mb-2">🎁</div>
+              <div className="text-sm font-semibold">Day {item.day} Prize</div>
+            </div>
+          ) : (
+            <Image
+              src={item.image}
+              alt={`Day ${item.day} prize`}
+              width={200}
+              height={200}
+              className="object-contain max-w-full max-h-full"
+              unoptimized
+              onError={() => setImageError(true)}
+            />
+          )}
         </div>
 
-        {/* Locked overlay */}
+        {/* Locked/Drawn overlay */}
         {!item.unlocked && (
           <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 p-4">
             <div className="text-white text-center">
-              <div className="text-2xl font-bold mb-2">🔒 Locked</div>
-              {countdown && (
-                <div className="text-sm">
-                  <div>Unlocks in:</div>
-                  <div className="font-semibold mt-1">
-                    {countdown.days}d {countdown.hours}h {countdown.minutes}m
-                  </div>
-                </div>
+              {item.isPast ? (
+                <>
+                  <div className="text-2xl font-bold mb-2">🎲 Drawn</div>
+                  <div className="text-sm">This day has passed</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold mb-2">🔒 Locked</div>
+                  {countdown && (
+                    <div className="text-sm">
+                      <div>Unlocks in:</div>
+                      <div className="font-semibold mt-1">
+                        {countdown.days}d {countdown.hours}h {countdown.minutes}m
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

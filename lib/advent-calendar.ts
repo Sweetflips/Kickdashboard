@@ -7,6 +7,14 @@ export interface AdventItem {
 }
 
 export const ADVENT_ITEMS: AdventItem[] = [
+  { id: 'day-1', day: 1, pointsCost: 20, image: '/advent/Day 1.png', maxTickets: 25 },
+  { id: 'day-2', day: 2, pointsCost: 20, image: '/advent/Day 2.png', maxTickets: 25 },
+  { id: 'day-3', day: 3, pointsCost: 20, image: '/advent/Day 3.png', maxTickets: 25 },
+  { id: 'day-4', day: 4, pointsCost: 20, image: '/advent/Day 4.png', maxTickets: 25 },
+  { id: 'day-5', day: 5, pointsCost: 20, image: '/advent/Day 5.png', maxTickets: 25 },
+  { id: 'day-6', day: 6, pointsCost: 20, image: '/advent/Day 6.png', maxTickets: 25 },
+  { id: 'day-7', day: 7, pointsCost: 20, image: '/advent/Day 7.png', maxTickets: 25 },
+  { id: 'day-8', day: 8, pointsCost: 20, image: '/advent/Day 8.png', maxTickets: 25 },
   { id: 'day-9', day: 9, pointsCost: 20, image: '/advent/Day 9.png', maxTickets: 25 },
   { id: 'day-10', day: 10, pointsCost: 100, image: '/advent/Day 10.png', maxTickets: 25 },
   { id: 'day-11', day: 11, pointsCost: 100, image: '/advent/Day 11.png', maxTickets: 25 },
@@ -32,7 +40,7 @@ export const ADVENT_ITEMS: AdventItem[] = [
 
 /**
  * Check if an advent day is unlocked based on current date
- * Day unlocks on/after December {day}, 2024
+ * Only the current day is unlocked (not past days)
  */
 export function isDayUnlocked(day: number): boolean {
   const now = new Date()
@@ -40,11 +48,31 @@ export function isDayUnlocked(day: number): boolean {
   const currentMonth = now.getMonth() + 1 // getMonth() returns 0-11
   const currentDay = now.getDate()
 
-  // If it's December 2024 or later
-  if (currentYear > 2024) return true
-  if (currentYear === 2024 && currentMonth > 12) return true
+  // Only unlock if it's December 2024 and it's the current day
   if (currentYear === 2024 && currentMonth === 12) {
-    return currentDay >= day
+    return currentDay === day
+  }
+
+  return false
+}
+
+/**
+ * Check if a day is in the past (drawn/closed)
+ */
+export function isDayPast(day: number): boolean {
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1 // getMonth() returns 0-11
+  const currentDay = now.getDate()
+
+  // Check if it's December 2024 and the day has passed
+  if (currentYear === 2024 && currentMonth === 12) {
+    return currentDay > day
+  }
+
+  // If we're past December 2024, all days are past
+  if (currentYear > 2024 || (currentYear === 2024 && currentMonth > 12)) {
+    return true
   }
 
   return false
