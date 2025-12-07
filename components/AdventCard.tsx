@@ -6,8 +6,8 @@ import { useState, useMemo } from 'react'
 import AdventBuyModal from './AdventBuyModal'
 
 // Cache-busting version - increment this when images are updated
-// Using timestamp to force cache refresh
-const IMAGE_VERSION = '1733616000000'
+// Updated to force reload of new images from Advent Calendar - Final folder
+const IMAGE_VERSION = '5'
 
 interface AdventCardProps {
   item: {
