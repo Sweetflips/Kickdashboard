@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     }
 
     const response = await fetch(`https://ipapi.co/${ip}/json/?key=${apiKey}`)
-    
+
     if (!response.ok) {
       return NextResponse.json(
         { error: 'Geolocation lookup failed' },
@@ -81,4 +81,5 @@ export async function GET(request: Request) {
     )
   }
 }
+
 

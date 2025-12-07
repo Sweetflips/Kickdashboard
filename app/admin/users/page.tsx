@@ -125,23 +125,23 @@ const geoCache = new Map<string, GeoLocation | null>()
 // Lookup IP geolocation via secure server endpoint
 async function lookupGeoLocation(ip: string, token: string): Promise<GeoLocation | null> {
   if (!ip) return null
-  
+
   // Check cache first
   if (geoCache.has(ip)) {
     return geoCache.get(ip) || null
   }
-  
+
   try {
     // Use server-side API to keep API key secure
     const response = await fetch(`/api/admin/geolocate?ip=${encodeURIComponent(ip)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    
+
     if (!response.ok) {
       geoCache.set(ip, null)
       return null
     }
-    
+
     const data = await response.json()
     if (!data.error) {
       const geo: GeoLocation = {
@@ -223,7 +223,7 @@ export default function UsersPage() {
       if (ipsToLookup.size === 0) return
 
       const newGeoLocations = new Map(geoLocations)
-      
+
       // Batch lookup with small delay to avoid rate limiting
       for (const ip of ipsToLookup) {
         const geo = await lookupGeoLocation(ip, token)
@@ -231,7 +231,7 @@ export default function UsersPage() {
         // Small delay between requests
         await new Promise(resolve => setTimeout(resolve, 50))
       }
-      
+
       setGeoLocations(newGeoLocations)
     }
 
