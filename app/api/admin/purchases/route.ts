@@ -1,50 +1,14 @@
+import { isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
     try {
-        // Verify admin status
-        const authHeader = request.headers.get('authorization')
-        if (!authHeader?.startsWith('Bearer ')) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const token = authHeader.substring(7)
-
-        // Introspect token to get user info
-        const introspectResponse = await fetch('https://id.kick.com/oauth/introspect', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-                token,
-                client_id: process.env.KICK_CLIENT_ID!,
-                client_secret: process.env.KICK_CLIENT_SECRET!,
-            }),
-        })
-
-        if (!introspectResponse.ok) {
-            return NextResponse.json({ error: 'Token validation failed' }, { status: 401 })
-        }
-
-        const tokenData = await introspectResponse.json()
-        if (!tokenData.active) {
-            return NextResponse.json({ error: 'Token is invalid or expired' }, { status: 401 })
-        }
-
-        const kickUserId = tokenData.user_id || tokenData.sub
-        if (!kickUserId) {
-            return NextResponse.json({ error: 'Could not determine user ID' }, { status: 401 })
-        }
-
-        // Check if user is admin
-        const user = await db.user.findUnique({
-            where: { kick_user_id: BigInt(kickUserId) },
-            select: { is_admin: true },
-        })
-
-        if (!user?.is_admin) {
+        // Verify admin status using existing auth helper
+        const adminCheck = await isAdmin(request)
+        if (!adminCheck) {
             return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
         }
 
