@@ -67,7 +67,7 @@ function getUnlockDayForCalendarDay(day: number): number {
 export function isDayUnlocked(day: number): boolean {
   const { year, month, day: currentDay } = getCurrentUtcDate()
 
-  if (year === 2024 && month === 12) {
+  if (year === 2025 && month === 12) {
     const unlockDay = getUnlockDayForCalendarDay(day)
     return currentDay === unlockDay
   }
@@ -82,12 +82,12 @@ export function isDayUnlocked(day: number): boolean {
 export function isDayPast(day: number): boolean {
   const { year, month, day: currentDay } = getCurrentUtcDate()
 
-  if (year === 2024 && month === 12) {
+  if (year === 2025 && month === 12) {
     return currentDay >= day
   }
 
-  // If we're past December 2024, all days are past
-  if (year > 2024 || (year === 2024 && month > 12)) {
+  // If we're past December 2025, all days are past
+  if (year > 2025 || (year === 2025 && month > 12)) {
     return true
   }
 
@@ -104,7 +104,7 @@ export function getUnlockCountdown(day: number): { days: number; hours: number; 
   const now = new Date()
   const unlockDay = getUnlockDayForCalendarDay(day)
   // Month is 0-indexed, so 11 = December; use UTC to match unlock logic
-  const unlockTimeMs = Date.UTC(2024, 11, unlockDay, 0, 0, 0)
+  const unlockTimeMs = Date.UTC(2025, 11, unlockDay, 0, 0, 0)
 
   const diff = unlockTimeMs - now.getTime()
   if (diff <= 0) return null

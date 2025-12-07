@@ -44,6 +44,13 @@ export default function ShopPage() {
     if (isConnected) {
       fetchUserBalance()
       fetchAdventItems()
+
+      // Poll for updated points balance every 5 seconds
+      const balanceInterval = setInterval(() => {
+        fetchUserBalance()
+      }, 5000)
+
+      return () => clearInterval(balanceInterval)
     }
   }, [isConnected])
 
@@ -223,7 +230,7 @@ export default function ShopPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {adventItems.map((item) => (
+              {[...adventItems].sort((a, b) => a.day - b.day).map((item) => (
                 <AdventCard
                   key={item.id}
                   item={item}

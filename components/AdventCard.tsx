@@ -43,7 +43,7 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
   }
 
   return (
-    <>
+    <div>
       <div className="relative bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 rounded-xl overflow-hidden border-2 border-blue-300 shadow-lg">
         {/* Points cost badge - top left */}
         <div className="absolute top-2 left-2 z-10">
@@ -126,10 +126,10 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
           onClick={() => setShowModal(true)}
           disabled={!item.unlocked || item.isPast || userBalance < item.pointsCost}
           className={`w-full px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${item.isPast
-              ? 'bg-white/10 text-white/50 cursor-not-allowed'
-              : item.unlocked && userBalance >= item.pointsCost
-                ? 'bg-green-500 hover:bg-green-600 text-white'
-                : 'bg-white/10 text-white/60 cursor-not-allowed'
+            ? 'bg-white/10 text-white/50 cursor-not-allowed'
+            : item.unlocked && userBalance >= item.pointsCost
+              ? 'bg-green-500 hover:bg-green-600 text-white'
+              : 'bg-white/10 text-white/60 cursor-not-allowed'
             }`}
         >
           {item.isPast ? 'Closed' : item.unlocked ? 'Buy Tickets' : 'Coming Soon'}
@@ -145,6 +145,6 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
           onPurchase={handleBuy}
         />
       )}
-    </>
+    </div>
   )
 }
