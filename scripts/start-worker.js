@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const { execSync, spawn } = require('child_process');
+const http = require('http');
 const { PrismaClient } = require('@prisma/client');
 
 // Run migrations before starting the worker
@@ -74,6 +75,27 @@ async function ensureTables() {
 (async () => {
   await ensureTables();
 
+  // Start HTTP health check server
+  const port = parseInt(process.env.PORT || '3000', 10);
+  const healthServer = http.createServer((req, res) => {
+    if (req.url === '/' || req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('OK');
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not Found');
+    }
+  });
+
+  healthServer.listen(port, () => {
+    console.log(`✅ Health check server listening on port ${port}`);
+  });
+
+  healthServer.on('error', (err) => {
+    console.error('⚠️ Health check server error:', err.message);
+    // Don't exit - workers can still run without health endpoint
+  });
+
   // Start chat worker (handles all writes: users, messages, points)
   console.log('🔄 Starting chat worker (handles all database writes)...');
   const chatWorkerProcess = spawn('tsx', ['scripts/chat-worker.ts'], {
@@ -93,7 +115,10 @@ async function ensureTables() {
 
   const checkExit = () => {
     if (chatWorkerExited && pointWorkerExited) {
-      process.exit(0);
+      healthServer.close(() => {
+        console.log('✅ Health check server closed');
+        process.exit(0);
+      });
     }
   };
 
@@ -118,18 +143,23 @@ async function ensureTables() {
   chatWorkerProcess.on('error', (err) => {
     console.error('❌ Failed to start chat worker:', err.message);
     pointWorkerProcess.kill('SIGTERM');
+    healthServer.close();
     process.exit(1);
   });
 
   pointWorkerProcess.on('error', (err) => {
     console.error('❌ Failed to start point worker:', err.message);
     chatWorkerProcess.kill('SIGTERM');
+    healthServer.close();
     process.exit(1);
   });
 
   // Handle graceful shutdown
   const shutdown = (signal) => {
     console.log(`\n${signal} received, shutting down workers...`);
+    healthServer.close(() => {
+      console.log('✅ Health check server closed');
+    });
     chatWorkerProcess.kill(signal);
     pointWorkerProcess.kill(signal);
   };
