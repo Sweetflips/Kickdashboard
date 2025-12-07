@@ -39,39 +39,55 @@ export const ADVENT_ITEMS: AdventItem[] = [
 ]
 
 /**
- * Check if an advent day is unlocked based on current date
- * Day is unlocked from its calendar date until the next day starts (or admin marks as drawn)
+ * Helper to get current UTC date components
+ */
+function getCurrentUtcDate() {
+  const now = new Date()
+  return {
+    year: now.getUTCFullYear(),
+    month: now.getUTCMonth() + 1, // 1-12
+    day: now.getUTCDate(),
+  }
+}
+
+/**
+ * Helper: day when card should unlock for purchases (UTC)
+ * - For day 1: unlocks on Dec 1
+ * - For day N>1: unlocks on Dec (N-1), so you can buy one day before the raffle
+ */
+function getUnlockDayForCalendarDay(day: number): number {
+  return Math.max(1, day - 1)
+}
+
+/**
+ * Check if an advent day is unlocked based on current UTC date
+ * - For each calendar day D, tickets are purchasable on unlockDay(D)
+ *   (one day before the raffle, except Day 1 which unlocks on itself)
  */
 export function isDayUnlocked(day: number): boolean {
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth() + 1 // getMonth() returns 0-11
-  const currentDay = now.getDate()
+  const { year, month, day: currentDay } = getCurrentUtcDate()
 
-  // Unlock if it's December 2024 and current day >= day (allows purchases until next day)
-  if (currentYear === 2024 && currentMonth === 12) {
-    return currentDay >= day
+  if (year === 2024 && month === 12) {
+    const unlockDay = getUnlockDayForCalendarDay(day)
+    return currentDay === unlockDay
   }
 
   return false
 }
 
 /**
- * Check if a day is in the past (next day has started)
+ * Check if a day is in the past (raffle day or later in UTC)
+ * - Once we reach calendar day D in December, that day is considered past/closed
  */
 export function isDayPast(day: number): boolean {
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth() + 1 // getMonth() returns 0-11
-  const currentDay = now.getDate()
+  const { year, month, day: currentDay } = getCurrentUtcDate()
 
-  // Check if it's December 2024 and we're past this day
-  if (currentYear === 2024 && currentMonth === 12) {
-    return currentDay > day
+  if (year === 2024 && month === 12) {
+    return currentDay >= day
   }
 
   // If we're past December 2024, all days are past
-  if (currentYear > 2024 || (currentYear === 2024 && currentMonth > 12)) {
+  if (year > 2024 || (year === 2024 && month > 12)) {
     return true
   }
 
@@ -86,9 +102,11 @@ export function getUnlockCountdown(day: number): { days: number; hours: number; 
   if (isDayUnlocked(day)) return null
 
   const now = new Date()
-  const unlockDate = new Date(2024, 11, day, 0, 0, 0) // Month is 0-indexed, so 11 = December
+  const unlockDay = getUnlockDayForCalendarDay(day)
+  // Month is 0-indexed, so 11 = December; use UTC to match unlock logic
+  const unlockTimeMs = Date.UTC(2024, 11, unlockDay, 0, 0, 0)
 
-  const diff = unlockDate.getTime() - now.getTime()
+  const diff = unlockTimeMs - now.getTime()
   if (diff <= 0) return null
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))

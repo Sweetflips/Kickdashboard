@@ -72,7 +72,7 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
           )}
         </div>
 
-        {/* Locked/Drawn overlay */}
+        {/* Locked / Drawn / Coming Soon overlay */}
         {!item.unlocked && (
           <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 p-4">
             <div className="text-white text-center">
@@ -83,10 +83,10 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
                 </>
               ) : (
                 <>
-                  <div className="text-2xl font-bold mb-2">🔒 Locked</div>
+                  <div className="text-2xl font-bold mb-2">⏳ Coming Soon</div>
                   {countdown && (
                     <div className="text-sm">
-                      <div>Unlocks in:</div>
+                      <div>Opens in:</div>
                       <div className="font-semibold mt-1">
                         {countdown.days}d {countdown.hours}h {countdown.minutes}m
                       </div>
@@ -118,6 +118,22 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
             </div>
           </div>
         )}
+      </div>
+
+      {/* Secondary buy button under the card */}
+      <div className="mt-2">
+        <button
+          onClick={() => setShowModal(true)}
+          disabled={!item.unlocked || item.isPast || userBalance < item.pointsCost}
+          className={`w-full px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${item.isPast
+              ? 'bg-white/10 text-white/50 cursor-not-allowed'
+              : item.unlocked && userBalance >= item.pointsCost
+                ? 'bg-green-500 hover:bg-green-600 text-white'
+                : 'bg-white/10 text-white/60 cursor-not-allowed'
+            }`}
+        >
+          {item.isPast ? 'Closed' : item.unlocked ? 'Buy Tickets' : 'Coming Soon'}
+        </button>
       </div>
 
       {showModal && (
