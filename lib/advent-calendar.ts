@@ -17,21 +17,23 @@ export const ADVENT_ITEMS: AdventItem[] = [
   { id: 'day-8', day: 8, pointsCost: 300, image: '/advent/Day 8.png', maxTickets: 25 },
   { id: 'day-9', day: 9, pointsCost: 20, image: '/advent/Day 9.png', maxTickets: 25 },
   { id: 'day-10', day: 10, pointsCost: 100, image: '/advent/Day 10.png', maxTickets: 25 },
-  { id: 'day-11', day: 11, pointsCost: 100, image: '/advent/Day 11.png', maxTickets: 25 },
-  { id: 'day-12', day: 12, pointsCost: 100, image: '/advent/Day 12.png', maxTickets: 25 },
+  { id: 'day-11', day: 11, pointsCost: 20, image: '/advent/Day 11.png', maxTickets: 25 },
+  { id: 'day-12', day: 12, pointsCost: 50, image: '/advent/Day 12.png', maxTickets: 25 },
   { id: 'day-13', day: 13, pointsCost: 100, image: '/advent/Day 13.png', maxTickets: 25 },
-  { id: 'day-14', day: 14, pointsCost: 100, image: '/advent/Day 14.png', maxTickets: 25 },
-  { id: 'day-15', day: 15, pointsCost: 100, image: '/advent/Day 15.png', maxTickets: 25 },
+  { id: 'day-14', day: 14, pointsCost: 250, image: '/advent/Day 14.png', maxTickets: 25 },
+  { id: 'day-15', day: 15, pointsCost: 50, image: '/advent/Day 15.png', maxTickets: 25 },
   { id: 'day-16', day: 16, pointsCost: 100, image: '/advent/Day 16.png', maxTickets: 25 },
-  { id: 'day-17', day: 17, pointsCost: 100, image: '/advent/Day 17.png', maxTickets: 25 },
-  { id: 'day-18', day: 18, pointsCost: 100, image: '/advent/Day 18.png', maxTickets: 25 },
-  { id: 'day-19', day: 19, pointsCost: 100, image: '/advent/Day 19.png', maxTickets: 25 },
+  { id: 'day-17', day: 17, pointsCost: 160, image: '/advent/Day 17.png', maxTickets: 25 },
+  { id: 'day-18', day: 18, pointsCost: 50, image: '/advent/Day 18.png', maxTickets: 25 },
+  { id: 'day-19', day: 19, pointsCost: 20, image: '/advent/Day 19.png', maxTickets: 25 },
   { id: 'day-20', day: 20, pointsCost: 100, image: '/advent/Day 20.png', maxTickets: 25 },
-  { id: 'day-21', day: 21, pointsCost: 100, image: '/advent/Day 21.png', maxTickets: 25 },
-  { id: 'day-22', day: 22, pointsCost: 100, image: '/advent/Day 22.png', maxTickets: 25 },
-  { id: 'day-23', day: 23, pointsCost: 500, image: '/advent/Day 23.png', maxTickets: 25 },
+  { id: 'day-21', day: 21, pointsCost: 200, image: '/advent/Day 21.png', maxTickets: 25 },
+  { id: 'day-22', day: 22, pointsCost: 50, image: '/advent/Day 22.png', maxTickets: 25 },
+  { id: 'day-23', day: 23, pointsCost: 20, image: '/advent/Day 23.png', maxTickets: 25 },
+  { id: 'day-23b', day: 23, pointsCost: 500, image: '/advent/Day 23-2.png', maxTickets: 25 },
   { id: 'day-24', day: 24, pointsCost: 1400, image: '/advent/Day 24.png', maxTickets: 25 },
-  { id: 'day-25b', day: 25, pointsCost: 1000, image: '/advent/Day 25.png', maxTickets: 25 },
+  { id: 'day-25a', day: 25, pointsCost: 500, image: '/advent/Day 25.png', maxTickets: 25 },
+  { id: 'day-25b', day: 25, pointsCost: 1000, image: '/advent/Day 25-2.png', maxTickets: 25 },
   { id: 'day-31a', day: 31, pointsCost: 1000, image: '/advent/Day 31.png', maxTickets: 25 },
   { id: 'day-31b', day: 31, pointsCost: 1000, image: '/advent/Day 31-2.png', maxTickets: 25 },
 ]
@@ -59,15 +61,16 @@ function getUnlockDayForCalendarDay(day: number): number {
 
 /**
  * Check if an advent day is unlocked based on current UTC date
- * - For each calendar day D, tickets are purchasable on unlockDay(D)
- *   (one day before the raffle, except Day 1 which unlocks on itself)
+ * - All undrawn raffles stay open for ticket purchases
+ * - Ticket buying closes at midnight UTC the day before the raffle (day D-1)
+ * - Once it's day D or later, that raffle is closed
  */
 export function isDayUnlocked(day: number): boolean {
   const { year, month, day: currentDay } = getCurrentUtcDate()
 
   if (year === 2025 && month === 12) {
-    const unlockDay = getUnlockDayForCalendarDay(day)
-    return currentDay === unlockDay
+    // Open until midnight before raffle day (currentDay < day)
+    return currentDay < day
   }
 
   return false

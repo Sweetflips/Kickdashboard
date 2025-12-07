@@ -120,10 +120,60 @@ export async function GET(request: NextRequest) {
         // Get unique items purchased for filter dropdown
         const uniqueItems = [...new Set(purchases.map(p => p.item_id))].sort()
 
+        // Group by raffle/item for raffle view
+        const rafflePurchases: Record<string, {
+            itemId: string
+            totalTickets: number
+            totalPointsSpent: number
+            players: {
+                userId: string
+                kickUserId: string
+                username: string
+                profilePicture: string | null
+                tickets: number
+                pointsSpent: number
+                purchasedAt: string
+            }[]
+        }> = {}
+
+        for (const purchase of purchases) {
+            const item = ADVENT_ITEMS.find(i => i.id === purchase.item_id)
+            const pointsSpent = item ? item.pointsCost * purchase.tickets : 0
+
+            if (!rafflePurchases[purchase.item_id]) {
+                rafflePurchases[purchase.item_id] = {
+                    itemId: purchase.item_id,
+                    totalTickets: 0,
+                    totalPointsSpent: 0,
+                    players: [],
+                }
+            }
+
+            rafflePurchases[purchase.item_id].totalTickets += purchase.tickets
+            rafflePurchases[purchase.item_id].totalPointsSpent += pointsSpent
+            rafflePurchases[purchase.item_id].players.push({
+                userId: purchase.user.id.toString(),
+                kickUserId: purchase.user.kick_user_id.toString(),
+                username: purchase.user.username,
+                profilePicture: purchase.user.profile_picture_url,
+                tickets: purchase.tickets,
+                pointsSpent,
+                purchasedAt: purchase.created_at.toISOString(),
+            })
+        }
+
+        // Sort raffles by day number
+        const raffles = Object.values(rafflePurchases).sort((a, b) => {
+            const dayA = parseInt(a.itemId.match(/day-(\d+)/)?.[1] || '0')
+            const dayB = parseInt(b.itemId.match(/day-(\d+)/)?.[1] || '0')
+            return dayA - dayB
+        })
+
         return NextResponse.json({
             users,
             totals,
             items: uniqueItems,
+            raffles,
         })
     } catch (error) {
         console.error('Error fetching purchases:', error)
