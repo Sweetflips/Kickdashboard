@@ -374,6 +374,16 @@ export default function UsersPage() {
 
                         {/* Quick Session Info */}
                         <div className="hidden md:flex items-center gap-6 text-sm">
+                          {/* Location - always show */}
+                          <div className="text-center min-w-[100px]">
+                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Location</div>
+                            <div className="text-gray-900 dark:text-kick-text font-medium">
+                              {diagnostics?.last_country || diagnostics?.last_region || (
+                                <span className="text-gray-400 dark:text-kick-text-muted">Unknown</span>
+                              )}
+                            </div>
+                          </div>
+
                           {/* Last Active */}
                           <div className="text-center min-w-[80px]">
                             <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Last Active</div>
@@ -381,16 +391,6 @@ export default function UsersPage() {
                               {formatTimeAgo(diagnostics?.last_seen || user.last_login_at)}
                             </div>
                           </div>
-
-                          {/* Location - only show if we have data */}
-                          {(diagnostics?.last_country || diagnostics?.last_region) && (
-                            <div className="text-center min-w-[80px]">
-                              <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Location</div>
-                              <div className="text-gray-900 dark:text-kick-text font-medium">
-                                {diagnostics.last_country || diagnostics.last_region}
-                              </div>
-                            </div>
-                          )}
 
                           {/* Client - only show if we have data */}
                           {diagnostics?.last_client_type && (
