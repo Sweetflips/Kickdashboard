@@ -122,8 +122,8 @@ function formatTimeAgo(dateStr: string | null): string {
 // IP Geolocation cache
 const geoCache = new Map<string, GeoLocation | null>()
 
-// Lookup IP geolocation using free HTTPS API
-async function lookupGeoLocation(ip: string): Promise<GeoLocation | null> {
+// Lookup IP geolocation via secure server endpoint
+async function lookupGeoLocation(ip: string, token: string): Promise<GeoLocation | null> {
   if (!ip) return null
   
   // Check cache first
@@ -132,8 +132,11 @@ async function lookupGeoLocation(ip: string): Promise<GeoLocation | null> {
   }
   
   try {
-    // Using ipapi.co (free HTTPS, 1000 requests/day)
-    const response = await fetch(`https://ipapi.co/${ip}/json/`)
+    // Use server-side API to keep API key secure
+    const response = await fetch(`/api/admin/geolocate?ip=${encodeURIComponent(ip)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    
     if (!response.ok) {
       geoCache.set(ip, null)
       return null
@@ -142,11 +145,11 @@ async function lookupGeoLocation(ip: string): Promise<GeoLocation | null> {
     const data = await response.json()
     if (!data.error) {
       const geo: GeoLocation = {
-        country: data.country_name || 'Unknown',
-        countryCode: data.country_code || '',
+        country: data.country || 'Unknown',
+        countryCode: data.countryCode || '',
         city: data.city || '',
         region: data.region || '',
-        isp: data.org || '',
+        isp: data.isp || '',
       }
       geoCache.set(ip, geo)
       return geo
@@ -204,6 +207,9 @@ export default function UsersPage() {
   // Fetch geolocation for users with IPs
   useEffect(() => {
     const fetchGeoLocations = async () => {
+      const token = localStorage.getItem('kick_access_token')
+      if (!token) return
+
       const ipsToLookup = new Set<string>()
       users.forEach(user => {
         if (user.last_ip_address && !geoLocations.has(user.last_ip_address)) {
@@ -217,15 +223,15 @@ export default function UsersPage() {
       if (ipsToLookup.size === 0) return
 
       const newGeoLocations = new Map(geoLocations)
-
+      
       // Batch lookup with small delay to avoid rate limiting
       for (const ip of ipsToLookup) {
-        const geo = await lookupGeoLocation(ip)
+        const geo = await lookupGeoLocation(ip, token)
         newGeoLocations.set(ip, geo)
-        // Small delay to respect rate limits (45 req/min)
-        await new Promise(resolve => setTimeout(resolve, 100))
+        // Small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 50))
       }
-
+      
       setGeoLocations(newGeoLocations)
     }
 
