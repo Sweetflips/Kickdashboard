@@ -848,17 +848,12 @@ export default function ProfilePage() {
                                                                         <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
                                                                             <img
                                                                                 src="/Telegram-Logo-PNG-Image.png"
-                                                                                alt="Telegram"
-                                                                                width="48"
-                                                                                height="48"
-                                                                                className="w-full h-full object-cover"
-                                                                                onError={(e) => {
-                                                                                    const target = e.currentTarget
-                                                                                    target.style.display = 'none'
-                                                                                    if (target.parentElement) {
-                                                                                        target.parentElement.innerHTML = '<span class="text-blue-500 font-bold text-xl">T</span>'
-                                                                                    }
-                                                                                }}
+                                                                                alt="Telegram connected"
+                                                                                width="18"
+                                                                                height="18"
+                                                                                className="object-contain"
+                                                                                title="Connected via Telegram"
+                                                                                style={{ width: '32px', height: '32px' }}
                                                                             />
                                                                         </div>
                                                                         <div>

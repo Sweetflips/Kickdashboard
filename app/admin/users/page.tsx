@@ -349,9 +349,12 @@ export default function UsersPage() {
                               {user.telegram_connected && (
                                 <img
                                   src="/Telegram-Logo-PNG-Image.png"
-                                  alt="Telegram"
-                                  title={user.telegram_username ? `@${user.telegram_username}` : 'Telegram Connected'}
-                                  className="w-5 h-5 flex-shrink-0"
+                                  alt="Telegram connected"
+                                  width="18"
+                                  height="18"
+                                  className="object-contain"
+                                  title="Connected via Telegram"
+                                  style={{ width: '32px', height: '32px' }}
                                 />
                               )}
                             </div>

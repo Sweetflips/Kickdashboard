@@ -29,9 +29,9 @@ function startWebServer() {
   try {
     const { spawn, exec } = require('child_process');
     const path = require('path');
-    
+
     const port = process.env.PORT || '3000';
-    
+
     // Add node_modules/.bin to PATH so 'next' command is found
     const binPath = path.join(process.cwd(), 'node_modules', '.bin');
     const envWithPath = {
@@ -41,7 +41,7 @@ function startWebServer() {
 
     process.stdout.write('🚀 Starting Next.js on port ' + port + '...\n');
     process.stdout.write('📂 PATH includes: ' + binPath + '\n');
-    
+
     // Use sh -c which works reliably in the container
     const nextProcess = spawn('sh', ['-c', `next start -p ${port}`], {
       stdio: 'inherit',
@@ -78,7 +78,7 @@ function startWebServer() {
         }
       });
     }, 5000);
-    
+
   } catch (err) {
     process.stdout.write('❌ startWebServer error: ' + err.message + '\n');
     process.exit(1);

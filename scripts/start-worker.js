@@ -76,7 +76,7 @@ async function ensureTables() {
 
   // Start chat worker (handles all writes: users, messages, points)
   console.log('🔄 Starting chat worker (handles all database writes)...');
-  
+
   // Use sh -c which works reliably in the container
   const workerProcess = spawn('sh', ['-c', 'tsx scripts/chat-worker.ts'], {
     stdio: 'inherit',
