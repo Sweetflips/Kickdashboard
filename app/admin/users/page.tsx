@@ -341,9 +341,12 @@ export default function UsersPage() {
                               {user.discord_connected && (
                                 <img
                                   src="/discord.png"
-                                  alt="Discord"
-                                  title={user.discord_username ? `Discord: ${user.discord_username}` : 'Discord Connected'}
-                                  className="w-5 h-5 flex-shrink-0"
+                                  alt="Discord connected"
+                                  width="16"
+                                  height="16"
+                                  className="object-contain w-4 h-4"
+                                  title="Connected via Discord"
+                                  style={{ width: '21px', height: '21px' }}
                                 />
                               )}
                               {user.telegram_connected && (

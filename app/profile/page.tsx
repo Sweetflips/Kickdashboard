@@ -224,7 +224,7 @@ export default function ProfilePage() {
                 try {
                     const token = localStorage.getItem('kick_access_token')
                     if (!token) return
-                    
+
                     const response = await fetch('/api/user/preferences', {
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -266,7 +266,7 @@ export default function ProfilePage() {
                 const token = localStorage.getItem('kick_access_token')
                 await fetch('/api/user/preferences', {
                     method: 'PATCH',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`,
                     },
@@ -302,7 +302,7 @@ export default function ProfilePage() {
             const token = localStorage.getItem('kick_access_token')
             const response = await fetch('/api/user/preferences', {
                 method: 'PATCH',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
                 },
@@ -339,7 +339,7 @@ export default function ProfilePage() {
                 const token = localStorage.getItem('kick_access_token')
                 await fetch('/api/user/preferences', {
                     method: 'PATCH',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`,
                     },
@@ -785,17 +785,12 @@ export default function ProfilePage() {
                                                                         <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
                                                                             <img
                                                                                 src="/discord.png"
-                                                                                alt="Discord"
-                                                                                width="48"
-                                                                                height="48"
-                                                                                className="w-full h-full object-cover"
-                                                                                onError={(e) => {
-                                                                                    const target = e.currentTarget
-                                                                                    target.style.display = 'none'
-                                                                                    if (target.parentElement) {
-                                                                                        target.parentElement.innerHTML = '<span class="text-indigo-600 font-bold text-xl">D</span>'
-                                                                                    }
-                                                                                }}
+                                                                                alt="Discord connected"
+                                                                                width="16"
+                                                                                height="16"
+                                                                                className="object-contain w-4 h-4"
+                                                                                title="Connected via Discord"
+                                                                                style={{ width: '21px', height: '21px' }}
                                                                             />
                                                                         </div>
                                                                         <div>

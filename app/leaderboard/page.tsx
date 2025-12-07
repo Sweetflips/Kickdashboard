@@ -363,11 +363,11 @@ export default function LeaderboardPage() {
                                                                         <img
                                                                             src="/discord.png"
                                                                             alt="Discord connected"
-                                                                            width={16}
-                                                                            height={16}
+                                                                            width="16"
+                                                                            height="16"
                                                                             className="object-contain w-4 h-4"
-                                                                            style={{ width: '16px', height: '16px' }}
                                                                             title="Connected via Discord"
+                                                                            style={{ width: '21px', height: '21px' }}
                                                                         />
                                                                     )}
                                                                     {entry.verification_methods.telegram && (
