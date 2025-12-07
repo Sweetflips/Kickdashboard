@@ -23,13 +23,23 @@ export async function GET(request: Request) {
     })
 
     // Get drawn status for all days
-    const drawnDays = await db.adventDayStatus.findMany({
-      where: { drawn: true },
-      select: {
-        day: true,
-      },
-    })
-    const drawnDaysSet = new Set(drawnDays.map(d => d.day))
+    let drawnDaysSet = new Set<number>()
+    try {
+      const drawnDays = await db.adventDayStatus.findMany({
+        where: { drawn: true },
+        select: {
+          day: true,
+        },
+      })
+      drawnDaysSet = new Set(drawnDays.map(d => d.day))
+    } catch (err: any) {
+      // If the table doesn't exist yet (migration not applied), treat all days as not drawn
+      if (err?.code === 'P2021') {
+        console.error('AdventDayStatus table missing in database, treating all days as not drawn.')
+      } else {
+        throw err
+      }
+    }
 
     const purchaseMap = new Map(
       purchases.map(p => [p.item_id, p.tickets])
