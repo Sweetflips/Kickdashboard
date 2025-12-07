@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
-import Link from 'next/link'
+import { getAccessToken, getRefreshToken, setAuthTokens } from '@/lib/cookies'
 import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import ProfileDropdown from './ProfileDropdown'
 import ThemeToggle from './ThemeToggle'
-import { getAccessToken, getRefreshToken, setAuthTokens } from '@/lib/cookies'
 
 interface UserData {
     id?: number
@@ -33,6 +33,18 @@ export default function AppLayout({ children }: LayoutProps) {
         }
         return false
     })
+    const [utcTime, setUtcTime] = useState('')
+
+    useEffect(() => {
+        const updateTime = () => {
+            const now = new Date()
+            const utcString = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
+            setUtcTime(utcString)
+        }
+        updateTime()
+        const interval = setInterval(updateTime, 1000)
+        return () => clearInterval(interval)
+    }, [])
 
     useEffect(() => {
         // Check authentication
@@ -498,6 +510,11 @@ export default function AppLayout({ children }: LayoutProps) {
                             />
                         </div>
                         <div className="flex items-center gap-4 ml-auto">
+                            {isAuthenticated && utcTime && (
+                                <div className="hidden md:block text-sm text-gray-600 dark:text-kick-text-secondary font-mono">
+                                    {utcTime}
+                                </div>
+                            )}
                             <ThemeToggle variant="button" />
                             <ProfileDropdown
                                 user={userData}

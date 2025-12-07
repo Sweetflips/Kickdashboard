@@ -64,6 +64,7 @@ model User {
   raffles_created              Raffle[]
   raffle_entries               RaffleEntry[]
   advent_purchases              AdventPurchase[]
+  advent_days_drawn            AdventDayStatus[]
 
   @@map("users")
 }
@@ -305,4 +306,17 @@ model AdventPurchase {
 
   @@unique([user_id, item_id])
   @@map("advent_purchases")
+}
+
+model AdventDayStatus {
+  day        Int      @id // December day (1-31)
+  drawn      Boolean  @default(false)
+  drawn_at   DateTime?
+  drawn_by   BigInt?  // Admin user ID who marked it as drawn
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  drawn_by_user User? @relation(fields: [drawn_by], references: [id])
+
+  @@map("advent_day_status")
 }

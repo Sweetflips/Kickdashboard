@@ -23,6 +23,18 @@ export default function ShopPage() {
   const [loading, setLoading] = useState(true)
   const [adventItems, setAdventItems] = useState<AdventItem[]>([])
   const [itemsLoading, setItemsLoading] = useState(true)
+  const [utcTime, setUtcTime] = useState('')
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date()
+      const utcString = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
+      setUtcTime(utcString)
+    }
+    updateTime()
+    const interval = setInterval(updateTime, 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     checkAuth()
@@ -152,6 +164,17 @@ export default function ShopPage() {
         </div>
 
         <div className="relative z-10 container mx-auto px-4 py-8">
+          {/* UTC Time Display - Top Right */}
+          {isConnected && (
+            <div className="absolute top-4 right-4 z-20">
+              <div className="bg-white/10 backdrop-blur-md rounded-lg border border-white/20 px-4 py-2">
+                <div className="text-white text-sm font-mono">
+                  {utcTime}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-4 mb-4">

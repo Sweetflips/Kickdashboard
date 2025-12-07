@@ -52,13 +52,6 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
           </div>
         </div>
 
-        {/* Day number banner - bottom */}
-        <div className="absolute bottom-0 left-0 right-0 z-10">
-          <div className="bg-gradient-to-r from-red-500 via-red-600 to-blue-600 text-white font-bold text-center py-2 px-4">
-            Day {item.day}
-          </div>
-        </div>
-
         {/* Prize image */}
         <div className="relative aspect-square bg-white/10 flex items-center justify-center p-4">
           {imageError ? (

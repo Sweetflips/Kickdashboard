@@ -40,7 +40,7 @@ export const ADVENT_ITEMS: AdventItem[] = [
 
 /**
  * Check if an advent day is unlocked based on current date
- * Only the current day is unlocked (not past days)
+ * Day is unlocked from its calendar date until the next day starts (or admin marks as drawn)
  */
 export function isDayUnlocked(day: number): boolean {
   const now = new Date()
@@ -48,16 +48,16 @@ export function isDayUnlocked(day: number): boolean {
   const currentMonth = now.getMonth() + 1 // getMonth() returns 0-11
   const currentDay = now.getDate()
 
-  // Only unlock if it's December 2024 and it's the current day
+  // Unlock if it's December 2024 and current day >= day (allows purchases until next day)
   if (currentYear === 2024 && currentMonth === 12) {
-    return currentDay === day
+    return currentDay >= day
   }
 
   return false
 }
 
 /**
- * Check if a day is in the past (drawn/closed)
+ * Check if a day is in the past (next day has started)
  */
 export function isDayPast(day: number): boolean {
   const now = new Date()
@@ -65,7 +65,7 @@ export function isDayPast(day: number): boolean {
   const currentMonth = now.getMonth() + 1 // getMonth() returns 0-11
   const currentDay = now.getDate()
 
-  // Check if it's December 2024 and the day has passed
+  // Check if it's December 2024 and we're past this day
   if (currentYear === 2024 && currentMonth === 12) {
     return currentDay > day
   }

@@ -22,21 +22,36 @@ export async function GET(request: Request) {
       },
     })
 
+    // Get drawn status for all days
+    const drawnDays = await db.adventDayStatus.findMany({
+      where: { drawn: true },
+      select: {
+        day: true,
+      },
+    })
+    const drawnDaysSet = new Set(drawnDays.map(d => d.day))
+
     const purchaseMap = new Map(
       purchases.map(p => [p.item_id, p.tickets])
     )
 
     // Build response with unlock status and purchase counts
-    const items = ADVENT_ITEMS.map(item => ({
-      id: item.id,
-      day: item.day,
-      pointsCost: item.pointsCost,
-      image: item.image,
-      maxTickets: item.maxTickets,
-      unlocked: isDayUnlocked(item.day),
-      isPast: isDayPast(item.day),
-      userTickets: purchaseMap.get(item.id) || 0,
-    }))
+    const items = ADVENT_ITEMS.map(item => {
+      const isDrawn = drawnDaysSet.has(item.day)
+      const isPast = isDayPast(item.day)
+      const unlocked = !isDrawn && !isPast && isDayUnlocked(item.day)
+
+      return {
+        id: item.id,
+        day: item.day,
+        pointsCost: item.pointsCost,
+        image: item.image,
+        maxTickets: item.maxTickets,
+        unlocked,
+        isPast: isDrawn || isPast,
+        userTickets: purchaseMap.get(item.id) || 0,
+      }
+    })
 
     return NextResponse.json({ items })
   } catch (error) {

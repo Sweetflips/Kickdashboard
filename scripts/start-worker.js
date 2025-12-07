@@ -70,41 +70,73 @@ async function ensureTables() {
   }
 }
 
-// Run the safety net check and wait for it to complete before starting worker
+// Run the safety net check and wait for it to complete before starting workers
 (async () => {
   await ensureTables();
 
   // Start chat worker (handles all writes: users, messages, points)
   console.log('🔄 Starting chat worker (handles all database writes)...');
-
-  // Use sh -c which works reliably in the container
-  const workerProcess = spawn('sh', ['-c', 'tsx scripts/chat-worker.ts'], {
+  const chatWorkerProcess = spawn('sh', ['-c', 'tsx scripts/chat-worker.ts'], {
     stdio: 'inherit',
     env: process.env
   });
 
-  workerProcess.on('exit', (code) => {
-    if (code !== 0 && code !== null) {
-      console.error(`⚠️ Chat worker exited with code ${code}`);
-      process.exit(code);
-    }
-    process.exit(0);
+  // Start point worker (processes point_award_jobs queue)
+  console.log('🔄 Starting point worker (processes point award jobs)...');
+  const pointWorkerProcess = spawn('sh', ['-c', 'tsx scripts/point-worker.ts'], {
+    stdio: 'inherit',
+    env: process.env
   });
 
-  workerProcess.on('error', (err) => {
-    console.error('❌ Failed to start worker:', err.message);
+  let chatWorkerExited = false;
+  let pointWorkerExited = false;
+
+  const checkExit = () => {
+    if (chatWorkerExited && pointWorkerExited) {
+      process.exit(0);
+    }
+  };
+
+  chatWorkerProcess.on('exit', (code) => {
+    chatWorkerExited = true;
+    if (code !== 0 && code !== null) {
+      console.error(`⚠️ Chat worker exited with code ${code}`);
+      // Don't exit immediately - let point worker continue
+    }
+    checkExit();
+  });
+
+  pointWorkerProcess.on('exit', (code) => {
+    pointWorkerExited = true;
+    if (code !== 0 && code !== null) {
+      console.error(`⚠️ Point worker exited with code ${code}`);
+      // Don't exit immediately - let chat worker continue
+    }
+    checkExit();
+  });
+
+  chatWorkerProcess.on('error', (err) => {
+    console.error('❌ Failed to start chat worker:', err.message);
+    pointWorkerProcess.kill('SIGTERM');
+    process.exit(1);
+  });
+
+  pointWorkerProcess.on('error', (err) => {
+    console.error('❌ Failed to start point worker:', err.message);
+    chatWorkerProcess.kill('SIGTERM');
     process.exit(1);
   });
 
   // Handle graceful shutdown
   const shutdown = (signal) => {
-    console.log(`\n${signal} received, shutting down worker...`);
-    workerProcess.kill(signal);
+    console.log(`\n${signal} received, shutting down workers...`);
+    chatWorkerProcess.kill(signal);
+    pointWorkerProcess.kill(signal);
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 })().catch(err => {
-  console.error('⚠️ Error starting worker:', err.message);
+  console.error('⚠️ Error starting workers:', err.message);
   process.exit(1);
 });
