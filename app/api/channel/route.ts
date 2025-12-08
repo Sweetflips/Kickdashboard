@@ -157,46 +157,48 @@ export async function GET(request: Request) {
     const now = Date.now()
     const cacheAge = cached ? now - cached.timestamp : Infinity
 
-    // Always verify live status from official API, even with cached data
-    // This ensures stream status is always accurate and up-to-date
+    // Always verify live status AND viewer count from official API, even with cached data
+    // This ensures stream status and viewer count are always accurate and up-to-date
     if (cached && cacheAge < CACHE_TTL) {
         const cachedBroadcasterId = cached.data?.broadcaster_user_id
         if (cachedBroadcasterId) {
             const officialStatus = await checkLiveStatusFromOfficialAPI(cachedBroadcasterId)
             if (officialStatus !== null) {
                 const cachedIsLive = cached.data?.is_live || false
-                // If live status changed, update cached data and return fresh response
-                if (officialStatus.isLive !== cachedIsLive) {
-                    console.log(`[Channel API] Stream status changed: ${cachedIsLive} -> ${officialStatus.isLive}, updating cache`)
-                    // Update cached data with correct live status
+                const cachedViewerCount = cached.data?.viewer_count || 0
+                
+                // Always update viewer count and live status from official API
+                // This ensures viewer count stays fresh even when live status doesn't change
+                if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
                     const updatedData = {
                         ...cached.data,
                         is_live: officialStatus.isLive,
                         viewer_count: officialStatus.viewerCount,
                         session_title: officialStatus.streamTitle || cached.data?.session_title || '',
                     }
-                    // Update cache with corrected data
+                    // Update cache with fresh data
                     cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
                     return NextResponse.json(updatedData)
                 }
             }
         }
-        // Status hasn't changed, return cached data
+        // Data hasn't changed, return cached data
         return NextResponse.json(cached.data)
     }
 
     // Stale-while-revalidate: return stale cache immediately, refresh in background
     const isStale = cached && cacheAge < STALE_TTL
     if (isStale) {
-        // Even for stale cache, verify live status
+        // Even for stale cache, verify live status and viewer count
         const cachedBroadcasterId = cached.data?.broadcaster_user_id
         if (cachedBroadcasterId) {
             const officialStatus = await checkLiveStatusFromOfficialAPI(cachedBroadcasterId)
             if (officialStatus !== null) {
                 const cachedIsLive = cached.data?.is_live || false
-                // If live status changed, update and return immediately
-                if (officialStatus.isLive !== cachedIsLive) {
-                    console.log(`[Channel API] Stream status changed in stale cache: ${cachedIsLive} -> ${officialStatus.isLive}`)
+                const cachedViewerCount = cached.data?.viewer_count || 0
+                
+                // Always update viewer count and live status from official API
+                if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
                     const updatedData = {
                         ...cached.data,
                         is_live: officialStatus.isLive,
