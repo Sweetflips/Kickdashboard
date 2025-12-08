@@ -36,6 +36,7 @@ interface ChannelData {
     is_live?: boolean
     viewer_count?: number
     session_title?: string
+    stream_started_at?: string | null
     chatroom_id?: number
     followers_count?: number
     last_live_at?: string | null
@@ -75,6 +76,7 @@ export default function Dashboard() {
     } | null>(null)
     const [isAdmin, setIsAdmin] = useState<boolean>(false)
     const [adminCheckLoading, setAdminCheckLoading] = useState(true)
+    const [streamDuration, setStreamDuration] = useState<string>('0:00:00')
 
     useEffect(() => {
         fetchChannelData()
@@ -232,6 +234,34 @@ export default function Dashboard() {
         }, 5000)
         return () => clearInterval(interval)
     }, [channelData?.broadcaster_user_id, isLive])
+
+    // Update stream duration every second when live
+    useEffect(() => {
+        if (!isLive || !channelData?.stream_started_at) {
+            setStreamDuration('0:00:00')
+            return
+        }
+        
+        const updateDuration = () => {
+            const start = new Date(channelData.stream_started_at).getTime()
+            const diff = Date.now() - start
+            
+            if (diff < 0) {
+                setStreamDuration('0:00:00')
+                return
+            }
+            
+            const hours = Math.floor(diff / 3600000)
+            const mins = Math.floor((diff % 3600000) / 60000)
+            const secs = Math.floor((diff % 60000) / 1000)
+            setStreamDuration(`${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`)
+        }
+        
+        updateDuration()
+        const interval = setInterval(updateDuration, 1000)
+        return () => clearInterval(interval)
+    }, [isLive, channelData?.stream_started_at])
+
     const viewerCount = channelData?.viewer_count || 0
     const streamTitle = channelData?.session_title || 'Not streaming'
     const category = channelData?.category?.name || 'No category'
@@ -305,7 +335,7 @@ export default function Dashboard() {
                     </div>
 
                     {/* Status Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className={`grid grid-cols-1 md:grid-cols-3 ${isLive ? 'lg:grid-cols-4' : ''} gap-6`}>
                         {/* Stream Status Card */}
                         <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors shadow-sm">
                             <div className="flex items-center justify-between">
@@ -358,6 +388,23 @@ export default function Dashboard() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Stream Duration Card - only when live */}
+                        {isLive && (
+                            <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors shadow-sm">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary">Stream Duration</p>
+                                        <p className="text-h3 font-semibold mt-2 text-kick-green">{streamDuration}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-full bg-kick-green/20 flex items-center justify-center">
+                                        <svg className="w-6 h-6 text-kick-green" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Stream Stats Cards */}

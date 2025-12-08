@@ -27,6 +27,7 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
     viewerCount: number
     streamTitle: string
     thumbnailUrl: string | null
+    startedAt: string | null
 } | null> {
     try {
         const endpoint = `/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
@@ -93,11 +94,12 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
                 viewerCount,
                 streamTitle: livestream.stream_title || livestream.session_title || '',
                 thumbnailUrl,
+                startedAt: livestream.started_at || null,
             }
         }
 
         // Empty array = stream is offline
-        return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null }
+        return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null }
     } catch (error) {
         console.warn(`[Channel API] Failed to check official livestreams API:`, error instanceof Error ? error.message : 'Unknown error')
         return null
@@ -175,6 +177,7 @@ export async function GET(request: Request) {
                         is_live: officialStatus.isLive,
                         viewer_count: officialStatus.viewerCount,
                         session_title: officialStatus.streamTitle || cached.data?.session_title || '',
+                        stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
                     }
                     // Update cache with fresh data
                     cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
@@ -204,6 +207,7 @@ export async function GET(request: Request) {
                         is_live: officialStatus.isLive,
                         viewer_count: officialStatus.viewerCount,
                         session_title: officialStatus.streamTitle || cached.data?.session_title || '',
+                        stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
                     }
                     cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
                     return NextResponse.json(updatedData)
@@ -262,6 +266,7 @@ export async function GET(request: Request) {
         let isLive = false
         let viewerCount = 0
         let streamTitle = livestream?.session_title || ''
+        let streamStartedAt: string | null = null
 
         if (broadcasterUserId) {
             const officialStatus = await checkLiveStatusFromOfficialAPI(broadcasterUserId)
@@ -275,6 +280,9 @@ export async function GET(request: Request) {
                 }
                 if (officialStatus.thumbnailUrl) {
                     thumbnailUrl = officialStatus.thumbnailUrl
+                }
+                if (officialStatus.startedAt) {
+                    streamStartedAt = officialStatus.startedAt
                 }
                 
                 // Log mismatch between v2 API and official API
@@ -295,6 +303,10 @@ export async function GET(request: Request) {
                 } else {
                     viewerCount = 0
                 }
+                // Extract started_at from v2 API fallback
+                if (isLive) {
+                    streamStartedAt = livestream?.created_at || livestream?.started_at || null
+                }
                 console.log(`[Channel API] Official API unavailable, using v2 API fallback: isLive=${isLive}`)
             }
         } else {
@@ -309,6 +321,10 @@ export async function GET(request: Request) {
                 }
             } else {
                 viewerCount = 0
+            }
+            // Extract started_at from v2 API fallback
+            if (isLive) {
+                streamStartedAt = livestream?.created_at || livestream?.started_at || null
             }
         }
 
@@ -456,6 +472,7 @@ export async function GET(request: Request) {
             is_live: isLive,
             viewer_count: viewerCount,
             session_title: streamTitle,
+            stream_started_at: isLive ? streamStartedAt : null,
             stream: livestream || null,
             category: category,
             followers_count: followerCount,
