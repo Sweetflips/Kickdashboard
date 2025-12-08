@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
-import { NextResponse } from 'next/server';
 import { getBroadcasterToken } from '@/lib/kick-api';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
 
@@ -9,8 +9,8 @@ const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/public/
 
 // Simple in-memory cache with stale-while-revalidate
 const cache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_TTL = 30000 // 30 seconds cache (increased from 5s to reduce API calls)
-const STALE_TTL = 60000 // Return stale data for 60s while refreshing
+const CACHE_TTL = 15000 // 15 seconds cache (reduced from 30s for faster live status updates)
+const STALE_TTL = 30000 // Return stale data for 30s while refreshing (reduced from 60s)
 const MAX_RETRIES = 3
 const INITIAL_RETRY_DELAY = 1000 // 1 second
 const lastStreamState = new Map<string, { isLive: boolean; sessionId?: bigint }>()
@@ -23,6 +23,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 /**
  * Check live status using official Kick Dev API /livestreams endpoint
  * This is the source of truth - if it returns data, stream is live
+ * Always returns a result (never null) - returns offline status if API fails
  */
 async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promise<{
     isLive: boolean
@@ -31,7 +32,7 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
     thumbnailUrl: string | null
     startedAt: string | null
     category: { id: number; name: string } | null
-} | null> {
+}> {
     try {
         const endpoint = `/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
         const url = `${KICK_API_BASE}${endpoint}`
@@ -47,7 +48,7 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
         if (response.status === 401) {
             const token = await getBroadcasterToken()
             const clientId = process.env.KICK_CLIENT_ID
-            
+
             const headers: Record<string, string> = {
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/json',
@@ -56,22 +57,24 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
             if (clientId) {
                 headers['Client-Id'] = clientId
             }
-            
+
             response = await fetch(url, { headers })
         }
 
         if (!response.ok) {
             console.warn(`[Channel API] Official livestreams endpoint returned ${response.status}`)
-            return null
+            // Return offline status instead of null to avoid falling back to potentially stale v2 API
+            return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null, category: null }
         }
 
         const data = await response.json()
+        console.log(`[Channel API] Official livestreams response for user ${broadcasterUserId}:`, JSON.stringify(data).substring(0, 300))
 
         // If data array has items, stream is live
         if (Array.isArray(data.data) && data.data.length > 0) {
             const livestream = data.data[0]
             let thumbnailUrl: string | null = null
-            
+
             if (livestream.thumbnail) {
                 if (typeof livestream.thumbnail === 'string') {
                     thumbnailUrl = livestream.thumbnail
@@ -112,10 +115,12 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
         }
 
         // Empty array = stream is offline
+        console.log(`[Channel API] Official livestreams returned empty array for user ${broadcasterUserId} - stream is OFFLINE`)
         return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null, category: null }
     } catch (error) {
         console.warn(`[Channel API] Failed to check official livestreams API:`, error instanceof Error ? error.message : 'Unknown error')
-        return null
+        // Return offline status instead of null to avoid falling back to potentially stale v2 API
+        return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null, category: null }
     }
 }
 
@@ -178,25 +183,24 @@ export async function GET(request: Request) {
         const cachedBroadcasterId = cached.data?.broadcaster_user_id
         if (cachedBroadcasterId) {
             const officialStatus = await checkLiveStatusFromOfficialAPI(cachedBroadcasterId)
-            if (officialStatus !== null) {
-                const cachedIsLive = cached.data?.is_live || false
-                const cachedViewerCount = cached.data?.viewer_count || 0
-                
-                // Always update viewer count and live status from official API
-                // This ensures viewer count stays fresh even when live status doesn't change
-                if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
-                    const updatedData = {
-                        ...cached.data,
-                        is_live: officialStatus.isLive,
-                        viewer_count: officialStatus.viewerCount,
-                        session_title: officialStatus.streamTitle || cached.data?.session_title || '',
-                        stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
-                        category: officialStatus.category || cached.data?.category || null,
-                    }
-                    // Update cache with fresh data
-                    cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
-                    return NextResponse.json(updatedData)
+            // Always trust the official API response
+            const cachedIsLive = cached.data?.is_live || false
+            const cachedViewerCount = cached.data?.viewer_count || 0
+
+            // Always update viewer count and live status from official API
+            // This ensures viewer count stays fresh even when live status doesn't change
+            if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
+                const updatedData = {
+                    ...cached.data,
+                    is_live: officialStatus.isLive,
+                    viewer_count: officialStatus.viewerCount,
+                    session_title: officialStatus.streamTitle || cached.data?.session_title || '',
+                    stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
+                    category: officialStatus.category || cached.data?.category || null,
                 }
+                // Update cache with fresh data
+                cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
+                return NextResponse.json(updatedData)
             }
         }
         // Data hasn't changed, return cached data
@@ -210,23 +214,22 @@ export async function GET(request: Request) {
         const cachedBroadcasterId = cached.data?.broadcaster_user_id
         if (cachedBroadcasterId) {
             const officialStatus = await checkLiveStatusFromOfficialAPI(cachedBroadcasterId)
-            if (officialStatus !== null) {
-                const cachedIsLive = cached.data?.is_live || false
-                const cachedViewerCount = cached.data?.viewer_count || 0
-                
-                // Always update viewer count and live status from official API
-                if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
-                    const updatedData = {
-                        ...cached.data,
-                        is_live: officialStatus.isLive,
-                        viewer_count: officialStatus.viewerCount,
-                        session_title: officialStatus.streamTitle || cached.data?.session_title || '',
-                        stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
-                        category: officialStatus.category || cached.data?.category || null,
-                    }
-                    cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
-                    return NextResponse.json(updatedData)
+            // Always trust the official API response
+            const cachedIsLive = cached.data?.is_live || false
+            const cachedViewerCount = cached.data?.viewer_count || 0
+
+            // Always update viewer count and live status from official API
+            if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
+                const updatedData = {
+                    ...cached.data,
+                    is_live: officialStatus.isLive,
+                    viewer_count: officialStatus.viewerCount,
+                    session_title: officialStatus.streamTitle || cached.data?.session_title || '',
+                    stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
+                    category: officialStatus.category || cached.data?.category || null,
                 }
+                cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
+                return NextResponse.json(updatedData)
             }
         }
         // Trigger background refresh (don't await)
@@ -262,7 +265,7 @@ export async function GET(request: Request) {
 
         // Extract stream data from livestream object (v2 API)
         const livestream = channelData.livestream
-        
+
         // Extract thumbnail URL - handle both string and object formats
         let thumbnailUrl: string | null = null
         if (livestream?.thumbnail) {
@@ -286,50 +289,32 @@ export async function GET(request: Request) {
 
         if (broadcasterUserId) {
             officialStatus = await checkLiveStatusFromOfficialAPI(broadcasterUserId)
-            
-            if (officialStatus !== null) {
-                // Official API responded - use it as source of truth
-                isLive = officialStatus.isLive
-                viewerCount = officialStatus.viewerCount
-                if (officialStatus.streamTitle) {
-                    streamTitle = officialStatus.streamTitle
-                }
-                if (officialStatus.thumbnailUrl) {
-                    thumbnailUrl = officialStatus.thumbnailUrl
-                }
-                if (officialStatus.startedAt) {
-                    streamStartedAt = officialStatus.startedAt
-                }
-                
-                // Log mismatch between v2 API and official API (with cooldown to avoid spam)
-                const v2IsLive = livestream?.is_live === true
-                if (v2IsLive !== isLive) {
-                    const now = Date.now()
-                    const lastLog = lastMismatchLog.get(slug) || 0
-                    if (now - lastLog > MISMATCH_LOG_COOLDOWN) {
-                        console.log(`[Channel API] Live status mismatch for ${slug}: v2=${v2IsLive}, official=${isLive} (using official)`)
-                        lastMismatchLog.set(slug, now)
-                    }
-                }
-            } else {
-                // Official API failed - fall back to v2 API
-                isLive = livestream?.is_live === true
-                if (isLive && livestream?.viewer_count !== undefined && livestream?.viewer_count !== null) {
-                    if (typeof livestream.viewer_count === 'string') {
-                        const cleaned = livestream.viewer_count.replace(/[.,]/g, '')
-                        viewerCount = parseInt(cleaned, 10) || 0
-                    } else {
-                        viewerCount = Math.floor(livestream.viewer_count)
-                    }
-                } else {
-                    viewerCount = 0
-                }
-                // Extract started_at from v2 API fallback
-                if (isLive) {
-                    streamStartedAt = livestream?.created_at || livestream?.started_at || null
-                }
-                console.log(`[Channel API] Official API unavailable, using v2 API fallback: isLive=${isLive}`)
+
+            // Always use official API as the source of truth
+            isLive = officialStatus.isLive
+            viewerCount = officialStatus.viewerCount
+            if (officialStatus.streamTitle) {
+                streamTitle = officialStatus.streamTitle
             }
+            if (officialStatus.thumbnailUrl) {
+                thumbnailUrl = officialStatus.thumbnailUrl
+            }
+            if (officialStatus.startedAt) {
+                streamStartedAt = officialStatus.startedAt
+            }
+
+            // Log mismatch between v2 API and official API (with cooldown to avoid spam)
+            const v2IsLive = livestream?.is_live === true
+            if (v2IsLive !== isLive) {
+                const now = Date.now()
+                const lastLog = lastMismatchLog.get(slug) || 0
+                if (now - lastLog > MISMATCH_LOG_COOLDOWN) {
+                    console.log(`[Channel API] Live status mismatch for ${slug}: v2=${v2IsLive}, official=${isLive} (using official)`)
+                    lastMismatchLog.set(slug, now)
+                }
+            }
+
+            console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}`)
         } else {
             // No broadcaster_user_id - fall back to v2 API
             isLive = livestream?.is_live === true
@@ -357,19 +342,19 @@ export async function GET(request: Request) {
         // 5. channelData.category (fallback)
         // 6. channelData.subcategory (fallback)
         let category = null
-        
+
         // First try official API category if available
         if (officialStatus?.category) {
             category = officialStatus.category
         }
-        
+
         // Fall back to v2 API if official API doesn't have category
         if (!category && livestream) {
             category = livestream.subcategory ||
-                      livestream.category ||
-                      (Array.isArray(livestream.categories) && livestream.categories.length > 0 ? livestream.categories[0] : null)
+                livestream.category ||
+                (Array.isArray(livestream.categories) && livestream.categories.length > 0 ? livestream.categories[0] : null)
         }
-        
+
         // Final fallback to channel data
         if (!category) {
             category = channelData.category || channelData.subcategory || null

@@ -83,7 +83,7 @@ export default function Dashboard() {
         // Only refresh if there's no error
         const interval = setInterval(() => {
             fetchChannelData()
-        }, 30000) // Refresh every 30 seconds (reduced from 10s)
+        }, 15000) // Refresh every 15 seconds (reduced from 30s for faster status updates)
         return () => clearInterval(interval)
     }, [])
 
@@ -241,28 +241,28 @@ export default function Dashboard() {
             setStreamDuration('0:00:00')
             return
         }
-        
+
         const startedAt = channelData.stream_started_at
         if (!startedAt) {
             setStreamDuration('0:00:00')
             return
         }
-        
+
         const updateDuration = () => {
             const start = new Date(startedAt).getTime()
             const diff = Date.now() - start
-            
+
             if (diff < 0) {
                 setStreamDuration('0:00:00')
                 return
             }
-            
+
             const hours = Math.floor(diff / 3600000)
             const mins = Math.floor((diff % 3600000) / 60000)
             const secs = Math.floor((diff % 60000) / 1000)
             setStreamDuration(`${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`)
         }
-        
+
         updateDuration()
         const interval = setInterval(updateDuration, 1000)
         return () => clearInterval(interval)
