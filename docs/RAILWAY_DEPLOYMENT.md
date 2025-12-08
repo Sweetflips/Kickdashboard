@@ -59,6 +59,24 @@ Set these in Railway dashboard:
    - Railway will automatically deploy on push to main branch
    - Or manually trigger deployment from dashboard
 
+## Preventing unnecessary worker rebuilds
+
+To avoid the `point-worker` from rebuilding on unrelated changes (e.g., changes to frontend components), there are two recommended approaches:
+
+1. Set Railway watch paths (recommended)
+   - In the Railway dashboard, open the `point-worker` service and go to `Deploy` → `Watch Paths` (or similar setting for the service). Configure watch paths so the service only deploys when worker-related files change:
+     - `scripts/point-worker*`, `scripts/chat-worker*`, `scripts/start-worker*`, `lib/point-queue*`, `lib/chat-queue*`, `lib/points*`, `prisma/**`, `package.json`, `tsconfig.json`
+   - For the web service, configure its watch path to include `app/**`, `components/**`, `public/**`, etc. Include `prisma/**`, `package.json`, `tsconfig.json` in both if those files should cause both services to rebuild.
+
+2. Gate build steps inside the repository (implemented)
+   - The repository includes `scripts/build.worker.js` that checks which files changed in a push and short-circuits the worker build when no worker-related file changes are detected.
+   - `railway-worker.json` points the worker `buildCommand` to `node scripts/build.worker.js` to avoid running the heavy build when it's not necessary.
+
+Notes & caveats
+- This script is a best-effort gate that verifies changed files via git diff; it works in most CI environments but can fall back to building if the repo is shallow/fetch is disabled.
+- The most reliable option is to configure watch paths for each Railway service in the dashboard (option 1). The build gating script is a safe fallback when you cannot modify the Railway dashboard or prefer in-repo configuration that works in commit-based deployments.
+- Changes to `package.json`, `prisma/`, or other shared artifacts will still trigger builds for both services by design if you include those paths in both watch lists.
+
 ## Post-Deployment
 
 1. **Verify Database Connection**

@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import AppLayout from '@/components/AppLayout'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 interface StreamSession {
     id: string
@@ -243,7 +243,7 @@ export default function AdminStreamsPage() {
             })
 
             const result = await response.json()
-            
+
             if (response.ok) {
                 setSyncResult({
                     success: true,
@@ -275,7 +275,7 @@ export default function AdminStreamsPage() {
             })
 
             const result = await response.json()
-            
+
             if (response.ok) {
                 setSyncResult({
                     success: true,
@@ -358,13 +358,12 @@ export default function AdminStreamsPage() {
 
                 {/* Sync Result Message */}
                 {syncResult && (
-                    <div className={`p-4 rounded-lg ${
-                        syncResult.success && (syncResult.stats?.updated > 0 || syncResult.stats?.liveStreamUpdated > 0)
+                    <div className={`p-4 rounded-lg ${syncResult.success && (syncResult.stats?.updated > 0 || syncResult.stats?.liveStreamUpdated > 0)
                             ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
                             : syncResult.success
                                 ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200'
                                 : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
-                    }`}>
+                        }`}>
                         <h3 className="font-bold">
                             {syncResult.success && (syncResult.stats?.updated > 0 || syncResult.stats?.liveStreamUpdated > 0)
                                 ? '✓ Sync Completed'
@@ -485,11 +484,10 @@ export default function AdminStreamsPage() {
                                             {session.duration_formatted || '-'}
                                         </td>
                                         <td className="py-3 px-4">
-                                            <span className={`px-2 py-1 rounded text-xs ${
-                                                session.ended_at
+                                            <span className={`px-2 py-1 rounded text-xs ${session.ended_at
                                                     ? 'bg-gray-100 dark:bg-kick-dark text-gray-600 dark:text-kick-text-secondary'
                                                     : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 animate-pulse'
-                                            }`}>
+                                                }`}>
                                                 {session.ended_at ? 'Ended' : 'Live'}
                                             </span>
                                         </td>
