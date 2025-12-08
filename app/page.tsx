@@ -242,8 +242,14 @@ export default function Dashboard() {
             return
         }
         
+        const startedAt = channelData.stream_started_at
+        if (!startedAt) {
+            setStreamDuration('0:00:00')
+            return
+        }
+        
         const updateDuration = () => {
-            const start = new Date(channelData.stream_started_at).getTime()
+            const start = new Date(startedAt).getTime()
             const diff = Date.now() - start
             
             if (diff < 0) {
