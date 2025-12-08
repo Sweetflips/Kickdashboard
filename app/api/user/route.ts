@@ -222,11 +222,9 @@ export async function GET(request: Request) {
                 const errorText = await response.text()
                 lastError = `${response.status} - ${errorText}`
 
-                // Only log 401 errors at warning level (expected when tokens expire)
+                // Only log non-401 errors (401 is expected when tokens expire, client handles refresh)
                 // Full error logging happens in token refresh handler
-                if (response.status === 401) {
-                    console.warn(`⚠️ Token expired for /api/user endpoint - token refresh will be attempted`)
-                } else {
+                if (response.status !== 401) {
                     console.error(`❌ API error: ${lastError}`)
                 }
             }

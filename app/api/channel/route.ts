@@ -14,6 +14,8 @@ const STALE_TTL = 60000 // Return stale data for 60s while refreshing
 const MAX_RETRIES = 3
 const INITIAL_RETRY_DELAY = 1000 // 1 second
 const lastStreamState = new Map<string, { isLive: boolean; sessionId?: bigint }>()
+const lastMismatchLog = new Map<string, number>()
+const MISMATCH_LOG_COOLDOWN = 60000 // Only log once per minute per channel
 
 // Exponential backoff helper
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -28,6 +30,7 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
     streamTitle: string
     thumbnailUrl: string | null
     startedAt: string | null
+    category: { id: number; name: string } | null
 } | null> {
     try {
         const endpoint = `/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
@@ -89,17 +92,27 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
                 }
             }
 
+            // Extract category from official API response
+            let category: { id: number; name: string } | null = null
+            if (livestream.category && typeof livestream.category === 'object') {
+                category = {
+                    id: livestream.category.id,
+                    name: livestream.category.name
+                }
+            }
+
             return {
                 isLive: true,
                 viewerCount,
                 streamTitle: livestream.stream_title || livestream.session_title || '',
                 thumbnailUrl,
                 startedAt: livestream.started_at || null,
+                category,
             }
         }
 
         // Empty array = stream is offline
-        return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null }
+        return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null, category: null }
     } catch (error) {
         console.warn(`[Channel API] Failed to check official livestreams API:`, error instanceof Error ? error.message : 'Unknown error')
         return null
@@ -178,6 +191,7 @@ export async function GET(request: Request) {
                         viewer_count: officialStatus.viewerCount,
                         session_title: officialStatus.streamTitle || cached.data?.session_title || '',
                         stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
+                        category: officialStatus.category || cached.data?.category || null,
                     }
                     // Update cache with fresh data
                     cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
@@ -208,6 +222,7 @@ export async function GET(request: Request) {
                         viewer_count: officialStatus.viewerCount,
                         session_title: officialStatus.streamTitle || cached.data?.session_title || '',
                         stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
+                        category: officialStatus.category || cached.data?.category || null,
                     }
                     cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
                     return NextResponse.json(updatedData)
@@ -267,9 +282,10 @@ export async function GET(request: Request) {
         let viewerCount = 0
         let streamTitle = livestream?.session_title || ''
         let streamStartedAt: string | null = null
+        let officialStatus: { isLive: boolean; viewerCount: number; streamTitle: string; thumbnailUrl: string | null; startedAt: string | null; category: { id: number; name: string } | null } | null = null
 
         if (broadcasterUserId) {
-            const officialStatus = await checkLiveStatusFromOfficialAPI(broadcasterUserId)
+            officialStatus = await checkLiveStatusFromOfficialAPI(broadcasterUserId)
             
             if (officialStatus !== null) {
                 // Official API responded - use it as source of truth
@@ -285,10 +301,15 @@ export async function GET(request: Request) {
                     streamStartedAt = officialStatus.startedAt
                 }
                 
-                // Log mismatch between v2 API and official API
+                // Log mismatch between v2 API and official API (with cooldown to avoid spam)
                 const v2IsLive = livestream?.is_live === true
                 if (v2IsLive !== isLive) {
-                    console.log(`[Channel API] Live status mismatch for ${slug}: v2 API says ${v2IsLive}, official API says ${isLive} (using official)`)
+                    const now = Date.now()
+                    const lastLog = lastMismatchLog.get(slug) || 0
+                    if (now - lastLog > MISMATCH_LOG_COOLDOWN) {
+                        console.log(`[Channel API] Live status mismatch for ${slug}: v2=${v2IsLive}, official=${isLive} (using official)`)
+                        lastMismatchLog.set(slug, now)
+                    }
                 }
             } else {
                 // Official API failed - fall back to v2 API
@@ -329,24 +350,29 @@ export async function GET(request: Request) {
         }
 
         // Extract category from multiple possible locations:
-        // 1. livestream.subcategory (most common for live streams)
-        // 2. livestream.category
-        // 3. livestream.categories[0] (if it's an array)
-        // 4. channelData.category (fallback)
-        // 5. channelData.subcategory (fallback)
+        // 1. Official API category (most reliable for live streams)
+        // 2. livestream.subcategory (v2 API)
+        // 3. livestream.category (v2 API)
+        // 4. livestream.categories[0] (v2 API, if it's an array)
+        // 5. channelData.category (fallback)
+        // 6. channelData.subcategory (fallback)
         let category = null
-        if (livestream) {
+        
+        // First try official API category if available
+        if (officialStatus?.category) {
+            category = officialStatus.category
+        }
+        
+        // Fall back to v2 API if official API doesn't have category
+        if (!category && livestream) {
             category = livestream.subcategory ||
                       livestream.category ||
                       (Array.isArray(livestream.categories) && livestream.categories.length > 0 ? livestream.categories[0] : null)
         }
+        
+        // Final fallback to channel data
         if (!category) {
             category = channelData.category || channelData.subcategory || null
-        }
-
-        // Debug logging to help identify the actual structure (only when category is missing)
-        if (isLive && !category) {
-            console.warn(`⚠️ No category found for live stream ${slug}. Checking livestream.subcategory, livestream.category, or channelData.category`)
         }
 
         // Extract chatroom_id if available
