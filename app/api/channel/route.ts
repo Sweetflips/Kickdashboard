@@ -70,9 +70,15 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
         const data = await response.json()
         console.log(`[Channel API] Official livestreams response for user ${broadcasterUserId}:`, JSON.stringify(data).substring(0, 300))
 
-        // If data array has items, stream is live
+        // If data array has items, verify it's for the correct broadcaster
         if (Array.isArray(data.data) && data.data.length > 0) {
-            const livestream = data.data[0]
+            // Find the livestream for our specific broadcaster
+            const livestream = data.data.find((stream: any) => stream.broadcaster_user_id === broadcasterUserId)
+            
+            if (!livestream) {
+                console.log(`[Channel API] Livestreams returned data but not for user ${broadcasterUserId} - stream is OFFLINE`)
+                return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null, category: null }
+            }
             let thumbnailUrl: string | null = null
 
             if (livestream.thumbnail) {
