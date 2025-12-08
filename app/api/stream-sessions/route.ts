@@ -250,6 +250,56 @@ export async function PATCH(request: Request) {
     }
 }
 
+export async function DELETE(request: Request) {
+    try {
+        // Check admin access - Only admins can delete streams
+        const adminCheck = await isAdmin(request)
+        if (!adminCheck) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Admin access required' },
+                { status: 403 }
+            )
+        }
+
+        const { searchParams } = new URL(request.url)
+        const sessionId = searchParams.get('id')
+
+        if (!sessionId) {
+            return NextResponse.json(
+                { error: 'session_id is required' },
+                { status: 400 }
+            )
+        }
+
+        // Convert to BigInt
+        let sessionIdBigInt: bigint
+        try {
+            sessionIdBigInt = BigInt(sessionId)
+        } catch (error) {
+            return NextResponse.json(
+                { error: 'Invalid session_id format' },
+                { status: 400 }
+            )
+        }
+
+        // Delete the session
+        await db.streamSession.delete({
+            where: { id: sessionIdBigInt },
+        })
+
+        return NextResponse.json({
+            success: true,
+            message: 'Stream session deleted successfully',
+        })
+    } catch (error) {
+        console.error('Error deleting stream session:', error)
+        return NextResponse.json(
+            { error: 'Failed to delete stream session', details: error instanceof Error ? error.message : 'Unknown error' },
+            { status: 500 }
+        )
+    }
+}
+
 function formatDuration(seconds: number): string {
     // Ensure seconds is a valid positive number
     const safeSeconds = Math.max(0, Math.floor(seconds || 0))

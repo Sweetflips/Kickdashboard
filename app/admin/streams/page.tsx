@@ -27,6 +27,8 @@ export default function AdminStreamsPage() {
     const [offset, setOffset] = useState(0)
     const [showManualSync, setShowManualSync] = useState(false)
     const [manualJson, setManualJson] = useState('')
+    const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [fetchingThumbnailId, setFetchingThumbnailId] = useState<string | null>(null)
     const limit = 20
 
     useEffect(() => {
@@ -228,6 +230,72 @@ export default function AdminStreamsPage() {
         }
     }
 
+    const handleDeleteStream = async (sessionId: string) => {
+        if (!confirm('Are you sure you want to delete this stream session? This action cannot be undone.')) {
+            return
+        }
+
+        try {
+            setDeletingId(sessionId)
+            const response = await fetch(`/api/stream-sessions?id=${sessionId}`, {
+                method: 'DELETE',
+                credentials: 'include',
+            })
+
+            const result = await response.json()
+            
+            if (response.ok) {
+                setSyncResult({
+                    success: true,
+                    message: 'Stream deleted successfully',
+                })
+                await fetchStreams()
+            } else {
+                setSyncResult({
+                    success: false,
+                    error: result.error || 'Failed to delete stream',
+                })
+            }
+        } catch (error) {
+            console.error('Delete stream error:', error)
+            setSyncResult({ success: false, error: 'Failed to delete stream' })
+        } finally {
+            setDeletingId(null)
+        }
+    }
+
+    const handleFetchStreamThumbnail = async (sessionId: string) => {
+        try {
+            setFetchingThumbnailId(sessionId)
+            const response = await fetch('/api/admin/fetch-stream-thumbnail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+                credentials: 'include',
+            })
+
+            const result = await response.json()
+            
+            if (response.ok) {
+                setSyncResult({
+                    success: true,
+                    message: 'Thumbnail updated successfully',
+                })
+                await fetchStreams()
+            } else {
+                setSyncResult({
+                    success: false,
+                    error: result.error || 'Failed to fetch thumbnail',
+                })
+            }
+        } catch (error) {
+            console.error('Fetch thumbnail error:', error)
+            setSyncResult({ success: false, error: 'Failed to fetch thumbnail' })
+        } finally {
+            setFetchingThumbnailId(null)
+        }
+    }
+
     if (!userData || !userData.is_admin) {
         return (
             <AppLayout>
@@ -374,6 +442,7 @@ export default function AdminStreamsPage() {
                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Started</th>
                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Duration</th>
                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Status</th>
+                                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -423,6 +492,38 @@ export default function AdminStreamsPage() {
                                             }`}>
                                                 {session.ended_at ? 'Ended' : 'Live'}
                                             </span>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleFetchStreamThumbnail(session.id)}
+                                                    disabled={fetchingThumbnailId === session.id}
+                                                    title="Refresh thumbnail from Kick API"
+                                                    className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-kick-surface-hover text-gray-600 dark:text-kick-text-secondary hover:text-green-600 dark:hover:text-green-400 disabled:opacity-50 transition-colors"
+                                                >
+                                                    {fetchingThumbnailId === session.id ? (
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                                                    ) : (
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteStream(session.id)}
+                                                    disabled={deletingId === session.id}
+                                                    title="Delete this stream"
+                                                    className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-600 dark:text-kick-text-secondary hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
+                                                >
+                                                    {deletingId === session.id ? (
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                                                    ) : (
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
