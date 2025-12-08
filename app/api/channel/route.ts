@@ -269,6 +269,9 @@ export async function GET(request: Request) {
 
         console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}`)
 
+        // Ensure broadcaster_user_id is available (try multiple possible locations)
+        const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
+
         // Extract chatroom_id if available
         const chatroomId = channelData.chatroom?.id || channelData.chatroom_id || null
 
