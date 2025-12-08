@@ -334,7 +334,7 @@ export default function Dashboard() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary">Viewers</p>
-                                    <p className="text-h3 font-semibold mt-2 text-gray-900 dark:text-kick-text">{viewerCount.toLocaleString()}</p>
+                                    <p className="text-h3 font-semibold mt-2 text-gray-900 dark:text-kick-text">{viewerCount.toLocaleString('en-US')}</p>
                                 </div>
                                 <div className="w-12 h-12 rounded-full bg-kick-purple/20 flex items-center justify-center">
                                     <svg className="w-6 h-6 text-kick-purple" fill="currentColor" viewBox="0 0 20 20">
@@ -419,7 +419,7 @@ export default function Dashboard() {
                                                 : '0%'}
                                         </p>
                                         <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
-                                            {streamStats.unique_chatters} of {viewerCount.toLocaleString()} viewers
+                                            {streamStats.unique_chatters} of {viewerCount.toLocaleString('en-US')} viewers
                                         </p>
                                     </div>
                                     <div className="w-12 h-12 rounded-full bg-kick-green/20 flex items-center justify-center">

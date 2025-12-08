@@ -76,9 +76,21 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
                 }
             }
 
+            // Ensure viewer_count is a number - parse if string, handle null/undefined
+            let viewerCount = 0
+            if (livestream.viewer_count !== undefined && livestream.viewer_count !== null) {
+                if (typeof livestream.viewer_count === 'string') {
+                    // Remove any formatting (commas, periods used as separators)
+                    const cleaned = livestream.viewer_count.replace(/[.,]/g, '')
+                    viewerCount = parseInt(cleaned, 10) || 0
+                } else if (typeof livestream.viewer_count === 'number') {
+                    viewerCount = Math.floor(livestream.viewer_count)
+                }
+            }
+
             return {
                 isLive: true,
-                viewerCount: livestream.viewer_count || 0,
+                viewerCount,
                 streamTitle: livestream.stream_title || livestream.session_title || '',
                 thumbnailUrl,
             }
@@ -271,13 +283,31 @@ export async function GET(request: Request) {
             } else {
                 // Official API failed - fall back to v2 API
                 isLive = livestream?.is_live === true
-                viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
+                if (isLive && livestream?.viewer_count !== undefined && livestream?.viewer_count !== null) {
+                    if (typeof livestream.viewer_count === 'string') {
+                        const cleaned = livestream.viewer_count.replace(/[.,]/g, '')
+                        viewerCount = parseInt(cleaned, 10) || 0
+                    } else {
+                        viewerCount = Math.floor(livestream.viewer_count)
+                    }
+                } else {
+                    viewerCount = 0
+                }
                 console.log(`[Channel API] Official API unavailable, using v2 API fallback: isLive=${isLive}`)
             }
         } else {
             // No broadcaster_user_id - fall back to v2 API
             isLive = livestream?.is_live === true
-            viewerCount = isLive ? (livestream?.viewer_count ?? 0) : 0
+            if (isLive && livestream?.viewer_count !== undefined && livestream?.viewer_count !== null) {
+                if (typeof livestream.viewer_count === 'string') {
+                    const cleaned = livestream.viewer_count.replace(/[.,]/g, '')
+                    viewerCount = parseInt(cleaned, 10) || 0
+                } else {
+                    viewerCount = Math.floor(livestream.viewer_count)
+                }
+            } else {
+                viewerCount = 0
+            }
         }
 
         // Extract category from multiple possible locations:
