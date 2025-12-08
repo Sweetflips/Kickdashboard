@@ -18,14 +18,23 @@ async function sendMessageWithRetry(
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/80522650-5b84-46a1-aef1-7229e5be0ce5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat/send/route.ts:sendMessageWithRetry',message:'Sending to Kick API',data:{tokenLength:accessToken?.length,tokenFirst20:accessToken?.substring(0,20),tokenLast10:accessToken?.substring(accessToken.length-10),broadcasterUserId,contentLength:content?.length,type},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B,C,D'})}).catch(()=>{});
     // #endregion agent log
+    
+    const clientId = process.env.KICK_CLIENT_ID
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+    }
+    
+    // Add Client-Id header if available (required by Kick API for authenticated requests)
+    if (clientId) {
+        headers['Client-Id'] = clientId
+    }
+    
     const response = await fetch(`${KICK_API_BASE}/chat`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-        },
+        headers,
         body: JSON.stringify({
-            broadcaster_user_id: broadcasterUserId,
+            broadcaster_user_id: typeof broadcasterUserId === 'string' ? parseInt(broadcasterUserId, 10) : broadcasterUserId,
             content: content.trim(),
             type: type,
         }),
