@@ -215,7 +215,7 @@ let cachedToken: {
  * Get broadcaster's User Access Token from database
  * Falls back to App Access Token if user token not available
  */
-async function getBroadcasterToken(): Promise<string> {
+export async function getBroadcasterToken(): Promise<string> {
     // Check if cached token is still valid (with 5 minute buffer)
     if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60 * 1000) {
         // Don't log every cache hit - too noisy

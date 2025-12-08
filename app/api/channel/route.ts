@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { getBroadcasterToken } from '@/lib/kick-api';
 
 export const dynamic = 'force-dynamic'
 
@@ -31,12 +32,29 @@ async function checkLiveStatusFromOfficialAPI(broadcasterUserId: number): Promis
         const endpoint = `/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
         const url = `${KICK_API_BASE}${endpoint}`
 
-        const response = await fetch(url, {
+        let response = await fetch(url, {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
             },
         })
+
+        // Retry with auth if we get 401
+        if (response.status === 401) {
+            const token = await getBroadcasterToken()
+            const clientId = process.env.KICK_CLIENT_ID
+            
+            const headers: Record<string, string> = {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            }
+            if (clientId) {
+                headers['Client-Id'] = clientId
+            }
+            
+            response = await fetch(url, { headers })
+        }
 
         if (!response.ok) {
             console.warn(`[Channel API] Official livestreams endpoint returned ${response.status}`)
