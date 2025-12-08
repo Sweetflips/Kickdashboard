@@ -271,15 +271,15 @@ export default function StreamsPage() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="w-full h-48 bg-gradient-to-br from-kick-purple/20 to-kick-purple/10 flex items-center justify-center relative">
+                                            <div className="w-full h-48 bg-gradient-to-br from-kick-purple/30 via-purple-500/20 to-pink-500/20 flex items-center justify-center relative">
                                                 <div className="absolute top-2 right-2">
                                                     {getStatusBadge()}
                                                 </div>
                                                 <div className="text-center">
-                                                    <svg className="w-16 h-16 text-kick-purple/50 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                                                    <svg className="w-16 h-16 text-white/60 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
                                                         <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
                                                     </svg>
-                                                    <p className="text-sm text-gray-600 dark:text-kick-text-secondary">No thumbnail</p>
+                                                    <p className="text-sm text-white/70 font-medium">Past Stream</p>
                                                 </div>
                                             </div>
                                         )}
