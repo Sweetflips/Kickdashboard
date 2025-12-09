@@ -352,9 +352,6 @@ export default function UsersPage() {
       setAwarding(false)
     }
   }
-    }
-    setExpandedUsers(newExpanded)
-  }
 
   if (!userData || !userData.is_admin) {
     return (
