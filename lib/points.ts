@@ -352,6 +352,21 @@ export async function awardPoint(
             }
         }
 
+        // Trigger referral reward check asynchronously (non-blocking)
+        // This checks if the user has reached any referral milestones
+        (async () => {
+            try {
+                await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://kickdashboard.com'}/api/referrals/claim`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refereeUserId: userId }),
+                })
+            } catch (error) {
+                // Non-critical - log but don't fail the main operation
+                logDebug(`[awardPoint] Could not trigger referral rewards check: ${error instanceof Error ? error.message : 'Unknown error'}`)
+            }
+        })()
+
         return {
             awarded: true,
             pointsEarned: pointsToAward

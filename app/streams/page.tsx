@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import AppLayout from '../../components/AppLayout'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import AppLayout from '../../components/AppLayout'
 
 interface StreamSession {
     id: string

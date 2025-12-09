@@ -82,10 +82,19 @@ export default function ReferralsPage() {
     const [loading, setLoading] = useState(true)
     const [userData, setUserData] = useState<{ username?: string; id?: number } | null>(null)
     const [copied, setCopied] = useState(false)
+    const [stats, setStats] = useState<{ totalReferrals: number; activeReferrals: number; totalEarned: number; pendingRewards: number } | null>(null)
+    const [referrals, setReferrals] = useState<any[]>([])
+    const [loadingStats, setLoadingStats] = useState(false)
 
     useEffect(() => {
         checkAuth()
     }, [])
+
+    useEffect(() => {
+        if (isConnected) {
+            fetchStats()
+        }
+    }, [isConnected])
 
     const checkAuth = async () => {
         try {
@@ -112,6 +121,22 @@ export default function ReferralsPage() {
         }
     }
 
+    const fetchStats = async () => {
+        setLoadingStats(true)
+        try {
+            const response = await fetch('/api/referrals/stats')
+            if (response.ok) {
+                const data = await response.json()
+                setStats(data.stats)
+                setReferrals(data.referrals)
+            }
+        } catch (error) {
+            console.error('Error fetching stats:', error)
+        } finally {
+            setLoadingStats(false)
+        }
+    }
+
     const referralCode = userData?.username?.toUpperCase() || 'YOURCODE'
     const referralLink = `https://kickdashboard.com/signup?ref=${referralCode}`
 
@@ -128,6 +153,8 @@ export default function ReferralsPage() {
     }
 
     const totalPossibleReward = REFERRAL_TIERS.reduce((sum, tier) => sum + tier.yourReward, 0)
+    const displayStats = stats || MOCK_STATS
+    const activeReferrals = referrals.filter(r => r.points > 0).length
 
     if (loading) {
         return (
@@ -163,28 +190,6 @@ export default function ReferralsPage() {
     return (
         <AppLayout>
             <div className="space-y-6">
-                {/* Coming Soon Banner */}
-                <div className="relative overflow-hidden bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 rounded-2xl p-8 text-white">
-                    <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.08%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-50"></div>
-                    <div className="relative z-10 text-center">
-                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 mb-4">
-                            <span className="relative flex h-3 w-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-300 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-300"></span>
-                            </span>
-                            <span className="text-sm font-medium">Coming Soon</span>
-                        </div>
-                        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-                            🤝 Referral Program
-                        </h1>
-                        <p className="text-lg text-white/90 max-w-2xl mx-auto">
-                            Invite your friends to join the SweetFlips community! Earn bonus points as they become active chatters and climb the ranks.
-                        </p>
-                    </div>
-                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-                    <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-                </div>
-
                 {/* Referral Code Section */}
                 <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
                     <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">
@@ -202,8 +207,7 @@ export default function ReferralsPage() {
                                 </div>
                                 <button
                                     onClick={handleCopyCode}
-                                    disabled
-                                    className="px-4 py-3 bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-lg font-medium cursor-not-allowed"
+                                    className="px-4 py-3 bg-kick-purple text-white rounded-lg font-medium hover:bg-kick-purple-dark transition-colors"
                                 >
                                     {copied ? 'Copied!' : 'Copy'}
                                 </button>
@@ -220,8 +224,7 @@ export default function ReferralsPage() {
                                 </div>
                                 <button
                                     onClick={handleCopyLink}
-                                    disabled
-                                    className="px-4 py-3 bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-lg font-medium cursor-not-allowed"
+                                    className="px-4 py-3 bg-kick-purple text-white rounded-lg font-medium hover:bg-kick-purple-dark transition-colors"
                                 >
                                     {copied ? 'Copied!' : 'Copy'}
                                 </button>
@@ -239,7 +242,7 @@ export default function ReferralsPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-600 dark:text-kick-text-secondary">Total Referrals</p>
-                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{MOCK_STATS.totalReferrals}</p>
+                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{displayStats.totalReferrals}</p>
                             </div>
                         </div>
                     </div>
@@ -250,7 +253,7 @@ export default function ReferralsPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-600 dark:text-kick-text-secondary">Active</p>
-                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{MOCK_STATS.activeReferrals}</p>
+                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{activeReferrals}</p>
                             </div>
                         </div>
                     </div>
@@ -261,7 +264,7 @@ export default function ReferralsPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-600 dark:text-kick-text-secondary">Points Earned</p>
-                                <p className="text-h4 font-bold text-kick-purple">{MOCK_STATS.totalEarned}</p>
+                                <p className="text-h4 font-bold text-kick-purple">{displayStats.totalEarned}</p>
                             </div>
                         </div>
                     </div>
@@ -272,7 +275,7 @@ export default function ReferralsPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-600 dark:text-kick-text-secondary">Pending</p>
-                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{MOCK_STATS.pendingRewards}</p>
+                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{displayStats.pendingRewards}</p>
                             </div>
                         </div>
                     </div>
@@ -413,11 +416,66 @@ export default function ReferralsPage() {
                     <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">
                         Your Referrals
                     </h2>
-                    <div className="text-center py-12 text-gray-500 dark:text-kick-text-muted">
-                        <span className="text-4xl mb-4 block">👥</span>
-                        <p className="text-body font-medium mb-2">No referrals yet</p>
-                        <p className="text-small">Share your code with friends to start earning rewards!</p>
-                    </div>
+                    {loadingStats ? (
+                        <div className="flex items-center justify-center h-64">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+                        </div>
+                    ) : referrals.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500 dark:text-kick-text-muted">
+                            <span className="text-4xl mb-4 block">👥</span>
+                            <p className="text-body font-medium mb-2">No referrals yet</p>
+                            <p className="text-small">Share your code with friends to start earning rewards!</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="border-b border-gray-200 dark:border-kick-border">
+                                    <tr>
+                                        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Friend</th>
+                                        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Points</th>
+                                        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Tiers Reached</th>
+                                        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Earned</th>
+                                        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Referred</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {referrals.map((ref: any) => (
+                                        <tr key={ref.id} className="border-b border-gray-200 dark:border-kick-border hover:bg-gray-50 dark:hover:bg-kick-dark/50 transition-colors">
+                                            <td className="py-3 px-4">
+                                                <div className="flex items-center gap-2">
+                                                    {ref.referee.profilePicture && (
+                                                        <img src={ref.referee.profilePicture} alt={ref.referee.username} className="w-8 h-8 rounded-full" />
+                                                    )}
+                                                    <span className="font-medium text-gray-900 dark:text-kick-text">{ref.referee.username}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-4 text-gray-600 dark:text-kick-text-secondary">{ref.points.toLocaleString()}</td>
+                                            <td className="py-3 px-4">
+                                                <div className="flex gap-1 flex-wrap">
+                                                    {ref.completedTiers.length === 0 ? (
+                                                        <span className="text-xs text-gray-500 dark:text-kick-text-muted">-</span>
+                                                    ) : (
+                                                        ref.completedTiers.map((tier: string) => {
+                                                            const tierData = REFERRAL_TIERS.find(t => t.id === tier)
+                                                            return (
+                                                                <span key={tier} className="px-2 py-1 bg-kick-purple/20 text-kick-purple dark:text-kick-purple text-xs font-medium rounded">
+                                                                    {tierData?.icon}
+                                                                </span>
+                                                            )
+                                                        })
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-4 font-semibold text-kick-purple">+{ref.earnedPoints}</td>
+                                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-kick-text-secondary">
+                                                {new Date(ref.referredAt).toLocaleDateString()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
 
                 {/* FAQ Section */}
@@ -462,12 +520,12 @@ export default function ReferralsPage() {
                 </div>
 
                 {/* CTA Section */}
-                <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-kick-surface dark:to-kick-dark rounded-xl border border-gray-200 dark:border-kick-border p-6 text-center">
+                <div className="bg-gradient-to-r from-kick-purple/10 to-kick-purple/5 dark:from-kick-purple/20 dark:to-kick-purple/10 rounded-xl border border-kick-purple/20 p-6 text-center">
                     <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-2">
-                        Referral program launching soon!
+                        🚀 Referral Program is Live!
                     </h3>
                     <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-4">
-                        Keep chatting and earning points. When the referral system launches, your code will be ready to share!
+                        Start sharing your code and earning rewards as your friends earn points!
                     </p>
                     <a
                         href="https://kick.com/sweetflips"

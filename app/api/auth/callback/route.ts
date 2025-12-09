@@ -170,6 +170,9 @@ export async function GET(request: Request) {
                     const ipAddress = extractIpAddress(request)
                     const userAgent = request.headers.get('user-agent') || null
                     const referrer = request.headers.get('referer') || request.headers.get('referrer') || null
+                    
+                    // Extract referral code from URL parameter
+                    const referralCode = searchParams.get('ref')?.toUpperCase().trim() || null
 
                     // Check if user already exists to determine if this is a signup
                     const existingUser = await db.user.findUnique({
@@ -285,6 +288,41 @@ export async function GET(request: Request) {
                         update: updateData,
                         create: createData,
                     })
+
+                    // Handle referral if provided and this is a new signup
+                    if (isNewSignup && referralCode) {
+                        try {
+                            // Find the referrer by username (referral code is uppercase username)
+                            const referrer = await db.user.findFirst({
+                                where: {
+                                    username: {
+                                        equals: referralCode,
+                                        mode: 'insensitive',
+                                    }
+                                },
+                                select: { id: true, username: true },
+                            })
+
+                            if (referrer && referrer.id !== savedUser.id) {
+                                // Create referral relationship
+                                await db.referral.create({
+                                    data: {
+                                        referrer_user_id: referrer.id,
+                                        referee_user_id: savedUser.id,
+                                        referral_code: referralCode,
+                                    },
+                                })
+                                console.log(`✅ Referral created: ${referrer.username} -> ${username}`)
+                            } else if (!referrer) {
+                                console.warn(`⚠️ Referral code not found: ${referralCode}`)
+                            } else {
+                                console.warn(`⚠️ User cannot refer themselves`)
+                            }
+                        } catch (referralError) {
+                            // Non-critical - log but don't fail auth
+                            console.warn('⚠️ Could not create referral:', referralError instanceof Error ? referralError.message : 'Unknown error')
+                        }
+                    }
 
                     // Create or update user session for diagnostics
                     try {

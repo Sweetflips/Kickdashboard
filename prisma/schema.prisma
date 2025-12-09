@@ -67,6 +67,10 @@ model User {
   advent_days_drawn            AdventDayStatus[]
   promo_codes_created          PromoCode[]             @relation("PromoCodeCreator")
   promo_code_redemptions       PromoCodeRedemption[]   @relation("PromoCodeRedemptions")
+  // Referral relations
+  referrals_as_referrer        Referral[]           @relation("Referrer")
+  referrals_as_referee         Referral[]           @relation("Referee")
+  referral_rewards_earned      ReferralReward[]
 
   @@map("users")
 }
@@ -364,4 +368,44 @@ model AdventDayStatus {
   drawn_by_user User? @relation(fields: [drawn_by], references: [id])
 
   @@map("advent_day_status")
+}
+
+model Referral {
+  id              BigInt   @id @default(autoincrement())
+  referrer_user_id BigInt
+  referee_user_id BigInt
+  referral_code   String   // The code used at signup
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  // Relations
+  referrer User @relation("Referrer", fields: [referrer_user_id], references: [id], onDelete: Cascade)
+  referee  User @relation("Referee", fields: [referee_user_id], references: [id], onDelete: Cascade)
+
+  // Unique constraint - one referee per referrer
+  @@unique([referee_user_id])
+  @@index([referrer_user_id])
+  @@index([referral_code])
+  @@index([created_at])
+  @@map("referrals")
+}
+
+model ReferralReward {
+  id                BigInt   @id @default(autoincrement())
+  referrer_user_id  BigInt
+  referee_user_id   BigInt
+  tier_id           String   // 'starter', 'active', 'dedicated', 'superfan', 'legend'
+  required_points   Int      // Points threshold that was reached
+  reward_points     Int      // Points awarded to referrer
+  awarded_at        DateTime @default(now())
+  created_at        DateTime @default(now())
+
+  // Relations
+  referrer_user User @relation(fields: [referrer_user_id], references: [id], onDelete: Cascade)
+
+  // Unique constraint - one reward per tier per referral pair
+  @@unique([referrer_user_id, referee_user_id, tier_id])
+  @@index([referrer_user_id])
+  @@index([awarded_at])
+  @@map("referral_rewards")
 }
