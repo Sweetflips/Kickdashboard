@@ -1,9 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import AppLayout from '@/components/AppLayout'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 interface UserSession {
   session_id: string

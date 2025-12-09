@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
