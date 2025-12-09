@@ -50,13 +50,20 @@ async function checkLiveStatusFromV2API(slug: string): Promise<{
         }
 
         const data = await response.json()
-        console.log(`[Channel API] v2 API response for ${slug}:`, JSON.stringify(data, null, 2).substring(0, 500))
+        
+        // Log the full response structure for debugging
+        console.log(`[Channel API] v2 API response for ${slug}:`, JSON.stringify(data, null, 2).substring(0, 1500))
+        console.log(`[Channel API] Has livestream object:`, !!data.livestream)
+        if (data.livestream) {
+            console.log(`[Channel API] livestream.is_live:`, data.livestream.is_live)
+            console.log(`[Channel API] livestream keys:`, Object.keys(data.livestream))
+        }
 
         // Check if livestream exists and is_live flag
         const livestream = data.livestream
         
         if (!livestream || !livestream.is_live) {
-            console.log(`[Channel API] v2 API shows stream is OFFLINE for ${slug}`)
+            console.log(`[Channel API] v2 API shows stream is OFFLINE for ${slug} (has livestream: ${!!livestream}, is_live: ${livestream?.is_live})`)
             return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null, category: null }
         }
 
