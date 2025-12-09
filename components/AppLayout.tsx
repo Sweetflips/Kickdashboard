@@ -433,6 +433,11 @@ export default function AppLayout({ children }: LayoutProps) {
                                 </li>
                             </>
                         )}
+                        <li className="mt-4 mb-2">
+                            <span className="text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                Rewards
+                            </span>
+                        </li>
                         <li>
                             <Link href="/raffles" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/raffles' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
