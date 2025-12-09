@@ -6,15 +6,9 @@ export const dynamic = 'force-dynamic'
 // Kick Dev API base URL
 const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/public/v1'
 
-// Simple in-memory cache with stale-while-revalidate
-const cache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_TTL = 3000 // 3 seconds cache (aggressive - live status and viewer count must be fresh)
-const STALE_TTL = 8000 // Return stale data for 8s while refreshing
 const MAX_RETRIES = 3
 const INITIAL_RETRY_DELAY = 1000 // 1 second
 const lastStreamState = new Map<string, { isLive: boolean; sessionId?: bigint }>()
-const lastMismatchLog = new Map<string, number>()
-const MISMATCH_LOG_COOLDOWN = 60000 // Only log once per minute per channel
 
 // Exponential backoff helper
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -223,11 +217,6 @@ async function trackStreamSession(
         const wasLive = lastState?.isLive || false
 
         if (isLive && !wasLive) {
-            // Stream just went live - FORCE CACHE CLEAR to ensure fresh data
-            const cacheKey = `channel:${slug.toLowerCase()}`
-            cache.delete(cacheKey)
-            console.log(`[Channel API] Stream went live - cleared cache for ${slug}`)
-
             // Stream just went live - create session if none exists
             if (!activeSession) {
                 const session = await db.streamSession.create({
@@ -299,133 +288,8 @@ async function trackStreamSession(
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const slug = searchParams.get('slug') || 'sweetflips'
-    const cacheKey = `channel-${slug}`
 
-    // Check cache first
-    const cached = cache.get(cacheKey)
-    const now = Date.now()
-    const cacheAge = cached ? now - cached.timestamp : Infinity
-
-    console.log(`[Channel API] Cache status for ${slug}: age=${cacheAge}ms, has_cached=${!!cached}, is_stale=${cacheAge >= CACHE_TTL && cacheAge < STALE_TTL}`)
-
-    // Always verify live status AND viewer count from official API, even with cached data
-    // This ensures stream status and viewer count are always accurate and up-to-date
-    if (cached && cacheAge < CACHE_TTL) {
-        const officialStatus = await checkLiveStatusFromV2API(slug)
-        // Always trust the official API response
-        const cachedIsLive = cached.data?.is_live || false
-        const cachedViewerCount = cached.data?.viewer_count || 0
-
-        // Always update viewer count and live status from official API
-        // This ensures viewer count stays fresh even when live status doesn't change
-        if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
-            // Fetch active session for fallback if needed
-            let activeSessionStartTime: string | null = null
-            if (officialStatus.isLive && !officialStatus.startedAt) {
-                try {
-                    const broadcasterUserId = cached.data?.broadcaster_user_id
-                    if (broadcasterUserId) {
-                        const activeSession = await db.streamSession.findFirst({
-                            where: {
-                                broadcaster_user_id: BigInt(broadcasterUserId),
-                                ended_at: null,
-                            },
-                            orderBy: { started_at: 'desc' },
-                            select: { started_at: true },
-                        })
-                        if (activeSession) {
-                            activeSessionStartTime = activeSession.started_at.toISOString()
-                            console.log(`[Channel API] Using database session start time as fallback in cache: ${activeSessionStartTime}`)
-                        }
-                    }
-                } catch (err) {
-                    console.error(`[Channel API] Error fetching session for cache fallback:`, err)
-                }
-            }
-
-            const updatedData = {
-                ...cached.data,
-                is_live: officialStatus.isLive,
-                viewer_count: officialStatus.viewerCount,
-                session_title: officialStatus.streamTitle || cached.data?.session_title || '',
-                stream_started_at: officialStatus.isLive 
-                    ? (officialStatus.startedAt || activeSessionStartTime || cached.data?.stream_started_at || null) 
-                    : null,
-                category: officialStatus.category || cached.data?.category || null,
-            }
-            // Update cache with fresh data
-            cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
-            
-            // Track session changes even when serving from cache
-            await trackStreamSession(slug, updatedData.broadcaster_user_id, officialStatus.isLive, officialStatus.viewerCount, officialStatus.streamTitle || '', null)
-            
-            return NextResponse.json(updatedData)
-        }
-        // Data hasn't changed, but still track session
-        await trackStreamSession(slug, cached.data.broadcaster_user_id, cached.data.is_live, cached.data.viewer_count, cached.data.session_title || '', null)
-        return NextResponse.json(cached.data)
-    }
-
-    // Stale-while-revalidate: return stale cache immediately, refresh in background
-    const isStale = cached && cacheAge < STALE_TTL
-    if (isStale) {
-        // Even for stale cache, verify live status and viewer count
-        const officialStatus = await checkLiveStatusFromV2API(slug)
-        // Always trust the official API response
-        const cachedIsLive = cached.data?.is_live || false
-        const cachedViewerCount = cached.data?.viewer_count || 0
-
-        // Always update viewer count and live status from official API
-        if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
-            // Fetch active session for fallback if needed
-            let activeSessionStartTime: string | null = null
-            if (officialStatus.isLive && !officialStatus.startedAt) {
-                try {
-                    const broadcasterUserId = cached.data?.broadcaster_user_id
-                    if (broadcasterUserId) {
-                        const activeSession = await db.streamSession.findFirst({
-                            where: {
-                                broadcaster_user_id: BigInt(broadcasterUserId),
-                                ended_at: null,
-                            },
-                            orderBy: { started_at: 'desc' },
-                            select: { started_at: true },
-                        })
-                        if (activeSession) {
-                            activeSessionStartTime = activeSession.started_at.toISOString()
-                            console.log(`[Channel API] Using database session start time as fallback in stale cache: ${activeSessionStartTime}`)
-                        }
-                    }
-                } catch (err) {
-                    console.error(`[Channel API] Error fetching session for stale cache fallback:`, err)
-                }
-            }
-
-            const updatedData = {
-                ...cached.data,
-                is_live: officialStatus.isLive,
-                viewer_count: officialStatus.viewerCount,
-                session_title: officialStatus.streamTitle || cached.data?.session_title || '',
-                stream_started_at: officialStatus.isLive 
-                    ? (officialStatus.startedAt || activeSessionStartTime || cached.data?.stream_started_at || null) 
-                    : null,
-                category: officialStatus.category || cached.data?.category || null,
-            }
-            cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
-            
-            // Track session changes even when serving from stale cache
-            await trackStreamSession(slug, updatedData.broadcaster_user_id, officialStatus.isLive, officialStatus.viewerCount, officialStatus.streamTitle || '', null)
-            
-            return NextResponse.json(updatedData)
-        }
-        // Trigger background refresh (don't await)
-        fetchChannelWithRetry(slug).catch(() => {
-            // Silently fail background refresh
-        })
-        // Still track session with stale data
-        await trackStreamSession(slug, cached.data.broadcaster_user_id, cached.data.is_live, cached.data.viewer_count, cached.data.session_title || '', null)
-        return NextResponse.json(cached.data)
-    }
+    console.log(`[Channel API] Fetching fresh data for ${slug}`)
 
     try {
         const response = await fetchChannelWithRetry(slug)
@@ -433,12 +297,6 @@ export async function GET(request: Request) {
         if (!response.ok) {
             const errorText = await response.text().catch(() => 'Unknown error')
             console.error(`❌ Kick API error: ${response.status} - ${errorText.substring(0, 200)}`)
-
-            // Return cached data if available even if expired
-            if (cached) {
-                return NextResponse.json(cached.data)
-            }
-
             throw new Error(`Kick API error: ${response.status} - ${errorText.substring(0, 200)}`)
         }
 
@@ -611,29 +469,13 @@ export async function GET(request: Request) {
             last_live_at: lastLiveTime?.toISOString() || null,
         }
 
-        // Cache the response
-        cache.set(cacheKey, { data: responseData, timestamp: Date.now() })
-
         return NextResponse.json(responseData)
     } catch (error) {
         const errorMessage = error instanceof Error
             ? (error.name === 'AbortError' ? 'Request timed out' : error.message)
             : 'Unknown error'
 
-        // Log timeout errors less verbosely (they're expected during high traffic)
-        if (error instanceof Error && error.name === 'AbortError') {
-            // Only log if we don't have cached data to return
-            if (!cached) {
-                console.error(`❌ Channel API timeout for ${slug}`)
-            }
-        } else {
-            console.error(`❌ Channel API error for ${slug}:`, errorMessage)
-        }
-
-        // Return cached data if available even if expired (stale-while-revalidate)
-        if (cached) {
-            return NextResponse.json(cached.data)
-        }
+        console.error(`❌ Channel API error for ${slug}:`, errorMessage)
 
         return NextResponse.json(
             { error: 'Failed to fetch channel data', details: errorMessage },
