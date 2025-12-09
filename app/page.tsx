@@ -87,7 +87,7 @@ export default function Dashboard() {
         // Only refresh if there's no error
         const interval = setInterval(() => {
             fetchChannelData()
-        }, 15000) // Refresh every 15 seconds (reduced from 30s for faster status updates)
+        }, 5000) // Refresh every 5 seconds for live viewer count, duration, and category updates
         return () => clearInterval(interval)
     }, [])
 
@@ -372,8 +372,16 @@ export default function Dashboard() {
                         {/* Viewer Count Card */}
                         <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors shadow-sm">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary">Viewers</p>
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary">Viewers</p>
+                                        {isLive && (
+                                            <span className="flex items-center gap-1 text-xs font-semibold text-kick-green">
+                                                <span className="w-1.5 h-1.5 bg-kick-green rounded-full animate-pulse"></span>
+                                                LIVE
+                                            </span>
+                                        )}
+                                    </div>
                                     <p className="text-h3 font-semibold mt-2 text-gray-900 dark:text-kick-text">{viewerCount.toLocaleString('en-US')}</p>
                                 </div>
                                 <div className="w-12 h-12 rounded-full bg-kick-purple/20 flex items-center justify-center">
@@ -403,8 +411,14 @@ export default function Dashboard() {
                         {isLive && (
                             <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors shadow-sm">
                                 <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary">Stream Duration</p>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary">Stream Duration</p>
+                                            <span className="flex items-center gap-1 text-xs font-semibold text-kick-green">
+                                                <span className="w-1.5 h-1.5 bg-kick-green rounded-full animate-pulse"></span>
+                                                LIVE
+                                            </span>
+                                        </div>
                                         <p className="text-h3 font-semibold mt-2 text-kick-green">{streamDuration}</p>
                                     </div>
                                     <div className="w-12 h-12 rounded-full bg-kick-green/20 flex items-center justify-center">

@@ -8,8 +8,8 @@ const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/public/
 
 // Simple in-memory cache with stale-while-revalidate
 const cache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_TTL = 5000 // 5 seconds cache (aggressive - live status must be fresh)
-const STALE_TTL = 10000 // Return stale data for 10s while refreshing (very short)
+const CACHE_TTL = 3000 // 3 seconds cache (aggressive - live status and viewer count must be fresh)
+const STALE_TTL = 8000 // Return stale data for 8s while refreshing
 const MAX_RETRIES = 3
 const INITIAL_RETRY_DELAY = 1000 // 1 second
 const lastStreamState = new Map<string, { isLive: boolean; sessionId?: bigint }>()
