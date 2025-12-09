@@ -408,6 +408,9 @@ export async function GET(request: Request) {
                         id: true,
                         started_at: true,
                         ended_at: true,
+                        peak_viewer_count: true,
+                        session_title: true,
+                        thumbnail_url: true,
                     },
                 })
             } catch (err) {
