@@ -96,6 +96,15 @@ async function checkLiveStatusFromV2API(slug: string): Promise<{
             }
         }
 
+        // Log extracted data for debugging
+        console.log(`[Channel API] Extracted data:`, {
+            viewerCount,
+            streamTitle: livestream.stream_title || livestream.session_title || '',
+            startedAt: livestream.started_at,
+            category: category,
+            categoryRaw: livestream.category
+        })
+
         return {
             isLive: true,
             viewerCount,
@@ -243,6 +252,17 @@ export async function GET(request: Request) {
             )
         }
 
+        // Log channel data structure for debugging
+        console.log(`[Channel API] Channel data keys:`, Object.keys(channelData))
+        console.log(`[Channel API] Has categories:`, !!channelData.categories)
+        console.log(`[Channel API] Has category:`, !!channelData.category)
+        if (channelData.livestream) {
+            console.log(`[Channel API] Livestream keys:`, Object.keys(channelData.livestream))
+            console.log(`[Channel API] Livestream started_at:`, channelData.livestream.started_at)
+            console.log(`[Channel API] Livestream category:`, channelData.livestream.category)
+            console.log(`[Channel API] Livestream categories:`, channelData.livestream.categories)
+        }
+
         // Extract stream data from livestream object (v2 API)
         const livestream = channelData.livestream
 
@@ -273,7 +293,17 @@ export async function GET(request: Request) {
         streamStartedAt = v2Status.startedAt
         category = v2Status.category
 
-        console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}`)
+        // Also check for categories array (some APIs return categories as array)
+        if (!category && channelData.categories && Array.isArray(channelData.categories) && channelData.categories.length > 0) {
+            const firstCategory = channelData.categories[0]
+            category = {
+                id: firstCategory.id || firstCategory.category_id,
+                name: firstCategory.name
+            }
+            console.log(`[Channel API] Found category from categories array:`, category)
+        }
+
+        console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}, category=${category?.name || 'null'}, startedAt=${streamStartedAt}`)
 
         // Ensure broadcaster_user_id is available (try multiple possible locations)
         const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
