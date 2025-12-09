@@ -124,7 +124,17 @@ export default function StreamsPage() {
             if (isNaN(date.getTime())) {
                 return 'Invalid date'
             }
-            return date.toLocaleString()
+            // Format in UTC to be consistent with session detail page
+            return date.toLocaleString('en-US', { 
+                timeZone: 'UTC',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }) + ' UTC'
         } catch (error) {
             console.error('Error formatting date:', dateString, error)
             return 'Invalid date'

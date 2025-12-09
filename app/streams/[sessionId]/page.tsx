@@ -238,7 +238,17 @@ export default function StreamDetailPage() {
     const formatDate = (dateString: string) => {
         try {
             const date = new Date(dateString)
-            return date.toLocaleString()
+            // Format in UTC to match Kick's timezone (or use 'en-US' with UTC)
+            return date.toLocaleString('en-US', { 
+                timeZone: 'UTC',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }) + ' UTC'
         } catch {
             return 'Invalid date'
         }
