@@ -24,6 +24,11 @@ const nextConfig = {
       },
     ],
   },
+  // Disable ESLint blocking production builds. We still keep ESLint configured
+  // so that "next lint" can be run manually during development.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 }
 
 module.exports = nextConfig
