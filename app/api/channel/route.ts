@@ -183,6 +183,119 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
     throw new Error('Max retries exceeded')
 }
 
+/**
+ * Track stream session state (create, update, or close sessions)
+ * This runs regardless of cache status to ensure sessions are properly tracked
+ */
+async function trackStreamSession(
+    slug: string,
+    broadcasterUserId: number | undefined,
+    isLive: boolean,
+    viewerCount: number,
+    streamTitle: string,
+    thumbnailUrl: string | null
+): Promise<void> {
+    if (!broadcasterUserId) {
+        return
+    }
+
+    try {
+        const broadcasterIdBigInt = BigInt(broadcasterUserId)
+        
+        // Fetch active session
+        const activeSession = await db.streamSession.findFirst({
+            where: {
+                broadcaster_user_id: broadcasterIdBigInt,
+                ended_at: null,
+            },
+            orderBy: { started_at: 'desc' },
+            select: {
+                id: true,
+                started_at: true,
+                ended_at: true,
+                peak_viewer_count: true,
+                session_title: true,
+                thumbnail_url: true,
+            },
+        })
+
+        const lastState = lastStreamState.get(slug)
+        const wasLive = lastState?.isLive || false
+
+        if (isLive && !wasLive) {
+            // Stream just went live - FORCE CACHE CLEAR to ensure fresh data
+            const cacheKey = `channel:${slug.toLowerCase()}`
+            cache.delete(cacheKey)
+            console.log(`[Channel API] Stream went live - cleared cache for ${slug}`)
+
+            // Stream just went live - create session if none exists
+            if (!activeSession) {
+                const session = await db.streamSession.create({
+                    data: {
+                        broadcaster_user_id: broadcasterIdBigInt,
+                        channel_slug: slug,
+                        session_title: streamTitle || null,
+                        thumbnail_url: thumbnailUrl,
+                        started_at: new Date(),
+                        peak_viewer_count: viewerCount,
+                    },
+                })
+                lastStreamState.set(slug, { isLive: true, sessionId: session.id })
+                console.log(`✅ Stream went live - created session ${session.id}`)
+            } else {
+                // Use existing active session
+                lastStreamState.set(slug, { isLive: true, sessionId: activeSession.id })
+                console.log(`✅ Stream went live - using existing session ${activeSession.id}`)
+            }
+        } else if (isLive && wasLive) {
+            // Stream still live - update active session
+            if (activeSession) {
+                const newPeak = Math.max(activeSession.peak_viewer_count, viewerCount)
+                await db.streamSession.update({
+                    where: { id: activeSession.id },
+                    data: {
+                        session_title: streamTitle || activeSession.session_title,
+                        thumbnail_url: thumbnailUrl || activeSession.thumbnail_url,
+                        peak_viewer_count: newPeak,
+                        updated_at: new Date(),
+                    },
+                })
+                lastStreamState.set(slug, { isLive: true, sessionId: activeSession.id })
+            }
+        } else if (!isLive) {
+            // Stream is offline - ALWAYS end any active sessions regardless of wasLive state
+            // This handles cases where server restarts or cache clears
+            if (activeSession) {
+                const messageCount = await db.chatMessage.count({
+                    where: { stream_session_id: activeSession.id },
+                })
+                
+                // Calculate duration in seconds
+                const startTime = activeSession.started_at.getTime()
+                const endTime = Date.now()
+                const durationSeconds = Math.floor((endTime - startTime) / 1000)
+                const durationHours = Math.floor(durationSeconds / 3600)
+                const durationMinutes = Math.floor((durationSeconds % 3600) / 60)
+                
+                await db.streamSession.update({
+                    where: { id: activeSession.id },
+                    data: {
+                        ended_at: new Date(),
+                        total_messages: messageCount,
+                        duration_seconds: durationSeconds,
+                        updated_at: new Date(),
+                    },
+                })
+                console.log(`🛑 Stream is offline - ended session ${activeSession.id} (duration: ${durationHours}h ${durationMinutes}m, messages: ${messageCount})`)
+            }
+            lastStreamState.delete(slug)
+        }
+    } catch (dbError) {
+        console.error('❌ Error tracking stream session:', dbError)
+        // Continue even if session tracking fails
+    }
+}
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const slug = searchParams.get('slug') || 'sweetflips'
@@ -242,9 +355,14 @@ export async function GET(request: Request) {
             }
             // Update cache with fresh data
             cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
+            
+            // Track session changes even when serving from cache
+            await trackStreamSession(slug, updatedData.broadcaster_user_id, officialStatus.isLive, officialStatus.viewerCount, officialStatus.streamTitle || '', null)
+            
             return NextResponse.json(updatedData)
         }
-        // Data hasn't changed, return cached data
+        // Data hasn't changed, but still track session
+        await trackStreamSession(slug, cached.data.broadcaster_user_id, cached.data.is_live, cached.data.viewer_count, cached.data.session_title || '', null)
         return NextResponse.json(cached.data)
     }
 
@@ -294,12 +412,18 @@ export async function GET(request: Request) {
                 category: officialStatus.category || cached.data?.category || null,
             }
             cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
+            
+            // Track session changes even when serving from stale cache
+            await trackStreamSession(slug, updatedData.broadcaster_user_id, officialStatus.isLive, officialStatus.viewerCount, officialStatus.streamTitle || '', null)
+            
             return NextResponse.json(updatedData)
         }
         // Trigger background refresh (don't await)
         fetchChannelWithRetry(slug).catch(() => {
             // Silently fail background refresh
         })
+        // Still track session with stale data
+        await trackStreamSession(slug, cached.data.broadcaster_user_id, cached.data.is_live, cached.data.viewer_count, cached.data.session_title || '', null)
         return NextResponse.json(cached.data)
     }
 
@@ -469,87 +593,8 @@ export async function GET(request: Request) {
             // Continue even if stats fail
         }
 
-        // Track stream sessions - always check database for active sessions
-        if (broadcasterUserId && activeSession !== null) {
-            try {
-                const broadcasterIdBigInt = BigInt(broadcasterUserId)
-                // activeSession already fetched earlier for fallback logic
-
-                const lastState = lastStreamState.get(slug)
-                const wasLive = lastState?.isLive || false
-
-                if (isLive && !wasLive) {
-                    // Stream just went live - FORCE CACHE CLEAR to ensure fresh data
-                    cache.delete(cacheKey)
-                    console.log(`[Channel API] Stream went live - cleared cache for ${slug}`)
-
-                    // Stream just went live - create session if none exists
-                    if (!activeSession) {
-                        const session = await db.streamSession.create({
-                            data: {
-                                broadcaster_user_id: broadcasterIdBigInt,
-                                channel_slug: slug,
-                                session_title: streamTitle || null,
-                                thumbnail_url: thumbnailUrl,
-                                started_at: new Date(),
-                                peak_viewer_count: viewerCount,
-                            },
-                        })
-                        lastStreamState.set(slug, { isLive: true, sessionId: session.id })
-                        console.log(`✅ Stream went live - created session ${session.id}`)
-                    } else {
-                        // Use existing active session
-                        lastStreamState.set(slug, { isLive: true, sessionId: activeSession.id })
-                        console.log(`✅ Stream went live - using existing session ${activeSession.id}`)
-                    }
-                } else if (isLive && wasLive) {
-                    // Stream still live - update active session
-                    if (activeSession) {
-                        const newPeak = Math.max(activeSession.peak_viewer_count, viewerCount)
-                        await db.streamSession.update({
-                            where: { id: activeSession.id },
-                            data: {
-                                session_title: streamTitle || activeSession.session_title,
-                                thumbnail_url: thumbnailUrl || activeSession.thumbnail_url,
-                                peak_viewer_count: newPeak,
-                                updated_at: new Date(),
-                            },
-                        })
-                        lastStreamState.set(slug, { isLive: true, sessionId: activeSession.id })
-                    }
-                } else if (!isLive) {
-                    // Stream is offline - ALWAYS end any active sessions regardless of wasLive state
-                    // This handles cases where server restarts or cache clears
-                    if (activeSession) {
-                        const messageCount = await db.chatMessage.count({
-                            where: { stream_session_id: activeSession.id },
-                        })
-                        
-                        // Calculate duration in seconds
-                        const startTime = activeSession.started_at.getTime()
-                        const endTime = Date.now()
-                        const durationSeconds = Math.floor((endTime - startTime) / 1000)
-                        const durationHours = Math.floor(durationSeconds / 3600)
-                        const durationMinutes = Math.floor((durationSeconds % 3600) / 60)
-                        
-                        await db.streamSession.update({
-                            where: { id: activeSession.id },
-                            data: {
-                                ended_at: new Date(),
-                                total_messages: messageCount,
-                                duration_seconds: durationSeconds,
-                                updated_at: new Date(),
-                            },
-                        })
-                        console.log(`🛑 Stream is offline - ended session ${activeSession.id} (duration: ${durationHours}h ${durationMinutes}m, messages: ${messageCount})`)
-                    }
-                    lastStreamState.delete(slug)
-                }
-            } catch (dbError) {
-                console.error('❌ Error tracking stream session:', dbError)
-                // Continue even if session tracking fails
-            }
-        }
+        // Track stream sessions
+        await trackStreamSession(slug, broadcasterUserId, isLive, viewerCount, streamTitle, thumbnailUrl)
 
         // Prepare response data
         const responseData = {
