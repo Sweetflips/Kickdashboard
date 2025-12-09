@@ -394,7 +394,14 @@ export async function GET(request: Request) {
         const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
 
         // Fetch active session early for fallback logic
-        let activeSession: { id: bigint; started_at: Date; ended_at: Date | null } | null = null
+        let activeSession: { 
+            id: bigint; 
+            started_at: Date; 
+            ended_at: Date | null; 
+            peak_viewer_count: number;
+            session_title: string | null;
+            thumbnail_url: string | null;
+        } | null = null
         if (broadcasterUserId) {
             try {
                 const broadcasterIdBigInt = BigInt(broadcasterUserId)
