@@ -418,13 +418,21 @@ export default function AppLayout({ children }: LayoutProps) {
                                         <span className="ml-3 text-body font-medium">Purchases</span>
                                     </Link>
                                 </li>
+                                <li>
+                                    <Link href="/admin/promo-codes" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/promo-codes' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                            setSidebarOpen(false)
+                                        }
+                                    }}>
+                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                                            <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="ml-3 text-body font-medium">Promo Codes</span>
+                                    </Link>
+                                </li>
                             </>
                         )}
-                        <li className="mt-4 mb-2">
-                            <div className="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-secondary uppercase tracking-wider">
-                                Rewards
-                            </div>
-                        </li>
                         <li>
                             <Link href="/raffles" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/raffles' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {

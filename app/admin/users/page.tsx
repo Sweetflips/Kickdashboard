@@ -174,6 +174,12 @@ export default function UsersPage() {
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
   const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false)
   const [geoLocations, setGeoLocations] = useState<Map<string, GeoLocation | null>>(new Map())
+  const [showAwardModal, setShowAwardModal] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [awardPoints, setAwardPoints] = useState('')
+  const [awardReason, setAwardReason] = useState('')
+  const [awarding, setAwarding] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const limit = 50
 
   useEffect(() => {
@@ -298,6 +304,54 @@ export default function UsersPage() {
       newExpanded.delete(userId)
     } else {
       newExpanded.add(userId)
+    }
+    setExpandedUsers(newExpanded)
+  }
+
+  const openAwardModal = (user: User) => {
+    setSelectedUser(user)
+    setAwardPoints('')
+    setAwardReason('')
+    setShowAwardModal(true)
+  }
+
+  const handleAwardPoints = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedUser) return
+
+    setAwarding(true)
+    try {
+      const token = localStorage.getItem('kick_access_token')
+      if (!token) return
+
+      const response = await fetch('/api/admin/users/award-points', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          kick_user_id: selectedUser.kick_user_id,
+          points: parseInt(awardPoints),
+          reason: awardReason || null,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setToast({ message: data.message, type: 'success' })
+        setShowAwardModal(false)
+        await fetchUsers()
+      } else {
+        setToast({ message: data.error || 'Failed to award points', type: 'error' })
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to award points', type: 'error' })
+    } finally {
+      setAwarding(false)
+    }
+  }
     }
     setExpandedUsers(newExpanded)
   }
@@ -534,6 +588,18 @@ export default function UsersPage() {
                           }`}
                         >
                           {user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                        </button>
+
+                        {/* Award Points Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openAwardModal(user)
+                          }}
+                          className="px-3 py-1.5 rounded text-xs font-medium transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
+                          title="Award or deduct points"
+                        >
+                          ± Points
                         </button>
                       </div>
 
@@ -773,6 +839,106 @@ export default function UsersPage() {
           )}
         </div>
       </div>
+
+      {/* Award Points Modal */}
+      {showAwardModal && selectedUser && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-kick-surface rounded-xl max-w-md w-full p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text">
+                Award/Deduct Points
+              </h2>
+              <button
+                onClick={() => setShowAwardModal(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-kick-text-secondary dark:hover:text-kick-text"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-kick-dark rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-kick-text-secondary">User:</p>
+              <p className="font-semibold text-gray-900 dark:text-kick-text">{selectedUser.username}</p>
+              <p className="text-sm text-gray-600 dark:text-kick-text-secondary mt-1">
+                Current Points: <span className="font-bold text-kick-purple">{selectedUser.total_points.toLocaleString()}</span>
+              </p>
+            </div>
+
+            <form onSubmit={handleAwardPoints} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                  Points Amount *
+                </label>
+                <input
+                  type="number"
+                  value={awardPoints}
+                  onChange={(e) => setAwardPoints(e.target.value)}
+                  placeholder="100 or -100"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
+                  Use positive numbers to award, negative to deduct
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                  Reason (optional)
+                </label>
+                <input
+                  type="text"
+                  value={awardReason}
+                  onChange={(e) => setAwardReason(e.target.value)}
+                  placeholder="Manual adjustment, giveaway, etc."
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                  maxLength={200}
+                />
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p className="text-xs text-blue-800 dark:text-blue-300">
+                  ⚠️ This will immediately adjust the user's point balance. This action is logged in their point history.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAwardModal(false)}
+                  className="flex-1 px-4 py-2 bg-gray-200 dark:bg-kick-dark text-gray-700 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-surface-hover transition-colors font-medium"
+                  disabled={awarding}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark transition-colors font-medium disabled:opacity-50"
+                  disabled={awarding || !awardPoints}
+                >
+                  {awarding ? 'Processing...' : 'Confirm'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <div className={`rounded-lg px-4 py-3 shadow-lg ${
+            toast.type === 'success'
+              ? 'bg-green-500 text-white'
+              : 'bg-red-500 text-white'
+          }`}>
+            {toast.message}
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

@@ -1,5 +1,4 @@
 import { db } from '@/lib/db';
-import { getBroadcasterToken } from '@/lib/kick-api';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'

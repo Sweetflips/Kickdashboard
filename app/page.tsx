@@ -4,6 +4,8 @@ import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import AppLayout from '../components/AppLayout'
 import ChatFrame from '../components/ChatFrame'
+import PromoCodeModal from '../components/PromoCodeModal'
+import { Toast } from '../components/Toast'
 
 interface Stream {
     is_live: boolean
@@ -77,6 +79,8 @@ export default function Dashboard() {
     const [isAdmin, setIsAdmin] = useState<boolean>(false)
     const [adminCheckLoading, setAdminCheckLoading] = useState(true)
     const [streamDuration, setStreamDuration] = useState<string>('0:00:00')
+    const [showPromoCodeModal, setShowPromoCodeModal] = useState(false)
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
     useEffect(() => {
         fetchChannelData()
@@ -613,6 +617,42 @@ export default function Dashboard() {
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Floating Redeem Code Button */}
+            <button
+                onClick={() => setShowPromoCodeModal(true)}
+                className="fixed bottom-6 right-6 bg-gradient-to-r from-kick-purple to-purple-600 text-white px-5 py-3 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center gap-2 font-medium z-40"
+                title="Redeem Promo Code"
+            >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                    <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+                </svg>
+                <span>Redeem Code</span>
+            </button>
+
+            {/* Promo Code Modal */}
+            <PromoCodeModal
+                isOpen={showPromoCodeModal}
+                onClose={() => setShowPromoCodeModal(false)}
+                onSuccess={(points) => {
+                    setToast({
+                        message: `🎉 Success! You earned ${points.toLocaleString()} points!`,
+                        type: 'success'
+                    })
+                    // Refresh channel data to update points display
+                    fetchChannelData()
+                }}
+            />
+
+            {/* Toast Notifications */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
             )}
         </AppLayout>
     )

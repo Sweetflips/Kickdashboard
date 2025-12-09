@@ -65,23 +65,28 @@ model User {
   raffle_entries               RaffleEntry[]
   advent_purchases              AdventPurchase[]
   advent_days_drawn            AdventDayStatus[]
+  promo_codes_created          PromoCode[]             @relation("PromoCodeCreator")
+  promo_code_redemptions       PromoCodeRedemption[]   @relation("PromoCodeRedemptions")
 
   @@map("users")
 }
 
 model StreamSession {
-  id                  BigInt    @id @default(autoincrement())
-  broadcaster_user_id BigInt
-  channel_slug        String
-  session_title       String?
-  thumbnail_url       String?
-  started_at          DateTime  @default(now())
-  ended_at            DateTime?
-  peak_viewer_count   Int       @default(0)
-  total_messages      Int       @default(0)
-  duration_seconds    Int?
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
+  id                          BigInt    @id @default(autoincrement())
+  broadcaster_user_id         BigInt
+  channel_slug                String
+  session_title               String?
+  thumbnail_url               String?
+  thumbnail_captured_at       DateTime?
+  thumbnail_last_refreshed_at DateTime?
+  thumbnail_source            String?
+  started_at                  DateTime  @default(now())
+  ended_at                    DateTime?
+  peak_viewer_count           Int       @default(0)
+  total_messages              Int       @default(0)
+  duration_seconds            Int?
+  created_at                  DateTime  @default(now())
+  updated_at                  DateTime  @updatedAt
 
   // Relations
   broadcaster   User           @relation(fields: [broadcaster_user_id], references: [kick_user_id])
@@ -247,6 +252,45 @@ model UserSession {
   @@index([user_id])
   @@index([last_seen_at])
   @@map("user_sessions")
+}
+
+model PromoCode {
+  id              BigInt              @id @default(autoincrement())
+  code            String              @unique
+  points_value    Int
+  max_uses        Int?                // null = unlimited
+  current_uses    Int                 @default(0)
+  expires_at      DateTime?
+  is_active       Boolean             @default(true)
+  created_by      BigInt
+  created_at      DateTime            @default(now())
+  updated_at      DateTime            @updatedAt
+
+  // Relations
+  creator     User                  @relation("PromoCodeCreator", fields: [created_by], references: [id])
+  redemptions PromoCodeRedemption[]
+
+  @@index([code])
+  @@index([expires_at])
+  @@index([is_active])
+  @@map("promo_codes")
+}
+
+model PromoCodeRedemption {
+  id            BigInt   @id @default(autoincrement())
+  promo_code_id BigInt
+  user_id       BigInt
+  points_awarded Int
+  redeemed_at   DateTime @default(now())
+
+  // Relations
+  promo_code PromoCode @relation(fields: [promo_code_id], references: [id], onDelete: Cascade)
+  user       User      @relation("PromoCodeRedemptions", fields: [user_id], references: [id])
+
+  @@unique([promo_code_id, user_id])
+  @@index([user_id])
+  @@index([redeemed_at])
+  @@map("promo_code_redemptions")
 }
 
 model PointAwardJob {
