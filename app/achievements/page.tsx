@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 interface Achievement {
     id: string
     name: string
-    description: string
+    description?: string
+    requirement?: string
     icon: string
     reward: number
     category: 'streams' | 'chat' | 'leaderboard' | 'community' | 'special'
@@ -27,8 +28,19 @@ const ACHIEVEMENTS: Achievement[] = [
     {
         id: 'stream-starter',
         name: 'Stream Starter',
-        description: 'Watch your first SweetFlips stream',
+        requirement: 'Watch your first 30 minutes.',
+        description: 'Welcome to the stream!',
         icon: '🎬',
+        reward: 25,
+        category: 'streams',
+        unlocked: false,
+    },
+    {
+        id: 'getting-cozy',
+        name: 'Getting Cozy',
+        requirement: 'Watch 2 hours total.',
+        description: "You're settling in nicely.",
+        icon: '🛋️',
         reward: 50,
         category: 'streams',
         unlocked: false,
@@ -36,51 +48,78 @@ const ACHIEVEMENTS: Achievement[] = [
     {
         id: 'dedicated-viewer',
         name: 'Dedicated Viewer',
-        description: 'Watch streams multiple days in a row',
+        requirement: 'Watch 10 hours total.',
+        description: 'A real supporter!',
         icon: '📺',
-        reward: 100,
+        reward: 150,
         category: 'streams',
-        tiers: [
-            { level: 1, requirement: 3, reward: 50, unlocked: false },
-            { level: 2, requirement: 7, reward: 100, unlocked: false },
-            { level: 3, requirement: 14, reward: 250, unlocked: false },
-            { level: 4, requirement: 30, reward: 500, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 30,
+        unlocked: false,
     },
     {
         id: 'stream-veteran',
         name: 'Stream Veteran',
-        description: 'Watch a total number of streams',
+        requirement: 'Watch 50 hours total.',
+        description: "You've survived many streams.",
         icon: '🏅',
-        reward: 200,
+        reward: 500,
         category: 'streams',
-        tiers: [
-            { level: 1, requirement: 10, reward: 100, unlocked: false },
-            { level: 2, requirement: 25, reward: 200, unlocked: false },
-            { level: 3, requirement: 50, reward: 400, unlocked: false },
-            { level: 4, requirement: 100, reward: 1000, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 100,
+        unlocked: false,
     },
     {
-        id: 'night-owl',
-        name: 'Night Owl',
-        description: 'Watch 5 late night streams (after midnight)',
-        icon: '🦉',
-        reward: 150,
+        id: 'ride-or-die',
+        name: 'Ride or Die',
+        requirement: 'Watch 200 hours total.',
+        icon: '🚀',
+        reward: 1500,
         category: 'streams',
-        progress: 0,
-        maxProgress: 5,
+        unlocked: false,
+    },
+    {
+        id: 'multi-stream-hopper',
+        name: 'Multi-Stream Hopper',
+        requirement: 'Watch 2 different SweetFlips streams in 24 hours.',
+        icon: '🔁',
+        reward: 50,
+        category: 'streams',
+        unlocked: false,
+    },
+
+    // Dashboard / Community Achievements
+    {
+        id: 'dashboard-addict',
+        name: 'Dashboard Addict',
+        requirement: 'Log into the dashboard 7 days in a month.',
+        icon: '📊',
+        reward: 100,
+        category: 'community',
+        unlocked: false,
+    },
+
+    // Raffle Achievements
+    {
+        id: 'raffle-participant',
+        name: 'Raffle Participant',
+        requirement: 'Enter one of the raffles.',
+        icon: '🎟️',
+        reward: 25,
+        category: 'community',
+        unlocked: false,
+    },
+    {
+        id: 'lucky-winner',
+        name: 'Lucky Winner',
+        requirement: 'Win a raffle.',
+        icon: '🍀',
+        reward: 200,
+        category: 'community',
+        unlocked: false,
     },
 
     // Chat Achievements
     {
         id: 'first-words',
         name: 'First Words',
-        description: 'Send your first chat message',
+        requirement: 'Send your first chat message.',
         icon: '💬',
         reward: 25,
         category: 'chat',
@@ -89,156 +128,67 @@ const ACHIEVEMENTS: Achievement[] = [
     {
         id: 'chatterbox',
         name: 'Chatterbox',
-        description: 'Send messages during streams',
+        requirement: 'Send 1000 chat messages.',
         icon: '🗣️',
         reward: 100,
         category: 'chat',
-        tiers: [
-            { level: 1, requirement: 100, reward: 50, unlocked: false },
-            { level: 2, requirement: 500, reward: 100, unlocked: false },
-            { level: 3, requirement: 1000, reward: 200, unlocked: false },
-            { level: 4, requirement: 5000, reward: 500, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 5000,
+        unlocked: false,
     },
     {
         id: 'emote-master',
         name: 'Emote Master',
-        description: 'Use emotes in your messages',
+        requirement: 'Use 1500 emotes in chat.',
         icon: '😎',
         reward: 75,
         category: 'chat',
-        tiers: [
-            { level: 1, requirement: 50, reward: 25, unlocked: false },
-            { level: 2, requirement: 200, reward: 75, unlocked: false },
-            { level: 3, requirement: 500, reward: 150, unlocked: false },
-            { level: 4, requirement: 1000, reward: 300, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 1000,
-    },
-
-    // Leaderboard Achievements
-    {
-        id: 'top-chatter',
-        name: 'Top Chatter',
-        description: 'Finish in the top 10 on the stream leaderboard',
-        icon: '🏆',
-        reward: 100,
-        category: 'leaderboard',
-        tiers: [
-            { level: 1, requirement: 1, reward: 50, unlocked: false },
-            { level: 2, requirement: 5, reward: 100, unlocked: false },
-            { level: 3, requirement: 10, reward: 200, unlocked: false },
-            { level: 4, requirement: 25, reward: 500, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 25,
+        unlocked: false,
     },
     {
-        id: 'champion',
-        name: 'Champion',
-        description: 'Finish #1 on the stream leaderboard',
-        icon: '👑',
+        id: 'super-social',
+        name: 'Super Social',
+        requirement: 'Send 4000 chat messages.',
+        icon: '🌐',
         reward: 250,
-        category: 'leaderboard',
-        tiers: [
-            { level: 1, requirement: 1, reward: 100, unlocked: false },
-            { level: 2, requirement: 5, reward: 250, unlocked: false },
-            { level: 3, requirement: 10, reward: 500, unlocked: false },
-            { level: 4, requirement: 25, reward: 1500, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 25,
-    },
-    {
-        id: 'podium-finisher',
-        name: 'Podium Finisher',
-        description: 'Finish in top 3 on the stream leaderboard',
-        icon: '🥇',
-        reward: 150,
-        category: 'leaderboard',
-        tiers: [
-            { level: 1, requirement: 3, reward: 75, unlocked: false },
-            { level: 2, requirement: 10, reward: 150, unlocked: false },
-            { level: 3, requirement: 25, reward: 350, unlocked: false },
-            { level: 4, requirement: 50, reward: 750, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 50,
-    },
-
-    // Community Achievements
-    {
-        id: 'social-butterfly',
-        name: 'Social Butterfly',
-        description: 'Connect Discord and Telegram accounts',
-        icon: '🦋',
-        reward: 100,
-        category: 'community',
+        category: 'chat',
         unlocked: false,
     },
     {
-        id: 'raffle-participant',
-        name: 'Raffle Participant',
-        description: 'Enter raffles',
-        icon: '🎟️',
-        reward: 50,
-        category: 'community',
-        tiers: [
-            { level: 1, requirement: 1, reward: 25, unlocked: false },
-            { level: 2, requirement: 5, reward: 50, unlocked: false },
-            { level: 3, requirement: 10, reward: 100, unlocked: false },
-            { level: 4, requirement: 25, reward: 250, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 25,
-    },
-    {
-        id: 'lucky-winner',
-        name: 'Lucky Winner',
-        description: 'Win a raffle',
-        icon: '🍀',
-        reward: 200,
-        category: 'community',
+        id: 'daily-chatter',
+        name: 'Daily Chatter',
+        requirement: 'Send any message on 7 different days.',
+        icon: '📅',
+        reward: 75,
+        category: 'chat',
         unlocked: false,
     },
 
-    // Special Achievements
+    // Leaderboard / Special Achievements
     {
-        id: 'og-viewer',
-        name: 'OG Viewer',
-        description: 'Be one of the first 100 dashboard users',
-        icon: '⭐',
-        reward: 500,
-        category: 'special',
-        unlocked: false,
-    },
-    {
-        id: 'subscriber',
-        name: 'Supporter',
-        description: 'Subscribe to SweetFlips on Kick',
-        icon: '💎',
+        id: 'top-g-chatter',
+        name: 'Top G Chatter',
+        requirement: 'Finish in the Top 3 leaderboard.',
+        icon: '🏆',
         reward: 300,
+        category: 'leaderboard',
+        unlocked: false,
+    },
+    {
+        id: 'og-dash',
+        name: 'OG Dash',
+        requirement: 'Be one of the first 100 users in your dashboard.',
+        icon: '⭐',
+        reward: 150,
         category: 'special',
         unlocked: false,
     },
     {
-        id: 'point-millionaire',
-        name: 'Point Millionaire',
-        description: 'Accumulate 10,000 total points',
-        icon: '💰',
-        reward: 1000,
+        id: 'sf-legend-of-the-month',
+        name: 'SF Legend of the Month',
+        requirement: 'Earn the most points this month.',
+        icon: '👑',
+        reward: 1500,
         category: 'special',
-        tiers: [
-            { level: 1, requirement: 1000, reward: 100, unlocked: false },
-            { level: 2, requirement: 5000, reward: 250, unlocked: false },
-            { level: 3, requirement: 10000, reward: 500, unlocked: false },
-            { level: 4, requirement: 50000, reward: 2000, unlocked: false },
-        ],
-        progress: 0,
-        maxProgress: 50000,
+        unlocked: false,
     },
 ]
 
@@ -256,6 +206,7 @@ export default function AchievementsPage() {
     const [loading, setLoading] = useState(true)
     const [selectedCategory, setSelectedCategory] = useState<string>('all')
     const [userBalance, setUserBalance] = useState(0)
+    const [achievementStatuses, setAchievementStatuses] = useState<Record<string, boolean>>({})
 
     useEffect(() => {
         checkAuth()
@@ -264,6 +215,7 @@ export default function AchievementsPage() {
     useEffect(() => {
         if (isConnected) {
             fetchUserBalance()
+            fetchAchievements()
         }
     }, [isConnected])
 
@@ -311,6 +263,29 @@ export default function AchievementsPage() {
         }
     }
 
+    const fetchAchievements = async () => {
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            if (!token) return
+
+            const response = await fetch(`/api/achievements?access_token=${encodeURIComponent(token)}`)
+            if (!response.ok) return
+
+            const data = await response.json()
+            if (Array.isArray(data.achievements)) {
+                const statusMap: Record<string, boolean> = {}
+                for (const a of data.achievements) {
+                    if (a && typeof a.id === 'string') {
+                        statusMap[a.id] = !!a.unlocked
+                    }
+                }
+                setAchievementStatuses(statusMap)
+            }
+        } catch (error) {
+            console.error('Error fetching achievements:', error)
+        }
+    }
+
     const filteredAchievements = selectedCategory === 'all'
         ? ACHIEVEMENTS
         : ACHIEVEMENTS.filter(a => a.category === selectedCategory)
@@ -320,6 +295,18 @@ export default function AchievementsPage() {
             return sum + a.tiers.reduce((tierSum, t) => tierSum + t.reward, 0)
         }
         return sum + a.reward
+    }, 0)
+
+    const unlockedCount = ACHIEVEMENTS.filter(a => achievementStatuses[a.id]).length
+
+    const totalEarnedPoints = ACHIEVEMENTS.reduce((sum, a) => {
+        if (achievementStatuses[a.id]) {
+            if (a.tiers) {
+                return sum + a.tiers.reduce((tierSum, t) => tierSum + t.reward, 0)
+            }
+            return sum + a.reward
+        }
+        return sum
     }, 0)
 
     if (loading) {
@@ -398,7 +385,7 @@ export default function AchievementsPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-600 dark:text-kick-text-secondary">Unlocked</p>
-                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">0 / {ACHIEVEMENTS.length}</p>
+                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{unlockedCount} / {ACHIEVEMENTS.length}</p>
                             </div>
                         </div>
                     </div>
@@ -409,7 +396,7 @@ export default function AchievementsPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-600 dark:text-kick-text-secondary">Points Earned</p>
-                                <p className="text-h4 font-bold text-kick-purple">0</p>
+                                <p className="text-h4 font-bold text-kick-purple">{totalEarnedPoints.toLocaleString()}</p>
                             </div>
                         </div>
                     </div>
@@ -456,10 +443,16 @@ export default function AchievementsPage() {
 
                 {/* Achievements Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredAchievements.map((achievement) => (
+                    {filteredAchievements.map((achievement) => {
+                        const isUnlocked = achievementStatuses[achievement.id]
+                        return (
                         <div
                             key={achievement.id}
-                            className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-5 opacity-75"
+                            className={`bg-white dark:bg-kick-surface rounded-xl border p-5 transition-opacity ${
+                                isUnlocked
+                                    ? 'border-kick-green opacity-100'
+                                    : 'border-gray-200 dark:border-kick-border opacity-75'
+                            }`}
                         >
                             <div className="flex items-start gap-4">
                                 <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-kick-dark flex items-center justify-center text-3xl flex-shrink-0">
@@ -474,9 +467,21 @@ export default function AchievementsPage() {
                                             {CATEGORY_INFO[achievement.category].name}
                                         </span>
                                     </div>
-                                    <p className="text-small text-gray-600 dark:text-kick-text-secondary mb-3">
-                                        {achievement.description}
-                                    </p>
+                                    {achievement.requirement && (
+                                        <p className="text-small text-gray-600 dark:text-kick-text-secondary">
+                                            {achievement.requirement}
+                                        </p>
+                                    )}
+                                    {achievement.description && (
+                                        <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-3 mt-1">
+                                            {achievement.description}
+                                        </p>
+                                    )}
+                                    {!achievement.requirement && !achievement.description && (
+                                        <p className="text-small text-gray-600 dark:text-kick-text-secondary mb-3">
+                                            Achievement details coming soon.
+                                        </p>
+                                    )}
 
                                     {/* Progress bar for tiered achievements */}
                                     {achievement.tiers && (
@@ -516,75 +521,29 @@ export default function AchievementsPage() {
                                                 } pts
                                             </span>
                                         </div>
-                                        <span className="px-2 py-1 text-xs font-medium rounded bg-gray-200 dark:bg-kick-dark text-gray-500 dark:text-kick-text-muted">
-                                            Locked
+                                        <span className={
+                                            `px-2 py-1 text-xs font-medium rounded ${
+                                                isUnlocked
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
+                                                    : 'bg-gray-200 dark:bg-kick-dark text-gray-500 dark:text-kick-text-muted'
+                                            }`}
+                                        >
+                                            {isUnlocked ? 'Unlocked' : 'Locked'}
                                         </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    ))}
-                </div>
-
-                {/* Featured Achievements */}
-                <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
-                    <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-6">
-                        Featured Challenges
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Streak Challenge */}
-                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-5 border border-blue-200 dark:border-blue-800">
-                            <div className="flex items-center gap-3 mb-3">
-                                <span className="text-3xl">🔥</span>
-                                <div>
-                                    <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text">Watch Streak</h3>
-                                    <p className="text-small text-gray-600 dark:text-kick-text-secondary">Watch 10 streams in a row</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1 text-kick-purple font-semibold">
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.765-1.36 2.722-1.36 3.486 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
-                                    +500 points
-                                </div>
-                                <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-medium rounded-full">
-                                    0/10 streams
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Leaderboard Champion */}
-                        <div className="bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 rounded-xl p-5 border border-yellow-200 dark:border-yellow-800">
-                            <div className="flex items-center gap-3 mb-3">
-                                <span className="text-3xl">👑</span>
-                                <div>
-                                    <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text">Leaderboard Legend</h3>
-                                    <p className="text-small text-gray-600 dark:text-kick-text-secondary">Finish #1 on 10 streams</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1 text-kick-purple font-semibold">
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.765-1.36 2.722-1.36 3.486 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
-                                    +1,500 points
-                                </div>
-                                <span className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-sm font-medium rounded-full">
-                                    0/10 wins
-                                </span>
-                            </div>
-                        </div>
-                    </div>
+                    )})}
                 </div>
 
                 {/* Info Section */}
                 <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-kick-surface dark:to-kick-dark rounded-xl border border-gray-200 dark:border-kick-border p-6 text-center">
                     <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-2">
-                        Achievements are coming soon!
+                        How achievements work
                     </h3>
                     <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-4">
-                        Keep watching streams and chatting to build up your stats. When achievements launch, your progress will be tracked!
+                        Earn points by watching streams, chatting, joining raffles and being active in the community. More achievements will be added over time.
                     </p>
                     <a
                         href="https://kick.com/sweetflips"
