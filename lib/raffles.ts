@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import crypto from 'crypto'
+import { buildEntryRanges, deterministicRandomInt, findEntryForIndex } from './raffle-utils'
 
 export interface PurchaseTicketsResult {
     success: boolean
@@ -17,8 +18,14 @@ export interface DrawWinnersResult {
         userId: bigint
         username: string
         tickets: number
+        selectedTicketIndex?: number
+        ticketRangeStart?: number
+        ticketRangeEnd?: number
+        spinNumber?: number
+        isRigged?: boolean
     }>
     drawSeed?: string
+    totalTickets?: number
 }
 
 /**
@@ -265,19 +272,12 @@ export async function drawWinners(
                 throw new Error('No entries found for this raffle')
             }
 
-            // Expand tickets into weighted pool (each ticket = one chance)
-            const ticketPool: Array<{ entryId: bigint; userId: bigint; username: string }> = []
-            for (const entry of entries) {
-                for (let i = 0; i < entry.tickets; i++) {
-                    ticketPool.push({
-                        entryId: entry.id,
-                        userId: entry.user.id,
-                        username: entry.user.username,
-                    })
-                }
-            }
 
-            if (ticketPool.length === 0) {
+            // Build prefix-sum ranges for entries (each ticket = one index)
+            const mappedEntries = entries.map(e => ({ id: e.id, userId: e.user.id, username: e.user.username, tickets: e.tickets }))
+            const { ranges, totalTickets } = buildEntryRanges(mappedEntries)
+
+            if (totalTickets === 0) {
                 throw new Error('No tickets found for this raffle')
             }
 
@@ -285,46 +285,78 @@ export async function drawWinners(
             const drawSeed = crypto.randomBytes(32).toString('hex')
             const timestamp = Date.now()
 
-            // Use seed + timestamp for deterministic but random selection
-            // Create a simple RNG from seed
-            let seedValue = parseInt(drawSeed.substring(0, 8), 16) % 1000000
-            const seededRandom = () => {
-                seedValue = (seedValue * 9301 + 49297) % 233280
-                return seedValue / 233280
+
+            // Fetch rigged winners (if enabled)
+            let riggedRecords: Array<{ entry_id: bigint; position: number }> = []
+            try {
+                if ((await tx.raffle.findUnique({ where: { id: raffleId }, select: { rigging_enabled: true } }))?.rigging_enabled) {
+                    riggedRecords = await tx.raffleRiggedWinner.findMany({
+                        where: { raffle_id: raffleId },
+                        orderBy: { position: 'asc' },
+                        select: { entry_id: true, position: true },
+                    })
+                }
+            } catch (err) {
+                // If rigging table doesn't exist or any error, we'll just skip rigging
+                console.warn('Rigging check failed, skipping rigged options:', err)
+                riggedRecords = []
             }
 
-            // Select winners (no duplicates)
-            const winners: Array<{ entryId: bigint; userId: bigint; username: string; tickets: number }> = []
+            // Select winners using deterministic RNG and prefix-sum ranges
+            const winners: Array<{ entryId: bigint; userId: bigint; username: string; tickets: number; selectedTicketIndex: number; ticketRangeStart: number; ticketRangeEnd: number; spinNumber: number; isRigged: boolean }> = []
             const selectedEntryIds = new Set<bigint>()
-
-            // If we need more winners than entries, allow duplicates
             const allowDuplicates = numberOfWinners > entries.length
 
-            while (winners.length < numberOfWinners && ticketPool.length > 0) {
-                const randomIndex = Math.floor(seededRandom() * ticketPool.length)
-                const selected = ticketPool[randomIndex]
+            let spinCounter = 0
+            while (winners.length < numberOfWinners) {
+                // Use deterministic RNG derived from seed + spinCounter
+                // If rigged winner exists for this spin number pick that entry instead
+                let randomIndex: number
+                let isRigged = false
+                const rigSlot = riggedRecords[winners.length]
+                if (rigSlot) {
+                    // Find the rigged entry range
+                    const rigEntry = ranges.find(r => r.entryId === rigSlot.entry_id)
+                    if (rigEntry) {
+                        // Pick a deterministic index within the rigEntry range
+                        const entryTicketCount = rigEntry.rangeEnd - rigEntry.rangeStart
+                        const offset = deterministicRandomInt(drawSeed, spinCounter, entryTicketCount)
+                        randomIndex = rigEntry.rangeStart + offset
+                        isRigged = true
+                    } else {
+                        // rigged entry not found (removed), fallback to normal selection
+                        randomIndex = deterministicRandomInt(drawSeed, spinCounter, totalTickets)
+                    }
+                } else {
+                    randomIndex = deterministicRandomInt(drawSeed, spinCounter, totalTickets)
+                }
 
-                if (!allowDuplicates && selectedEntryIds.has(selected.entryId)) {
-                    // Remove this ticket from pool and try again
-                    ticketPool.splice(randomIndex, 1)
+                const entryRange = findEntryForIndex(ranges, randomIndex)
+                if (!entryRange) {
+                    throw new Error('Failed to map index to entry')
+                }
+
+                // Skip duplicates if not allowed
+                if (!allowDuplicates && selectedEntryIds.has(entryRange.entryId)) {
+                    spinCounter += 1
                     continue
                 }
 
-                selectedEntryIds.add(selected.entryId)
+                selectedEntryIds.add(entryRange.entryId)
 
-                // Find the entry to get ticket count
-                const entry = entries.find(e => e.id === selected.entryId)
-                if (entry) {
-                    winners.push({
-                        entryId: selected.entryId,
-                        userId: selected.userId,
-                        username: selected.username,
-                        tickets: entry.tickets,
-                    })
-                }
+                winners.push({
+                    entryId: entryRange.entryId,
+                    userId: entryRange.userId,
+                    username: entryRange.username,
+                    tickets: entryRange.tickets,
+                    selectedTicketIndex: randomIndex,
+                    ticketRangeStart: entryRange.rangeStart,
+                    ticketRangeEnd: entryRange.rangeEnd,
+                    spinNumber: winners.length + 1,
+                    isRigged: isRigged,
+                })
 
-                // Remove this ticket from pool
-                ticketPool.splice(randomIndex, 1)
+                spinCounter += 1
             }
 
             if (winners.length === 0) {
@@ -341,20 +373,35 @@ export async function drawWinners(
                 },
             })
 
-            // Create winner records
+
+            // Create winner records and persist selected ticket index and spin number if schema allows
             for (const winner of winners) {
                 await tx.raffleWinner.create({
                     data: {
                         raffle_id: raffleId,
                         entry_id: winner.entryId,
-                    },
+                        selected_ticket_index: BigInt(winner.selectedTicketIndex),
+                        spin_number: winner.spinNumber,
+                        is_rigged: winner.isRigged,
+                    } as any,
                 })
             }
 
             return {
                 success: true,
-                winners,
+                winners: winners.map(w => ({
+                    entryId: w.entryId,
+                    userId: w.userId,
+                    username: w.username,
+                    tickets: w.tickets,
+                    selectedTicketIndex: w.selectedTicketIndex,
+                    ticketRangeStart: w.ticketRangeStart,
+                    ticketRangeEnd: w.ticketRangeEnd,
+                    spinNumber: w.spinNumber,
+                    isRigged: w.isRigged,
+                })),
                 drawSeed,
+                totalTickets,
             }
         }, {
             maxWait: 20000,

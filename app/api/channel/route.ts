@@ -13,6 +13,29 @@ const lastStreamState = new Map<string, { isLive: boolean; sessionId?: bigint }>
 // Exponential backoff helper
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+// Normalize livestream.is_live flag from Kick API to a strict boolean.
+// Kick has changed response formats in the past (boolean, number, string),
+// so we defensively coerce here and default to "offline" for unknown values
+// to avoid false positives where the dashboard shows LIVE while actually offline.
+function normalizeIsLiveFlag(raw: unknown): boolean {
+    if (typeof raw === 'boolean') return raw
+    if (typeof raw === 'number') return raw !== 0
+    if (typeof raw === 'string') {
+        const value = raw.trim().toLowerCase()
+        if (['true', '1', 'yes', 'live', 'online'].includes(value)) return true
+        if (['false', '0', 'no', 'offline'].includes(value)) return false
+    }
+
+    if (raw === null || raw === undefined) return false
+
+    console.warn('[Channel API] Unexpected is_live value from Kick v2 API, treating as offline:', {
+        value: raw,
+        type: typeof raw,
+    })
+    // Be conservative: assume offline on unexpected formats to prevent stuck LIVE status
+    return false
+}
+
 /**
  * Check live status using Kick v2 API (most reliable for real-time status)
  * GET https://kick.com/api/v2/channels/{slug}
@@ -53,15 +76,16 @@ async function checkLiveStatusFromV2API(slug: string): Promise<{
             console.log(`[Channel API] livestream keys:`, Object.keys(data.livestream))
         }
 
-        // Check if livestream exists and is_live flag
+        // Check if livestream exists and is_live flag (normalized to avoid truthiness bugs)
         const livestream = data.livestream
-        
-        if (!livestream || !livestream.is_live) {
-            console.log(`[Channel API] v2 API shows stream is OFFLINE for ${slug} (has livestream: ${!!livestream}, is_live: ${livestream?.is_live})`)
+        const normalizedIsLive = livestream ? normalizeIsLiveFlag(livestream.is_live) : false
+
+        if (!livestream || !normalizedIsLive) {
+            console.log(`[Channel API] v2 API shows stream is OFFLINE for ${slug} (has livestream: ${!!livestream}, is_live: ${livestream?.is_live}, normalized: ${normalizedIsLive})`)
             return { isLive: false, viewerCount: 0, streamTitle: '', thumbnailUrl: null, startedAt: null, category: null }
         }
 
-        console.log(`[Channel API] v2 API shows stream is LIVE for ${slug}`)
+        console.log(`[Channel API] v2 API shows stream is LIVE for ${slug} (normalized is_live=${normalizedIsLive})`)
 
         let thumbnailUrl: string | null = null
         if (livestream.thumbnail) {
@@ -469,7 +493,14 @@ export async function GET(request: Request) {
             last_live_at: lastLiveTime?.toISOString() || null,
         }
 
-        return NextResponse.json(responseData)
+        return NextResponse.json(responseData, {
+            headers: {
+                // Ensure no intermediate cache keeps a stale LIVE status
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                Pragma: 'no-cache',
+                Expires: '0',
+            },
+        })
     } catch (error) {
         const errorMessage = error instanceof Error
             ? (error.name === 'AbortError' ? 'Request timed out' : error.message)
@@ -479,7 +510,14 @@ export async function GET(request: Request) {
 
         return NextResponse.json(
             { error: 'Failed to fetch channel data', details: errorMessage },
-            { status: 500 }
+            {
+                status: 500,
+                headers: {
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                    Pragma: 'no-cache',
+                    Expires: '0',
+                },
+            }
         )
     }
 }

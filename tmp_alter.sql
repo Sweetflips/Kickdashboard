@@ -1,0 +1,1 @@
+ALTER TABLE "raffles" ADD COLUMN     "center_logo_url" TEXT;

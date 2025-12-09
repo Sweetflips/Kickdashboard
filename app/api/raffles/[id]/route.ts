@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { getAuthenticatedUser, isAdmin } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { NextResponse } from 'next/server'
 
 export async function GET(
     request: Request,
@@ -52,6 +52,8 @@ export async function GET(
                         entries: true,
                     },
                 },
+                // include number of winners & rigging
+                // Prisma include doesn't support these scalar fields directly, we will fetch them from raffle in return
             },
         })
 
@@ -91,6 +93,11 @@ export async function GET(
                 total_tickets_sold: totalTickets,
                 user_tickets: userTickets,
                 total_entries: raffle._count.entries,
+                number_of_winners: raffle.number_of_winners,
+                rigging_enabled: raffle.rigging_enabled,
+                wheel_background_url: raffle.wheel_background_url || null,
+                center_logo_url: raffle.center_logo_url || null,
+                slice_opacity: raffle.slice_opacity || 0.5,
                 winners: raffle.winners.map(w => ({
                     id: w.id.toString(),
                     username: w.entry.user.username,
@@ -150,6 +157,11 @@ export async function PUT(
             if (body.hidden_until_start !== undefined) allowedFields.hidden_until_start = body.hidden_until_start
             if (body.claim_message !== undefined) allowedFields.claim_message = body.claim_message || null
             if (body.hidden !== undefined) allowedFields.hidden = body.hidden
+            if (body.wheel_background_url !== undefined) allowedFields.wheel_background_url = body.wheel_background_url || null
+            if (body.center_logo_url !== undefined) allowedFields.center_logo_url = body.center_logo_url || null
+            if (body.slice_opacity !== undefined) allowedFields.slice_opacity = parseFloat(body.slice_opacity)
+            if (body.number_of_winners !== undefined) allowedFields.number_of_winners = Number(body.number_of_winners)
+            if (body.rigging_enabled !== undefined) allowedFields.rigging_enabled = body.rigging_enabled
 
             // Update status if end date changed
             if (body.end_at !== undefined) {
@@ -184,6 +196,11 @@ export async function PUT(
             if (body.sub_only !== undefined) updateData.sub_only = body.sub_only
             if (body.hidden_until_start !== undefined) updateData.hidden_until_start = body.hidden_until_start
             if (body.hidden !== undefined) updateData.hidden = body.hidden
+            if (body.number_of_winners !== undefined) updateData.number_of_winners = Number(body.number_of_winners)
+            if (body.rigging_enabled !== undefined) updateData.rigging_enabled = body.rigging_enabled
+            if (body.wheel_background_url !== undefined) updateData.wheel_background_url = body.wheel_background_url || null
+            if (body.center_logo_url !== undefined) updateData.center_logo_url = body.center_logo_url || null
+            if (body.slice_opacity !== undefined) updateData.slice_opacity = parseFloat(body.slice_opacity)
 
             // Update status based on dates
             if (body.start_at !== undefined || body.end_at !== undefined) {

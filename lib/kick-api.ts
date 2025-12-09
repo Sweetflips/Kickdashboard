@@ -211,6 +211,28 @@ let cachedToken: {
     source: 'user' | 'app'
 } | null = null
 
+// Normalize livestream.is_live flag from Kick APIs into a strict boolean.
+// Some Kick responses have used numbers or strings here; we defensively
+// coerce and default to "offline" for unknown values to avoid false
+// positives where a stream is treated as live when it is actually offline.
+function normalizeIsLiveFlag(raw: unknown): boolean {
+    if (typeof raw === 'boolean') return raw
+    if (typeof raw === 'number') return raw !== 0
+    if (typeof raw === 'string') {
+        const value = raw.trim().toLowerCase()
+        if (['true', '1', 'yes', 'live', 'online'].includes(value)) return true
+        if (['false', '0', 'no', 'offline'].includes(value)) return false
+    }
+
+    if (raw === null || raw === undefined) return false
+
+    console.warn('[Kick API] Unexpected is_live value from Kick API, treating as offline:', {
+        value: raw,
+        type: typeof raw,
+    })
+    return false
+}
+
 /**
  * Get broadcaster's User Access Token from database
  * Falls back to App Access Token if user token not available
@@ -582,9 +604,10 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             // Parse v2 API response
             const v2Data: any = await response.json()
             const livestream = v2Data.livestream
+            const isLive = livestream ? normalizeIsLiveFlag(livestream.is_live) : false
 
-            if (!livestream || !livestream.is_live) {
-                console.log(`[Kick API] Channel ${slug} has no active livestream (v2 API)`)
+            if (!livestream || !isLive) {
+                console.log(`[Kick API] Channel ${slug} has no active livestream (v2 API, normalized is_live=${isLive})`)
                 return null
             }
 
@@ -663,7 +686,7 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             if (v2Response.ok) {
                 const v2Data: any = await v2Response.json()
                 const livestream = v2Data.livestream
-                if (livestream && livestream.is_live) {
+                if (livestream && normalizeIsLiveFlag(livestream.is_live)) {
                     let thumbnailUrl: string | null = null
                     if (livestream.thumbnail) {
                         thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)

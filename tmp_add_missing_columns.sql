@@ -1,0 +1,2 @@
+ALTER TABLE "raffles" ADD COLUMN IF NOT EXISTS "slice_opacity" DOUBLE PRECISION DEFAULT 0.5;
+ALTER TABLE "raffles" ADD COLUMN IF NOT EXISTS "wheel_background_url" TEXT;

@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
+import RaffleWheel from '@/components/RaffleWheel'
 import { Toast } from '@/components/Toast'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 interface Raffle {
     id: string
@@ -17,6 +18,11 @@ interface Raffle {
     prize_description: string
     drawn_at?: string
     hidden?: boolean
+    number_of_winners?: number
+    rigging_enabled?: boolean
+    wheel_background_url?: string | null
+    center_logo_url?: string | null
+    slice_opacity?: number
 }
 
 interface Winner {
@@ -24,6 +30,11 @@ interface Winner {
     username: string
     tickets: number
     selected_at: string
+    selected_ticket_index?: number | null
+    ticket_range_start?: number
+    ticket_range_end?: number
+    spin_number?: number | null
+    is_rigged?: boolean
 }
 
 export default function AdminRafflesPage() {
@@ -36,6 +47,7 @@ export default function AdminRafflesPage() {
     const [editingRaffle, setEditingRaffle] = useState<Raffle | null>(null)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
     const [viewingWinners, setViewingWinners] = useState<{ raffle: Raffle; winners: Winner[] } | null>(null)
+    const [entriesForWheel, setEntriesForWheel] = useState<any[]>([])
     const [loadingWinners, setLoadingWinners] = useState(false)
 
     useEffect(() => {
@@ -154,6 +166,23 @@ export default function AdminRafflesPage() {
                 const data = await response.json()
                 setToast({ message: '🎉 Winners have been drawn successfully.', type: 'success' })
                 await fetchRaffles()
+                // If we got winners back, show them in modal (include metadata for wheel animation)
+                if (data && data.winners && data.winners.length > 0) {
+                    // Fetch raffle metadata for modal
+                    const raffleResp = await fetch(`/api/raffles/${id}`)
+                    const raffleData = raffleResp.ok ? await raffleResp.json() : null
+                    setViewingWinners({ raffle: raffleData?.raffle || { id }, winners: data.winners.map((w: any) => ({
+                        id: w.entry_id,
+                        username: w.username,
+                        user_id: w.user_id,
+                        tickets: w.tickets,
+                        selected_ticket_index: w.selected_ticket_index,
+                        ticket_range_start: w.ticket_range_start,
+                        ticket_range_end: w.ticket_range_end,
+                        spin_number: w.spin_number,
+                        is_rigged: w.is_rigged,
+                    })) })
+                }
             } else {
                 const error = await response.json()
                 setToast({ message: error.error || 'Failed to draw winners', type: 'error' })
@@ -179,6 +208,13 @@ export default function AdminRafflesPage() {
             if (response.ok) {
                 const data = await response.json()
                 setViewingWinners({ raffle, winners: data.winners || [] })
+
+                // Load entries for wheel
+                const entriesResp = await fetch(`/api/raffles/${raffle.id}/entries`)
+                if (entriesResp.ok) {
+                    const entriesData = await entriesResp.json()
+                    setEntriesForWheel(entriesData.entries || [])
+                }
             } else {
                 const error = await response.json()
                 setToast({ message: error.error || 'Failed to fetch winners', type: 'error' })
@@ -188,6 +224,69 @@ export default function AdminRafflesPage() {
             setToast({ message: 'Failed to fetch winners', type: 'error' })
         } finally {
             setLoadingWinners(false)
+        }
+    }
+
+    const handleResetDraw = async (raffleId: string) => {
+        if (!confirm('Reset draw? All winners will be deleted and raffle will be made active again.')) return
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            const resp = await fetch(`/api/raffles/${raffleId}/reset`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+            if (resp.ok) {
+                setToast({ message: 'Draw has been reset.', type: 'success' })
+                await fetchRaffles()
+            } else {
+                const err = await resp.json()
+                setToast({ message: err.error || 'Failed to reset draw', type: 'error' })
+            }
+        } catch (err) {
+            setToast({ message: 'Failed to reset draw', type: 'error' })
+        }
+    }
+
+    const handleRemoveTicketInstance = async (raffleId: string, entryId: string) => {
+        if (!confirm('Remove this ticket instance?')) return
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            const response = await fetch(`/api/raffles/${raffleId}/entries/${entryId}/remove`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ count: 1 }) })
+            if (response.ok) {
+                setToast({ message: 'Ticket instance removed.', type: 'success' })
+                await fetchRaffles()
+                if (viewingWinners) {
+                    // refresh entries for wheel to update slices
+                    const entriesResp = await fetch(`/api/raffles/${viewingWinners.raffle.id}/entries`)
+                    const entriesData = entriesResp.ok ? await entriesResp.json() : null
+                    setEntriesForWheel(entriesData?.entries || [])
+                }
+            } else {
+                const err = await response.json()
+                setToast({ message: err.error || 'Failed to remove ticket', type: 'error' })
+            }
+        } catch (err) {
+            setToast({ message: 'Failed to remove ticket', type: 'error' })
+        }
+    }
+
+    const handleRemoveAllInstances = async (raffleId: string, entryId: string) => {
+        if (!confirm('Remove all instances for this user?')) return
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            const response = await fetch(`/api/raffles/${raffleId}/entries/${entryId}/remove-all`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+            if (response.ok) {
+                setToast({ message: 'All instances removed for this user.', type: 'success' })
+                await fetchRaffles()
+                if (viewingWinners) {
+                    // refresh entries for wheel to update slices
+                    const entriesResp = await fetch(`/api/raffles/${viewingWinners.raffle.id}/entries`)
+                    const entriesData = entriesResp.ok ? await entriesResp.json() : null
+                    setEntriesForWheel(entriesData?.entries || [])
+                }
+            } else {
+                const err = await response.json()
+                setToast({ message: err.error || 'Failed to remove instances', type: 'error' })
+            }
+        } catch (err) {
+            setToast({ message: 'Failed to remove instances', type: 'error' })
         }
     }
 
@@ -433,6 +532,9 @@ export default function AdminRafflesPage() {
                                                         {loadingWinners ? 'Loading...' : 'View Winners'}
                                                     </button>
                                                 )}
+                                                    {raffle.status === 'completed' && raffle.drawn_at && (
+                                                        <button onClick={() => handleResetDraw(raffle.id)} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">Reset Draw</button>
+                                                    )}
                                                 {(raffle.status === 'completed' || raffle.status === 'cancelled') && (
                                                     <button
                                                         onClick={() => handleToggleHidden(raffle.id, raffle.hidden || false)}
@@ -494,6 +596,11 @@ export default function AdminRafflesPage() {
                             </div>
                         </div>
                         <div className="p-6 overflow-y-auto max-h-[60vh]">
+                            {entriesForWheel.length > 0 && (
+                                <div className="mb-4 flex justify-center">
+                                    <RaffleWheel entries={entriesForWheel as any} totalTickets={entriesForWheel?.length > 0 ? entriesForWheel[entriesForWheel.length - 1].range_end : 0} targetIndex={viewingWinners?.winners?.[0]?.selected_ticket_index ?? null} backgroundImageUrl={viewingWinners?.raffle?.wheel_background_url || null} centerLogoUrl={viewingWinners?.raffle?.center_logo_url || null} sliceOpacity={Number(viewingWinners?.raffle?.slice_opacity || 0.5)} />
+                                </div>
+                            )}
                             {viewingWinners.winners.length === 0 ? (
                                 <p className="text-center text-gray-500 dark:text-kick-text-secondary py-8">
                                     No winners have been drawn yet.
@@ -517,6 +624,10 @@ export default function AdminRafflesPage() {
                                                         {winner.tickets} ticket{winner.tickets !== 1 ? 's' : ''}
                                                     </p>
                                                 </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => handleRemoveTicketInstance(viewingWinners.raffle.id, winner.id)} className="px-3 py-1 text-xs bg-gray-200 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text rounded hover:bg-gray-300 dark:hover:bg-kick-dark">Remove</button>
+                                                <button onClick={() => handleRemoveAllInstances(viewingWinners.raffle.id, winner.id)} className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Remove all instances</button>
                                             </div>
                                             <span className="text-small text-gray-500 dark:text-kick-text-secondary">
                                                 #{index + 1}

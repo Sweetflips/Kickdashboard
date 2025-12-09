@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 interface ReferralTier {
     id: string

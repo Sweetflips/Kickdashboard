@@ -203,6 +203,12 @@ export default function RaffleCard({ raffle, userBalance, isSubscriber, onPurcha
                     >
                         Details
                     </button>
+                    <button
+                        onClick={() => window.open(`/raffles/${raffle.id}/wheel`, '_blank')}
+                        className="px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg text-gray-700 dark:text-kick-text hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors"
+                    >
+                        View Wheel
+                    </button>
                 </div>
             </div>
 

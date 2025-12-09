@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
 import { Toast } from '@/components/Toast'
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 export default function EditRafflePage() {
     const router = useRouter()
@@ -15,6 +15,12 @@ export default function EditRafflePage() {
     const [saving, setSaving] = useState(false)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
     const [hasEntries, setHasEntries] = useState(false)
+    const [numberOfWinners, setNumberOfWinners] = useState(1)
+    const [riggingEnabled, setRiggingEnabled] = useState(false)
+    const [rigSlots, setRigSlots] = useState<(string | null)[]>([null, null, null, null, null])
+    const [entriesList, setEntriesList] = useState<any[]>([])
+    const [manualUserId, setManualUserId] = useState('')
+    const [manualTicketsCount, setManualTicketsCount] = useState(1)
 
     const [formData, setFormData] = useState({
         title: '',
@@ -29,6 +35,9 @@ export default function EditRafflePage() {
         end_at: '',
         sub_only: false,
         hidden_until_start: false,
+        wheel_background_url: '',
+        center_logo_url: '',
+        slice_opacity: '0.5',
     })
 
     useEffect(() => {
@@ -104,7 +113,19 @@ export default function EditRafflePage() {
                     end_at: raffle.end_at ? new Date(raffle.end_at).toISOString().slice(0, 16) : '',
                     sub_only: raffle.sub_only || false,
                     hidden_until_start: raffle.hidden_until_start || false,
+                    wheel_background_url: raffle.wheel_background_url || '',
+                    center_logo_url: raffle.center_logo_url || '',
+                    slice_opacity: raffle.slice_opacity?.toString() || '0.5',
                 })
+                setNumberOfWinners(raffle.number_of_winners || 1)
+                setRiggingEnabled(raffle.rigging_enabled || false)
+
+                // load entries for dropdowns
+                const entriesResp = await fetch(`/api/raffles/${raffleId}/entries`)
+                if (entriesResp.ok) {
+                    const ed = await entriesResp.json()
+                    setEntriesList(ed.entries || [])
+                }
             }
         } catch (error) {
             console.error('Error fetching raffle:', error)
@@ -128,6 +149,11 @@ export default function EditRafflePage() {
                 },
                 body: JSON.stringify({
                     ...formData,
+                    number_of_winners: numberOfWinners,
+                    rigging_enabled: riggingEnabled,
+                    wheel_background_url: formData.wheel_background_url || null,
+                    center_logo_url: formData.center_logo_url || null,
+                    slice_opacity: formData.slice_opacity,
                     ticket_cost: parseInt(formData.ticket_cost),
                     max_tickets_per_user: formData.max_tickets_per_user ? parseInt(formData.max_tickets_per_user) : null,
                     total_tickets_cap: formData.total_tickets_cap ? parseInt(formData.total_tickets_cap) : null,
@@ -297,6 +323,121 @@ export default function EditRafflePage() {
                                         className="flex-1 px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                     <span className="text-body text-gray-600 dark:text-kick-text-secondary">points</span>
+                                </div>
+                            </div>
+
+                            {/* Raffle Options */}
+                            <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
+                                <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">Raffle Options</h2>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">Number of Winners</label>
+                                        <input type="number" min={1} value={numberOfWinners} onChange={(e) => setNumberOfWinners(Number(e.target.value))} className="w-24 px-3 py-2 border rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">Wheel Background URL</label>
+                                        <input type="text" value={formData.wheel_background_url} onChange={(e) => setFormData({ ...formData, wheel_background_url: e.target.value })} className="w-full px-3 py-2 border rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">Center Logo URL</label>
+                                        <input type="text" value={formData.center_logo_url} onChange={(e) => setFormData({ ...formData, center_logo_url: e.target.value })} className="w-full px-3 py-2 border rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">Slice Opacity</label>
+                                        <input type="range" min={0} max={1} step={0.05} value={formData.slice_opacity} onChange={(e) => setFormData({ ...formData, slice_opacity: e.target.value })} className="w-full" />
+                                        <div className="text-small text-gray-500">Opacity: {formData.slice_opacity}</div>
+                                    </div>
+
+                                    {/* Manual Tickets & Users */}
+                                    <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
+                                        <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">Manual Tickets & Users</h2>
+                                        <div className="space-y-4">
+                                            <div className="flex gap-2 items-center">
+                                                <input placeholder="User ID (kick id)" value={manualUserId} onChange={(e) => setManualUserId(e.target.value)} className="px-3 py-2 border rounded w-48" />
+                                                <input type="number" min={1} max={50} value={manualTicketsCount} onChange={(e) => setManualTicketsCount(Number(e.target.value))} className="px-3 py-2 border rounded w-32" />
+                                                <button type="button" className="px-3 py-2 bg-blue-600 text-white rounded" onClick={async () => {
+                                                    if (!manualUserId) { setToast({ message: 'Please enter a user ID', type: 'error' }); return }
+                                                    const token = localStorage.getItem('kick_access_token')
+                                                    const resp = await fetch(`/api/raffles/${raffleId}/entries/manual`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ userId: manualUserId, tickets: manualTicketsCount }) })
+                                                    if (resp.ok) {
+                                                        setToast({ message: 'Manual tickets added', type: 'success' })
+                                                        // refresh entries list
+                                                        const entriesResp = await fetch(`/api/raffles/${raffleId}/entries`)
+                                                        if (entriesResp.ok) {
+                                                            const ed = await entriesResp.json(); setEntriesList(ed.entries || [])
+                                                        }
+                                                    } else { const e = await resp.json(); setToast({ message: e.error || 'Failed to add manual tickets', type: 'error' }) }
+                                                }}>Add Tickets</button>
+                                            </div>
+                                            <div>
+                                                <p className="text-small text-gray-500">Current entries: {entriesList.length}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Entries List */}
+                                        <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
+                                            <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">Ticket Entries</h2>
+                                            <div className="max-h-64 overflow-y-auto">
+                                                {entriesList.length === 0 ? (
+                                                    <p className="text-small text-gray-500">No entries</p>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {entriesList.map((e) => (
+                                                            <div key={e.entry_id} className="border rounded p-2">
+                                                                <div className="font-semibold">{e.username} <span className="text-small text-gray-500">({e.tickets} tickets)</span></div>
+                                                                <div className="mt-2 space-y-1">
+                                                                    {Array.from({ length: e.tickets }).map((_, idx) => (
+                                                                        <div key={`${e.entry_id}-${idx}`} className="flex items-center justify-between p-2 border rounded">
+                                                                            <div className="text-small">Ticket #{idx + 1}</div>
+                                                                            <div className="flex gap-2">
+                                                                                <button type="button" onClick={async () => {
+                                                                                    const token = localStorage.getItem('kick_access_token')
+                                                                                    const resp = await fetch(`/api/raffles/${raffleId}/entries/${e.entry_id}/remove`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ count: 1 }) })
+                                                                                    if (resp.ok) { setToast({ message: 'Ticket removed', type: 'success' }); const entriesResp = await fetch(`/api/raffles/${raffleId}/entries`); const data = await entriesResp.json(); setEntriesList(data.entries || []) }
+                                                                                }} className="px-2 py-1 bg-gray-200 rounded">Remove</button>
+                                                                                <button type="button" onClick={async () => {
+                                                                                    if (!confirm('Remove all instances for this user?')) return
+                                                                                    const token = localStorage.getItem('kick_access_token')
+                                                                                    const resp = await fetch(`/api/raffles/${raffleId}/entries/${e.entry_id}/remove-all`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+                                                                                    if (resp.ok) { setToast({ message: 'All instances removed', type: 'success' }); const entriesResp = await fetch(`/api/raffles/${raffleId}/entries`); const data = await entriesResp.json(); setEntriesList(data.entries || []) }
+                                                                                }} className="px-2 py-1 bg-red-500 text-white rounded">Remove all</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <input type="checkbox" id="rigging_enabled" checked={riggingEnabled} onChange={(e) => setRiggingEnabled(e.target.checked)} className="w-4 h-4" />
+                                        <label htmlFor="rigging_enabled" className="text-body text-gray-900 dark:text-kick-text">Enable predefined winners (Rigging)</label>
+                                    </div>
+                                    {riggingEnabled && (
+                                        <div className="space-y-2">
+                                            {[0,1,2,3,4].map(i => (
+                                                <div key={i} className="flex items-center gap-2">
+                                                    <label className="w-20">Winner #{i+1}</label>
+                                                    <select value={rigSlots[i] || ''} onChange={(e) => { const newSlots = [...rigSlots]; newSlots[i] = e.target.value || null; setRigSlots(newSlots) }} className="flex-1 px-3 py-2 border rounded">
+                                                        <option value="">-- None --</option>
+                                                        {entriesList.map(entry => (
+                                                            <option key={entry.entry_id} value={entry.entry_id}>{entry.username} ({entry.tickets})</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            ))}
+                                            <div>
+                                                <button type="button" onClick={async () => {
+                                                    const token = localStorage.getItem('kick_access_token')
+                                                    const resp = await fetch(`/api/raffles/${raffleId}/rigging`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ rigging_enabled: riggingEnabled, rigs: rigSlots.filter(Boolean) }) })
+                                                    if (resp.ok) setToast({ message: 'Rigging updated', type: 'success' }); else setToast({ message: 'Failed to update rigging', type: 'error' })
+                                                }} className="px-3 py-1 bg-blue-600 text-white rounded">Save Rigging</button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

@@ -127,7 +127,10 @@ export default function Dashboard() {
 
     const fetchChannelData = async () => {
         try {
-            const response = await fetch('/api/channel?slug=sweetflips')
+            const response = await fetch('/api/channel?slug=sweetflips', {
+                // Always bypass any HTTP cache so we never show a stale LIVE state
+                cache: 'no-store',
+            })
             if (!response.ok) {
                 throw new Error('Failed to fetch channel data')
             }
