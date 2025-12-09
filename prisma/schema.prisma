@@ -79,6 +79,7 @@ model StreamSession {
   ended_at            DateTime?
   peak_viewer_count   Int       @default(0)
   total_messages      Int       @default(0)
+  duration_seconds    Int?
   created_at          DateTime  @default(now())
   updated_at          DateTime  @updatedAt
 

@@ -369,15 +369,24 @@ export async function GET(request: Request) {
                         const messageCount = await db.chatMessage.count({
                             where: { stream_session_id: activeSession.id },
                         })
+                        
+                        // Calculate duration in seconds
+                        const startTime = activeSession.started_at.getTime()
+                        const endTime = Date.now()
+                        const durationSeconds = Math.floor((endTime - startTime) / 1000)
+                        const durationHours = Math.floor(durationSeconds / 3600)
+                        const durationMinutes = Math.floor((durationSeconds % 3600) / 60)
+                        
                         await db.streamSession.update({
                             where: { id: activeSession.id },
                             data: {
                                 ended_at: new Date(),
                                 total_messages: messageCount,
+                                duration_seconds: durationSeconds,
                                 updated_at: new Date(),
                             },
                         })
-                        console.log(`🛑 Stream is offline - ended session ${activeSession.id}`)
+                        console.log(`🛑 Stream is offline - ended session ${activeSession.id} (duration: ${durationHours}h ${durationMinutes}m, messages: ${messageCount})`)
                     }
                     lastStreamState.delete(slug)
                 }
