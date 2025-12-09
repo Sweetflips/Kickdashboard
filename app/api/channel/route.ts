@@ -97,10 +97,31 @@ async function checkLiveStatusFromV2API(slug: string): Promise<{
         }
 
         // Log extracted data for debugging
+        // Validate and normalize started_at timestamp to ensure proper timezone handling
+        let startedAt: string | null = livestream.started_at || null
+        if (startedAt) {
+            try {
+                const parsedDate = new Date(startedAt)
+                if (isNaN(parsedDate.getTime())) {
+                    console.warn(`[Channel API] Invalid started_at timestamp: ${startedAt}`)
+                    startedAt = null
+                } else {
+                    // Normalize to ISO 8601 UTC format
+                    startedAt = parsedDate.toISOString()
+                }
+            } catch (error) {
+                console.error(`[Channel API] Error parsing started_at:`, error)
+                startedAt = null
+            }
+        }
+
         console.log(`[Channel API] Extracted data:`, {
             viewerCount,
             streamTitle: livestream.stream_title || livestream.session_title || '',
             startedAt: livestream.started_at,
+            startedAtNormalized: startedAt,
+            startedAtTimestamp: startedAt ? new Date(startedAt).getTime() : null,
+            nowTimestamp: Date.now(),
             category: category,
             categoryRaw: livestream.category
         })
@@ -110,7 +131,7 @@ async function checkLiveStatusFromV2API(slug: string): Promise<{
             viewerCount,
             streamTitle: livestream.stream_title || livestream.session_title || '',
             thumbnailUrl,
-            startedAt: livestream.started_at || null,
+            startedAt: startedAt,
             category,
         }
     } catch (error) {
@@ -172,6 +193,8 @@ export async function GET(request: Request) {
     const now = Date.now()
     const cacheAge = cached ? now - cached.timestamp : Infinity
 
+    console.log(`[Channel API] Cache status for ${slug}: age=${cacheAge}ms, has_cached=${!!cached}, is_stale=${cacheAge >= CACHE_TTL && cacheAge < STALE_TTL}`)
+
     // Always verify live status AND viewer count from official API, even with cached data
     // This ensures stream status and viewer count are always accurate and up-to-date
     if (cached && cacheAge < CACHE_TTL) {
@@ -183,12 +206,38 @@ export async function GET(request: Request) {
         // Always update viewer count and live status from official API
         // This ensures viewer count stays fresh even when live status doesn't change
         if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
+            // Fetch active session for fallback if needed
+            let activeSessionStartTime: string | null = null
+            if (officialStatus.isLive && !officialStatus.startedAt) {
+                try {
+                    const broadcasterUserId = cached.data?.broadcaster_user_id
+                    if (broadcasterUserId) {
+                        const activeSession = await db.streamSession.findFirst({
+                            where: {
+                                broadcaster_user_id: BigInt(broadcasterUserId),
+                                ended_at: null,
+                            },
+                            orderBy: { started_at: 'desc' },
+                            select: { started_at: true },
+                        })
+                        if (activeSession) {
+                            activeSessionStartTime = activeSession.started_at.toISOString()
+                            console.log(`[Channel API] Using database session start time as fallback in cache: ${activeSessionStartTime}`)
+                        }
+                    }
+                } catch (err) {
+                    console.error(`[Channel API] Error fetching session for cache fallback:`, err)
+                }
+            }
+
             const updatedData = {
                 ...cached.data,
                 is_live: officialStatus.isLive,
                 viewer_count: officialStatus.viewerCount,
                 session_title: officialStatus.streamTitle || cached.data?.session_title || '',
-                stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
+                stream_started_at: officialStatus.isLive 
+                    ? (officialStatus.startedAt || activeSessionStartTime || cached.data?.stream_started_at || null) 
+                    : null,
                 category: officialStatus.category || cached.data?.category || null,
             }
             // Update cache with fresh data
@@ -210,12 +259,38 @@ export async function GET(request: Request) {
 
         // Always update viewer count and live status from official API
         if (officialStatus.isLive !== cachedIsLive || officialStatus.viewerCount !== cachedViewerCount) {
+            // Fetch active session for fallback if needed
+            let activeSessionStartTime: string | null = null
+            if (officialStatus.isLive && !officialStatus.startedAt) {
+                try {
+                    const broadcasterUserId = cached.data?.broadcaster_user_id
+                    if (broadcasterUserId) {
+                        const activeSession = await db.streamSession.findFirst({
+                            where: {
+                                broadcaster_user_id: BigInt(broadcasterUserId),
+                                ended_at: null,
+                            },
+                            orderBy: { started_at: 'desc' },
+                            select: { started_at: true },
+                        })
+                        if (activeSession) {
+                            activeSessionStartTime = activeSession.started_at.toISOString()
+                            console.log(`[Channel API] Using database session start time as fallback in stale cache: ${activeSessionStartTime}`)
+                        }
+                    }
+                } catch (err) {
+                    console.error(`[Channel API] Error fetching session for stale cache fallback:`, err)
+                }
+            }
+
             const updatedData = {
                 ...cached.data,
                 is_live: officialStatus.isLive,
                 viewer_count: officialStatus.viewerCount,
                 session_title: officialStatus.streamTitle || cached.data?.session_title || '',
-                stream_started_at: officialStatus.isLive ? (officialStatus.startedAt || cached.data?.stream_started_at || null) : null,
+                stream_started_at: officialStatus.isLive 
+                    ? (officialStatus.startedAt || activeSessionStartTime || cached.data?.stream_started_at || null) 
+                    : null,
                 category: officialStatus.category || cached.data?.category || null,
             }
             cache.set(cacheKey, { data: updatedData, timestamp: cached.timestamp })
@@ -292,6 +367,12 @@ export async function GET(request: Request) {
         }
         streamStartedAt = v2Status.startedAt
         category = v2Status.category
+
+        // Fallback: If API didn't provide started_at but stream is live, use database session time
+        if (isLive && !streamStartedAt && activeSession) {
+            streamStartedAt = activeSession.started_at.toISOString()
+            console.log(`[Channel API] Using database session start time as fallback: ${streamStartedAt}`)
+        }
 
         // Also check for categories array (some APIs return categories as array)
         if (!category && channelData.categories && Array.isArray(channelData.categories) && channelData.categories.length > 0) {
@@ -374,6 +455,10 @@ export async function GET(request: Request) {
                 const wasLive = lastState?.isLive || false
 
                 if (isLive && !wasLive) {
+                    // Stream just went live - FORCE CACHE CLEAR to ensure fresh data
+                    cache.delete(cacheKey)
+                    console.log(`[Channel API] Stream went live - cleared cache for ${slug}`)
+
                     // Stream just went live - create session if none exists
                     if (!activeSession) {
                         const session = await db.streamSession.create({

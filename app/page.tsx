@@ -254,11 +254,18 @@ export default function Dashboard() {
 
         const updateDuration = () => {
             const start = new Date(startedAt).getTime()
-            const diff = Date.now() - start
+            const now = Date.now()
+            const diff = now - start
 
             if (diff < 0) {
+                console.warn(`[Duration] Negative duration detected! start=${new Date(startedAt).toISOString()}, now=${new Date(now).toISOString()}, diff=${diff}ms`)
                 setStreamDuration('0:00:00')
                 return
+            }
+
+            // Sanity check: stream can't be more than 72 hours old
+            if (diff > 72 * 3600000) {
+                console.warn(`[Duration] Suspiciously long duration: ${diff}ms (${Math.floor(diff / 3600000)}h)`);
             }
 
             const hours = Math.floor(diff / 3600000)
