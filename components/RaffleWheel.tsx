@@ -128,7 +128,7 @@ export default function RaffleWheel({ entries, totalTickets, onSpinComplete, tar
                 winwheelRef.current = null
             }
         }
-    }, [entries, totalTickets, targetIndex])
+    }, [entries, totalTickets, targetIndex, onSpinComplete, sliceOpacity])
 
     return (
         <div className="relative" style={{ width: 600, height: 600, backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>

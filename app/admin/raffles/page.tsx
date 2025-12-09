@@ -29,12 +29,14 @@ interface Winner {
     id: string
     username: string
     tickets: number
-    selected_at: string
+    selected_at?: string
     selected_ticket_index?: number | null
     ticket_range_start?: number
     ticket_range_end?: number
     spin_number?: number | null
     is_rigged?: boolean
+    user_id?: string
+    entry_id?: string
 }
 
 export default function AdminRafflesPage() {
@@ -174,7 +176,7 @@ export default function AdminRafflesPage() {
                     setViewingWinners({ raffle: raffleData?.raffle || { id }, winners: data.winners.map((w: any) => ({
                         id: w.entry_id,
                         username: w.username,
-                        user_id: w.user_id,
+						user_id: w.user_id,
                         tickets: w.tickets,
                         selected_ticket_index: w.selected_ticket_index,
                         ticket_range_start: w.ticket_range_start,
@@ -626,8 +628,8 @@ export default function AdminRafflesPage() {
                                                 </div>
                                             </div>
                                             <div className="flex gap-2">
-                                                <button onClick={() => handleRemoveTicketInstance(viewingWinners.raffle.id, winner.id)} className="px-3 py-1 text-xs bg-gray-200 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text rounded hover:bg-gray-300 dark:hover:bg-kick-dark">Remove</button>
-                                                <button onClick={() => handleRemoveAllInstances(viewingWinners.raffle.id, winner.id)} className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Remove all instances</button>
+												<button onClick={() => handleRemoveTicketInstance(viewingWinners.raffle.id, winner.entry_id || winner.id)} className="px-3 py-1 text-xs bg-gray-200 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text rounded hover:bg-gray-300 dark:hover:bg-kick-dark">Remove</button>
+												<button onClick={() => handleRemoveAllInstances(viewingWinners.raffle.id, winner.entry_id || winner.id)} className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Remove all instances</button>
                                             </div>
                                             <span className="text-small text-gray-500 dark:text-kick-text-secondary">
                                                 #{index + 1}
