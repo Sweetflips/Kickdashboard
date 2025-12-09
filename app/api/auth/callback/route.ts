@@ -113,6 +113,7 @@ export async function GET(request: Request) {
         // Get code_verifier from cookie
         const cookieStore = await cookies()
         const codeVerifier = cookieStore.get('pkce_code_verifier')?.value
+        const referralCode = cookieStore.get('referral_code')?.value
 
         if (!codeVerifier) {
             return NextResponse.redirect(`${errorRedirect}/?error=${encodeURIComponent('PKCE code verifier not found. Please try authenticating again.')}`)
@@ -171,8 +172,8 @@ export async function GET(request: Request) {
                     const userAgent = request.headers.get('user-agent') || null
                     const referrer = request.headers.get('referer') || request.headers.get('referrer') || null
                     
-                    // Extract referral code from URL parameter
-                    const referralCode = searchParams.get('ref')?.toUpperCase().trim() || null
+                    // Extract referral code from cookie (set during auth flow)
+                    const finalReferralCode = referralCode?.toUpperCase().trim() || null
 
                     // Check if user already exists to determine if this is a signup
                     const existingUser = await db.user.findUnique({
@@ -290,13 +291,13 @@ export async function GET(request: Request) {
                     })
 
                     // Handle referral if provided and this is a new signup
-                    if (isNewSignup && referralCode) {
+                    if (isNewSignup && finalReferralCode) {
                         try {
                             // Find the referrer by username (referral code is uppercase username)
                             const referrer = await db.user.findFirst({
                                 where: {
                                     username: {
-                                        equals: referralCode,
+                                        equals: finalReferralCode,
                                         mode: 'insensitive',
                                     }
                                 },
@@ -309,12 +310,12 @@ export async function GET(request: Request) {
                                     data: {
                                         referrer_user_id: referrer.id,
                                         referee_user_id: savedUser.id,
-                                        referral_code: referralCode,
+                                        referral_code: finalReferralCode,
                                     },
                                 })
                                 console.log(`✅ Referral created: ${referrer.username} -> ${username}`)
                             } else if (!referrer) {
-                                console.warn(`⚠️ Referral code not found: ${referralCode}`)
+                                console.warn(`⚠️ Referral code not found: ${finalReferralCode}`)
                             } else {
                                 console.warn(`⚠️ User cannot refer themselves`)
                             }
@@ -400,9 +401,10 @@ export async function GET(request: Request) {
             // Continue with redirect even if user save fails
         }
 
-        // Clear PKCE cookie and set auth tokens in cookies with 3-month expiration
+        // Clear PKCE and referral code cookies and set auth tokens in cookies with 3-month expiration
         const response = NextResponse.redirect(`${baseUrl}/?auth_success=true&access_token=${encodeURIComponent(tokenData.access_token)}&refresh_token=${encodeURIComponent(tokenData.refresh_token || '')}`)
         response.cookies.delete('pkce_code_verifier')
+        response.cookies.delete('referral_code')
 
         // Set authentication tokens in cookies with 3-month expiration (90 days)
         const threeMonthsInSeconds = 90 * 24 * 60 * 60 // 7,776,000 seconds

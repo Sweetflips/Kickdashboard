@@ -3,21 +3,28 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 
 // Note: Since this is a client component, metadata must be set via head tags
 // The page title will be handled by the parent layout
 
-export default function LoginPage() {
+function LoginContent() {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [referralCode, setReferralCode] = useState<string | null>(null)
 
     useEffect(() => {
         // Check if already authenticated
         if (typeof window !== 'undefined') {
             const token = localStorage.getItem('kick_access_token')
             const params = new URLSearchParams(window.location.search)
+
+            // Get referral code from URL
+            const ref = params.get('ref')
+            if (ref) {
+                setReferralCode(ref)
+            }
 
             // Handle auth callback
             if (params.get('auth_success') === 'true') {
@@ -76,7 +83,11 @@ export default function LoginPage() {
     const handleKickLogin = () => {
         setIsLoading(true)
         setError(null)
-        window.location.href = '/api/auth?action=authorize'
+        // Pass referral code to auth endpoint if provided
+        const authUrl = referralCode 
+            ? `/api/auth?action=authorize&ref=${encodeURIComponent(referralCode)}`
+            : '/api/auth?action=authorize'
+        window.location.href = authUrl
     }
 
     return (
@@ -186,5 +197,13 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <LoginContent />
+        </Suspense>
     )
 }

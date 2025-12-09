@@ -56,6 +56,7 @@ export async function GET(request: Request) {
         const { clientId, clientSecret } = getKickCredentials()
         const { searchParams } = new URL(request.url)
         const action = searchParams.get('action')
+        const referralCode = searchParams.get('ref')
 
         if (action === 'authorize') {
             // Generate authorization URL with PKCE
@@ -96,6 +97,17 @@ export async function GET(request: Request) {
                 maxAge: 7776000, // 3 months (90 days)
                 path: '/',
             })
+
+            // Store referral code in a cookie if provided
+            if (referralCode) {
+                response.cookies.set('referral_code', referralCode, {
+                    httpOnly: false,
+                    secure: !isLocalhost,
+                    sameSite: 'lax',
+                    maxAge: 7776000, // 3 months (90 days)
+                    path: '/',
+                })
+            }
 
             return response
         }
