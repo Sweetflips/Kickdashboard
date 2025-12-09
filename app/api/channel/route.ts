@@ -368,12 +368,6 @@ export async function GET(request: Request) {
         streamStartedAt = v2Status.startedAt
         category = v2Status.category
 
-        // Fallback: If API didn't provide started_at but stream is live, use database session time
-        if (isLive && !streamStartedAt && activeSession) {
-            streamStartedAt = activeSession.started_at.toISOString()
-            console.log(`[Channel API] Using database session start time as fallback: ${streamStartedAt}`)
-        }
-
         // Also check for categories array (some APIs return categories as array)
         if (!category && channelData.categories && Array.isArray(channelData.categories) && channelData.categories.length > 0) {
             const firstCategory = channelData.categories[0]
@@ -398,6 +392,34 @@ export async function GET(request: Request) {
 
         // Ensure broadcaster_user_id is available (try multiple possible locations)
         const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
+
+        // Fetch active session early for fallback logic
+        let activeSession: { id: bigint; started_at: Date; ended_at: Date | null } | null = null
+        if (broadcasterUserId) {
+            try {
+                const broadcasterIdBigInt = BigInt(broadcasterUserId)
+                activeSession = await db.streamSession.findFirst({
+                    where: {
+                        broadcaster_user_id: broadcasterIdBigInt,
+                        ended_at: null,
+                    },
+                    orderBy: { started_at: 'desc' },
+                    select: {
+                        id: true,
+                        started_at: true,
+                        ended_at: true,
+                    },
+                })
+            } catch (err) {
+                console.error('❌ Error fetching active session:', err)
+            }
+        }
+
+        // Fallback: If API didn't provide started_at but stream is live, use database session time
+        if (isLive && !streamStartedAt && activeSession) {
+            streamStartedAt = activeSession.started_at.toISOString()
+            console.log(`[Channel API] Using database session start time as fallback: ${streamStartedAt}`)
+        }
 
         // Extract chatroom_id if available
         const chatroomId = channelData.chatroom?.id || channelData.chatroom_id || null
@@ -438,18 +460,10 @@ export async function GET(request: Request) {
         }
 
         // Track stream sessions - always check database for active sessions
-        if (broadcasterUserId) {
+        if (broadcasterUserId && activeSession !== null) {
             try {
                 const broadcasterIdBigInt = BigInt(broadcasterUserId)
-
-                // Check database for active session (not relying on in-memory cache)
-                const activeSession = await db.streamSession.findFirst({
-                    where: {
-                        broadcaster_user_id: broadcasterIdBigInt,
-                        ended_at: null,
-                    },
-                    orderBy: { started_at: 'desc' },
-                })
+                // activeSession already fetched earlier for fallback logic
 
                 const lastState = lastStreamState.get(slug)
                 const wasLive = lastState?.isLive || false
