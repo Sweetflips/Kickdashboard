@@ -114,27 +114,13 @@ export async function POST(request: Request) {
             )
         }
 
-        // Get admin user ID from request
-        const token = request.headers.get('authorization')?.replace('Bearer ', '')
-        if (!token) {
+        // Get authenticated admin user
+        const { getAuthenticatedUser } = await import('@/lib/auth')
+        const auth = await getAuthenticatedUser(request)
+        if (!auth) {
             return NextResponse.json(
-                { error: 'No authorization token provided' },
+                { error: 'Authentication required' },
                 { status: 401 }
-            )
-        }
-
-        const adminUser = await db.user.findFirst({
-            where: {
-                is_admin: true,
-                access_token_hash: { not: null },
-            },
-            select: { id: true },
-        })
-
-        if (!adminUser) {
-            return NextResponse.json(
-                { error: 'Admin user not found' },
-                { status: 404 }
             )
         }
 
@@ -171,7 +157,7 @@ export async function POST(request: Request) {
                     points_value: parseInt(points_value),
                     max_uses: max_uses ? parseInt(max_uses) : null,
                     expires_at: expires_at ? new Date(expires_at) : null,
-                    created_by: adminUser.id,
+                    created_by: auth.userId,
                 },
             })
 
