@@ -303,6 +303,16 @@ export async function GET(request: Request) {
             console.log(`[Channel API] Found category from categories array:`, category)
         }
 
+        // Also check livestream.categories if not found yet
+        if (!category && livestream?.categories && Array.isArray(livestream.categories) && livestream.categories.length > 0) {
+            const firstCategory = livestream.categories[0]
+            category = {
+                id: firstCategory.id || firstCategory.category_id,
+                name: firstCategory.name
+            }
+            console.log(`[Channel API] Found category from livestream.categories array:`, category)
+        }
+
         console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}, category=${category?.name || 'null'}, startedAt=${streamStartedAt}`)
 
         // Ensure broadcaster_user_id is available (try multiple possible locations)
