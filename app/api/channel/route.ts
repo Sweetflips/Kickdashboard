@@ -234,8 +234,8 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                     }
                 }
                 if (livestream.viewer_count !== undefined) {
-                    viewerCount = typeof livestream.viewer_count === 'number' 
-                        ? Math.floor(livestream.viewer_count) 
+                    viewerCount = typeof livestream.viewer_count === 'number'
+                        ? Math.floor(livestream.viewer_count)
                         : parseInt(String(livestream.viewer_count).replace(/[.,]/g, ''), 10) || 0
                 }
                 streamTitle = livestream.stream_title || livestream.session_title || ''
@@ -605,8 +605,8 @@ export async function GET(request: Request) {
         // Track stream sessions
         await trackStreamSession(slug, broadcasterUserId, isLive, viewerCount, streamTitle, thumbnailUrl)
 
-        // Prepare response data
-        const responseData = {
+        // Prepare final response
+        return NextResponse.json({
             ...channelData,
             broadcaster_user_id: broadcasterUserId,
             chatroom_id: chatroomId,
@@ -618,9 +618,7 @@ export async function GET(request: Request) {
             category: category,
             followers_count: followerCount,
             last_live_at: lastLiveTime?.toISOString() || null,
-        }
-
-        return NextResponse.json(responseData, {
+        }, {
             headers: {
                 // Ensure no intermediate cache keeps a stale LIVE status
                 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
