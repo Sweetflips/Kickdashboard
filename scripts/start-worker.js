@@ -1,6 +1,40 @@
 #!/usr/bin/env node
-const { execSync, spawn } = require('child_process');
+
+// Start HTTP health check server IMMEDIATELY (before ANY other code)
+// This ensures Railway can verify the service is up within seconds
 const http = require('http');
+const port = parseInt(process.env.PORT || '8080', 10);
+
+const healthServer = http.createServer((req, res) => {
+  // Support both /health and /api/health for Railway compatibility
+  if (req.url === '/' || req.url === '/health' || req.url === '/api/health') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache'
+    });
+    res.end(JSON.stringify({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      service: 'worker'
+    }));
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+  }
+});
+
+// Listen on 0.0.0.0 to accept connections from Railway
+healthServer.listen(port, '0.0.0.0', () => {
+  console.log(`✅ Health check server listening on 0.0.0.0:${port}`);
+});
+
+healthServer.on('error', (err) => {
+  console.error('⚠️ Health check server error:', err.message);
+  // Don't exit - workers can still run without health endpoint
+});
+
+// Now load other modules and start workers
+const { execSync, spawn } = require('child_process');
 const { PrismaClient } = require('@prisma/client');
 
 // Run migrations before starting the worker
@@ -70,37 +104,6 @@ async function ensureTables() {
     await prisma.$disconnect();
   }
 }
-
-// Start HTTP health check server IMMEDIATELY (synchronously, before any async operations)
-// This ensures Railway can verify the service is up within the timeout window
-const port = parseInt(process.env.PORT || '8080', 10);
-const healthServer = http.createServer((req, res) => {
-  // Support both /health and /api/health for Railway compatibility
-  if (req.url === '/' || req.url === '/health' || req.url === '/api/health') {
-    res.writeHead(200, { 
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache'
-    });
-    res.end(JSON.stringify({ 
-      status: 'ok', 
-      timestamp: new Date().toISOString(),
-      service: 'point-worker'
-    }));
-  } else {
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not Found');
-  }
-});
-
-// Start listening immediately (synchronously)
-healthServer.listen(port, '0.0.0.0', () => {
-  console.log(`✅ Health check server listening on 0.0.0.0:${port}`);
-});
-
-healthServer.on('error', (err) => {
-  console.error('⚠️ Health check server error:', err.message);
-  // Don't exit - workers can still run without health endpoint
-});
 
 // Run the safety net check and wait for it to complete before starting workers
 (async () => {
