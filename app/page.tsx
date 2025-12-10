@@ -233,12 +233,12 @@ export default function Dashboard() {
 
         // Fetch immediately on mount and when dependencies change
         fetchStreamLeaderboard()
-        // Refresh leaderboard every 60 seconds only when live
+        // Refresh leaderboard every 10 seconds when live (faster updates for real-time feel)
         const interval = setInterval(() => {
             if (isLive) {
                 fetchStreamLeaderboard()
             }
-        }, 60000)
+        }, 10000)
         return () => clearInterval(interval)
     }, [channelData?.broadcaster_user_id, isLive])
 

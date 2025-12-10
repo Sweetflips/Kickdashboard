@@ -741,16 +741,16 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
                 console.log(`[ChatFrame] Loading messages with params: ${params.toString()}`)
                 const response = await fetch(`/api/chat?${params.toString()}`)
-                
+
                 if (!response.ok) {
                     const errorText = await response.text()
                     console.error(`[ChatFrame] Failed to fetch messages: ${response.status} - ${errorText}`)
                     return
                 }
-                
+
                 const data = await response.json()
                 console.log(`[ChatFrame] Received ${data.messages?.length || 0} messages from API`)
-                
+
                 if (data.messages && Array.isArray(data.messages)) {
                     // Ensure messages are properly formatted and sorted by timestamp
                     const formattedMessages = data.messages
