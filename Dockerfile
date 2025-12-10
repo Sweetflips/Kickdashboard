@@ -5,18 +5,15 @@ FROM node:18-alpine AS base
 FROM base AS deps
 WORKDIR /app
 
-# Copy package files
+# Copy package files and prisma schema (needed for postinstall)
 COPY package.json package-lock.json* ./
-# Install dependencies
+COPY prisma ./prisma
+
+# Install dependencies (this runs postinstall which generates Prisma client)
 RUN npm ci
 
-# Generate Prisma Client
-FROM deps AS prisma
-COPY prisma ./prisma
-RUN npx prisma generate
-
 # Build the application
-FROM prisma AS builder
+FROM deps AS builder
 WORKDIR /app
 
 # Copy source code
@@ -61,4 +58,3 @@ ENV HOSTNAME="0.0.0.0"
 
 # Start the application
 CMD ["node", "scripts/start.js"]
-
