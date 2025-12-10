@@ -727,57 +727,67 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
     }, [chatroomId, slug])
 
     useEffect(() => {
-        if (!chatroomId) return
-
-        // Load messages from database API
+        // Load messages from database API - don't require chatroomId, just broadcasterUserId
         const loadMessagesFromDatabase = async () => {
             try {
                 setChatLoading(true)
                 const params = new URLSearchParams()
                 if (broadcasterUserId) {
                     params.append('broadcaster_user_id', broadcasterUserId.toString())
+                } else {
+                    console.warn('[ChatFrame] broadcasterUserId missing, loading all messages')
                 }
                 params.append('limit', '500') // Load last 500 messages (includes offline messages)
 
+                console.log(`[ChatFrame] Loading messages with params: ${params.toString()}`)
                 const response = await fetch(`/api/chat?${params.toString()}`)
-                if (response.ok) {
-                    const data = await response.json()
-                    if (data.messages && Array.isArray(data.messages)) {
-                        // Ensure messages are properly formatted and sorted by timestamp
-                        const formattedMessages = data.messages
-                            .map((msg: ChatMessage) => ({
-                                ...msg,
-                                sender: {
-                                    ...msg.sender,
-                                    is_verified: msg.sender.is_verified || isVerifiedUser(
-                                        msg.sender.username || '',
-                                        msg.sender.identity?.badges || []
-                                    ),
-                                    identity: msg.sender.identity || {
-                                        username_color: '#FFFFFF',
-                                        badges: [],
-                                    },
+                
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    console.error(`[ChatFrame] Failed to fetch messages: ${response.status} - ${errorText}`)
+                    return
+                }
+                
+                const data = await response.json()
+                console.log(`[ChatFrame] Received ${data.messages?.length || 0} messages from API`)
+                
+                if (data.messages && Array.isArray(data.messages)) {
+                    // Ensure messages are properly formatted and sorted by timestamp
+                    const formattedMessages = data.messages
+                        .map((msg: ChatMessage) => ({
+                            ...msg,
+                            sender: {
+                                ...msg.sender,
+                                is_verified: msg.sender.is_verified || isVerifiedUser(
+                                    msg.sender.username || '',
+                                    msg.sender.identity?.badges || []
+                                ),
+                                identity: msg.sender.identity || {
+                                    username_color: '#FFFFFF',
+                                    badges: [],
                                 },
-                            }))
-                            .sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp)
+                            },
+                        }))
+                        .sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp)
 
-                        setChatMessages(formattedMessages)
+                    setChatMessages(formattedMessages)
 
-                        // Mark all loaded messages as processed to prevent duplicate saves
-                        formattedMessages.forEach((msg: ChatMessage) => {
-                            processedMessageIdsRef.current.add(msg.message_id)
-                        })
+                    // Mark all loaded messages as processed to prevent duplicate saves
+                    formattedMessages.forEach((msg: ChatMessage) => {
+                        processedMessageIdsRef.current.add(msg.message_id)
+                    })
 
-                        // Scroll to bottom after messages load
-                        setTimeout(() => {
-                            if (chatContainerRef.current) {
-                                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
-                            }
-                        }, 100)
-                    }
+                    // Scroll to bottom after messages load
+                    setTimeout(() => {
+                        if (chatContainerRef.current) {
+                            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+                        }
+                    }, 100)
+                } else {
+                    console.warn('[ChatFrame] No messages in response or invalid format:', data)
                 }
             } catch (error) {
-                console.error('Failed to load messages from database:', error)
+                console.error('[ChatFrame] Failed to load messages from database:', error)
             } finally {
                 setChatLoading(false)
             }

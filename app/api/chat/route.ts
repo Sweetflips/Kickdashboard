@@ -29,6 +29,8 @@ export async function GET(request: Request) {
         const streamSessionId = searchParams.get('stream_session_id')
         const broadcasterUserId = searchParams.get('broadcaster_user_id')
 
+        console.log(`📡 Chat API: Request - limit=${limit}, offset=${offset}, stream_session_id=${streamSessionId || 'none'}, broadcaster_user_id=${broadcasterUserId || 'none'}`)
+
         const where: any = {}
         const offlineWhere: any = {}
         if (streamSessionId) {
@@ -38,6 +40,8 @@ export async function GET(request: Request) {
         if (broadcasterUserId) {
             where.broadcaster_user_id = BigInt(broadcasterUserId)
             offlineWhere.broadcaster_user_id = BigInt(broadcasterUserId)
+        } else {
+            console.warn(`📡 Chat API: broadcaster_user_id missing - will return all messages (unfiltered)`)
         }
         // Note: Offline messages are now in a separate table
         // We merge queries from both tables to show all messages together
@@ -200,7 +204,7 @@ export async function GET(request: Request) {
             }
         })
 
-        console.log(`📡 Chat API: Returning ${formattedMessages.length} messages from database (total: ${total}, limit: ${limit}, offset: ${offset})`)
+        console.log(`📡 Chat API: Returning ${formattedMessages.length} messages from database (total: ${total}, limit: ${limit}, offset: ${offset}, broadcaster_user_id: ${broadcasterUserId || 'none'}, stream_session_id: ${streamSessionId || 'none'})`)
 
         return NextResponse.json({
             messages: formattedMessages,
