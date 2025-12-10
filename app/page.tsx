@@ -84,10 +84,10 @@ export default function Dashboard() {
 
     useEffect(() => {
         fetchChannelData()
-        // Only refresh if there's no error
+        // Refresh every 60 seconds to reduce API calls
         const interval = setInterval(() => {
             fetchChannelData()
-        }, 5000) // Refresh every 5 seconds for live viewer count, duration, and category updates
+        }, 60000) // Refresh every 60 seconds (1 minute)
         return () => clearInterval(interval)
     }, [])
 
@@ -233,12 +233,12 @@ export default function Dashboard() {
 
         // Fetch immediately on mount and when dependencies change
         fetchStreamLeaderboard()
-        // Refresh leaderboard every 5 seconds only when live (faster updates)
+        // Refresh leaderboard every 60 seconds only when live
         const interval = setInterval(() => {
             if (isLive) {
                 fetchStreamLeaderboard()
             }
-        }, 5000)
+        }, 60000)
         return () => clearInterval(interval)
     }, [channelData?.broadcaster_user_id, isLive])
 

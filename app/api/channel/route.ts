@@ -29,7 +29,7 @@ async function fetchV2ChannelData(slug: string): Promise<{
     try {
         const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
         console.log(`[Channel API] Fetching v2 API for metadata: ${url}`)
-        
+
         const response = await fetch(url, {
             headers: {
                 'Accept': 'application/json',
@@ -37,14 +37,14 @@ async function fetchV2ChannelData(slug: string): Promise<{
             },
             cache: 'no-store',
         })
-        
+
         if (!response.ok) {
             console.warn(`[Channel API] v2 API returned ${response.status}`)
             return null
         }
-        
+
         const data = await response.json()
-        
+
         // Log ALL important data from v2 API
         console.log(`[Channel API] ========== V2 API FULL DATA ==========`)
         console.log(`[Channel API] slug: ${data.slug}`)
@@ -52,7 +52,7 @@ async function fetchV2ChannelData(slug: string): Promise<{
         console.log(`[Channel API] followers_count: ${data.followers_count}`)
         console.log(`[Channel API] subscriber_count: ${data.subscriber_count}`)
         console.log(`[Channel API] verified: ${data.verified}`)
-        
+
         if (data.livestream) {
             console.log(`[Channel API] livestream.id: ${data.livestream.id}`)
             console.log(`[Channel API] livestream.session_title: ${data.livestream.session_title}`)
@@ -66,10 +66,10 @@ async function fetchV2ChannelData(slug: string): Promise<{
             console.log(`[Channel API] livestream: null (stream is offline)`)
         }
         console.log(`[Channel API] ========================================`)
-        
+
         const livestream = data.livestream
         let category: { id: number; name: string } | null = null
-        
+
         // Extract category from livestream
         if (livestream?.category && typeof livestream.category === 'object') {
             category = {
@@ -85,7 +85,7 @@ async function fetchV2ChannelData(slug: string): Promise<{
                 name: firstCat.name
             }
         }
-        
+
         // Extract thumbnail
         let thumbnail: string | null = null
         if (livestream?.thumbnail) {
@@ -95,7 +95,7 @@ async function fetchV2ChannelData(slug: string): Promise<{
                 thumbnail = livestream.thumbnail.url
             }
         }
-        
+
         return {
             followers_count: data.followers_count || data.followersCount || 0,
             viewer_count: livestream?.viewer_count || 0,
@@ -631,7 +631,7 @@ export async function GET(request: Request) {
             }
             // Use v2 data for follower count
             followerCount = v2Data.followers_count
-            
+
             // If official API says offline but v2 says live, trust v2
             if (!isLive && v2Data.is_live) {
                 console.log(`[Channel API] Official API says offline but v2 says live - using v2 status`)
