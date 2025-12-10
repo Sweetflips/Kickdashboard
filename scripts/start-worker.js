@@ -40,7 +40,7 @@ const { PrismaClient } = require('@prisma/client');
 // Run migrations before starting the worker
 try {
   console.log('🔄 Running database migrations...');
-  execSync('prisma migrate deploy', { stdio: 'inherit' });
+  execSync('npx prisma migrate deploy', { stdio: 'inherit' });
   console.log('✅ Migrations completed');
 } catch (error) {
   console.error('⚠️ Migration failed (continuing anyway):', error.message);
@@ -111,14 +111,14 @@ async function ensureTables() {
 
   // Start chat worker (handles all writes: users, messages, points)
   console.log('🔄 Starting chat worker (handles all database writes)...');
-  const chatWorkerProcess = spawn('tsx', ['scripts/chat-worker.ts'], {
+  const chatWorkerProcess = spawn('npx', ['tsx', 'scripts/chat-worker.ts'], {
     stdio: 'inherit',
     env: process.env
   });
 
   // Start point worker (processes point_award_jobs queue)
   console.log('🔄 Starting point worker (processes point award jobs)...');
-  const pointWorkerProcess = spawn('tsx', ['scripts/point-worker.ts'], {
+  const pointWorkerProcess = spawn('npx', ['tsx', 'scripts/point-worker.ts'], {
     stdio: 'inherit',
     env: process.env
   });

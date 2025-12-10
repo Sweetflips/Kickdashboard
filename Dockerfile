@@ -33,16 +33,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy necessary files
+# Copy full node_modules (needed for tsx, prisma CLI, etc.)
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy application files
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-# Copy Prisma files (standalone doesn't include these)
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-# Copy scripts and prisma schema for migrations
+COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./
 
