@@ -71,31 +71,40 @@ async function ensureTables() {
   }
 }
 
+// Start HTTP health check server IMMEDIATELY (before any async operations)
+// This ensures Railway can verify the service is up quickly
+const port = parseInt(process.env.PORT || '8080', 10);
+const healthServer = http.createServer((req, res) => {
+  // Support both /health and /api/health for Railway compatibility
+  if (req.url === '/' || req.url === '/health' || req.url === '/api/health') {
+    res.writeHead(200, { 
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache'
+    });
+    res.end(JSON.stringify({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      service: 'worker'
+    }));
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+  }
+});
+
+// Listen on 0.0.0.0 to accept connections from Railway
+healthServer.listen(port, '0.0.0.0', () => {
+  console.log(`✅ Health check server listening on 0.0.0.0:${port}`);
+});
+
+healthServer.on('error', (err) => {
+  console.error('⚠️ Health check server error:', err.message);
+  // Don't exit - workers can still run without health endpoint
+});
+
 // Run the safety net check and wait for it to complete before starting workers
 (async () => {
   await ensureTables();
-
-  // Start HTTP health check server
-  const port = parseInt(process.env.PORT || '3000', 10);
-  const healthServer = http.createServer((req, res) => {
-    // Support both /health and /api/health for Railway compatibility
-    if (req.url === '/' || req.url === '/health' || req.url === '/api/health') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
-    } else {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
-    }
-  });
-
-  healthServer.listen(port, () => {
-    console.log(`✅ Health check server listening on port ${port}`);
-  });
-
-  healthServer.on('error', (err) => {
-    console.error('⚠️ Health check server error:', err.message);
-    // Don't exit - workers can still run without health endpoint
-  });
 
   // Start chat worker (handles all writes: users, messages, points)
   console.log('🔄 Starting chat worker (handles all database writes)...');
