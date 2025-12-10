@@ -350,7 +350,7 @@ export default function LeaderboardPage() {
                                                                 <div className="flex items-center gap-1">
                                                                     {entry.verification_methods.kick && (
                                                                         <img
-                                                                            src="/imgi_144_kick-streaming-platform-logo-icon.svg"
+                                                                            src="/logos/kick-icon.svg"
                                                                             alt="Kick verified"
                                                                             width={16}
                                                                             height={16}
@@ -361,7 +361,7 @@ export default function LeaderboardPage() {
                                                                     )}
                                                                     {entry.verification_methods.discord && (
                                                                         <img
-                                                                            src="/discord.png"
+                                                                            src="/icons/discord.png"
                                                                             alt="Discord connected"
                                                                             width="16"
                                                                             height="16"
@@ -372,7 +372,7 @@ export default function LeaderboardPage() {
                                                                     )}
                                                                     {entry.verification_methods.telegram && (
                                                                         <img
-                                                                            src="/Telegram-Logo-PNG-Image.png"
+                                                                            src="/logos/telegram-logo.png"
                                                                             alt="Telegram connected"
                                                                             width="18"
                                                                             height="18"

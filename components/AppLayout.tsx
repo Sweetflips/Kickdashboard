@@ -277,7 +277,7 @@ export default function AppLayout({ children }: LayoutProps) {
                         <div className="flex items-center gap-3">
                             <Link href="/" className="flex items-center">
                                 <Image
-                                    src="/kick.jpg"
+                                    src="/icons/kick.jpg"
                                     alt="Kick Logo"
                                     width={32}
                                     height={32}
@@ -523,7 +523,7 @@ export default function AppLayout({ children }: LayoutProps) {
                         </button>
                         <div className="flex-1 flex items-center justify-center">
                             <Image
-                                src="/sweet_flips (2).png"
+                                src="/logos/sweet-flips-logo.png"
                                 alt="SweetFlips Logo"
                                 width={360}
                                 height={120}

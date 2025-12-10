@@ -748,7 +748,7 @@ export default function ProfilePage() {
                                                             <div className="flex items-center gap-4">
                                                                 <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
                                                                     <img
-                                                                        src="/kick.jpg"
+                                                                        src="/icons/kick.jpg"
                                                                         alt="Kick"
                                                                         width={48}
                                                                         height={48}
@@ -784,7 +784,7 @@ export default function ProfilePage() {
                                                                     <div className="flex items-center gap-4">
                                                                         <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
                                                                             <img
-                                                                                src="/discord.png"
+                                                                                src="/icons/discord.png"
                                                                                 alt="Discord connected"
                                                                                 width="16"
                                                                                 height="16"
@@ -842,7 +842,7 @@ export default function ProfilePage() {
                                                                     <div className="flex items-center gap-4">
                                                                         <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
                                                                             <img
-                                                                                src="/Telegram-Logo-PNG-Image.png"
+                                                                                src="/logos/telegram-logo.png"
                                                                                 alt="Telegram connected"
                                                                                 width="18"
                                                                                 height="18"

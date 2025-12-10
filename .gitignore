@@ -42,4 +42,11 @@ prisma/migrations/
 .env.production
 .env.local
 
+# Temp SQL files
+tmp_*.sql
+migration_to_apply*.sql
+*.tmp
+
+# Dev tools
+*.bat
 

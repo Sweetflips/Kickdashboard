@@ -84,7 +84,7 @@ function LoginContent() {
         setIsLoading(true)
         setError(null)
         // Pass referral code to auth endpoint if provided
-        const authUrl = referralCode 
+        const authUrl = referralCode
             ? `/api/auth?action=authorize&ref=${encodeURIComponent(referralCode)}`
             : '/api/auth?action=authorize'
         window.location.href = authUrl
@@ -107,7 +107,7 @@ function LoginContent() {
                         <div className="inline-flex items-center justify-center mb-6">
                             <div className="shadow-lg overflow-hidden">
                                 <Image
-                                    src="/8 EMERALD (1).png"
+                                    src="/rewards/emerald-sub.png"
                                     alt="SweetFlips Logo"
                                     width={160}
                                     height={160}

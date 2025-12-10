@@ -23,7 +23,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
                 <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
                     <Link href="/" className="flex items-center gap-3 group">
                         <Image
-                            src="/kick.jpg"
+                            src="/icons/kick.jpg"
                             alt="SweetFlips"
                             width={32}
                             height={32}

@@ -49,7 +49,7 @@ export async function GET(request: Request) {
             const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
             const proto = request.headers.get('x-forwarded-proto') || 'https'
             const baseUrl = host ? `${proto}://${host}` : 'https://kickdashboard.com'
-            const defaultImageUrl = `${baseUrl}/kick.jpg`
+            const defaultImageUrl = `${baseUrl}/icons/kick.jpg`
 
             try {
                 const defaultImageResponse = await fetch(defaultImageUrl)
@@ -230,7 +230,7 @@ export async function GET(request: Request) {
                 const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
                 const proto = request.headers.get('x-forwarded-proto') || 'https'
                 const baseUrl = host ? `${proto}://${host}` : 'https://kickdashboard.com'
-                const defaultImageUrl = `${baseUrl}/kick.jpg`
+                const defaultImageUrl = `${baseUrl}/icons/kick.jpg`
 
                 console.log(`🔄 Fetching default avatar: ${defaultImageUrl}`)
                 const defaultImageResponse = await fetch(defaultImageUrl, {

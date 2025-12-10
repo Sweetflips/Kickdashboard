@@ -462,7 +462,7 @@ export default function UsersPage() {
                           <div className="flex items-center gap-2">
                             {/* Kick logo - always show since all users sign up via Kick */}
                             <img
-                              src="/imgi_144_kick-streaming-platform-logo-icon.svg"
+                              src="/logos/kick-icon.svg"
                               alt="Kick"
                               title={`Kick: ${user.username}`}
                               className="w-5 h-5 flex-shrink-0"
@@ -480,7 +480,7 @@ export default function UsersPage() {
                             <div className="flex items-center gap-1.5">
                               {user.discord_connected && (
                                 <img
-                                  src="/discord.png"
+                                  src="/icons/discord.png"
                                   alt="Discord connected"
                                   width="16"
                                   height="16"
@@ -491,7 +491,7 @@ export default function UsersPage() {
                               )}
                               {user.telegram_connected && (
                                 <img
-                                  src="/Telegram-Logo-PNG-Image.png"
+                                  src="/logos/telegram-logo.png"
                                   alt="Telegram connected"
                                   width="18"
                                   height="18"

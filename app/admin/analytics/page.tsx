@@ -660,9 +660,9 @@ export default function AnalyticsPage() {
                                                                                     target.src = `/api/image-proxy?url=${encodeURIComponent(user.profile_picture_url)}`
                                                                                 } else if (isKickDomain && !target.src.includes('/api/image-proxy') && user.profile_picture_url) {
                                                                                     // Already using proxy, fallback to default
-                                                                                    target.src = '/kick.jpg'
+                                                                                    target.src = '/icons/kick.jpg'
                                                                                 } else {
-                                                                                    target.src = '/kick.jpg'
+                                                                                    target.src = '/icons/kick.jpg'
                                                                                 }
                                                                             }}
                                                                         />

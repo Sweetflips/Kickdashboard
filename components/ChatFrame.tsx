@@ -1546,7 +1546,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                             <button type="button" className="base-badge ml-1 first:ml-0">
                                                                 <div className="base-icon icon size-sm" style={{ width: '16px', height: '16px' }}>
                                                                     <img
-                                                                        src="/verifiedicon.svg"
+                                                                        src="/icons/verifiedicon.svg"
                                                                         alt="Verified"
                                                                         width={16}
                                                                         height={16}
@@ -1623,13 +1623,13 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                         let badgeImage = '/Base.png' // Default/base badge
 
                                                         if (months >= 9) {
-                                                            badgeImage = '/9-Months.png'
+                                                            badgeImage = '/rewards/9-Months.png'
                                                         } else if (months >= 6) {
-                                                            badgeImage = '/6-Month.png'
+                                                            badgeImage = '/rewards/6-Month.png'
                                                         } else if (months >= 3) {
-                                                            badgeImage = '/3-Month.png'
+                                                            badgeImage = '/rewards/3-Month.png'
                                                         } else if (months >= 2) {
-                                                            badgeImage = '/2-Month.png'
+                                                            badgeImage = '/rewards/2-Month.png'
                                                         }
 
                                                         return (
@@ -1672,7 +1672,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                         message.points_reason === 'Kick account not connected' ? (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/20 dark:bg-red-500/30 text-red-600 dark:text-red-400 border border-red-500/40 dark:border-red-500/50">
                                                                 <Image
-                                                                    src="/imgi_144_kick-streaming-platform-logo-icon.svg"
+                                                                    src="/logos/kick-icon.svg"
                                                                     alt="Kick logo"
                                                                     width={14}
                                                                     height={14}
@@ -1766,7 +1766,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                                     <button type="button" className="base-badge ml-1 first:ml-0">
                                                                         <div className="base-icon icon size-sm" style={{ width: '16px', height: '16px' }}>
                                                                             <img
-                                                                                src="/verifiedicon.svg"
+                                                                                src="/icons/verifiedicon.svg"
                                                                                 alt="Verified"
                                                                                 width={16}
                                                                                 height={16}
@@ -1783,7 +1783,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                             <button type="button" className="base-badge ml-1 first:ml-0">
                                                                 <div className="base-icon icon size-sm" style={{ width: '16px', height: '16px' }}>
                                                                     <img
-                                                                        src="/mod.svg"
+                                                                        src="/icons/mod.svg"
                                                                         alt="Moderator"
                                                                         width={16}
                                                                         height={16}
@@ -1800,7 +1800,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                                     <button type="button" className="base-badge ml-1 first:ml-0">
                                                                         <div className="base-icon icon size-sm" style={{ width: '16px', height: '16px' }}>
                                                                             <Image
-                                                                                src="/vip.svg"
+                                                                                src="/icons/vip.svg"
                                                                                 alt="VIP"
                                                                                 width={16}
                                                                                 height={16}
@@ -1865,13 +1865,13 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                                 let badgeImage = '/Base.png' // Default/base badge
 
                                                                 if (months >= 9) {
-                                                                    badgeImage = '/9-Months.png'
+                                                                    badgeImage = '/rewards/9-Months.png'
                                                                 } else if (months >= 6) {
-                                                                    badgeImage = '/6-Month.png'
+                                                                    badgeImage = '/rewards/6-Month.png'
                                                                 } else if (months >= 3) {
-                                                                    badgeImage = '/3-Month.png'
+                                                                    badgeImage = '/rewards/3-Month.png'
                                                                 } else if (months >= 2) {
-                                                                    badgeImage = '/2-Month.png'
+                                                                    badgeImage = '/rewards/2-Month.png'
                                                                 }
 
                                                                 return (
@@ -1914,7 +1914,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                                 message.points_reason === 'Kick account not connected' ? (
                                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/20 dark:bg-red-500/30 text-red-600 dark:text-red-400 border border-red-500/40 dark:border-red-500/50">
                                                                         <Image
-                                                                            src="/imgi_144_kick-streaming-platform-logo-icon.svg"
+                                                                            src="/logos/kick-icon.svg"
                                                                             alt="Kick logo"
                                                                             width={14}
                                                                             height={14}
