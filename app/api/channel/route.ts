@@ -13,6 +13,104 @@ const INITIAL_RETRY_DELAY = 1000 // 1 second
 // Exponential backoff helper
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+/**
+ * Fetch channel metadata from v2 API (has more complete data like followers, title, viewers, category)
+ * This is used to supplement the official API which may lack some fields
+ */
+async function fetchV2ChannelData(slug: string): Promise<{
+    followers_count: number
+    viewer_count: number
+    stream_title: string
+    category: { id: number; name: string } | null
+    is_live: boolean
+    started_at: string | null
+    thumbnail: string | null
+} | null> {
+    try {
+        const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
+        console.log(`[Channel API] Fetching v2 API for metadata: ${url}`)
+        
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            cache: 'no-store',
+        })
+        
+        if (!response.ok) {
+            console.warn(`[Channel API] v2 API returned ${response.status}`)
+            return null
+        }
+        
+        const data = await response.json()
+        
+        // Log ALL important data from v2 API
+        console.log(`[Channel API] ========== V2 API FULL DATA ==========`)
+        console.log(`[Channel API] slug: ${data.slug}`)
+        console.log(`[Channel API] user.username: ${data.user?.username}`)
+        console.log(`[Channel API] followers_count: ${data.followers_count}`)
+        console.log(`[Channel API] subscriber_count: ${data.subscriber_count}`)
+        console.log(`[Channel API] verified: ${data.verified}`)
+        
+        if (data.livestream) {
+            console.log(`[Channel API] livestream.id: ${data.livestream.id}`)
+            console.log(`[Channel API] livestream.session_title: ${data.livestream.session_title}`)
+            console.log(`[Channel API] livestream.is_live: ${data.livestream.is_live}`)
+            console.log(`[Channel API] livestream.viewer_count: ${data.livestream.viewer_count}`)
+            console.log(`[Channel API] livestream.started_at: ${data.livestream.started_at}`)
+            console.log(`[Channel API] livestream.thumbnail: ${JSON.stringify(data.livestream.thumbnail)}`)
+            console.log(`[Channel API] livestream.category: ${JSON.stringify(data.livestream.category)}`)
+            console.log(`[Channel API] livestream.categories: ${JSON.stringify(data.livestream.categories)}`)
+        } else {
+            console.log(`[Channel API] livestream: null (stream is offline)`)
+        }
+        console.log(`[Channel API] ========================================`)
+        
+        const livestream = data.livestream
+        let category: { id: number; name: string } | null = null
+        
+        // Extract category from livestream
+        if (livestream?.category && typeof livestream.category === 'object') {
+            category = {
+                id: livestream.category.id,
+                name: livestream.category.name
+            }
+        }
+        // Or from categories array
+        if (!category && livestream?.categories && Array.isArray(livestream.categories) && livestream.categories.length > 0) {
+            const firstCat = livestream.categories[0]
+            category = {
+                id: firstCat.id || firstCat.category_id,
+                name: firstCat.name
+            }
+        }
+        
+        // Extract thumbnail
+        let thumbnail: string | null = null
+        if (livestream?.thumbnail) {
+            if (typeof livestream.thumbnail === 'string') {
+                thumbnail = livestream.thumbnail
+            } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {
+                thumbnail = livestream.thumbnail.url
+            }
+        }
+        
+        return {
+            followers_count: data.followers_count || data.followersCount || 0,
+            viewer_count: livestream?.viewer_count || 0,
+            stream_title: livestream?.session_title || livestream?.stream_title || '',
+            category,
+            is_live: !!livestream?.is_live,
+            started_at: livestream?.started_at || null,
+            thumbnail,
+        }
+    } catch (error) {
+        console.warn(`[Channel API] Failed to fetch v2 API:`, error instanceof Error ? error.message : 'Unknown error')
+        return null
+    }
+}
+
 // Normalize livestream.is_live flag from Kick API to a strict boolean.
 // Kick has changed response formats in the past (boolean, number, string),
 // so we defensively coerce here and default to "offline" for unknown values
@@ -487,12 +585,17 @@ export async function GET(request: Request) {
         // Get broadcaster_user_id first (needed for /livestreams endpoint)
         const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
 
+        // Fetch v2 API data for complete metadata (followers, title, viewers, category)
+        // The official API often lacks these fields
+        const v2Data = await fetchV2ChannelData(slug)
+
         // Get live status from official /livestreams endpoint (authoritative source)
         let isLive = false
         let viewerCount = 0
         let streamTitle = livestream?.session_title || ''
         let streamStartedAt: string | null = null
         let category: { id: number; name: string } | null = null
+        let followerCount = 0
 
         const apiStatus = await checkLiveStatusFromAPI(slug, broadcasterUserId)
         isLive = apiStatus.isLive
@@ -504,7 +607,44 @@ export async function GET(request: Request) {
         streamStartedAt = apiStatus.startedAt
         category = apiStatus.category
 
-        // Also check for categories array (some APIs return categories as array)
+        // Override with v2 API data if available (it's more complete)
+        if (v2Data) {
+            // Use v2 data for viewer count if we got 0 from official API
+            if (viewerCount === 0 && v2Data.viewer_count > 0) {
+                viewerCount = v2Data.viewer_count
+            }
+            // Use v2 data for stream title if empty
+            if (!streamTitle && v2Data.stream_title) {
+                streamTitle = v2Data.stream_title
+            }
+            // Use v2 data for category if not set
+            if (!category && v2Data.category) {
+                category = v2Data.category
+            }
+            // Use v2 data for started_at if not set
+            if (!streamStartedAt && v2Data.started_at) {
+                streamStartedAt = v2Data.started_at
+            }
+            // Use v2 data for thumbnail if not set
+            if (!thumbnailUrl && v2Data.thumbnail) {
+                thumbnailUrl = v2Data.thumbnail
+            }
+            // Use v2 data for follower count
+            followerCount = v2Data.followers_count
+            
+            // If official API says offline but v2 says live, trust v2
+            if (!isLive && v2Data.is_live) {
+                console.log(`[Channel API] Official API says offline but v2 says live - using v2 status`)
+                isLive = true
+                viewerCount = v2Data.viewer_count
+                streamTitle = v2Data.stream_title
+                category = v2Data.category
+                streamStartedAt = v2Data.started_at
+                thumbnailUrl = v2Data.thumbnail
+            }
+        }
+
+        // Fallback: Also check for categories array (some APIs return categories as array)
         if (!category && channelData.categories && Array.isArray(channelData.categories) && channelData.categories.length > 0) {
             const firstCategory = channelData.categories[0]
             category = {
@@ -524,7 +664,7 @@ export async function GET(request: Request) {
             console.log(`[Channel API] Found category from livestream.categories array:`, category)
         }
 
-        console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}, category=${category?.name || 'null'}, startedAt=${streamStartedAt}`)
+        console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}, followers=${followerCount}, category=${category?.name || 'null'}, title="${streamTitle}", startedAt=${streamStartedAt}`)
 
         // Fetch active session early for fallback logic
         let activeSession: {
@@ -567,17 +707,18 @@ export async function GET(request: Request) {
         // Extract chatroom_id if available
         const chatroomId = channelData.chatroom?.id || channelData.chatroom_id || null
 
-        // Get follower count and last live time
-        let followerCount = 0
+        // Get last live time from database
         let lastLiveTime: Date | null = null
 
         try {
-            // Extract follower count from various possible locations
-            followerCount = channelData.followers_count ||
-                channelData.followers?.length ||
-                channelData.user?.followers_count ||
-                channelData.followersCount ||
-                0
+            // If v2 data didn't provide follower count, try from channelData
+            if (followerCount === 0) {
+                followerCount = channelData.followers_count ||
+                    channelData.followers?.length ||
+                    channelData.user?.followers_count ||
+                    channelData.followersCount ||
+                    0
+            }
 
             // Get last live time from database
             if (broadcasterUserId) {
