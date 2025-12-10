@@ -267,35 +267,83 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
     }
 }
 
-async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promise<Response> {
-    // Use official /channels endpoint with auth
+async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promise<Response | null> {
+    // Try v2 API first (no auth required, more reliable)
+    const v2Url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
+    
+    try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 8000)
+        
+        const v2Response = await fetch(v2Url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            signal: controller.signal,
+            cache: 'no-store',
+        })
+        
+        clearTimeout(timeoutId)
+        
+        if (v2Response.ok) {
+            // Return a mock Response object that works with our parsing logic
+            return v2Response
+        }
+    } catch (error) {
+        console.warn(`[Channel API] v2 API failed, trying official API:`, error instanceof Error ? error.message : 'Unknown error')
+    }
+    
+    // Fallback: Try official API without auth first
     const url = `${KICK_API_BASE}/channels?slug[]=${encodeURIComponent(slug)}`
-
+    
     for (let attempt = 0; attempt < retries; attempt++) {
         try {
             const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 8000)
 
-            // Get auth token
-            const token = await getBroadcasterToken()
-            const clientId = process.env.KICK_CLIENT_ID
-
-            const headers: Record<string, string> = {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            }
-            if (clientId) {
-                headers['Client-Id'] = clientId
-            }
-
-            const response = await fetch(url, {
-                headers,
+            // Try without auth first
+            let response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
                 signal: controller.signal,
                 cache: 'no-store',
             })
 
             clearTimeout(timeoutId)
+
+            // If 401, try with auth
+            if (response.status === 401) {
+                try {
+                    const token = await getBroadcasterToken()
+                    const clientId = process.env.KICK_CLIENT_ID
+
+                    const authHeaders: Record<string, string> = {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    }
+                    if (clientId) {
+                        authHeaders['Client-Id'] = clientId
+                    }
+
+                    const controller2 = new AbortController()
+                    const timeoutId2 = setTimeout(() => controller2.abort(), 8000)
+                    
+                    response = await fetch(url, {
+                        headers: authHeaders,
+                        signal: controller2.signal,
+                        cache: 'no-store',
+                    })
+                    
+                    clearTimeout(timeoutId2)
+                } catch (authError) {
+                    console.warn(`[Channel API] Auth failed, will use v2 API only:`, authError instanceof Error ? authError.message : 'Unknown error')
+                    return null
+                }
+            }
 
             // If successful or client error (4xx), return immediately
             if (response.ok || (response.status >= 400 && response.status < 500)) {
@@ -312,14 +360,15 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
             return response
         } catch (error) {
             if (attempt === retries - 1) {
-                throw error
+                console.warn(`[Channel API] All retries failed, will use v2 API only`)
+                return null
             }
             const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt)
             await sleep(delay)
         }
     }
 
-    throw new Error('Max retries exceeded')
+    return null
 }
 
 /**
@@ -427,31 +476,51 @@ export async function GET(request: Request) {
     try {
         const response = await fetchChannelWithRetry(slug)
 
-        if (!response.ok) {
-            const errorText = await response.text().catch(() => 'Unknown error')
-            console.error(`❌ Kick API error: ${response.status} - ${errorText.substring(0, 200)}`)
-            throw new Error(`Kick API error: ${response.status} - ${errorText.substring(0, 200)}`)
-        }
-
-        const responseData = await response.json()
-
-        // Parse response - official API returns { data: [channel] } format
         let channelData = null
-        if (Array.isArray(responseData.data) && responseData.data.length > 0) {
-            channelData = responseData.data[0]
-        } else if (responseData.data && typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
-            channelData = responseData.data
-        } else if (responseData.id || responseData.broadcaster_user_id || responseData.slug) {
-            // Direct channel object (legacy v2 format)
-            channelData = responseData
+        let broadcasterUserId: number | undefined = undefined
+
+        if (response && response.ok) {
+            const responseData = await response.json()
+
+            // Parse response - official API returns { data: [channel] } format
+            if (Array.isArray(responseData.data) && responseData.data.length > 0) {
+                channelData = responseData.data[0]
+            } else if (responseData.data && typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
+                channelData = responseData.data
+            } else if (responseData.id || responseData.broadcaster_user_id || responseData.slug) {
+                // Direct channel object (legacy v2 format)
+                channelData = responseData
+            }
         }
 
+        // If official API failed or returned no data, use v2 API only
         if (!channelData) {
-            console.error(`[Channel API] Could not parse channel data. Response keys:`, Object.keys(responseData))
-            return NextResponse.json(
-                { error: 'Channel not found' },
-                { status: 404 }
-            )
+            console.log(`[Channel API] Official API unavailable, using v2 API only`)
+            const v2Data = await fetchV2ChannelData(slug)
+            
+            if (!v2Data) {
+                return NextResponse.json(
+                    { error: 'Channel not found' },
+                    { status: 404 }
+                )
+            }
+
+            // Build channelData from v2 API response
+            broadcasterUserId = undefined // v2 API doesn't always provide this
+            channelData = {
+                slug: slug,
+                followers_count: v2Data.followers_count,
+                livestream: v2Data.is_live ? {
+                    session_title: v2Data.stream_title,
+                    viewer_count: v2Data.viewer_count,
+                    started_at: v2Data.started_at,
+                    thumbnail: v2Data.thumbnail,
+                    category: v2Data.category,
+                    is_live: true,
+                } : null,
+            }
+        } else {
+            broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
         }
 
         // Log channel data structure for debugging
@@ -478,11 +547,13 @@ export async function GET(request: Request) {
             }
         }
 
-        // Get broadcaster_user_id first (needed for /livestreams endpoint)
-        const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
+        // Get broadcaster_user_id if available
+        if (!broadcasterUserId) {
+            broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
+        }
 
         // Fetch v2 API data for complete metadata (followers, title, viewers, category)
-        // The official API often lacks these fields
+        // The official API often lacks these fields - v2 is PRIMARY source
         const v2Data = await fetchV2ChannelData(slug)
 
         // Get live status from official /livestreams endpoint (authoritative source)
