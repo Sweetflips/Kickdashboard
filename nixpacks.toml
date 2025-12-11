@@ -11,6 +11,4 @@ cacheDirectories = []
 [start]
 cmd = "node scripts/start.js"
 
-[providers]
-node = "18"
-
+providers = ["node"]
