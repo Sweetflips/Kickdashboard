@@ -138,16 +138,15 @@ export async function GET(request: Request) {
         }
 
         // Get all messages for this session to count per user
-        // Filter out offline messages, invalid user IDs, and messages created before session started
+        // Filter out offline messages and invalid user IDs
+        // Note: stream_session_id is sufficient filter - no need for created_at filter
+        // as messages are already associated with the correct session
         const allMessages = await executeQueryWithRetry(() => db.chatMessage.findMany({
             where: {
                 stream_session_id: session.id,
                 sent_when_offline: false, // Only count messages sent during live stream
                 sender_user_id: {
                     gt: BigInt(0), // Exclude invalid/anonymous user IDs (0 or negative)
-                },
-                created_at: {
-                    gte: session.started_at, // Only count messages created after session started
                 },
             },
             select: {
