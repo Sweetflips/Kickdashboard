@@ -105,13 +105,12 @@ export async function GET(request: Request) {
 
         const userMap = new Map(users.map(u => [u.id.toString(), u]))
 
-        // Rank bonus multipliers (1st gets 50% bonus, 2nd 30%, 3rd 15%, 4th 8%, 5th 4%)
+        // Rank bonus multipliers (top 3 bonuses; everyone else is even)
         const RANK_MULTIPLIERS: Record<number, number> = {
-            1: 1.50,
-            2: 1.30,
-            3: 1.15,
-            4: 1.08,
-            5: 1.04,
+            // Requested: 1st +100%, 2nd +75%, 3rd +50% (rest 1.0)
+            1: 2.0,
+            2: 1.75,
+            3: 1.5,
         }
 
         // Build initial sorted list by points

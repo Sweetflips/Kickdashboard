@@ -234,7 +234,7 @@ export default function PayoutsPage() {
         rows.push(['Total Points', payoutData.summary.total_points.toString()])
         if (payoutData.summary.rank_bonus) {
             rows.push(['Total Weighted Points', payoutData.summary.total_weighted_points.toString()])
-            rows.push(['Rank Bonus', 'Enabled (1st +50%, 2nd +30%, 3rd +15%, 4th +8%, 5th +4%)'])
+            rows.push(['Rank Bonus', 'Enabled (1st +100%, 2nd +75%, 3rd +50%)'])
         }
         rows.push(['Dollar per Point', `$${payoutData.summary.dollar_per_point.toFixed(6)}`])
         rows.push(['Total Payout', `$${payoutData.summary.total_payout.toFixed(roundTo)}`])
@@ -418,7 +418,7 @@ export default function PayoutsPage() {
                                     Rank Bonus
                                 </label>
                                 <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-0.5">
-                                    Higher ranks get multipliers: 1st +50%, 2nd +30%, 3rd +15%, 4th +8%, 5th +4%
+                                    Higher ranks get multipliers: 1st +100%, 2nd +75%, 3rd +50% (rest even)
                                 </p>
                             </div>
                             <button
