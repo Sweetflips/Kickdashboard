@@ -219,7 +219,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
             messages: formattedMessages,
             limit,
-            ...(useCursor ? { cursor: nextCursor } : { offset }),
+            ...(useCursor ? { cursor: nextCursor } : { offset, total: null }), // total deprecated but kept for backward compatibility
             hasMore: formattedMessages.length === limit, // Indicates if there might be more messages
         })
     } catch (error) {
