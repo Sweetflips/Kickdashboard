@@ -220,10 +220,8 @@ export async function GET(request: Request) {
                     }
                 }
 
-                // For stream thumbnails, try additional header strategies
+                // For stream thumbnails, try additional header strategies (silently)
                 if (isStreamThumbnail && imageResponse.status === 403) {
-                    console.log('⚠️ Stream thumbnail 403 - Trying alternate header strategies')
-
                     // Strategy 1: No headers at all
                     try {
                         imageResponse = await fetch(finalImageUrl, {
