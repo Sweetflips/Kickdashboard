@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(request: Request) {
     try {
-        const adminCheck = await isAdmin(request)
-        if (!adminCheck.isAdmin) {
+        const isAdminUser = await isAdmin(request)
+        if (!isAdminUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -67,8 +67,8 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
     try {
-        const adminCheck = await isAdmin(request)
-        if (!adminCheck.isAdmin) {
+        const isAdminUser = await isAdmin(request)
+        if (!isAdminUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -146,8 +146,8 @@ export async function POST(request: Request) {
  */
 export async function DELETE(request: Request) {
     try {
-        const adminCheck = await isAdmin(request)
-        if (!adminCheck.isAdmin) {
+        const isAdminUser = await isAdmin(request)
+        if (!isAdminUser) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -209,4 +209,3 @@ export async function DELETE(request: Request) {
         )
     }
 }
-
