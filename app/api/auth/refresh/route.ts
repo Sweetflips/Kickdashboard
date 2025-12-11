@@ -109,9 +109,6 @@ export async function POST(request: Request) {
         // Build redirect URI (must match the one used during authorization)
         const redirectUri = buildRedirectUri(request)
 
-        // Log redirect URI for debugging (first 50 chars only for security)
-        console.log(`🔄 Token refresh attempt - redirect URI: ${redirectUri.substring(0, 50)}...`)
-
         // Exchange refresh token for new access token
         const params = new URLSearchParams({
             grant_type: 'refresh_token',

@@ -24,12 +24,11 @@ function isVerifiedUser(username: string, badges: Array<{ type: string }> = []):
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
-        const limit = parseInt(searchParams.get('limit') || '100')
-        const offset = parseInt(searchParams.get('offset') || '0')
+        const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 500) // Cap at 500
+        const cursor = searchParams.get('cursor') // Timestamp cursor for pagination
+        const offset = parseInt(searchParams.get('offset') || '0') // Backward compatibility
         const streamSessionId = searchParams.get('stream_session_id')
         const broadcasterUserId = searchParams.get('broadcaster_user_id')
-
-        console.log(`📡 Chat API: Request - limit=${limit}, offset=${offset}, stream_session_id=${streamSessionId || 'none'}, broadcaster_user_id=${broadcasterUserId || 'none'}`)
 
         const where: any = {}
         const offlineWhere: any = {}
@@ -43,16 +42,28 @@ export async function GET(request: Request) {
         } else {
             console.warn(`📡 Chat API: broadcaster_user_id missing - will return all messages (unfiltered)`)
         }
-        // Note: Offline messages are now in a separate table
-        // We merge queries from both tables to show all messages together
 
-        // Fetch messages from both tables
-        const [onlineMessages, offlineMessages, onlineTotal, offlineTotal] = await Promise.all([
+        // Use cursor-based pagination if cursor is provided, otherwise fall back to offset
+        const useCursor = cursor !== null && cursor !== undefined && cursor !== ''
+        const cursorTimestamp = useCursor ? BigInt(cursor) : null
+
+        // Build where clauses with cursor support
+        const onlineWhere = { ...where }
+        const offlineWhereWithCursor = { ...offlineWhere }
+
+        if (useCursor && cursorTimestamp) {
+            // Cursor-based: get messages before this timestamp
+            onlineWhere.timestamp = { lt: cursorTimestamp }
+            offlineWhereWithCursor.timestamp = { lt: cursorTimestamp }
+        }
+
+        // Fetch messages from both tables (no COUNT queries - much faster)
+        const [onlineMessages, offlineMessages] = await Promise.all([
             db.chatMessage.findMany({
-                where,
+                where: onlineWhere,
                 orderBy: { timestamp: 'desc' },
-                take: limit * 2, // Get more to account for merging
-                skip: offset,
+                take: useCursor ? limit : limit * 2, // Less overhead with cursor
+                ...(useCursor ? {} : { skip: offset }), // Only use skip if not using cursor
                 select: {
                     message_id: true,
                     stream_session_id: true,
@@ -91,10 +102,10 @@ export async function GET(request: Request) {
                 },
             }),
             broadcasterUserId ? db.offlineChatMessage.findMany({
-                where: offlineWhere,
+                where: offlineWhereWithCursor,
                 orderBy: { timestamp: 'desc' },
-                take: limit * 2, // Get more to account for merging
-                skip: offset,
+                take: useCursor ? limit : limit * 2,
+                ...(useCursor ? {} : { skip: offset }),
                 include: {
                     sender: {
                         select: {
@@ -112,8 +123,6 @@ export async function GET(request: Request) {
                     },
                 },
             }) : [],
-            db.chatMessage.count({ where }),
-            broadcasterUserId ? db.offlineChatMessage.count({ where: offlineWhere }) : 0,
         ])
 
         // Combine and sort messages by timestamp
@@ -126,7 +135,10 @@ export async function GET(request: Request) {
             return bTime - aTime // Descending order
         }).slice(0, limit) // Apply final limit after merging
 
-        const total = onlineTotal + offlineTotal
+        // Calculate next cursor from the last message
+        const nextCursor = allMessages.length > 0
+            ? allMessages[allMessages.length - 1].timestamp.toString()
+            : null
 
         // Format messages to match ChatMessage interface
         const formattedMessages = allMessages.map(msg => {
@@ -204,13 +216,11 @@ export async function GET(request: Request) {
             }
         })
 
-        console.log(`📡 Chat API: Returning ${formattedMessages.length} messages from database (total: ${total}, limit: ${limit}, offset: ${offset}, broadcaster_user_id: ${broadcasterUserId || 'none'}, stream_session_id: ${streamSessionId || 'none'})`)
-
         return NextResponse.json({
             messages: formattedMessages,
-            total,
             limit,
-            offset,
+            ...(useCursor ? { cursor: nextCursor } : { offset }),
+            hasMore: formattedMessages.length === limit, // Indicates if there might be more messages
         })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'

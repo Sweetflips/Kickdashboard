@@ -125,6 +125,8 @@ model ChatMessage {
   sender         User           @relation("SenderMessages", fields: [sender_user_id], references: [kick_user_id])
   broadcaster    User           @relation("BroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
 
+  @@index([broadcaster_user_id, timestamp])
+  @@index([stream_session_id, timestamp])
   @@map("chat_messages")
 }
 
@@ -147,6 +149,7 @@ model OfflineChatMessage {
   sender      User @relation("OfflineSenderMessages", fields: [sender_user_id], references: [kick_user_id])
   broadcaster User @relation("OfflineBroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
 
+  @@index([broadcaster_user_id, timestamp])
   @@map("offline_chat_messages")
 }
 

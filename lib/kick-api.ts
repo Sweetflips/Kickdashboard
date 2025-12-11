@@ -211,6 +211,9 @@ let cachedToken: {
     source: 'user' | 'app'
 } | null = null
 
+// Mutex for token refresh to prevent concurrent refresh attempts
+let refreshMutex: Promise<string | null> | null = null
+
 // Normalize livestream.is_live flag from Kick APIs into a strict boolean.
 // Some Kick responses have used numbers or strings here; we defensively
 // coerce and default to "offline" for unknown values to avoid false
@@ -246,8 +249,6 @@ export async function getBroadcasterToken(): Promise<string> {
 
     // Try to get broadcaster's token from database
     try {
-        console.log(`[Kick API] Looking for broadcaster token for: ${BROADCASTER_SLUG}`)
-
         const broadcaster = await db.user.findFirst({
             where: {
                 username: {
@@ -265,7 +266,6 @@ export async function getBroadcasterToken(): Promise<string> {
         if (broadcaster?.access_token_encrypted) {
             try {
                 const accessToken = decryptToken(broadcaster.access_token_encrypted)
-                console.log(`[Kick API] Successfully retrieved token for broadcaster: ${broadcaster.username}`)
 
                 // Cache the token (assume 1 hour validity, will be refreshed on next call if expired)
                 cachedToken = {
@@ -278,106 +278,115 @@ export async function getBroadcasterToken(): Promise<string> {
             } catch (decryptError) {
                 console.warn(`[Kick API] Failed to decrypt broadcaster token:`, decryptError instanceof Error ? decryptError.message : 'Unknown error')
             }
-        } else {
-            console.log(`[Kick API] No encrypted token found for broadcaster: ${BROADCASTER_SLUG}`)
         }
     } catch (dbError) {
         console.warn(`[Kick API] Error fetching broadcaster from database:`, dbError instanceof Error ? dbError.message : 'Unknown error')
     }
 
     // Fallback to App Access Token
-    console.log(`[Kick API] Falling back to App Access Token`)
     return getAppAccessToken()
 }
 
 /**
  * Refresh broadcaster's access token using refresh token from database
+ * Uses mutex to prevent concurrent refresh attempts
  */
 export async function refreshBroadcasterToken(): Promise<string | null> {
-    try {
-        const broadcaster = await db.user.findFirst({
-            where: {
-                username: {
-                    equals: BROADCASTER_SLUG,
-                    mode: 'insensitive',
-                },
-            },
-            select: {
-                refresh_token_encrypted: true,
-                kick_user_id: true,
-                username: true,
-            },
-        })
-
-        if (!broadcaster?.refresh_token_encrypted) {
-            console.log(`[Kick API] No refresh token found for broadcaster: ${BROADCASTER_SLUG}`)
-            return null
-        }
-
-        const refreshToken = decryptToken(broadcaster.refresh_token_encrypted)
-        const clientId = process.env.KICK_CLIENT_ID
-        const clientSecret = process.env.KICK_CLIENT_SECRET
-
-        if (!clientId || !clientSecret) {
-            console.warn(`[Kick API] KICK_CLIENT_ID and KICK_CLIENT_SECRET required for token refresh`)
-            return null
-        }
-
-        // Build redirect URI (use a default one for server-side refresh)
-        const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
-
-        console.log(`[Kick API] Attempting to refresh token for broadcaster: ${broadcaster.username}`)
-
-        const params = new URLSearchParams({
-            grant_type: 'refresh_token',
-            client_id: clientId,
-            client_secret: clientSecret,
-            refresh_token: refreshToken,
-            redirect_uri: redirectUri,
-        })
-
-        const response = await fetch(KICK_AUTH_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: params.toString(),
-        })
-
-        if (!response.ok) {
-            const errorText = await response.text()
-            console.warn(`[Kick API] Token refresh failed: ${response.status} ${errorText}`)
-            return null
-        }
-
-        const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
-
-        // Update tokens in database (both encrypted and hashed)
-        await db.user.update({
-            where: { kick_user_id: broadcaster.kick_user_id },
-            data: {
-                access_token_hash: hashToken(data.access_token),
-                refresh_token_hash: data.refresh_token ? hashToken(data.refresh_token) : undefined,
-                access_token_encrypted: encryptToken(data.access_token),
-                ...(data.refresh_token && {
-                    refresh_token_encrypted: encryptToken(data.refresh_token),
-                }),
-            },
-        })
-
-        // Update cache
-        cachedToken = {
-            token: data.access_token,
-            expiresAt: Date.now() + (data.expires_in * 1000),
-            source: 'user',
-        }
-
-        console.log(`[Kick API] Successfully refreshed token for broadcaster: ${broadcaster.username}`)
-        return data.access_token
-    } catch (error) {
-        console.error(`[Kick API] Error refreshing broadcaster token:`, error instanceof Error ? error.message : 'Unknown error')
-        return null
+    // If a refresh is already in progress, wait for it
+    if (refreshMutex) {
+        return refreshMutex
     }
+
+    // Create new refresh promise
+    refreshMutex = (async () => {
+        try {
+            const broadcaster = await db.user.findFirst({
+                where: {
+                    username: {
+                        equals: BROADCASTER_SLUG,
+                        mode: 'insensitive',
+                    },
+                },
+                select: {
+                    refresh_token_encrypted: true,
+                    kick_user_id: true,
+                    username: true,
+                },
+            })
+
+            if (!broadcaster?.refresh_token_encrypted) {
+                return null
+            }
+
+            const refreshToken = decryptToken(broadcaster.refresh_token_encrypted)
+            const clientId = process.env.KICK_CLIENT_ID
+            const clientSecret = process.env.KICK_CLIENT_SECRET
+
+            if (!clientId || !clientSecret) {
+                return null
+            }
+
+            // Build redirect URI (use a default one for server-side refresh)
+            const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
+
+            const params = new URLSearchParams({
+                grant_type: 'refresh_token',
+                client_id: clientId,
+                client_secret: clientSecret,
+                refresh_token: refreshToken,
+                redirect_uri: redirectUri,
+            })
+
+            const response = await fetch(KICK_AUTH_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: params.toString(),
+            })
+
+            if (!response.ok) {
+                const errorText = await response.text()
+                // Only log actual failures, not every attempt
+                if (response.status !== 401) {
+                    console.warn(`[Kick API] Token refresh failed: ${response.status} ${errorText.substring(0, 100)}`)
+                }
+                return null
+            }
+
+            const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
+
+            // Update tokens in database (both encrypted and hashed)
+            await db.user.update({
+                where: { kick_user_id: broadcaster.kick_user_id },
+                data: {
+                    access_token_hash: hashToken(data.access_token),
+                    refresh_token_hash: data.refresh_token ? hashToken(data.refresh_token) : undefined,
+                    access_token_encrypted: encryptToken(data.access_token),
+                    ...(data.refresh_token && {
+                        refresh_token_encrypted: encryptToken(data.refresh_token),
+                    }),
+                },
+            })
+
+            // Update cache
+            cachedToken = {
+                token: data.access_token,
+                expiresAt: Date.now() + (data.expires_in * 1000),
+                source: 'user',
+            }
+
+            return data.access_token
+        } catch (error) {
+            console.error(`[Kick API] Error refreshing broadcaster token:`, error instanceof Error ? error.message : 'Unknown error')
+            return null
+        } finally {
+            // Clear mutex when done
+            refreshMutex = null
+        }
+    })()
+
+    return refreshMutex
 }
 
 /**
@@ -393,7 +402,6 @@ export async function getAppAccessToken(): Promise<string> {
     }
 
     try {
-        console.log(`[Kick API] Requesting App Access Token from ${KICK_AUTH_URL}`)
         const response = await fetch(KICK_AUTH_URL, {
             method: 'POST',
             headers: {
@@ -421,7 +429,6 @@ export async function getAppAccessToken(): Promise<string> {
             source: 'app',
         }
 
-        console.log(`[Kick API] Successfully obtained App Access Token (expires in ${data.expires_in}s)`)
         return data.access_token
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
@@ -587,7 +594,6 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
 
                 // If still 401 after refresh, fall back to v2 API
                 if (response.status === 401) {
-                    console.log(`[Kick API] Still 401 after token refresh, falling back to v2 API`)
                     useV2Fallback = true
                 }
             }
