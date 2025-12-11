@@ -20,9 +20,19 @@ interface RaffleWheelProps {
     backgroundImageUrl?: string | null
     sliceOpacity?: number
     centerLogoUrl?: string | null
+    maskNames?: boolean
 }
 
-export default function RaffleWheel({ entries, totalTickets, onSpinComplete, targetIndex, backgroundImageUrl, sliceOpacity = 0.5, centerLogoUrl }: RaffleWheelProps) {
+export default function RaffleWheel({
+    entries,
+    totalTickets,
+    onSpinComplete,
+    targetIndex,
+    backgroundImageUrl,
+    sliceOpacity = 0.5,
+    centerLogoUrl,
+    maskNames = true,
+}: RaffleWheelProps) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
     const winwheelRef = useRef<any>(null)
 
@@ -50,18 +60,20 @@ export default function RaffleWheel({ entries, totalTickets, onSpinComplete, tar
                 if (totalTickets <= 2000) {
                     // Build a separate segment per ticket
                     for (const e of entries) {
+                        const color = rgbaFromString(e.username || e.user_id || e.entry_id, sliceOpacity)
                         for (let i = e.range_start; i < e.range_end; i++) {
-                            const hex = Math.floor(Math.random()*16777215).toString(16)
-                            const color = hexToRgba(hex, sliceOpacity)
-                            segmentArray.push({ fillStyle: color, text: maskName(e.username) })
+                            segmentArray.push({ fillStyle: color, text: formatName(e.username, maskNames) })
                         }
                     }
                 } else {
                     // Fall back: one segment per user, sized proportional to tickets
                     for (const e of entries) {
-                        const hex = Math.floor(Math.random()*16777215).toString(16)
-                        const color = hexToRgba(hex, sliceOpacity)
-                        segmentArray.push({ fillStyle: color, text: `${maskName(e.username)} (${e.tickets})`, size: (e.tickets / totalTickets) * 360 })
+                        const color = rgbaFromString(e.username || e.user_id || e.entry_id, sliceOpacity)
+                        segmentArray.push({
+                            fillStyle: color,
+                            text: `${formatName(e.username, maskNames)} (${e.tickets})`,
+                            size: (e.tickets / totalTickets) * 360
+                        })
                     }
                 }
 
@@ -104,9 +116,23 @@ export default function RaffleWheel({ entries, totalTickets, onSpinComplete, tar
 
                 // If a target index provided, compute stopAngle and start animation
                 if (typeof targetIndex === 'number' && targetIndex >= 0) {
-                    // compute angle based on index
+                    // compute angle based on ticket index (works for both per-ticket and aggregated modes)
+                    let midAngle = 0
                     const anglePerTicket = 360 / totalTickets
-                    const stopAngle = 360 - (targetIndex + 0.5) * anglePerTicket
+                    if (totalTickets <= 2000) {
+                        midAngle = (targetIndex + 0.5) * anglePerTicket
+                    } else {
+                        // Find entry that contains the target ticket index and land in the middle of its arc
+                        const found = entries.find(e => targetIndex >= e.range_start && targetIndex < e.range_end)
+                        if (found) {
+                            const start = (found.range_start / totalTickets) * 360
+                            const end = (found.range_end / totalTickets) * 360
+                            midAngle = (start + end) / 2
+                        } else {
+                            midAngle = (targetIndex + 0.5) * anglePerTicket
+                        }
+                    }
+                    const stopAngle = 360 - midAngle
                     // set stopAngle and start
                     winwheelRef.current.animation.stopAngle = stopAngle
                     winwheelRef.current.startAnimation()
@@ -128,7 +154,7 @@ export default function RaffleWheel({ entries, totalTickets, onSpinComplete, tar
                 winwheelRef.current = null
             }
         }
-    }, [entries, totalTickets, targetIndex, onSpinComplete, sliceOpacity])
+    }, [entries, totalTickets, targetIndex, onSpinComplete, sliceOpacity, maskNames])
 
     return (
         <div className="relative" style={{ width: 600, height: 600, backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
@@ -140,17 +166,20 @@ export default function RaffleWheel({ entries, totalTickets, onSpinComplete, tar
     )
 }
 
-function maskName(name: string) {
+function formatName(name: string, mask: boolean) {
+    if (!mask) return name
     if (!name || name.length < 2) return '*'
     return name[0] + '*'.repeat(Math.max(1, name.length - 2)) + name[name.length - 1]
 }
 
-function hexToRgba(hex: string, opacity = 0.5) {
-    // ensure 6 chars
-    hex = hex.replace('#', '')
-    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('')
-    const r = parseInt(hex.substring(0,2), 16)
-    const g = parseInt(hex.substring(2,4), 16)
-    const b = parseInt(hex.substring(4,6), 16)
+function rgbaFromString(input: string, opacity = 0.5) {
+    // Simple stable hash -> RGB
+    let hash = 0
+    for (let i = 0; i < input.length; i++) {
+        hash = (hash * 31 + input.charCodeAt(i)) | 0
+    }
+    const r = (hash >>> 16) & 255
+    const g = (hash >>> 8) & 255
+    const b = hash & 255
     return `rgba(${r}, ${g}, ${b}, ${opacity})`
 }

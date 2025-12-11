@@ -217,6 +217,7 @@ model Raffle {
   entries        RaffleEntry[]
   winners        RaffleWinner[]
   rigged_winners RaffleRiggedWinner[]
+  wheel_overlays WheelOverlayState[]
 
   @@map("raffles")
 }
@@ -438,4 +439,58 @@ model ReferralReward {
   @@index([referrer_user_id])
   @@index([awarded_at])
   @@map("referral_rewards")
+}
+
+// OBS Wheel Overlay (singleton state + custom entrants + spin events)
+model WheelOverlayState {
+  key                  String   @id @default("default")
+  mode                 String   @default("raffle") // raffle | custom
+  raffle_id            BigInt?
+  title                String?
+  locked               Boolean  @default(false)
+  locked_entries       Json?
+  locked_total_tickets Int?
+  wheel_background_url String?
+  center_logo_url      String?
+  slice_opacity        Float?   @default(0.5)
+  updated_at           DateTime @updatedAt
+  created_at           DateTime @default(now())
+
+  raffle    Raffle?               @relation(fields: [raffle_id], references: [id], onDelete: SetNull)
+  entrants  WheelOverlayEntrant[]
+  spins     WheelOverlaySpin[]
+
+  @@map("wheel_overlay_state")
+}
+
+model WheelOverlayEntrant {
+  id          BigInt   @id @default(autoincrement())
+  overlay_key String
+  label       String
+  weight      Int      @default(1)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
+
+  @@index([overlay_key])
+  @@map("wheel_overlay_entrants")
+}
+
+model WheelOverlaySpin {
+  id                BigInt   @id @default(autoincrement())
+  overlay_key       String
+  version           Int
+  mode              String // raffle | custom
+  raffle_id         BigInt?
+  target_ticket_index Int
+  winner_label      String
+  winner_user_id    BigInt?
+  winner_entry_id   BigInt?
+  created_at        DateTime @default(now())
+
+  overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
+
+  @@index([overlay_key, version])
+  @@map("wheel_overlay_spins")
 }
