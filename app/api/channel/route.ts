@@ -817,6 +817,14 @@ export async function GET(request: Request) {
         // Track stream sessions
         await trackStreamSession(slug, broadcasterUserId, isLive, viewerCount, streamTitle, thumbnailUrl)
 
+        // Ensure channelData exists before spreading
+        if (!channelData) {
+            return NextResponse.json(
+                { error: 'Channel data not available' },
+                { status: 500 }
+            )
+        }
+
         // Prepare final response
         const responseData = {
             ...channelData,
