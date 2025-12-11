@@ -12,6 +12,12 @@
  * All writes go through this worker via the chat_jobs queue.
  */
 
+console.log('')
+console.log('========================================')
+console.log('🔄 CHAT WORKER STARTING')
+console.log('========================================')
+console.log('')
+
 import { db } from '../lib/db'
 import { claimChatJobs, completeChatJob, failChatJob, getChatQueueStats, type ClaimedChatJob, type ChatJobPayload } from '../lib/chat-queue'
 import { awardPoint, awardEmotes, isBot } from '../lib/points'

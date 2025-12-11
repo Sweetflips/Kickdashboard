@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+
+console.log('')
+console.log('========================================')
+console.log('🔄 POINT WORKER STARTING')
+console.log('========================================')
+console.log('')
+
 import { claimJobs, processJob, getQueueStats } from '../lib/point-queue'
 import { db } from '../lib/db'
 

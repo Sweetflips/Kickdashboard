@@ -110,18 +110,28 @@ async function ensureTables() {
   await ensureTables();
 
   // Start chat worker (handles all writes: users, messages, points)
-  console.log('🔄 Starting chat worker (handles all database writes)...');
+  console.log('');
+  console.log('========================================');
+  console.log('🚀 STARTING WORKERS');
+  console.log('========================================');
+  console.log('');
+  console.log('📝 Chat Worker: Starting (handles users, messages, points)...');
   const chatWorkerProcess = spawn('npx', ['tsx', 'scripts/chat-worker.ts'], {
     stdio: 'inherit',
     env: process.env
   });
 
   // Start point worker (processes point_award_jobs queue)
-  console.log('🔄 Starting point worker (processes point award jobs)...');
+  console.log('📝 Point Worker: Starting (processes point award jobs)...');
   const pointWorkerProcess = spawn('npx', ['tsx', 'scripts/point-worker.ts'], {
     stdio: 'inherit',
     env: process.env
   });
+  
+  console.log('');
+  console.log('✅ Workers spawned successfully');
+  console.log('   Waiting for database connections...');
+  console.log('');
 
   let chatWorkerExited = false;
   let pointWorkerExited = false;
