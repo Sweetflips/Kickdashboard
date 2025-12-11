@@ -48,7 +48,7 @@ const rateLimiter = {
  * Acquire a slot to make an API request
  * Returns a release function to call when done
  */
-async function acquireRateLimitSlot(): Promise<() => void> {
+export async function acquireRateLimitSlot(): Promise<() => void> {
     // Wait for global backoff if we're rate limited
     const now = Date.now()
     if (rateLimiter.globalBackoffUntil > now) {
