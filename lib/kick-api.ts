@@ -770,7 +770,19 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                     // Livestreams API returns { data: [...] }
                     // If data array has items, stream is live and contains thumbnail
                     if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
-                        const livestream = livestreamsData.data[0] as KickLivestream
+                        // Find the livestream that matches our requested broadcaster_user_id
+                        // The Kick API may return other streams if the filter doesn't work properly
+                        const livestream = livestreamsData.data.find(
+                            (ls: KickLivestream) => ls.broadcaster_user_id === broadcasterUserId ||
+                                ls.slug?.toLowerCase() === slug.toLowerCase()
+                        ) as KickLivestream | undefined
+
+                        if (!livestream) {
+                            // No matching livestream found - the API returned data for other channels
+                            console.warn(`[Kick API] Livestream response mismatch: requested broadcaster ${broadcasterUserId} (${slug}), but response contains different channels`)
+                            console.log(`[Kick API] Channel ${slug} has no active livestream (no matching data in response)`)
+                            return null
+                        }
 
                         // Debug: Log livestream response
                         console.log(`[Kick API] Livestreams response:`, JSON.stringify(livestream, null, 2))
@@ -793,11 +805,11 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                         // The API only provides broadcaster_user_id and channel_id
                         // We use broadcaster_user_id as the identifier
                         streamId = livestream.broadcaster_user_id.toString()
-                        
+
                         // Capture started_at for matching with local sessions
                         const startedAt = livestream.started_at
                         console.log(`[Kick API] Stream is LIVE - broadcaster: ${streamId}, started_at: ${startedAt}, thumbnail: ${thumbnailUrl ? 'yes' : 'no'}`)
-                        
+
                         // Return early with all data
                         return {
                             streamId,
@@ -906,12 +918,29 @@ export async function getLivestreams(filters?: {
 
         const apiResponse: { data: KickLivestream[] } = await response.json()
 
-        return apiResponse.data.map(livestream => ({
+        // Filter response to only include requested broadcaster IDs
+        // The Kick API may return other streams if the filter doesn't work properly
+        let filteredData = apiResponse.data
+        if (filters?.broadcaster_user_id && filters.broadcaster_user_id.length > 0) {
+            const requestedIds = new Set(filters.broadcaster_user_id)
+            filteredData = apiResponse.data.filter(ls => requestedIds.has(ls.broadcaster_user_id))
+
+            if (filteredData.length !== apiResponse.data.length) {
+                console.warn(`[Kick API] Livestreams response contained ${apiResponse.data.length - filteredData.length} unrequested streams, filtered out`)
+            }
+        }
+
+        return filteredData.map(livestream => ({
             streamId: livestream.broadcaster_user_id.toString(),
             channelSlug: livestream.slug || '',
             // Per API docs: thumbnail is a direct string URL
+<<<<<<< HEAD
             thumbnailUrl: typeof livestream.thumbnail === 'string' 
                 ? livestream.thumbnail 
+=======
+            thumbnailUrl: typeof livestream.thumbnail === 'string'
+                ? livestream.thumbnail
+>>>>>>> point-worker
                 : extractThumbnailUrl(livestream.thumbnail),
             startedAt: livestream.started_at,
             fetchedAt: new Date(),
