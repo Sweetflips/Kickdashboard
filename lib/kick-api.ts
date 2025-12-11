@@ -934,13 +934,8 @@ export async function getLivestreams(filters?: {
             streamId: livestream.broadcaster_user_id.toString(),
             channelSlug: livestream.slug || '',
             // Per API docs: thumbnail is a direct string URL
-<<<<<<< HEAD
-            thumbnailUrl: typeof livestream.thumbnail === 'string' 
-                ? livestream.thumbnail 
-=======
             thumbnailUrl: typeof livestream.thumbnail === 'string'
                 ? livestream.thumbnail
->>>>>>> point-worker
                 : extractThumbnailUrl(livestream.thumbnail),
             startedAt: livestream.started_at,
             fetchedAt: new Date(),
