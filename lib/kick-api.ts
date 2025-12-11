@@ -649,7 +649,6 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
         }
 
         const responseData: any = await response.json()
-        const duration = Date.now() - startTime
 
         // Handle v1 API response format: { data: [channel1, channel2, ...] }
         let channel: KickChannel | null = null
