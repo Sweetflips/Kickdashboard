@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthenticatedUser, isAdmin } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
     request: Request,
     { params }: { params: { id: string } }

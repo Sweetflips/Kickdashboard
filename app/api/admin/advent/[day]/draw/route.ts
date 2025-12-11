@@ -2,6 +2,8 @@ import { getAuthenticatedUser, isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
   request: Request,
   { params }: { params: { day: string } }
@@ -112,5 +114,3 @@ export async function DELETE(
     )
   }
 }
-
-

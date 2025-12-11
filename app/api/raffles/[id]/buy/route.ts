@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { purchaseTickets } from '@/lib/raffles'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
     request: Request,
     { params }: { params: { id: string } }
