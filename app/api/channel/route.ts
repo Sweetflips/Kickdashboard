@@ -781,6 +781,20 @@ export async function GET(request: Request) {
             }
         }
 
+        // Check if there's a test session active (admin-created for testing)
+        const isTestSession = activeSession?.session_title?.startsWith('[TEST]') || false
+
+        // If test session is active, override live status to show as live on dashboard
+        if (isTestSession && activeSession) {
+            isLive = true
+            streamTitle = activeSession.session_title || '[TEST] Test Session'
+            streamStartedAt = activeSession.started_at.toISOString()
+            // Set a test category
+            if (!category) {
+                category = { id: 0, name: 'Testing' }
+            }
+        }
+
         // Fallback: If API didn't provide started_at but stream is live, use database session time
         if (isLive && !streamStartedAt && activeSession) {
             streamStartedAt = activeSession.started_at.toISOString()
@@ -842,7 +856,8 @@ export async function GET(request: Request) {
             broadcaster_user_id: broadcasterUserId,
             chatroom_id: chatroomId,
             is_live: isLive,
-            viewer_count: viewerCount,
+            is_test_session: isTestSession, // Flag to indicate test mode
+            viewer_count: isTestSession ? 1 : viewerCount, // Show 1 viewer for test sessions
             session_title: streamTitle,
             stream_started_at: isLive ? streamStartedAt : null,
             stream: livestream || null,
