@@ -819,6 +819,7 @@ export async function GET(request: Request) {
             peak_viewer_count: number;
             session_title: string | null;
             thumbnail_url: string | null;
+            kick_video_id: string | null;
         } | null = null
         if (broadcasterUserId) {
             try {
@@ -836,6 +837,7 @@ export async function GET(request: Request) {
                         peak_viewer_count: true,
                         session_title: true,
                         thumbnail_url: true,
+                        kick_video_id: true,
                     },
                 })
             } catch (err) {
