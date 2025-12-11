@@ -11,6 +11,42 @@ const FAILED_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
  * This bypasses CORS and Next.js image restrictions
  * GET /api/image-proxy?url=https://stream.kick.com/thumbnails/livestream/123.jpg
  */
+/**
+ * Normalize and validate image URL
+ * Filters out malformed URLs with spaces, invalid characters, etc.
+ */
+function normalizeImageUrl(url: string): string | null {
+    try {
+        // Remove leading/trailing whitespace
+        url = url.trim()
+
+        // Reject URLs with spaces (like "/sweet_flips (2).png")
+        if (url.includes(' ') && !url.startsWith('http')) {
+            return null
+        }
+
+        // If it's a relative path, try to construct a valid URL
+        if (!url.startsWith('http')) {
+            // Reject malformed relative paths
+            if (url.includes('(') || url.includes(')') || url.includes(' ')) {
+                return null
+            }
+            // If it's a relative path like "/kick.jpg", convert to full URL
+            if (url.startsWith('/')) {
+                // This shouldn't happen in production, but handle gracefully
+                return null
+            }
+        }
+
+        // Validate URL format
+        const urlObj = new URL(url)
+        return urlObj.toString()
+    } catch {
+        // Invalid URL format
+        return null
+    }
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
@@ -23,8 +59,42 @@ export async function GET(request: Request) {
             )
         }
 
+        // Normalize and validate URL
+        const normalizedUrl = normalizeImageUrl(imageUrl)
+        if (!normalizedUrl) {
+            console.warn(`⚠️ Invalid image URL format: ${imageUrl.substring(0, 100)}`)
+            // Return default image for invalid URLs
+            const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
+            const proto = request.headers.get('x-forwarded-proto') || 'https'
+            const baseUrl = host ? `${proto}://${host}` : 'https://kickdashboard.com'
+            const defaultImageUrl = `${baseUrl}/icons/kick.jpg`
+
+            try {
+                const defaultImageResponse = await fetch(defaultImageUrl, {
+                    signal: AbortSignal.timeout(5000),
+                })
+                if (defaultImageResponse.ok) {
+                    const defaultImageBuffer = await defaultImageResponse.arrayBuffer()
+                    return new NextResponse(defaultImageBuffer, {
+                        headers: {
+                            'Content-Type': 'image/jpeg',
+                            'Cache-Control': 'public, max-age=300',
+                            'Access-Control-Allow-Origin': '*',
+                        },
+                    })
+                }
+            } catch {
+                // Fall through to error response
+            }
+
+            return NextResponse.json(
+                { error: 'Invalid image URL format' },
+                { status: 400 }
+            )
+        }
+
         // Validate URL is from Kick domain or Kick's CDN
-        const url = new URL(imageUrl)
+        const url = new URL(normalizedUrl)
         const allowedDomains = [
             'kick.com',
             'cloudfront.net',
@@ -41,10 +111,13 @@ export async function GET(request: Request) {
             )
         }
 
+        // Use normalized URL for all operations
+        const finalImageUrl = normalizedUrl
+
         // Check if this URL recently failed (avoid repeated failed requests)
-        const failedCacheEntry = failedImageCache.get(imageUrl)
+        const failedCacheEntry = failedImageCache.get(finalImageUrl)
         if (failedCacheEntry && Date.now() - failedCacheEntry.timestamp < FAILED_CACHE_TTL) {
-            console.log(`⏭️ Skipping recently failed image: ${imageUrl.substring(0, 80)}...`)
+            console.log(`⏭️ Skipping recently failed image: ${finalImageUrl.substring(0, 80)}...`)
             // Return default avatar immediately for recently failed URLs
             const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
             const proto = request.headers.get('x-forwarded-proto') || 'https'
@@ -73,8 +146,8 @@ export async function GET(request: Request) {
         const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
         let imageResponse: Response
-        const isEmote = imageUrl.includes('files.kick.com/emotes')
-        const isStreamThumbnail = imageUrl.includes('stream.kick.com')
+        const isEmote = finalImageUrl.includes('files.kick.com/emotes')
+        const isStreamThumbnail = finalImageUrl.includes('stream.kick.com')
 
         // For stream thumbnails, use minimal headers initially to avoid 403s
         const getInitialHeaders = (): Record<string, string> => {
@@ -93,7 +166,7 @@ export async function GET(request: Request) {
 
         try {
             // First try with appropriate headers based on image type
-            imageResponse = await fetch(imageUrl, {
+            imageResponse = await fetch(finalImageUrl, {
                 headers: getInitialHeaders(),
                 signal: controller.signal,
             })
@@ -102,13 +175,13 @@ export async function GET(request: Request) {
             if (imageResponse.status === 403) {
                 // For emotes, try alternate URL formats
                 if (isEmote) {
-                    const emoteIdMatch = imageUrl.match(/emotes\/(\d+)/)
+                    const emoteIdMatch = finalImageUrl.match(/emotes\/(\d+)/)
                     if (emoteIdMatch) {
                         const emoteId = emoteIdMatch[1]
                         const fullsizeUrl = `https://files.kick.com/emotes/${emoteId}/fullsize`
 
                         // Only try fullsize if different from original URL
-                        if (fullsizeUrl !== imageUrl) {
+                        if (fullsizeUrl !== finalImageUrl) {
                             console.log(`⚠️ Emote 403 - Trying fullsize format: ${fullsizeUrl}`)
                             try {
                                 const fallbackResponse = await fetch(fullsizeUrl, {
@@ -153,7 +226,7 @@ export async function GET(request: Request) {
 
                     // Strategy 1: No headers at all
                     try {
-                        imageResponse = await fetch(imageUrl, {
+                        imageResponse = await fetch(finalImageUrl, {
                             signal: controller.signal,
                         })
                         if (imageResponse.ok) {
@@ -167,7 +240,7 @@ export async function GET(request: Request) {
                     // Strategy 2: Minimal headers with different User-Agent
                     if (!imageResponse.ok) {
                         try {
-                            imageResponse = await fetch(imageUrl, {
+                            imageResponse = await fetch(finalImageUrl, {
                                 headers: {
                                     'User-Agent': 'Mozilla/5.0',
                                     'Accept': '*/*'
@@ -188,7 +261,7 @@ export async function GET(request: Request) {
         } catch (fetchError) {
             clearTimeout(timeoutId)
             if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-                console.error(`⏱️ Image fetch timeout: ${imageUrl.substring(0, 80)}...`)
+                console.error(`⏱️ Image fetch timeout: ${finalImageUrl.substring(0, 80)}...`)
             } else {
                 console.error(`❌ Image fetch error: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`)
             }
@@ -199,7 +272,7 @@ export async function GET(request: Request) {
         if (!imageResponse.ok) {
             // Cache failed requests (especially 403/404) to avoid repeated attempts
             if (imageResponse.status === 403 || imageResponse.status === 404 || imageResponse.status === 408) {
-                failedImageCache.set(imageUrl, { timestamp: Date.now() })
+                failedImageCache.set(finalImageUrl, { timestamp: Date.now() })
             }
 
             // For emotes, return transparent 1x1 PNG instead of default avatar
