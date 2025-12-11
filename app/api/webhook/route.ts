@@ -221,6 +221,7 @@ export async function POST(request: Request) {
                                 channel_slug: broadcasterSlug,
                                 session_title: null, // Official API doesn't return title in this endpoint
                                 thumbnail_url: livestreamData.thumbnailUrl,
+                                kick_stream_id: livestreamData.streamId,
                                 started_at: new Date(),
                                 peak_viewer_count: 0,
                             },

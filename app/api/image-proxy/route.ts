@@ -68,9 +68,6 @@ export async function GET(request: Request) {
             }
         }
 
-        console.log(`🖼️ Proxying image: ${imageUrl}`)
-        console.log(`🖼️ Decoded URL: ${decodeURIComponent(imageUrl)}`)
-
         // Fetch the image with timeout
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
@@ -199,8 +196,6 @@ export async function GET(request: Request) {
             imageResponse = new Response(null, { status: 408 }) // Timeout status
         }
 
-        console.log(`📡 Image fetch response status: ${imageResponse.status}`)
-
         if (!imageResponse.ok) {
             // Cache failed requests (especially 403/404) to avoid repeated attempts
             if (imageResponse.status === 403 || imageResponse.status === 404 || imageResponse.status === 408) {
@@ -214,7 +209,6 @@ export async function GET(request: Request) {
                     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
                     'base64'
                 )
-                console.log(`✅ Returning transparent PNG for failed emote: ${imageUrl.substring(0, 80)}...`)
                 return new NextResponse(transparentPng, {
                     headers: {
                         'Content-Type': 'image/png',
@@ -232,14 +226,12 @@ export async function GET(request: Request) {
                 const baseUrl = host ? `${proto}://${host}` : 'https://kickdashboard.com'
                 const defaultImageUrl = `${baseUrl}/icons/kick.jpg`
 
-                console.log(`🔄 Fetching default avatar: ${defaultImageUrl}`)
                 const defaultImageResponse = await fetch(defaultImageUrl, {
                     signal: AbortSignal.timeout(5000), // 5 second timeout for default image
                 })
 
                 if (defaultImageResponse.ok) {
                     const defaultImageBuffer = await defaultImageResponse.arrayBuffer()
-                    console.log(`✅ Returning default avatar for failed image: ${imageUrl.substring(0, 80)}...`)
                     return new NextResponse(defaultImageBuffer, {
                         headers: {
                             'Content-Type': 'image/jpeg',
@@ -257,8 +249,6 @@ export async function GET(request: Request) {
         // Get the image data
         const imageBuffer = await imageResponse.arrayBuffer()
         const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
-
-        console.log(`✅ Successfully proxied image: ${imageUrl} (${contentType})`)
 
         // Return the image with proper headers
         return new NextResponse(imageBuffer, {

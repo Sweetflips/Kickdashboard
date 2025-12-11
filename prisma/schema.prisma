@@ -84,6 +84,7 @@ model StreamSession {
   thumbnail_captured_at       DateTime?
   thumbnail_last_refreshed_at DateTime?
   thumbnail_source            String?
+  kick_stream_id              String?   // Kick's livestream.id or video.id for matching thumbnails
   started_at                  DateTime  @default(now())
   ended_at                    DateTime?
   peak_viewer_count           Int       @default(0)
@@ -199,7 +200,7 @@ model Raffle {
   draw_seed            String? // For transparency
   number_of_winners    Int       @default(1)
   rigging_enabled      Boolean   @default(false)
-  wheel_background_url String?   
+  wheel_background_url String?
   center_logo_url      String?
   slice_opacity        Float?    @default(0.5)
   drawn_at             DateTime?

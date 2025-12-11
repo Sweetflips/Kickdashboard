@@ -293,7 +293,7 @@ export async function getBroadcasterToken(): Promise<string> {
 /**
  * Refresh broadcaster's access token using refresh token from database
  */
-async function refreshBroadcasterToken(): Promise<string | null> {
+export async function refreshBroadcasterToken(): Promise<string | null> {
     try {
         const broadcaster = await db.user.findFirst({
             where: {
@@ -384,7 +384,7 @@ async function refreshBroadcasterToken(): Promise<string | null> {
  * Get App Access Token (client credentials flow)
  * Used as fallback when user token not available
  */
-async function getAppAccessToken(): Promise<string> {
+export async function getAppAccessToken(): Promise<string> {
     const clientId = process.env.KICK_CLIENT_ID
     const clientSecret = process.env.KICK_CLIENT_SECRET
 
@@ -535,9 +535,6 @@ function extractThumbnailUrl(thumbnail: string | KickThumbnail | null | undefine
  */
 export async function getChannelWithLivestream(slug: string): Promise<StreamThumbnail | null> {
     try {
-        const startTime = Date.now()
-        console.log(`[Kick API] Fetching channel data for: ${slug}`)
-
         // Try public v1 API first - use slug[] array syntax as per official API docs
         const endpoint = `/channels?slug[]=${encodeURIComponent(slug)}`
         const url = `${KICK_API_BASE}${endpoint}`
@@ -555,11 +552,10 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
 
         // If we get 401, try with authentication
         if (response.status === 401) {
-            console.log(`[Kick API] Got 401 without auth, retrying with authentication`)
-            const token = await getBroadcasterToken()
+            let token = await getBroadcasterToken()
             const clientId = process.env.KICK_CLIENT_ID
 
-            const headers: Record<string, string> = {
+            let headers: Record<string, string> = {
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
@@ -571,10 +567,29 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
 
             response = await fetch(url, { headers })
 
-            // If still 401, fall back to v2 API
+            // If still 401, try refreshing the token
             if (response.status === 401) {
-                console.log(`[Kick API] Still 401 with auth, falling back to v2 API`)
-                useV2Fallback = true
+                console.warn(`[Kick API] Got 401 with auth on /channels, attempting token refresh`)
+                clearTokenCache()
+                const refreshedToken = await refreshBroadcasterToken()
+                if (refreshedToken) {
+                    token = refreshedToken
+                    headers['Authorization'] = `Bearer ${token}`
+                    response = await fetch(url, { headers })
+                } else {
+                    // If refresh failed, try app token
+                    console.warn(`[Kick API] Token refresh failed, trying app token`)
+                    clearTokenCache()
+                    token = await getAppAccessToken()
+                    headers['Authorization'] = `Bearer ${token}`
+                    response = await fetch(url, { headers })
+                }
+
+                // If still 401 after refresh, fall back to v2 API
+                if (response.status === 401) {
+                    console.log(`[Kick API] Still 401 after token refresh, falling back to v2 API`)
+                    useV2Fallback = true
+                }
             }
         }
 
@@ -585,7 +600,6 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                 const errorText = await response.text().catch(() => 'Could not read error')
                 console.warn(`[Kick API] V1 API failed: ${response.status} ${errorText.substring(0, 200)}`)
             }
-            console.log(`[Kick API] Using legacy v2 API fallback for ${slug}`)
             const v2Url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
 
             response = await fetch(v2Url, {
@@ -637,9 +651,6 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
         const responseData: any = await response.json()
         const duration = Date.now() - startTime
 
-        // Log raw response for debugging
-        console.log(`[Kick API] Raw response for ${slug}:`, JSON.stringify(responseData, null, 2).substring(0, 500))
-
         // Handle v1 API response format: { data: [channel1, channel2, ...] }
         let channel: KickChannel | null = null
 
@@ -647,20 +658,13 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             // Response is { data: [channel1, channel2, ...] }
             if (responseData.data.length > 0) {
                 channel = responseData.data[0]
-                console.log(`[Kick API] Found channel in array format, using first item`)
-            } else {
-                console.warn(`[Kick API] Response has empty data array`)
             }
         } else if (responseData.data && typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
             // Response is { data: { channel object } }
             channel = responseData.data
-            console.log(`[Kick API] Found channel in data object format`)
         } else if (responseData.id || responseData.broadcaster_user_id) {
             // Response is directly a channel object (legacy format)
             channel = responseData
-            console.log(`[Kick API] Found channel in direct object format`)
-        } else {
-            console.warn(`[Kick API] Unknown response format. Keys:`, Object.keys(responseData))
         }
 
         if (!channel || (!channel.id && !channel.broadcaster_user_id)) {
@@ -671,10 +675,8 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                 hasId: !!responseData.id,
                 hasBroadcasterUserId: !!responseData.broadcaster_user_id,
                 keys: Object.keys(responseData),
-                fullResponse: JSON.stringify(responseData).substring(0, 300),
             })
             // Try v2 API as fallback
-            console.log(`[Kick API] Falling back to v2 API due to invalid response format`)
             const v2Url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
             const v2Response = await fetch(v2Url, {
                 headers: {
@@ -701,16 +703,6 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             }
             return null
         }
-
-        console.log(`[Kick API] Fetched channel ${slug} in ${duration}ms`)
-
-        console.log(`[Kick API] Channel data:`, JSON.stringify({
-            id: channel.id,
-            broadcaster_user_id: channel.broadcaster_user_id,
-            slug: channel.slug,
-            hasStream: !!channel.stream,
-            streamIsLive: channel.stream?.is_live,
-        }, null, 2))
 
         // Use /livestreams endpoint as the source of truth for live status and thumbnails
         // According to docs.kick.com/apis/livestreams, this endpoint returns thumbnail directly
@@ -739,10 +731,10 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
 
                 // If we get 401, try with authentication
                 if (livestreamsResponse.status === 401) {
-                    const token = await getBroadcasterToken()
+                    let token = await getBroadcasterToken()
                     const clientId = process.env.KICK_CLIENT_ID
 
-                    const headers: Record<string, string> = {
+                    let headers: Record<string, string> = {
                         'Authorization': `Bearer ${token}`,
                         'Accept': 'application/json',
                         'Content-Type': 'application/json',
@@ -753,6 +745,23 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                     }
 
                     livestreamsResponse = await fetch(livestreamsUrl, { headers })
+
+                    // If still 401, try refreshing the token
+                    if (livestreamsResponse.status === 401) {
+                        clearTokenCache()
+                        const refreshedToken = await refreshBroadcasterToken()
+                        if (refreshedToken) {
+                            token = refreshedToken
+                            headers['Authorization'] = `Bearer ${token}`
+                            livestreamsResponse = await fetch(livestreamsUrl, { headers })
+                        } else {
+                            // If refresh failed, try app token
+                            clearTokenCache()
+                            token = await getAppAccessToken()
+                            headers['Authorization'] = `Bearer ${token}`
+                            livestreamsResponse = await fetch(livestreamsUrl, { headers })
+                        }
+                    }
                 }
 
                 if (livestreamsResponse && livestreamsResponse.ok) {
@@ -766,26 +775,19 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                         // Extract thumbnail from livestream (per docs.kick.com/apis/livestreams)
                         if (livestream.thumbnail) {
                             thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
-                            console.log(`[Kick API] Extracted thumbnail from livestreams endpoint: ${thumbnailUrl?.substring(0, 80)}...`)
                         }
 
                         // Use the actual livestream ID (session_id) - this is required for thumbnail URLs
                         if (livestream.id) {
                             streamId = livestream.id.toString()
-                            console.log(`[Kick API] Using livestream ID: ${streamId}`)
                         } else if (livestream.session_id) {
                             streamId = livestream.session_id.toString()
-                            console.log(`[Kick API] Using session ID: ${streamId}`)
                         } else if (livestream.broadcaster_user_id) {
                             // Fallback to broadcaster_user_id (not ideal but better than nothing)
                             streamId = livestream.broadcaster_user_id.toString()
-                            console.warn(`[Kick API] No livestream ID found, falling back to broadcaster_user_id: ${streamId}`)
                         } else if (livestream.channel_id) {
                             streamId = livestream.channel_id.toString()
-                            console.warn(`[Kick API] No livestream ID found, falling back to channel_id: ${streamId}`)
                         }
-
-                        console.log(`[Kick API] Stream is LIVE (found in /livestreams endpoint, streamId: ${streamId})`)
                     } else {
                         // Empty data array means stream is not live
                         console.log(`[Kick API] Channel ${slug} has no active livestream (empty livestreams response)`)
@@ -810,13 +812,6 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
         }
 
         // If we got here, livestreams endpoint returned data (stream is live)
-        // But check if we actually got a thumbnail
-        if (!thumbnailUrl) {
-            console.warn(`[Kick API] Stream is live but no thumbnail found in livestreams response for ${slug} (streamId: ${streamId})`)
-            // Still return the data even without thumbnail, as stream is confirmed live
-        } else {
-            console.log(`[Kick API] Successfully found thumbnail for live stream ${slug}: ${thumbnailUrl.substring(0, 80)}...`)
-        }
 
         return {
             streamId,
@@ -874,7 +869,6 @@ export async function getLivestreams(filters?: {
 
         // If we get 401, try with authentication
         if (response.status === 401) {
-            console.log(`[Kick API] Got 401 without auth for livestreams, retrying with authentication`)
             const token = await getBroadcasterToken()
             const clientId = process.env.KICK_CLIENT_ID
 
@@ -1102,7 +1096,7 @@ async function syncThumbnailsFallback(
  * Fetches email, name, and profile_picture
  * Requires authentication (User Access Token)
  * Can fetch up to 50 users at once
- * 
+ *
  * RATE LIMITED: Uses global rate limiter to prevent API hammering
  */
 export async function getUsersByIds(userIds: number[]): Promise<Map<number, KickUser>> {
@@ -1136,7 +1130,7 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
             while (retryCount <= maxRetries && !batchSuccess) {
                 // ACQUIRE RATE LIMIT SLOT - This is the key change
                 const releaseSlot = await acquireRateLimitSlot()
-                
+
                 try {
                     const headers: Record<string, string> = {
                         'Authorization': `Bearer ${token}`,
@@ -1165,7 +1159,7 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
                         const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining')
                         const rateLimitLimit = response.headers.get('X-RateLimit-Limit')
                         const rateLimitReset = response.headers.get('X-RateLimit-Reset')
-                        
+
                         // Calculate wait time - prefer Retry-After header (RFC 7231)
                         let baseWaitTime = 5000 // Default 5 seconds
                         if (retryAfter) {
@@ -1175,15 +1169,15 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
                             const resetTime = parseInt(rateLimitReset, 10) * 1000
                             baseWaitTime = Math.max(0, resetTime - Date.now()) + 1000 // Add 1s buffer
                         }
-                        
+
                         // Log rate limit info if available
                         if (rateLimitLimit && rateLimitRemaining) {
                             console.warn(`[Kick API] Rate limited (429) - Limit: ${rateLimitLimit}, Remaining: ${rateLimitRemaining}, Reset: ${rateLimitReset || 'unknown'}`)
                         }
-                        
+
                         // Exponential backoff with jitter (max 60 seconds)
                         const waitTime = Math.min(baseWaitTime * Math.pow(2, retryCount) + Math.random() * 1000, 60000)
-                        
+
                         // Trigger global backoff - all other requests will wait too
                         triggerGlobalBackoff(waitTime)
 

@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { getBroadcasterToken } from '@/lib/kick-api';
+import { getBroadcasterToken, refreshBroadcasterToken, clearTokenCache, getAppAccessToken } from '@/lib/kick-api';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
@@ -44,28 +44,6 @@ async function fetchV2ChannelData(slug: string): Promise<{
         }
 
         const data = await response.json()
-
-        // Log ALL important data from v2 API
-        console.log(`[Channel API] ========== V2 API FULL DATA ==========`)
-        console.log(`[Channel API] slug: ${data.slug}`)
-        console.log(`[Channel API] user.username: ${data.user?.username}`)
-        console.log(`[Channel API] followers_count: ${data.followers_count}`)
-        console.log(`[Channel API] subscriber_count: ${data.subscriber_count}`)
-        console.log(`[Channel API] verified: ${data.verified}`)
-
-        if (data.livestream) {
-            console.log(`[Channel API] livestream.id: ${data.livestream.id}`)
-            console.log(`[Channel API] livestream.session_title: ${data.livestream.session_title}`)
-            console.log(`[Channel API] livestream.is_live: ${data.livestream.is_live}`)
-            console.log(`[Channel API] livestream.viewer_count: ${data.livestream.viewer_count}`)
-            console.log(`[Channel API] livestream.started_at: ${data.livestream.started_at}`)
-            console.log(`[Channel API] livestream.thumbnail: ${JSON.stringify(data.livestream.thumbnail)}`)
-            console.log(`[Channel API] livestream.category: ${JSON.stringify(data.livestream.category)}`)
-            console.log(`[Channel API] livestream.categories: ${JSON.stringify(data.livestream.categories)}`)
-        } else {
-            console.log(`[Channel API] livestream: null (stream is offline)`)
-        }
-        console.log(`[Channel API] ========================================`)
 
         const livestream = data.livestream
         let category: { id: number; name: string } | null = null
@@ -165,7 +143,6 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
 
             // If 401, retry with authentication
             if (livestreamsResponse.status === 401) {
-                console.log(`[Channel API] /livestreams returned 401, retrying with auth`)
                 try {
                     const token = await getBroadcasterToken()
                     const clientId = process.env.KICK_CLIENT_ID
@@ -190,7 +167,6 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
 
             if (livestreamsResponse.ok) {
                 const livestreamsData = await livestreamsResponse.json()
-                console.log(`[Channel API] /livestreams response:`, JSON.stringify(livestreamsData, null, 2).substring(0, 500))
 
                 // If data array has items, stream is LIVE
                 if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
@@ -270,11 +246,11 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
 async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promise<Response | null> {
     // Try v2 API first (no auth required, more reliable)
     const v2Url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
-    
+
     try {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 8000)
-        
+
         const v2Response = await fetch(v2Url, {
             headers: {
                 'Accept': 'application/json',
@@ -283,9 +259,9 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
             signal: controller.signal,
             cache: 'no-store',
         })
-        
+
         clearTimeout(timeoutId)
-        
+
         if (v2Response.ok) {
             // Return a mock Response object that works with our parsing logic
             return v2Response
@@ -293,10 +269,10 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
     } catch (error) {
         console.warn(`[Channel API] v2 API failed, trying official API:`, error instanceof Error ? error.message : 'Unknown error')
     }
-    
+
     // Fallback: Try official API without auth first
     const url = `${KICK_API_BASE}/channels?slug[]=${encodeURIComponent(slug)}`
-    
+
     for (let attempt = 0; attempt < retries; attempt++) {
         try {
             const controller = new AbortController()
@@ -317,10 +293,10 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
             // If 401, try with auth
             if (response.status === 401) {
                 try {
-                    const token = await getBroadcasterToken()
+                    let token = await getBroadcasterToken()
                     const clientId = process.env.KICK_CLIENT_ID
 
-                    const authHeaders: Record<string, string> = {
+                    let authHeaders: Record<string, string> = {
                         'Authorization': `Bearer ${token}`,
                         'Accept': 'application/json',
                         'Content-Type': 'application/json',
@@ -329,16 +305,49 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
                         authHeaders['Client-Id'] = clientId
                     }
 
-                    const controller2 = new AbortController()
-                    const timeoutId2 = setTimeout(() => controller2.abort(), 8000)
-                    
+                    let controller2 = new AbortController()
+                    let timeoutId2 = setTimeout(() => controller2.abort(), 8000)
+
                     response = await fetch(url, {
                         headers: authHeaders,
                         signal: controller2.signal,
                         cache: 'no-store',
                     })
-                    
+
                     clearTimeout(timeoutId2)
+
+                    // If still 401, try refreshing the token
+                    if (response.status === 401) {
+                        console.warn(`[Channel API] Got 401 with auth, attempting token refresh`)
+                        clearTokenCache()
+                        const refreshedToken = await refreshBroadcasterToken()
+                        if (refreshedToken) {
+                            token = refreshedToken
+                            authHeaders['Authorization'] = `Bearer ${token}`
+                            controller2 = new AbortController()
+                            timeoutId2 = setTimeout(() => controller2.abort(), 8000)
+                            response = await fetch(url, {
+                                headers: authHeaders,
+                                signal: controller2.signal,
+                                cache: 'no-store',
+                            })
+                            clearTimeout(timeoutId2)
+                        } else {
+                            // If refresh failed, try app token
+                            console.warn(`[Channel API] Token refresh failed, trying app token`)
+                            clearTokenCache()
+                            token = await getAppAccessToken()
+                            authHeaders['Authorization'] = `Bearer ${token}`
+                            controller2 = new AbortController()
+                            timeoutId2 = setTimeout(() => controller2.abort(), 8000)
+                            response = await fetch(url, {
+                                headers: authHeaders,
+                                signal: controller2.signal,
+                                cache: 'no-store',
+                            })
+                            clearTimeout(timeoutId2)
+                        }
+                    }
                 } catch (authError) {
                     console.warn(`[Channel API] Auth failed, will use v2 API only:`, authError instanceof Error ? authError.message : 'Unknown error')
                     return null
@@ -381,7 +390,8 @@ async function trackStreamSession(
     isLive: boolean,
     viewerCount: number,
     streamTitle: string,
-    thumbnailUrl: string | null
+    thumbnailUrl: string | null,
+    kickStreamId?: string | null
 ): Promise<void> {
     if (!broadcasterUserId) {
         return
@@ -416,6 +426,7 @@ async function trackStreamSession(
                         channel_slug: slug,
                         session_title: streamTitle || null,
                         thumbnail_url: thumbnailUrl,
+                        kick_stream_id: kickStreamId || null,
                         started_at: new Date(),
                         peak_viewer_count: viewerCount,
                     },
@@ -424,14 +435,20 @@ async function trackStreamSession(
             } else {
                 // Stream is live and session exists - update it
                 const newPeak = Math.max(activeSession.peak_viewer_count, viewerCount)
+                const updateData: any = {
+                    session_title: streamTitle || activeSession.session_title,
+                    peak_viewer_count: newPeak,
+                    updated_at: new Date(),
+                }
+                if (thumbnailUrl) {
+                    updateData.thumbnail_url = thumbnailUrl
+                }
+                if (kickStreamId) {
+                    updateData.kick_stream_id = kickStreamId
+                }
                 await db.streamSession.update({
                     where: { id: activeSession.id },
-                    data: {
-                        session_title: streamTitle || activeSession.session_title,
-                        thumbnail_url: thumbnailUrl || activeSession.thumbnail_url,
-                        peak_viewer_count: newPeak,
-                        updated_at: new Date(),
-                    },
+                    data: updateData,
                 })
                 console.log(`✅ Stream is LIVE - updated session ${activeSession.id} (peak: ${newPeak})`)
             }
@@ -497,7 +514,7 @@ export async function GET(request: Request) {
         if (!channelData) {
             console.log(`[Channel API] Official API unavailable, using v2 API only`)
             const v2Data = await fetchV2ChannelData(slug)
-            
+
             if (!v2Data) {
                 return NextResponse.json(
                     { error: 'Channel not found' },
@@ -521,17 +538,6 @@ export async function GET(request: Request) {
             }
         } else {
             broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
-        }
-
-        // Log channel data structure for debugging
-        console.log(`[Channel API] Channel data keys:`, Object.keys(channelData))
-        console.log(`[Channel API] Has stream:`, !!channelData.stream)
-        console.log(`[Channel API] Has livestream:`, !!channelData.livestream)
-        if (channelData.stream) {
-            console.log(`[Channel API] stream.is_live:`, channelData.stream.is_live)
-        }
-        if (channelData.livestream) {
-            console.log(`[Channel API] Livestream keys:`, Object.keys(channelData.livestream))
         }
 
         // Extract stream data from livestream object
@@ -581,8 +587,6 @@ export async function GET(request: Request) {
                 isLive = true
             }
 
-            // Log v2 API response for debugging
-            console.log(`[Channel API] v2 API: title="${v2Data.stream_title}", viewers=${v2Data.viewer_count}, followers=${v2Data.followers_count}, category=${v2Data.category?.name || 'null'}`)
         } else {
             // v2 API unavailable - use minimal fallback from channelData
             console.warn(`[Channel API] v2 API unavailable, using fallback data`)
@@ -596,7 +600,9 @@ export async function GET(request: Request) {
             }
         }
 
-        console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}, followers=${followerCount}, category=${category?.name || 'null'}, title="${streamTitle}", startedAt=${streamStartedAt}`)
+        // Log concise status summary
+        const statusEmoji = isLive ? '🟢' : '⚫'
+        console.log(`[Channel] ${slug}: ${statusEmoji} ${isLive ? 'LIVE' : 'OFFLINE'}, ${viewerCount} viewers, ${followerCount} followers${category ? `, ${category.name}` : ''}`)
 
         // Fetch active session early for fallback logic
         let activeSession: {

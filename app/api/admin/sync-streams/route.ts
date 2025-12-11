@@ -74,13 +74,18 @@ export async function POST(request: Request) {
                                     })
 
                                     if (activeSession) {
-                                        // Update thumbnail if different
-                                        if (activeSession.thumbnail_url !== livestreamData.thumbnailUrl) {
+                                        // Update thumbnail and kick_stream_id if different
+                                        const needsUpdate = activeSession.thumbnail_url !== livestreamData.thumbnailUrl ||
+                                                          activeSession.kick_stream_id !== livestreamData.streamId
+                                        if (needsUpdate) {
                                             await tx.streamSession.update({
                                                 where: { id: activeSession.id },
-                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                                data: {
+                                                    thumbnail_url: livestreamData.thumbnailUrl,
+                                                    kick_stream_id: livestreamData.streamId,
+                                                },
                                             })
-                                            console.log(`[Sync] Updated thumbnail for active session ${activeSession.id}`)
+                                            console.log(`[Sync] Updated thumbnail and kick_stream_id for active session ${activeSession.id}`)
                                             liveStreamUpdated = true
                                         } else {
                                             console.log(`[Sync] Thumbnail already up to date for session ${activeSession.id}`)
@@ -95,6 +100,7 @@ export async function POST(request: Request) {
                                                 channel_slug: slug,
                                                 session_title: null, // Could fetch from livestreams API if needed
                                                 thumbnail_url: livestreamData.thumbnailUrl,
+                                                kick_stream_id: livestreamData.streamId,
                                                 started_at: new Date(),
                                                 peak_viewer_count: 0,
                                             },
@@ -124,13 +130,18 @@ export async function POST(request: Request) {
                                     })
 
                                     if (existingSession) {
-                                        // Another request created the session - update thumbnail
-                                        if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
+                                        // Another request created the session - update thumbnail and kick_stream_id
+                                        const needsUpdate = existingSession.thumbnail_url !== livestreamData.thumbnailUrl ||
+                                                          existingSession.kick_stream_id !== livestreamData.streamId
+                                        if (needsUpdate) {
                                             await db.streamSession.update({
                                                 where: { id: existingSession.id },
-                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                                data: {
+                                                    thumbnail_url: livestreamData.thumbnailUrl,
+                                                    kick_stream_id: livestreamData.streamId,
+                                                },
                                             })
-                                            console.log(`[Sync] Unique constraint violation - updated thumbnail for session ${existingSession.id}`)
+                                            console.log(`[Sync] Unique constraint violation - updated thumbnail and kick_stream_id for session ${existingSession.id}`)
                                             liveStreamUpdated = true
                                         } else {
                                             console.log(`[Sync] Unique constraint violation - session ${existingSession.id} already has correct thumbnail`)
@@ -154,13 +165,18 @@ export async function POST(request: Request) {
                                     })
 
                                     if (existingSession) {
-                                        // Another request created the session - update thumbnail
-                                        if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
+                                        // Another request created the session - update thumbnail and kick_stream_id
+                                        const needsUpdate = existingSession.thumbnail_url !== livestreamData.thumbnailUrl ||
+                                                          existingSession.kick_stream_id !== livestreamData.streamId
+                                        if (needsUpdate) {
                                             await db.streamSession.update({
                                                 where: { id: existingSession.id },
-                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                                data: {
+                                                    thumbnail_url: livestreamData.thumbnailUrl,
+                                                    kick_stream_id: livestreamData.streamId,
+                                                },
                                             })
-                                            console.log(`[Sync] Race condition detected - updated thumbnail for session ${existingSession.id}`)
+                                            console.log(`[Sync] Race condition detected - updated thumbnail and kick_stream_id for session ${existingSession.id}`)
                                             liveStreamUpdated = true
                                         } else {
                                             console.log(`[Sync] Race condition detected - session ${existingSession.id} already has correct thumbnail`)

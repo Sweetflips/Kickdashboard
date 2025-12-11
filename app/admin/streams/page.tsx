@@ -11,6 +11,7 @@ interface StreamSession {
     channel_slug: string
     session_title: string | null
     thumbnail_url: string | null
+    kick_stream_id: string | null
     started_at: string
     ended_at: string | null
     duration_formatted: string | null
@@ -29,6 +30,10 @@ export default function AdminStreamsPage() {
     const [manualJson, setManualJson] = useState('')
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [fetchingThumbnailId, setFetchingThumbnailId] = useState<string | null>(null)
+    const [editingThumbnailId, setEditingThumbnailId] = useState<string | null>(null)
+    const [editThumbnailUrl, setEditThumbnailUrl] = useState('')
+    const [editKickVideoId, setEditKickVideoId] = useState('')
+    const [updatingThumbnail, setUpdatingThumbnail] = useState(false)
     const limit = 20
 
     useEffect(() => {
@@ -296,6 +301,53 @@ export default function AdminStreamsPage() {
         }
     }
 
+    const handleEditThumbnail = (session: StreamSession) => {
+        setEditingThumbnailId(session.id)
+        setEditThumbnailUrl(session.thumbnail_url || '')
+        setEditKickVideoId(session.kick_stream_id || '')
+    }
+
+    const handleUpdateThumbnail = async () => {
+        if (!editingThumbnailId) return
+
+        try {
+            setUpdatingThumbnail(true)
+            const response = await fetch('/api/admin/update-stream-thumbnail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: editingThumbnailId,
+                    thumbnailUrl: editThumbnailUrl || undefined,
+                    kickVideoId: editKickVideoId || undefined,
+                }),
+                credentials: 'include',
+            })
+
+            const result = await response.json()
+
+            if (response.ok) {
+                setSyncResult({
+                    success: true,
+                    message: 'Thumbnail updated successfully',
+                })
+                setEditingThumbnailId(null)
+                setEditThumbnailUrl('')
+                setEditKickVideoId('')
+                await fetchStreams()
+            } else {
+                setSyncResult({
+                    success: false,
+                    error: result.error || 'Failed to update thumbnail',
+                })
+            }
+        } catch (error) {
+            console.error('Update thumbnail error:', error)
+            setSyncResult({ success: false, error: 'Failed to update thumbnail' })
+        } finally {
+            setUpdatingThumbnail(false)
+        }
+    }
+
     if (!userData || !userData.is_admin) {
         return (
             <AppLayout>
@@ -494,6 +546,15 @@ export default function AdminStreamsPage() {
                                         <td className="py-3 px-4">
                                             <div className="flex items-center gap-2">
                                                 <button
+                                                    onClick={() => handleEditThumbnail(session)}
+                                                    title="Manually edit thumbnail URL or Kick Video ID"
+                                                    className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-kick-surface-hover text-gray-600 dark:text-kick-text-secondary hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                                <button
                                                     onClick={() => handleFetchStreamThumbnail(session.id)}
                                                     disabled={fetchingThumbnailId === session.id}
                                                     title="Refresh thumbnail from Kick API"
@@ -529,6 +590,69 @@ export default function AdminStreamsPage() {
                         </table>
                     </div>
                 </div>
+
+                {/* Edit Thumbnail Modal */}
+                {editingThumbnailId && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white dark:bg-kick-surface rounded-lg p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-kick-border">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-kick-text mb-4">
+                                Edit Thumbnail
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-1">
+                                        Thumbnail URL
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editThumbnailUrl}
+                                        onChange={(e) => setEditThumbnailUrl(e.target.value)}
+                                        placeholder="https://..."
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
+                                        Direct URL to the thumbnail image
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-1">
+                                        Kick Video/Stream ID
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editKickVideoId}
+                                        onChange={(e) => setEditKickVideoId(e.target.value)}
+                                        placeholder="e.g., 123456"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
+                                        Kick's stream/video ID for matching thumbnails
+                                    </p>
+                                </div>
+                                <div className="flex gap-2 justify-end pt-4">
+                                    <button
+                                        onClick={() => {
+                                            setEditingThumbnailId(null)
+                                            setEditThumbnailUrl('')
+                                            setEditKickVideoId('')
+                                        }}
+                                        disabled={updatingThumbnail}
+                                        className="px-4 py-2 text-gray-600 dark:text-kick-text-secondary hover:text-gray-900 dark:hover:text-kick-text disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleUpdateThumbnail}
+                                        disabled={updatingThumbnail || (!editThumbnailUrl && !editKickVideoId)}
+                                        className="px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 disabled:opacity-50 transition-colors"
+                                    >
+                                        {updatingThumbnail ? 'Updating...' : 'Update'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Simple Pagination */}
                 <div className="flex gap-2 justify-end">
