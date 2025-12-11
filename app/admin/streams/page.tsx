@@ -456,6 +456,16 @@ export default function AdminStreamsPage() {
                     </div>
                     <div className="flex items-center gap-3">
                         <button
+                            onClick={() => setShowManualSync(true)}
+                            title="Manual Sync (paste Kick /videos JSON) - best for historical thumbnails"
+                            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Manual Sync
+                        </button>
+                        <button
                             onClick={toggleTestSession}
                             disabled={testSessionLoading}
                             title={testSessionActive ? 'End test session - stop counting points' : 'Start test session - enable point counting for testing'}
@@ -577,7 +587,7 @@ export default function AdminStreamsPage() {
                             <li>
                                 Open this link in a new tab: <a href={kickApiUrl} target="_blank" rel="noopener noreferrer" className="text-kick-purple hover:underline">{kickApiUrl}</a>
                             </li>
-                            <li>Copy all the text (JSON data) from that page.</li>
+                            <li>Copy the RAW JSON (it must start with <span className="font-mono">[</span> and end with <span className="font-mono">]</span>). If you see a tree view, use View Source (Ctrl+U) or DevTools Network Response.</li>
                             <li>Paste it into the box below and click "Process Sync".</li>
                         </ol>
                         <textarea
