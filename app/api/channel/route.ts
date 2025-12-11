@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { getBroadcasterToken, refreshBroadcasterToken, clearTokenCache, getAppAccessToken, acquireRateLimitSlot } from '@/lib/kick-api';
+import { getOrCreateActiveSession, endActiveSession, getActiveSession, touchSession } from '@/lib/stream-session-manager';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
@@ -479,7 +480,8 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
 
 /**
  * Track stream session state (create, update, or close sessions)
- * Relies entirely on database state - no in-memory caching
+ * Uses centralized session manager to prevent duplicate sessions.
+ * This is the ONLY place where sessions should be created/ended.
  */
 async function trackStreamSession(
     slug: string,
@@ -488,7 +490,8 @@ async function trackStreamSession(
     viewerCount: number,
     streamTitle: string,
     thumbnailUrl: string | null,
-    kickStreamId?: string | null
+    kickStreamId?: string | null,
+    apiStartedAt?: string | null
 ): Promise<void> {
     if (!broadcasterUserId) {
         return
@@ -497,91 +500,30 @@ async function trackStreamSession(
     try {
         const broadcasterIdBigInt = BigInt(broadcasterUserId)
 
-        // Fetch active session from database (no caching)
-        const activeSession = await db.streamSession.findFirst({
-            where: {
-                broadcaster_user_id: broadcasterIdBigInt,
-                ended_at: null,
-            },
-            orderBy: { started_at: 'desc' },
-            select: {
-                id: true,
-                started_at: true,
-                ended_at: true,
-                peak_viewer_count: true,
-                session_title: true,
-                thumbnail_url: true,
-                kick_stream_id: true,
-            },
-        })
-
         if (isLive) {
-            if (!activeSession) {
-                // Stream is live but no active session - create one
-                const session = await db.streamSession.create({
-                    data: {
-                        broadcaster_user_id: broadcasterIdBigInt,
-                        channel_slug: slug,
-                        session_title: streamTitle || null,
-                        thumbnail_url: thumbnailUrl,
-                        kick_stream_id: kickStreamId || null,
-                        started_at: new Date(),
-                        peak_viewer_count: viewerCount,
-                    },
-                })
-                // Reduced logging verbosity
-            } else {
-                // Stream is live and session exists - update it
-                const newPeak = Math.max(activeSession.peak_viewer_count, viewerCount)
-                const updateData: any = {
-                    session_title: streamTitle || activeSession.session_title,
-                    peak_viewer_count: newPeak,
-                    updated_at: new Date(),
-                }
-                if (thumbnailUrl) {
-                    updateData.thumbnail_url = thumbnailUrl
-                }
-                if (kickStreamId) {
-                    updateData.kick_stream_id = kickStreamId
-                }
-                await db.streamSession.update({
-                    where: { id: activeSession.id },
-                    data: updateData,
-                })
-                // Reduced logging verbosity
+            // Stream is live - get or create session using the session manager
+            // This handles race conditions and enforces the unique constraint
+            const session = await getOrCreateActiveSession(
+                broadcasterIdBigInt,
+                slug,
+                {
+                    sessionTitle: streamTitle || null,
+                    thumbnailUrl: thumbnailUrl,
+                    kickStreamId: kickStreamId || null,
+                    viewerCount: viewerCount,
+                    startedAt: apiStartedAt,
+                },
+                apiStartedAt
+            )
+
+            if (session) {
+                // Mark that we've verified the stream is live (for grace period)
+                await touchSession(session.id)
             }
         } else {
-            // Stream is offline - end any active sessions (except test sessions)
-            if (activeSession) {
-                // Skip auto-closing test sessions (admin-created for testing)
-                const isTestSession = activeSession.session_title?.startsWith('[TEST]')
-                if (isTestSession) {
-                    // Don't auto-close test sessions - they must be manually ended
-                    return
-                }
-
-                const messageCount = await db.chatMessage.count({
-                    where: { stream_session_id: activeSession.id },
-                })
-
-                // Calculate duration in seconds
-                const startTime = activeSession.started_at.getTime()
-                const endTime = Date.now()
-                const durationSeconds = Math.floor((endTime - startTime) / 1000)
-                const durationHours = Math.floor(durationSeconds / 3600)
-                const durationMinutes = Math.floor((durationSeconds % 3600) / 60)
-
-                await db.streamSession.update({
-                    where: { id: activeSession.id },
-                    data: {
-                        ended_at: new Date(),
-                        total_messages: messageCount,
-                        duration_seconds: durationSeconds,
-                        updated_at: new Date(),
-                    },
-                })
-                console.log(`🛑 Stream is OFFLINE - ended session ${activeSession.id} (duration: ${durationHours}h ${durationMinutes}m, messages: ${messageCount})`)
-            }
+            // Stream is offline - end the active session (with grace period)
+            // The session manager will check grace period and skip test sessions
+            await endActiveSession(broadcasterIdBigInt, false)
         }
     } catch (dbError) {
         console.error('❌ Error tracking stream session:', dbError)
@@ -842,8 +784,8 @@ export async function GET(request: Request) {
             // Continue even if stats fail
         }
 
-        // Track stream sessions
-        await trackStreamSession(slug, broadcasterUserId, isLive, viewerCount, streamTitle, thumbnailUrl)
+        // Track stream sessions (this is the ONLY place sessions are created/ended)
+        await trackStreamSession(slug, broadcasterUserId, isLive, viewerCount, streamTitle, thumbnailUrl, null, streamStartedAt)
 
         // Ensure channelData exists before spreading
         if (!channelData) {

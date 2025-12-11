@@ -87,6 +87,7 @@ model StreamSession {
   thumbnail_source            String?
   started_at                  DateTime  @default(now())
   ended_at                    DateTime?
+  last_live_check_at          DateTime? // Last time we verified stream is actually live
   peak_viewer_count           Int       @default(0)
   total_messages              Int       @default(0)
   duration_seconds            Int?
@@ -98,6 +99,9 @@ model StreamSession {
   chat_messages ChatMessage[]
   point_history PointHistory[]
 
+  // Partial unique index enforced at database level via migration
+  // Ensures only one active session per broadcaster
+  @@index([broadcaster_user_id, ended_at])
   @@map("stream_sessions")
 }
 

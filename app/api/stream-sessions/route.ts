@@ -291,10 +291,14 @@ export async function DELETE(request: Request) {
             )
         }
 
-        // Check if session exists
+        // Check if session exists and get its details for duplicate detection
         const session = await db.streamSession.findUnique({
             where: { id: sessionIdBigInt },
-            select: { id: true },
+            select: {
+                id: true,
+                broadcaster_user_id: true,
+                started_at: true
+            },
         })
 
         if (!session) {
@@ -304,37 +308,60 @@ export async function DELETE(request: Request) {
             )
         }
 
+        // Find duplicate sessions (same broadcaster, started within 1 minute)
+        const timeWindow = 60 * 1000 // 1 minute
+        const duplicateSessions = await db.streamSession.findMany({
+            where: {
+                broadcaster_user_id: session.broadcaster_user_id,
+                started_at: {
+                    gte: new Date(session.started_at.getTime() - timeWindow),
+                    lte: new Date(session.started_at.getTime() + timeWindow),
+                },
+            },
+            select: { id: true },
+        })
+
+        const allSessionIds = duplicateSessions.map(s => s.id)
+        const deletedCount = allSessionIds.length
+
+        console.log(`[DELETE] Deleting ${deletedCount} session(s) (primary: ${sessionIdBigInt}, duplicates: ${allSessionIds.filter(id => id !== sessionIdBigInt).map(id => id.toString()).join(', ') || 'none'})`)
+
         // Delete related records first (chat messages, point history, jobs)
         // This prevents foreign key constraint errors
         try {
-            // Delete chat messages associated with this session
-            await db.chatMessage.deleteMany({
-                where: { stream_session_id: sessionIdBigInt },
-            })
+            for (const sid of allSessionIds) {
+                // Delete chat messages associated with this session
+                await db.chatMessage.deleteMany({
+                    where: { stream_session_id: sid },
+                })
 
-            // Delete point history associated with this session
-            await db.pointHistory.deleteMany({
-                where: { stream_session_id: sessionIdBigInt },
-            })
+                // Delete point history associated with this session
+                await db.pointHistory.deleteMany({
+                    where: { stream_session_id: sid },
+                })
 
-            // Delete point award jobs associated with this session
-            await db.pointAwardJob.deleteMany({
-                where: { stream_session_id: sessionIdBigInt },
-            })
+                // Delete point award jobs associated with this session
+                await db.pointAwardJob.deleteMany({
+                    where: { stream_session_id: sid },
+                })
 
-            // Delete chat jobs associated with this session
-            await db.chatJob.deleteMany({
-                where: { stream_session_id: sessionIdBigInt },
-            })
+                // Delete chat jobs associated with this session
+                await db.chatJob.deleteMany({
+                    where: { stream_session_id: sid },
+                })
 
-            // Now delete the session itself
-            await db.streamSession.delete({
-                where: { id: sessionIdBigInt },
-            })
+                // Delete the session itself
+                await db.streamSession.delete({
+                    where: { id: sid },
+                })
+            }
 
             return NextResponse.json({
                 success: true,
-                message: 'Stream session deleted successfully',
+                message: deletedCount > 1
+                    ? `Deleted ${deletedCount} sessions (including ${deletedCount - 1} duplicate(s))`
+                    : 'Stream session deleted successfully',
+                deleted_count: deletedCount,
             })
         } catch (dbError: any) {
             // Handle foreign key constraint errors specifically

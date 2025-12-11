@@ -634,6 +634,7 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                 streamId,
                 channelSlug: slug,
                 thumbnailUrl,
+                startedAt: livestream.started_at || livestream.created_at || undefined,
                 fetchedAt: new Date(),
             }
         }
@@ -704,6 +705,7 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                         streamId: livestream.id?.toString() || v2Data.id?.toString() || 'unknown',
                         channelSlug: slug,
                         thumbnailUrl,
+                        startedAt: livestream.started_at || livestream.created_at || undefined,
                         fetchedAt: new Date(),
                     }
                 }

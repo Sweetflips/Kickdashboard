@@ -159,15 +159,17 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // STEP 2: CHECK/CREATE STREAM SESSION IF NEEDED
+        // STEP 2: CHECK FOR ACTIVE STREAM SESSION (READ-ONLY)
         // ═══════════════════════════════════════════════════════════════
+        // NOTE: We do NOT create sessions here. Sessions are created only by
+        // the channel API when it detects a stream going live. This prevents
+        // duplicate sessions from being created by race conditions.
 
         let streamSessionId = payload.stream_session_id
 
-        // If no session ID provided, check for active session or create one
+        // If no session ID provided in payload, check for existing active session
         if (!streamSessionId) {
             try {
-                // Check for existing active session
                 const activeSession = await db.streamSession.findFirst({
                     where: {
                         broadcaster_user_id: broadcasterUserId,
@@ -179,57 +181,27 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
 
                 if (activeSession) {
                     streamSessionId = activeSession.id
+                    if (VERBOSE_LOGS) {
+                        console.log(`[chat-worker] Found active session ${streamSessionId} for broadcaster ${payload.broadcaster.username}`)
+                    }
                 } else {
-                    // No active session - create one (stream might have just gone live)
-                    // Use broadcaster username as channel slug
-                    const channelSlug = payload.broadcaster.username.toLowerCase()
-                    try {
-                        const newSession = await db.streamSession.create({
-                            data: {
-                                broadcaster_user_id: broadcasterUserId,
-                                channel_slug: channelSlug,
-                                session_title: null,
-                                thumbnail_url: null,
-                                kick_stream_id: null,
-                                started_at: new Date(),
-                                peak_viewer_count: 0,
-                            },
-                        })
-                        streamSessionId = newSession.id
-                        if (VERBOSE_LOGS) {
-                            console.log(`[chat-worker] ✅ Created new stream session ${streamSessionId} for broadcaster ${payload.broadcaster.username}`)
-                        }
-                    } catch (createError: any) {
-                        // If unique constraint violation or concurrent creation, check again
-                        if (createError?.code === 'P2002' || createError?.code === 'P2034') {
-                            // Another worker created the session - fetch it
-                            const retrySession = await db.streamSession.findFirst({
-                                where: {
-                                    broadcaster_user_id: broadcasterUserId,
-                                    ended_at: null,
-                                },
-                                orderBy: { started_at: 'desc' },
-                                select: { id: true },
-                            })
-                            if (retrySession) {
-                                streamSessionId = retrySession.id
-                            }
-                        } else {
-                            throw createError
-                        }
+                    // No active session exists - message will be saved to offline messages
+                    // The channel API polling will create a session when stream goes live
+                    if (VERBOSE_LOGS) {
+                        console.log(`[chat-worker] No active session for broadcaster ${payload.broadcaster.username} - treating as offline message`)
                     }
                 }
             } catch (error: any) {
-                // Non-critical - continue without session
+                // Non-critical - continue without session (treat as offline)
                 const isConnectionError = error?.code === 'P1001' ||
                                         error?.message?.includes("Can't reach database server") ||
                                         error?.message?.includes('PrismaClientInitializationError')
                 if (isConnectionError) {
                     if (VERBOSE_LOGS) {
-                        console.warn(`[chat-worker] Database connection error - continuing without session`)
+                        console.warn(`[chat-worker] Database connection error - treating as offline message`)
                     }
                 } else {
-                    console.warn(`[chat-worker] Failed to check/create stream session:`, error)
+                    console.warn(`[chat-worker] Failed to check stream session:`, error)
                 }
             }
         }
