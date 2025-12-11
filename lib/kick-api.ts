@@ -1285,6 +1285,52 @@ export async function getUserInfoBySlug(slug: string): Promise<{
 }
 
 /**
+ * Get channel videos (VODs) from Kick API v2
+ * Returns array of video objects with id, thumbnail, title, etc.
+ * Note: This endpoint may be blocked server-side (403), so it's often called client-side
+ */
+export async function getChannelVideos(slug: string): Promise<Array<{
+    id: number | string
+    title?: string
+    thumbnail?: string | KickThumbnail | null
+    start_time?: string
+    created_at?: string
+    duration?: number
+}> | null> {
+    try {
+        const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}/videos`
+
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+        })
+
+        if (!response.ok) {
+            if (response.status === 403) {
+                console.warn(`[Kick API] Videos endpoint blocked (403) for ${slug} - may need client-side fetch`)
+            }
+            return null
+        }
+
+        const videos = await response.json()
+
+        // Handle both array and object responses
+        if (Array.isArray(videos)) {
+            return videos
+        } else if (videos && typeof videos === 'object' && videos.data && Array.isArray(videos.data)) {
+            return videos.data
+        }
+
+        return null
+    } catch (error) {
+        console.error(`[Kick API] Error fetching videos for ${slug}:`, error instanceof Error ? error.message : 'Unknown error')
+        return null
+    }
+}
+
+/**
  * Clear cached token (useful for testing or forced refresh)
  */
 export function clearTokenCache(): void {

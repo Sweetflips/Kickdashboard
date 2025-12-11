@@ -69,7 +69,8 @@ export default function AdminStreamsPage() {
     const fetchStreams = async () => {
         try {
             setLoading(true)
-            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}`, {
+            // Skip deduplication for admin view so all sessions are visible
+            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}&skip_deduplication=true`, {
                 credentials: 'include', // Include cookies for authentication
             })
             if (response.ok) {
@@ -106,7 +107,7 @@ export default function AdminStreamsPage() {
         try {
             setTestSessionLoading(true)
             const token = localStorage.getItem('kick_access_token')
-            
+
             if (testSessionActive) {
                 // End the session
                 const response = await fetch('/api/admin/test-session', {

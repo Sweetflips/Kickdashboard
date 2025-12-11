@@ -284,13 +284,19 @@ export async function POST(request: Request) {
                         needsUpdate = true
                     }
 
+                    // Update kick_video_id if missing or different (this is the VOD video ID)
+                    if (video.id && matchingSession.kick_video_id !== video.id.toString()) {
+                        updateData.kick_video_id = video.id.toString()
+                        needsUpdate = true
+                    }
+
                     if (needsUpdate) {
                         await db.streamSession.update({
                             where: { id: matchingSession.id },
                             data: updateData
                         })
                         stats.updated++
-                        console.log(`Updated session ${matchingSession.id} with data from video ${video.id}`)
+                        console.log(`Updated session ${matchingSession.id} with data from video ${video.id} (kick_video_id: ${video.id})`)
                     }
                 } else {
                     console.log(`No matching session found for video ${video.id} (${video.title}) started at ${videoStartedAt.toISOString()}`)

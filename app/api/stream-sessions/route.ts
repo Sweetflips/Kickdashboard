@@ -20,6 +20,7 @@ export async function GET(request: Request) {
         const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '50', 10) || 50))
         const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0)
         const broadcasterUserId = searchParams.get('broadcaster_user_id')
+        const skipDeduplication = searchParams.get('skip_deduplication') === 'true'
 
         const where: Prisma.StreamSessionWhereInput = {
             ended_at: { not: null }, // Only show ended streams for Past Streams
@@ -53,25 +54,32 @@ export async function GET(request: Request) {
             },
         })
 
-        // Deduplicate sessions: same broadcaster, same started_at (within 1 minute), keep the one with most messages
-        const deduplicatedSessions = allSessions.reduce((acc, session) => {
-            const existingIndex = acc.findIndex(s =>
-                s.broadcaster_user_id === session.broadcaster_user_id &&
-                Math.abs(s.started_at.getTime() - session.started_at.getTime()) < 60000 // Within 1 minute
-            )
+        // Deduplicate sessions: same broadcaster, same started_at (within 1 minute), keep the one with LOWEST ID (most stable)
+        // This ensures that when you delete a session, you don't see a different "duplicate" appear
+        // Admin can skip deduplication to see all sessions
+        let deduplicatedSessions = allSessions
 
-            if (existingIndex === -1) {
-                acc.push(session)
-            } else {
-                // Keep the session with more messages, or if equal, the one with lower ID (created first)
-                const existing = acc[existingIndex]
-                if (session.total_messages > existing.total_messages ||
-                    (session.total_messages === existing.total_messages && session.id < existing.id)) {
-                    acc[existingIndex] = session
+        if (!skipDeduplication) {
+            deduplicatedSessions = allSessions.reduce((acc, session) => {
+                const existingIndex = acc.findIndex(s =>
+                    s.broadcaster_user_id === session.broadcaster_user_id &&
+                    Math.abs(s.started_at.getTime() - session.started_at.getTime()) < 60000 // Within 1 minute
+                )
+
+                if (existingIndex === -1) {
+                    acc.push(session)
+                } else {
+                    // Always keep the session with the LOWEST ID (oldest/created first) for stability
+                    // This ensures that deleting one session doesn't reveal another "duplicate"
+                    const existing = acc[existingIndex]
+                    if (session.id < existing.id) {
+                        acc[existingIndex] = session
+                    }
+                    // Otherwise, keep the existing one (don't replace)
                 }
-            }
-            return acc
-        }, [] as typeof allSessions)
+                return acc
+            }, [] as typeof allSessions)
+        }
 
         // Paginate after deduplication
         const total = deduplicatedSessions.length
@@ -98,6 +106,7 @@ export async function GET(request: Request) {
                 session_title: session.session_title || null,
                 thumbnail_url: session.thumbnail_url || null,
                 kick_stream_id: session.kick_stream_id || null,
+                kick_video_id: session.kick_video_id || null,
                 started_at: session.started_at?.toISOString() || new Date().toISOString(),
                 ended_at: session.ended_at?.toISOString() || null,
                 peak_viewer_count: session.peak_viewer_count || 0,
@@ -283,19 +292,60 @@ export async function DELETE(request: Request) {
             )
         }
 
-        // Delete the session
-        await db.streamSession.delete({
+        // Check if session exists
+        const session = await db.streamSession.findUnique({
             where: { id: sessionIdBigInt },
+            select: { id: true },
         })
 
-        return NextResponse.json({
-            success: true,
-            message: 'Stream session deleted successfully',
-        })
+        if (!session) {
+            return NextResponse.json(
+                { error: 'Stream session not found' },
+                { status: 404 }
+            )
+        }
+
+        // Delete related records first (chat messages and point history)
+        // This prevents foreign key constraint errors
+        try {
+            // Delete chat messages associated with this session
+            await db.chatMessage.deleteMany({
+                where: { stream_session_id: sessionIdBigInt },
+            })
+
+            // Delete point history associated with this session
+            await db.pointHistory.deleteMany({
+                where: { stream_session_id: sessionIdBigInt },
+            })
+
+            // Now delete the session itself
+            await db.streamSession.delete({
+                where: { id: sessionIdBigInt },
+            })
+
+            return NextResponse.json({
+                success: true,
+                message: 'Stream session deleted successfully',
+            })
+        } catch (dbError: any) {
+            // Handle foreign key constraint errors specifically
+            if (dbError?.code === 'P2003' || dbError?.message?.includes('foreign key constraint')) {
+                console.error('Foreign key constraint error deleting stream session:', dbError)
+                return NextResponse.json(
+                    {
+                        error: 'Cannot delete stream session - it has related records that prevent deletion',
+                        details: 'This session has chat messages or point history that need to be deleted first',
+                    },
+                    { status: 409 }
+                )
+            }
+            throw dbError
+        }
     } catch (error) {
         console.error('Error deleting stream session:', error)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         return NextResponse.json(
-            { error: 'Failed to delete stream session', details: error instanceof Error ? error.message : 'Unknown error' },
+            { error: 'Failed to delete stream session', details: errorMessage },
             { status: 500 }
         )
     }

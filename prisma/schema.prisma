@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,119 +8,107 @@ datasource db {
 }
 
 model User {
-  id                          BigInt    @id @default(autoincrement())
-  kick_user_id                BigInt    @unique
-  username                    String
-  email                       String?
-  email_verified_at           DateTime?
-  bio                         String?   @db.Text
-  profile_picture_url         String?
-  custom_profile_picture_url  String?
-  access_token_hash           String?
-  refresh_token_hash          String?
-  // Encrypted tokens (can be decrypted for API calls)
-  access_token_encrypted      String?   @db.Text
-  refresh_token_encrypted     String?   @db.Text
-  notifications_enabled       Boolean   @default(true)
-  email_notifications_enabled Boolean   @default(false)
-  chat_font_size              String?   @default("14px")
-  chat_show_timestamps        Boolean   @default(true)
-  last_login_at               DateTime?
-  last_ip_address             String?
-  last_user_agent             String?
-  // Social Media Links (for duplicate detection)
-  instagram_url               String?
-  twitter_url                 String?
-  // Signup Tracking
-  signup_ip_address           String?
-  signup_user_agent           String?
-  signup_referrer             String?
-  // Connected Accounts
-  discord_user_id             String?
-  discord_username            String?
-  discord_access_token_hash   String?
-  telegram_user_id            String?
-  telegram_username           String?
-  telegram_access_token_hash  String?
-  kick_connected              Boolean   @default(true)
-  discord_connected           Boolean   @default(false)
-  telegram_connected          Boolean   @default(false)
-  is_admin                    Boolean   @default(false)
-  created_at                  DateTime  @default(now())
-  updated_at                  DateTime  @updatedAt
-
-  // Relations
-  points                       UserPoints?
-  point_history                PointHistory[]
-  sent_messages                ChatMessage[]         @relation("SenderMessages")
+  id                           BigInt                @id @default(autoincrement())
+  kick_user_id                 BigInt                @unique
+  username                     String
+  email                        String?
+  profile_picture_url          String?
+  access_token_hash            String?
+  refresh_token_hash           String?
+  last_login_at                DateTime?
+  created_at                   DateTime              @default(now())
+  updated_at                   DateTime              @updatedAt
+  custom_profile_picture_url   String?
+  notifications_enabled        Boolean               @default(true)
+  email_notifications_enabled  Boolean               @default(false)
+  chat_font_size               String?               @default("14px")
+  chat_show_timestamps         Boolean               @default(true)
+  discord_user_id              String?
+  discord_username             String?
+  discord_access_token_hash    String?
+  discord_connected            Boolean               @default(false)
+  telegram_user_id             String?
+  telegram_username            String?
+  telegram_access_token_hash   String?
+  telegram_connected           Boolean               @default(false)
+  kick_connected               Boolean               @default(true)
+  is_admin                     Boolean               @default(false)
+  access_token_encrypted       String?
+  refresh_token_encrypted      String?
+  last_ip_address              String?
+  last_user_agent              String?
+  email_verified_at            DateTime?
+  bio                          String?
+  signup_ip_address            String?
+  signup_user_agent            String?
+  signup_referrer              String?
+  instagram_url                String?
+  twitter_url                  String?
   broadcaster_messages         ChatMessage[]         @relation("BroadcasterMessages")
-  offline_sent_messages        OfflineChatMessage[]  @relation("OfflineSenderMessages")
+  sent_messages                ChatMessage[]         @relation("SenderMessages")
   offline_broadcaster_messages OfflineChatMessage[]  @relation("OfflineBroadcasterMessages")
-  stream_sessions              StreamSession[]
-  user_sessions                UserSession[]
-  raffles_created              Raffle[]
-  raffle_entries               RaffleEntry[]
-  advent_purchases             AdventPurchase[]
-  advent_days_drawn            AdventDayStatus[]
-  promo_codes_created          PromoCode[]           @relation("PromoCodeCreator")
+  offline_sent_messages        OfflineChatMessage[]  @relation("OfflineSenderMessages")
+  point_history                PointHistory[]
   promo_code_redemptions       PromoCodeRedemption[] @relation("PromoCodeRedemptions")
-  // Referral relations
-  referrals_as_referrer        Referral[]            @relation("Referrer")
-  referrals_as_referee         Referral[]            @relation("Referee")
+  promo_codes_created          PromoCode[]           @relation("PromoCodeCreator")
+  raffle_entries               RaffleEntry[]
+  raffles_created              Raffle[]
   referral_rewards_earned      ReferralReward[]
+  referrals_as_referee         Referral?             @relation("Referee")
+  referrals_as_referrer        Referral[]            @relation("Referrer")
+  stream_sessions              StreamSession[]
+  points                       UserPoints?
+  user_sessions                UserSession[]
 
   @@map("users")
 }
 
 model StreamSession {
-  id                          BigInt    @id @default(autoincrement())
+  id                          BigInt         @id @default(autoincrement())
   broadcaster_user_id         BigInt
   channel_slug                String
   session_title               String?
+  started_at                  DateTime       @default(now())
+  ended_at                    DateTime?
+  peak_viewer_count           Int            @default(0)
+  total_messages              Int            @default(0)
+  created_at                  DateTime       @default(now())
+  updated_at                  DateTime       @updatedAt
   thumbnail_url               String?
+  duration_seconds            Int?
   thumbnail_captured_at       DateTime?
   thumbnail_last_refreshed_at DateTime?
   thumbnail_source            String?
-  kick_stream_id              String?   // Kick's livestream.id or video.id for matching thumbnails
-  started_at                  DateTime  @default(now())
-  ended_at                    DateTime?
-  peak_viewer_count           Int       @default(0)
-  total_messages              Int       @default(0)
-  duration_seconds            Int?
-  created_at                  DateTime  @default(now())
-  updated_at                  DateTime  @updatedAt
-
-  // Relations
-  broadcaster   User           @relation(fields: [broadcaster_user_id], references: [kick_user_id])
-  chat_messages ChatMessage[]
-  point_history PointHistory[]
+  kick_stream_id              String?
+  kick_video_id                String?
+  chat_messages               ChatMessage[]
+  point_history               PointHistory[]
+  broadcaster                 User           @relation(fields: [broadcaster_user_id], references: [kick_user_id])
 
   @@map("stream_sessions")
 }
 
 model ChatMessage {
-  id                    BigInt   @id @default(autoincrement())
-  message_id            String   @unique
+  id                    BigInt         @id @default(autoincrement())
+  message_id            String         @unique
   stream_session_id     BigInt?
   sender_user_id        BigInt
   sender_username       String
   broadcaster_user_id   BigInt
-  content               String   @db.Text
+  content               String
   emotes                Json?
   timestamp             BigInt
+  created_at            DateTime       @default(now())
   sender_username_color String?
   sender_badges         Json?
-  sender_is_verified    Boolean  @default(false)
-  sender_is_anonymous   Boolean  @default(false)
-  points_earned         Int      @default(0)
+  sender_is_verified    Boolean        @default(false)
+  sender_is_anonymous   Boolean        @default(false)
+  points_earned         Int            @default(0)
+  sent_when_offline     Boolean        @default(false)
   points_reason         String?
-  sent_when_offline     Boolean  @default(false)
-  created_at            DateTime @default(now())
-
-  // Relations
-  stream_session StreamSession? @relation(fields: [stream_session_id], references: [id])
-  sender         User           @relation("SenderMessages", fields: [sender_user_id], references: [kick_user_id])
-  broadcaster    User           @relation("BroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
+  broadcaster           User           @relation("BroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
+  sender                User           @relation("SenderMessages", fields: [sender_user_id], references: [kick_user_id])
+  stream_session        StreamSession? @relation(fields: [stream_session_id], references: [id])
 
   @@index([broadcaster_user_id, timestamp])
   @@index([stream_session_id, timestamp])
@@ -136,7 +121,7 @@ model OfflineChatMessage {
   sender_user_id        BigInt
   sender_username       String
   broadcaster_user_id   BigInt
-  content               String   @db.Text
+  content               String
   emotes                Json?
   timestamp             BigInt
   sender_username_color String?
@@ -144,10 +129,8 @@ model OfflineChatMessage {
   sender_is_verified    Boolean  @default(false)
   sender_is_anonymous   Boolean  @default(false)
   created_at            DateTime @default(now())
-
-  // Relations
-  sender      User @relation("OfflineSenderMessages", fields: [sender_user_id], references: [kick_user_id])
-  broadcaster User @relation("OfflineBroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
+  broadcaster           User     @relation("OfflineBroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
+  sender                User     @relation("OfflineSenderMessages", fields: [sender_user_id], references: [kick_user_id])
 
   @@index([broadcaster_user_id, timestamp])
   @@map("offline_chat_messages")
@@ -157,110 +140,101 @@ model UserPoints {
   id                   BigInt    @id @default(autoincrement())
   user_id              BigInt    @unique
   total_points         Int       @default(0)
-  total_emotes         Int       @default(0)
   last_point_earned_at DateTime?
-  is_subscriber        Boolean   @default(false)
   created_at           DateTime  @default(now())
   updated_at           DateTime  @updatedAt
-
-  // Relations
-  user User @relation(fields: [user_id], references: [id])
+  total_emotes         Int       @default(0)
+  is_subscriber        Boolean   @default(false)
+  user                 User      @relation(fields: [user_id], references: [id])
 
   @@map("user_points")
 }
 
 model PointHistory {
-  id                BigInt   @id @default(autoincrement())
+  id                BigInt         @id @default(autoincrement())
   user_id           BigInt
   stream_session_id BigInt?
-  points_earned     Int      @default(1)
-  message_id        String?  @unique
-  earned_at         DateTime @default(now())
-  created_at        DateTime @default(now())
-
-  // Relations
-  user           User           @relation(fields: [user_id], references: [id])
-  stream_session StreamSession? @relation(fields: [stream_session_id], references: [id])
+  points_earned     Int            @default(1)
+  message_id        String?
+  earned_at         DateTime       @default(now())
+  created_at        DateTime       @default(now())
+  stream_session    StreamSession? @relation(fields: [stream_session_id], references: [id])
+  user              User           @relation(fields: [user_id], references: [id])
 
   @@map("point_history")
 }
 
 model Raffle {
-  id                   BigInt    @id @default(autoincrement())
+  id                   BigInt               @id @default(autoincrement())
   title                String
-  description          String?   @db.Text
-  type                 String    @default("general") // daily, weekly, special, sub_only, general
+  description          String?
+  type                 String               @default("general")
   prize_description    String
   ticket_cost          Int
-  max_tickets_per_user Int? // null = no limit
-  total_tickets_cap    Int? // null = no cap
+  max_tickets_per_user Int?
+  total_tickets_cap    Int?
   start_at             DateTime
   end_at               DateTime
-  status               String    @default("upcoming") // upcoming, active, drawing, completed, cancelled
-  sub_only             Boolean   @default(false)
-  hidden_until_start   Boolean   @default(false)
-  hidden               Boolean   @default(false) // Hidden from public view by admin
-  draw_seed            String? // For transparency
-  number_of_winners    Int       @default(1)
-  rigging_enabled      Boolean   @default(false)
-  wheel_background_url String?
-  center_logo_url      String?
-  slice_opacity        Float?    @default(0.5)
+  status               String               @default("upcoming")
+  sub_only             Boolean              @default(false)
+  hidden_until_start   Boolean              @default(false)
+  draw_seed            String?
   drawn_at             DateTime?
-  claim_message        String?   @db.Text // Custom instructions for winners to claim prize
   created_by           BigInt
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
-
-  creator        User                 @relation(fields: [created_by], references: [id])
-  entries        RaffleEntry[]
-  winners        RaffleWinner[]
-  rigged_winners RaffleRiggedWinner[]
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+  claim_message        String?
+  hidden               Boolean              @default(false)
+  number_of_winners    Int                  @default(1)
+  rigging_enabled      Boolean              @default(false)
+  center_logo_url      String?
+  slice_opacity        Float?               @default(0.5)
+  wheel_background_url String?
+  entries              RaffleEntry[]
+  rigged_winners       RaffleRiggedWinner[]
+  winners              RaffleWinner[]
+  creator              User                 @relation(fields: [created_by], references: [id])
 
   @@map("raffles")
 }
 
 model RaffleEntry {
-  id         BigInt   @id @default(autoincrement())
-  raffle_id  BigInt
-  user_id    BigInt
-  tickets    Int      @default(1)
-  source     String   @default("system")
-  created_at DateTime @default(now())
-
+  id          BigInt               @id @default(autoincrement())
+  raffle_id   BigInt
+  user_id     BigInt
+  tickets     Int                  @default(1)
+  created_at  DateTime             @default(now())
+  source      String               @default("system")
   raffle      Raffle               @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
   user        User                 @relation(fields: [user_id], references: [id])
-  wins        RaffleWinner[]
   riggedSlots RaffleRiggedWinner[]
+  wins        RaffleWinner[]
 
   @@unique([raffle_id, user_id])
   @@map("raffle_entries")
 }
 
 model RaffleWinner {
-  id                    BigInt   @id @default(autoincrement())
+  id                    BigInt      @id @default(autoincrement())
   raffle_id             BigInt
   entry_id              BigInt
-  selected_at           DateTime @default(now())
-  // Optional metadata
+  selected_at           DateTime    @default(now())
+  is_rigged             Boolean?    @default(false)
   selected_ticket_index BigInt?
   spin_number           Int?
-  is_rigged             Boolean? @default(false)
-
-  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
-  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  entry                 RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  raffle                Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
 
   @@map("raffle_winners")
 }
 
 model RaffleRiggedWinner {
-  id        BigInt @id @default(autoincrement())
+  id        BigInt      @id @default(autoincrement())
   raffle_id BigInt
   entry_id  BigInt
-  position  Int // 1-based position in rigging order
-
-  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
-  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  position  Int
+  entry     RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  raffle    Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
 
   @@unique([raffle_id, position])
   @@map("raffle_rigged_winners")
@@ -269,18 +243,16 @@ model RaffleRiggedWinner {
 model UserSession {
   id           BigInt   @id @default(autoincrement())
   user_id      BigInt
-  session_id   String   @unique // Unique session identifier (e.g., UUID)
-  region       String? // Geographic region (e.g., "NA-East", "EU-West")
-  country      String? // Country code (e.g., "US", "CA", "GB")
-  client_type  String? // Client type: "web", "mobile", "embedded"
-  user_agent   String?  @db.Text // User agent string (for device/browser detection)
-  ip_hash      String? // Hashed IP address (for privacy - not storing raw IP)
+  session_id   String   @unique
+  region       String?
+  country      String?
+  client_type  String?
+  user_agent   String?
+  ip_hash      String?
   created_at   DateTime @default(now())
   last_seen_at DateTime @default(now())
   updated_at   DateTime @updatedAt
-
-  // Relations
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([last_seen_at])
@@ -288,20 +260,18 @@ model UserSession {
 }
 
 model PromoCode {
-  id           BigInt    @id @default(autoincrement())
-  code         String    @unique
+  id           BigInt                @id @default(autoincrement())
+  code         String                @unique
   points_value Int
-  max_uses     Int? // null = unlimited
-  current_uses Int       @default(0)
+  max_uses     Int?
+  current_uses Int                   @default(0)
   expires_at   DateTime?
-  is_active    Boolean   @default(true)
+  is_active    Boolean               @default(true)
   created_by   BigInt
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-
-  // Relations
-  creator     User                  @relation("PromoCodeCreator", fields: [created_by], references: [id])
-  redemptions PromoCodeRedemption[]
+  created_at   DateTime              @default(now())
+  updated_at   DateTime              @updatedAt
+  redemptions  PromoCodeRedemption[]
+  creator      User                  @relation("PromoCodeCreator", fields: [created_by], references: [id])
 
   @@index([code])
   @@index([expires_at])
@@ -310,15 +280,13 @@ model PromoCode {
 }
 
 model PromoCodeRedemption {
-  id             BigInt   @id @default(autoincrement())
+  id             BigInt    @id @default(autoincrement())
   promo_code_id  BigInt
   user_id        BigInt
   points_awarded Int
-  redeemed_at    DateTime @default(now())
-
-  // Relations
-  promo_code PromoCode @relation(fields: [promo_code_id], references: [id], onDelete: Cascade)
-  user       User      @relation("PromoCodeRedemptions", fields: [user_id], references: [id])
+  redeemed_at    DateTime  @default(now())
+  promo_code     PromoCode @relation(fields: [promo_code_id], references: [id], onDelete: Cascade)
+  user           User      @relation("PromoCodeRedemptions", fields: [user_id], references: [id])
 
   @@unique([promo_code_id, user_id])
   @@index([user_id])
@@ -331,13 +299,13 @@ model PointAwardJob {
   kick_user_id      BigInt
   stream_session_id BigInt?
   message_id        String    @unique
-  badges            Json? // Badges array for subscriber detection
-  emotes            Json? // Emotes array for emote counting
-  status            String    @default("pending") // pending, processing, completed, failed
+  badges            Json?
+  emotes            Json?
+  status            String    @default("pending")
   attempts          Int       @default(0)
   locked_at         DateTime?
   processed_at      DateTime?
-  last_error        String?   @db.Text
+  last_error        String?
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
 
@@ -346,27 +314,20 @@ model PointAwardJob {
   @@map("point_award_jobs")
 }
 
-// Full chat message job queue - worker handles ALL writes
 model ChatJob {
-  id         BigInt @id @default(autoincrement())
-  message_id String @unique
-
-  // Full message payload (stored as JSON for flexibility)
-  payload Json // Contains: sender, broadcaster, content, emotes, badges, timestamp, etc.
-
-  // Denormalized fields for quick filtering
+  id                  BigInt    @id @default(autoincrement())
+  message_id          String    @unique
+  payload             Json
   sender_user_id      BigInt
   broadcaster_user_id BigInt
   stream_session_id   BigInt?
-
-  // Job status
-  status       String    @default("pending") // pending, processing, completed, failed
-  attempts     Int       @default(0)
-  locked_at    DateTime?
-  processed_at DateTime?
-  last_error   String?   @db.Text
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
+  status              String    @default("pending")
+  attempts            Int       @default(0)
+  locked_at           DateTime?
+  processed_at        DateTime?
+  last_error          String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
 
   @@index([status, created_at])
   @@index([status, locked_at])
@@ -376,25 +337,21 @@ model ChatJob {
 model AdventPurchase {
   id         BigInt   @id @default(autoincrement())
   user_id    BigInt
-  item_id    String // e.g. "day-9", "day-23a"
+  item_id    String
   tickets    Int      @default(1)
   created_at DateTime @default(now())
-
-  user User @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, item_id])
   @@map("advent_purchases")
 }
 
 model AdventDayStatus {
-  day        Int       @id // December day (1-31)
+  day        Int       @id
   drawn      Boolean   @default(false)
   drawn_at   DateTime?
-  drawn_by   BigInt? // Admin user ID who marked it as drawn
+  drawn_by   BigInt?
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
-
-  drawn_by_user User? @relation(fields: [drawn_by], references: [id])
 
   @@map("advent_day_status")
 }
@@ -402,17 +359,13 @@ model AdventDayStatus {
 model Referral {
   id               BigInt   @id @default(autoincrement())
   referrer_user_id BigInt
-  referee_user_id  BigInt
-  referral_code    String // The code used at signup
+  referee_user_id  BigInt   @unique
+  referral_code    String
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
+  referee          User     @relation("Referee", fields: [referee_user_id], references: [id], onDelete: Cascade)
+  referrer         User     @relation("Referrer", fields: [referrer_user_id], references: [id], onDelete: Cascade)
 
-  // Relations
-  referrer User @relation("Referrer", fields: [referrer_user_id], references: [id], onDelete: Cascade)
-  referee  User @relation("Referee", fields: [referee_user_id], references: [id], onDelete: Cascade)
-
-  // Unique constraint - one referee per referrer
-  @@unique([referee_user_id])
   @@index([referrer_user_id])
   @@index([referral_code])
   @@index([created_at])
@@ -423,16 +376,13 @@ model ReferralReward {
   id               BigInt   @id @default(autoincrement())
   referrer_user_id BigInt
   referee_user_id  BigInt
-  tier_id          String // 'starter', 'active', 'dedicated', 'superfan', 'legend'
-  required_points  Int // Points threshold that was reached
-  reward_points    Int // Points awarded to referrer
+  tier_id          String
+  required_points  Int
+  reward_points    Int
   awarded_at       DateTime @default(now())
   created_at       DateTime @default(now())
+  referrer_user    User     @relation(fields: [referrer_user_id], references: [id], onDelete: Cascade)
 
-  // Relations
-  referrer_user User @relation(fields: [referrer_user_id], references: [id], onDelete: Cascade)
-
-  // Unique constraint - one reward per tier per referral pair
   @@unique([referrer_user_id, referee_user_id, tier_id])
   @@index([referrer_user_id])
   @@index([awarded_at])
