@@ -24,6 +24,37 @@ export async function POST(request: Request) {
         let liveStreamUpdated = false
         let liveStreamError: string | null = null
 
+        const getVideoTitle = (video: any): string | null => {
+            // Kick /api/v2/channels/:slug/videos uses session_title, not title
+            if (typeof video?.title === 'string' && video.title.trim()) return video.title.trim()
+            if (typeof video?.session_title === 'string' && video.session_title.trim()) return video.session_title.trim()
+            // Some payloads may embed title under video.title
+            if (typeof video?.video?.title === 'string' && video.video.title.trim()) return video.video.title.trim()
+            return null
+        }
+
+        const getVideoThumbnailUrl = (video: any): string | null => {
+            // Prefer normalized shape if present (e.g. { thumbnail: { url } } or { thumbnail: "..." })
+            const thumb = video?.thumbnail
+            if (typeof thumb === 'string' && thumb.trim()) return thumb.trim()
+            if (thumb && typeof thumb === 'object') {
+                if (typeof thumb.url === 'string' && thumb.url.trim()) return thumb.url.trim()
+                // Kick /videos returns { thumbnail: { src, srcset } }
+                if (typeof thumb.src === 'string' && thumb.src.trim()) return thumb.src.trim()
+            }
+            // Some payloads may include thumb under video.thumb
+            if (typeof video?.thumb === 'string' && video.thumb.trim()) return video.thumb.trim()
+            return null
+        }
+
+        const getKickVodVideoId = (video: any): string | null => {
+            // Kick /videos payload often includes nested video.id (VOD video id)
+            const raw = video?.video?.id ?? video?.kick_video_id ?? video?.kickVideoId
+            if (raw === null || raw === undefined) return null
+            const str = String(raw).trim()
+            return str ? str : null
+        }
+
         // Try to parse body for provided videos (manual sync fallback)
         try {
             const body = await request.json()
@@ -123,14 +154,9 @@ export async function POST(request: Request) {
                 const videoEndedAt = new Date(videoStartedAt.getTime() + videoDuration)
 
                 // Get thumbnail URL
-                let thumbnailUrl = null
-                if (video.thumbnail) {
-                    if (typeof video.thumbnail === 'string') {
-                        thumbnailUrl = video.thumbnail
-                    } else if (typeof video.thumbnail === 'object' && video.thumbnail.url) {
-                        thumbnailUrl = video.thumbnail.url
-                    }
-                }
+                const thumbnailUrl = getVideoThumbnailUrl(video)
+                const videoTitle = getVideoTitle(video)
+                const kickVodVideoId = getKickVodVideoId(video)
 
                 // Find matching session in DB by start time
                 const timeWindow = 30 * 60 * 1000 // 30 minutes
@@ -159,8 +185,14 @@ export async function POST(request: Request) {
                     }
 
                     // Update title if missing
-                    if (video.title && (!matchingSession.session_title || matchingSession.session_title === 'Untitled Stream')) {
-                        updateData.session_title = video.title
+                    if (videoTitle && (!matchingSession.session_title || matchingSession.session_title === 'Untitled Stream')) {
+                        updateData.session_title = videoTitle
+                        needsUpdate = true
+                    }
+
+                    // Store Kick VOD video id for future thumbnail fetching (schema says this is VOD id)
+                    if (kickVodVideoId && matchingSession.kick_stream_id !== kickVodVideoId) {
+                        updateData.kick_stream_id = kickVodVideoId
                         needsUpdate = true
                     }
 
@@ -179,7 +211,7 @@ export async function POST(request: Request) {
                         console.log(`[Sync] Updated session ${matchingSession.id} with data from video ${video.id}`)
                     }
                 } else {
-                    console.log(`[Sync] No matching session found for video ${video.id} (${video.title}) started at ${videoStartedAt.toISOString()}`)
+                    console.log(`[Sync] No matching session found for video ${video.id} (${videoTitle || 'Untitled'}) started at ${videoStartedAt.toISOString()}`)
                 }
 
             } catch (err) {
