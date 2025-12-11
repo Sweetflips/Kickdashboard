@@ -49,9 +49,6 @@ export async function POST(request: Request) {
         const body = await request.json()
         const message = body as ChatMessage
 
-        // Debug: Log that we received a save request
-        console.log(`[chat/save] 📥 Received message from ${message.sender?.username || 'unknown'} for broadcaster ${message.broadcaster?.user_id || 'unknown'}`)
-
         // ═══════════════════════════════════════════════════════════════
         // STEP 1: VALIDATE MESSAGE STRUCTURE
         // ═══════════════════════════════════════════════════════════════
@@ -156,19 +153,15 @@ export async function POST(request: Request) {
         // STEP 4: ENQUEUE JOB (ONLY WRITE OPERATION)
         // ═══════════════════════════════════════════════════════════════
 
-        console.log(`[chat/save] 📤 Enqueueing job for message ${jobPayload.message_id} (session: ${jobPayload.stream_session_id || 'none'})`)
-        
         const enqueueResult = await enqueueChatJob(jobPayload)
 
         if (!enqueueResult.success) {
-            console.error(`[chat/save] ❌ Failed to enqueue: ${enqueueResult.error}`)
+            logErrorRateLimited(`[chat/save] ❌ Failed to enqueue: ${enqueueResult.error}`)
             return NextResponse.json(
                 { error: 'Failed to queue message for processing' },
                 { status: 500 }
             )
         }
-        
-        console.log(`[chat/save] ✅ Job enqueued successfully for ${jobPayload.sender.username}`)
 
         // ═══════════════════════════════════════════════════════════════
         // STEP 5: RETURN IMMEDIATELY

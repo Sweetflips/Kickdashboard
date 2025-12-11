@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue'
 import type { ChatMessage } from '@/lib/chat-store'
+import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -177,19 +178,15 @@ export async function POST(request: Request) {
         // ENQUEUE JOB FOR WORKER PROCESSING
         // ═══════════════════════════════════════════════════════════════
 
-        console.log(`[webhook] 📤 Enqueueing job for message ${jobPayload.message_id} from ${jobPayload.sender.username} (session: ${jobPayload.stream_session_id || 'none'})`)
-
         const enqueueResult = await enqueueChatJob(jobPayload)
 
         if (!enqueueResult.success) {
-            console.error(`[webhook] ❌ Failed to enqueue: ${enqueueResult.error}`)
+            logErrorRateLimited(`[webhook] ❌ Failed to enqueue: ${enqueueResult.error}`)
             return NextResponse.json(
                 { error: 'Failed to queue message for processing', received: true },
                 { status: 500 }
             )
         }
-
-        console.log(`[webhook] ✅ Job enqueued successfully for ${jobPayload.sender.username}`)
 
         return NextResponse.json({ received: true, message: 'Chat message queued for processing' }, { status: 200 })
     } catch (error) {
