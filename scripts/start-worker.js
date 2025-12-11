@@ -46,6 +46,25 @@ try {
   console.error('⚠️ Migration failed (continuing anyway):', error.message);
 }
 
+// Wait for database to be reachable with retries
+async function waitForDatabase(maxRetries = 10, delayMs = 3000) {
+  const prisma = new PrismaClient();
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      console.log('✅ Database connection established');
+      await prisma.$disconnect();
+      return true;
+    } catch (error) {
+      console.log(`⏳ Waiting for database... (attempt ${i + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  console.error('❌ Could not connect to database after retries');
+  await prisma.$disconnect();
+  return false;
+}
+
 // Safety net: Ensure required tables exist
 async function ensureTables() {
   const prisma = new PrismaClient();
@@ -107,6 +126,13 @@ async function ensureTables() {
 
 // Run the safety net check and wait for it to complete before starting workers
 (async () => {
+  // Wait for database to be reachable first
+  const dbReady = await waitForDatabase();
+  if (!dbReady) {
+    console.error('❌ Database not reachable, exiting...');
+    process.exit(1);
+  }
+  
   await ensureTables();
 
   // Start chat worker (handles all writes: users, messages, points)
@@ -127,7 +153,7 @@ async function ensureTables() {
     stdio: 'inherit',
     env: process.env
   });
-  
+
   console.log('');
   console.log('✅ Workers spawned successfully');
   console.log('   Waiting for database connections...');
