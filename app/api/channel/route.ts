@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { getBroadcasterToken, refreshBroadcasterToken, clearTokenCache, getAppAccessToken, acquireRateLimitSlot, getChannelVideos } from '@/lib/kick-api';
+import { getBroadcasterToken, refreshBroadcasterToken, clearTokenCache, getAppAccessToken, acquireRateLimitSlot } from '@/lib/kick-api';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
@@ -511,7 +511,7 @@ async function trackStreamSession(
                 peak_viewer_count: true,
                 session_title: true,
                 thumbnail_url: true,
-                kick_video_id: true,
+                kick_stream_id: true,
             },
         })
 
@@ -581,67 +581,6 @@ async function trackStreamSession(
                     },
                 })
                 console.log(`🛑 Stream is OFFLINE - ended session ${activeSession.id} (duration: ${durationHours}h ${durationMinutes}m, messages: ${messageCount})`)
-
-                // Attempt to fetch video ID after stream ends (non-blocking, async)
-                // Kick needs time to process the VOD, so we'll try after a delay
-                // This is best-effort - manual sync can also backfill video IDs
-                setTimeout(async () => {
-                    try {
-                        // Wait 30 seconds for Kick to process the VOD
-                        await new Promise(resolve => setTimeout(resolve, 30000))
-
-                        const videos = await getChannelVideos(slug)
-                        if (videos && videos.length > 0) {
-                            // Find video that matches this session by timestamp
-                            const sessionStartTime = activeSession.started_at.getTime()
-                            const timeWindow = 30 * 60 * 1000 // 30 minutes
-
-                            for (const video of videos) {
-                                const videoStartTime = video.start_time || video.created_at
-                                if (!videoStartTime) continue
-
-                                const videoStart = new Date(videoStartTime).getTime()
-                                const timeDiff = Math.abs(videoStart - sessionStartTime)
-
-                                if (timeDiff <= timeWindow) {
-                                    // Match found - update session with video ID and thumbnail
-                                    const updateData: any = {
-                                        updated_at: new Date(),
-                                    }
-
-                                    if (video.id && activeSession.kick_video_id !== video.id.toString()) {
-                                        updateData.kick_video_id = video.id.toString()
-                                    }
-
-                                    // Update thumbnail if we have one from video and session doesn't have one
-                                    if (video.thumbnail && !activeSession.thumbnail_url) {
-                                        let thumbnailUrl: string | null = null
-                                        if (typeof video.thumbnail === 'string') {
-                                            thumbnailUrl = video.thumbnail
-                                        } else if (typeof video.thumbnail === 'object' && video.thumbnail.url) {
-                                            thumbnailUrl = video.thumbnail.url
-                                        }
-                                        if (thumbnailUrl) {
-                                            updateData.thumbnail_url = thumbnailUrl
-                                        }
-                                    }
-
-                                    if (Object.keys(updateData).length > 1) { // More than just updated_at
-                                        await db.streamSession.update({
-                                            where: { id: activeSession.id },
-                                            data: updateData,
-                                        })
-                                        console.log(`✅ Updated session ${activeSession.id} with video ID ${video.id} after stream ended`)
-                                    }
-                                    break
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        // Non-critical - video ID fetch failed, manual sync can handle it
-                        console.debug(`[Channel API] Failed to fetch video ID for ended session ${activeSession.id}:`, error instanceof Error ? error.message : 'Unknown error')
-                    }
-                }, 0) // Start immediately but delay the actual fetch
             }
         }
     } catch (dbError) {
@@ -819,7 +758,7 @@ export async function GET(request: Request) {
             peak_viewer_count: number;
             session_title: string | null;
             thumbnail_url: string | null;
-            kick_video_id: string | null;
+            kick_stream_id: string | null;
         } | null = null
         if (broadcasterUserId) {
             try {
@@ -837,7 +776,7 @@ export async function GET(request: Request) {
                         peak_viewer_count: true,
                         session_title: true,
                         thumbnail_url: true,
-                        kick_video_id: true,
+                        kick_stream_id: true,
                     },
                 })
             } catch (err) {

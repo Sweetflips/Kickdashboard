@@ -106,7 +106,6 @@ export async function GET(request: Request) {
                 session_title: session.session_title || null,
                 thumbnail_url: session.thumbnail_url || null,
                 kick_stream_id: session.kick_stream_id || null,
-                kick_video_id: session.kick_video_id || null,
                 started_at: session.started_at?.toISOString() || new Date().toISOString(),
                 ended_at: session.ended_at?.toISOString() || null,
                 peak_viewer_count: session.peak_viewer_count || 0,

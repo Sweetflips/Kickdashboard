@@ -48,7 +48,7 @@ const rateLimiter = {
  * Acquire a slot to make an API request
  * Returns a release function to call when done
  */
-async function acquireRateLimitSlot(): Promise<() => void> {
+export async function acquireRateLimitSlot(): Promise<() => void> {
     // Wait for global backoff if we're rate limited
     const now = Date.now()
     if (rateLimiter.globalBackoffUntil > now) {
@@ -295,7 +295,7 @@ export async function getBroadcasterToken(): Promise<string> {
 /**
  * Refresh broadcaster's access token using refresh token from database
  */
-async function refreshBroadcasterToken(): Promise<string | null> {
+export async function refreshBroadcasterToken(): Promise<string | null> {
     try {
         const broadcaster = await db.user.findFirst({
             where: {
@@ -386,7 +386,7 @@ async function refreshBroadcasterToken(): Promise<string | null> {
  * Get App Access Token (client credentials flow)
  * Used as fallback when user token not available
  */
-async function getAppAccessToken(): Promise<string> {
+export async function getAppAccessToken(): Promise<string> {
     const clientId = process.env.KICK_CLIENT_ID
     const clientSecret = process.env.KICK_CLIENT_SECRET
 

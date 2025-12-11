@@ -46,7 +46,6 @@ export async function POST(request: Request) {
                 channel_slug: true,
                 thumbnail_url: true,
                 kick_stream_id: true,
-                kick_video_id: true,
             },
         })
 
@@ -61,7 +60,6 @@ export async function POST(request: Request) {
         const updateData: {
             thumbnail_url?: string | null
             kick_stream_id?: string | null
-            kick_video_id?: string | null
         } = {}
 
         // If thumbnailUrl is provided directly, use it
@@ -69,20 +67,15 @@ export async function POST(request: Request) {
             updateData.thumbnail_url = thumbnailUrl || null
         }
 
-        // If kickStreamId is provided (for live streams), store it
+        // If kickStreamId is provided, store it
         if (kickStreamId !== undefined) {
             updateData.kick_stream_id = kickStreamId || null
         }
 
-        // If kickVideoId is provided (for VODs), store it and construct thumbnail URL if needed
-        if (kickVideoId !== undefined) {
-            updateData.kick_video_id = kickVideoId || null
-
-            // If no direct thumbnailUrl provided but kickVideoId is, construct VOD thumbnail URL
-            // Kick VOD thumbnail format: https://videos.kick.com/video/{video_id}/thumbnails/thumbnail.jpeg
-            if (!thumbnailUrl && kickVideoId) {
-                updateData.thumbnail_url = `https://videos.kick.com/video/${kickVideoId}/thumbnails/thumbnail.jpeg`
-            }
+        // If kickVideoId is provided, construct VOD thumbnail URL
+        // Kick VOD thumbnail format: https://videos.kick.com/video/{video_id}/thumbnails/thumbnail.jpeg
+        if (kickVideoId && !thumbnailUrl) {
+            updateData.thumbnail_url = `https://videos.kick.com/video/${kickVideoId}/thumbnails/thumbnail.jpeg`
         }
 
         // Update the session
@@ -98,7 +91,6 @@ export async function POST(request: Request) {
                 id: updatedSession.id.toString(),
                 thumbnail_url: updatedSession.thumbnail_url,
                 kick_stream_id: updatedSession.kick_stream_id,
-                kick_video_id: updatedSession.kick_video_id,
             },
         })
     } catch (error) {
