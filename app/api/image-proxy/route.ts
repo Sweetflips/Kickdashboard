@@ -60,10 +60,11 @@ export async function GET(request: Request) {
         }
 
         // Normalize and validate URL
-        const normalizedUrl = normalizeImageUrl(imageUrl)
+        let normalizedUrl = normalizeImageUrl(imageUrl)
+        
+        // Handle invalid URLs by returning default image
         if (!normalizedUrl) {
-            console.warn(`⚠️ Invalid image URL format: ${imageUrl.substring(0, 100)}`)
-            // Return default image for invalid URLs
+            // For relative paths or malformed URLs, return default image
             const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
             const proto = request.headers.get('x-forwarded-proto') || 'https'
             const baseUrl = host ? `${proto}://${host}` : 'https://kickdashboard.com'
@@ -83,13 +84,14 @@ export async function GET(request: Request) {
                         },
                     })
                 }
-            } catch {
-                // Fall through to error response
+            } catch (err) {
+                console.warn(`⚠️ Failed to fetch default image: ${err instanceof Error ? err.message : 'Unknown error'}`)
             }
 
+            // If default image fetch fails, return 404 instead of 400
             return NextResponse.json(
                 { error: 'Invalid image URL format' },
-                { status: 400 }
+                { status: 404 }
             )
         }
 
