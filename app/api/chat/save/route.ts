@@ -48,6 +48,9 @@ export async function POST(request: Request) {
     try {
         const body = await request.json()
         const message = body as ChatMessage
+        
+        // Debug: Log that we received a save request
+        console.log(`[chat/save] 📥 Received message from ${message.sender?.username || 'unknown'} for broadcaster ${message.broadcaster?.user_id || 'unknown'}`)
 
         // ═══════════════════════════════════════════════════════════════
         // STEP 1: VALIDATE MESSAGE STRUCTURE
@@ -93,7 +96,10 @@ export async function POST(request: Request) {
             
             // Debug: Log session lookup result (only first time per minute)
             if (!activeSession) {
-                logWarnRateLimited(`[chat/save] No active session found for broadcaster ${broadcasterUserId}`)
+                logWarnRateLimited(`[chat/save] ⚠️ No active session found for broadcaster_user_id=${broadcasterUserId} (from message.broadcaster.user_id=${message.broadcaster.user_id})`)
+            } else {
+                // Log first successful lookup per minute
+                logWarnRateLimited(`[chat/save] ✅ Found active session ${activeSession.id} for broadcaster ${broadcasterUserId}`)
             }
         } catch (error: any) {
             // Non-critical - continue without session info
