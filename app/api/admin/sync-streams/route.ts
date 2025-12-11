@@ -27,6 +27,30 @@ export async function POST(request: Request) {
         let liveStreamUpdated = false
         let liveStreamError: string | null = null
 
+        const parseKickTimestamp = (input: any): Date | null => {
+            if (!input) return null
+            if (input instanceof Date) return isNaN(input.getTime()) ? null : input
+
+            const raw = String(input).trim()
+            if (!raw) return null
+
+            // ISO (with timezone)
+            if (raw.includes('T') && (raw.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(raw))) {
+                const d = new Date(raw)
+                return isNaN(d.getTime()) ? null : d
+            }
+
+            // Kick often returns "YYYY-MM-DD HH:mm:ss" (no timezone). Treat as UTC.
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
+                const d = new Date(raw.replace(' ', 'T') + 'Z')
+                return isNaN(d.getTime()) ? null : d
+            }
+
+            // Fallback: let Date try
+            const d = new Date(raw)
+            return isNaN(d.getTime()) ? null : d
+        }
+
         const getVideoTitle = (video: any): string | null => {
             // Kick /api/v2/channels/:slug/videos uses session_title, not title
             if (typeof video?.title === 'string' && video.title.trim()) return video.title.trim()
@@ -156,8 +180,10 @@ export async function POST(request: Request) {
         if (videos.length > limit) {
             videos = [...videos]
                 .sort((a, b) => {
-                    const aTime = new Date(a?.start_time || a?.created_at || 0).getTime()
-                    const bTime = new Date(b?.start_time || b?.created_at || 0).getTime()
+                    const aDate = parseKickTimestamp(a?.start_time || a?.created_at)
+                    const bDate = parseKickTimestamp(b?.start_time || b?.created_at)
+                    const aTime = aDate ? aDate.getTime() : 0
+                    const bTime = bDate ? bDate.getTime() : 0
                     return bTime - aTime
                 })
                 .slice(0, limit)
@@ -170,7 +196,17 @@ export async function POST(request: Request) {
 
             try {
                 // Extract video data
-                const videoStartedAt = new Date(video.start_time || video.created_at)
+                const videoStartedAt = parseKickTimestamp(video.start_time || video.created_at)
+                if (!videoStartedAt) {
+                    stats.errors++
+                    debug.unmatched.push({
+                        videoId: String(video?.id ?? ''),
+                        startedAt: String(video?.start_time || video?.created_at || ''),
+                        title: getVideoTitle(video),
+                    })
+                    console.log(`[Sync] Skipping video ${video?.id} due to invalid start_time/created_at`)
+                    continue
+                }
                 const videoDuration = video.duration // usually in milliseconds
 
                 // Calculate end time
@@ -184,16 +220,25 @@ export async function POST(request: Request) {
                 // Find matching session in DB by start time
                 const timeWindow = 30 * 60 * 1000 // 30 minutes
 
-                const candidateSessions = await db.streamSession.findMany({
-                    where: {
-                        channel_slug: slug,
-                        started_at: {
-                            gte: new Date(videoStartedAt.getTime() - timeWindow),
-                            lte: new Date(videoStartedAt.getTime() + timeWindow)
-                        }
-                    },
-                    orderBy: { started_at: 'desc' },
-                })
+                const findCandidates = async (windowMs: number) => {
+                    return await db.streamSession.findMany({
+                        where: {
+                            channel_slug: slug,
+                            started_at: {
+                                gte: new Date(videoStartedAt.getTime() - windowMs),
+                                lte: new Date(videoStartedAt.getTime() + windowMs)
+                            }
+                        },
+                        orderBy: { started_at: 'desc' },
+                    })
+                }
+
+                let candidateSessions = await findCandidates(timeWindow)
+                // If nothing matched, widen window in force mode (handles timezone drift / slight offsets)
+                if (candidateSessions.length === 0 && force) {
+                    const extendedWindow = 6 * 60 * 60 * 1000 // 6 hours
+                    candidateSessions = await findCandidates(extendedWindow)
+                }
 
                 const matchingSession = candidateSessions
                     .filter(s => !s.session_title?.startsWith('[TEST]'))

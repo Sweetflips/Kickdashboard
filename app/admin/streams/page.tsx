@@ -42,9 +42,19 @@ export default function AdminStreamsPage() {
     const MANUAL_SYNC_LIMIT = 30
 
     const normalizeAndLimitVideos = (videos: any[]) => {
+        const parseKickTs = (v: any) => {
+            const raw = String(v ?? '').trim()
+            if (!raw) return 0
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
+                const d = new Date(raw.replace(' ', 'T') + 'Z')
+                return isNaN(d.getTime()) ? 0 : d.getTime()
+            }
+            const d = new Date(raw)
+            return isNaN(d.getTime()) ? 0 : d.getTime()
+        }
         const sorted = [...videos].sort((a, b) => {
-            const aTime = new Date(a?.start_time || a?.created_at || 0).getTime()
-            const bTime = new Date(b?.start_time || b?.created_at || 0).getTime()
+            const aTime = parseKickTs(a?.start_time || a?.created_at)
+            const bTime = parseKickTs(b?.start_time || b?.created_at)
             return bTime - aTime
         })
         return sorted.slice(0, MANUAL_SYNC_LIMIT)
