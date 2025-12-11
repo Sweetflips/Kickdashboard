@@ -37,6 +37,7 @@ export default function AdminStreamsPage() {
     const [testSessionActive, setTestSessionActive] = useState(false)
     const [testSessionLoading, setTestSessionLoading] = useState(false)
     const [testSessionId, setTestSessionId] = useState<string | null>(null)
+    const [manualForceSync, setManualForceSync] = useState(true)
     const limit = 20
     const MANUAL_SYNC_LIMIT = 30
 
@@ -273,7 +274,7 @@ export default function AdminStreamsPage() {
             const limitedVideos = normalizeAndLimitVideos(videos)
 
             const channelSlug = 'sweetflips'
-            const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
+            const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}&force=${manualForceSync ? '1' : '0'}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ videos: limitedVideos }),
@@ -610,6 +611,14 @@ export default function AdminStreamsPage() {
                             placeholder="Paste JSON here... [ { ... } ]"
                             className="w-full h-48 p-3 border border-gray-300 dark:border-kick-border rounded-lg bg-gray-50 dark:bg-kick-dark text-xs font-mono mb-4"
                         />
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-kick-text-secondary mb-4">
+                            <input
+                                type="checkbox"
+                                checked={manualForceSync}
+                                onChange={(e) => setManualForceSync(e.target.checked)}
+                            />
+                            Force overwrite (updates title/thumbnail/Kick ID even if already set)
+                        </label>
                         <div className="flex justify-end gap-2">
                             <button
                                 onClick={() => setShowManualSync(false)}
@@ -673,6 +682,9 @@ export default function AdminStreamsPage() {
                                             </div>
                                             <div className="text-xs text-gray-500 dark:text-kick-text-secondary font-mono">
                                                 ID: {session.id}
+                                            </div>
+                                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary font-mono">
+                                                Kick: {session.kick_stream_id || '-'}
                                             </div>
                                         </td>
                                         <td className="py-3 px-4 text-sm text-gray-900 dark:text-kick-text">

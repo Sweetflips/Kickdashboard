@@ -20,6 +20,8 @@ export async function POST(request: Request) {
         const { searchParams } = new URL(request.url)
         const slug = searchParams.get('slug') || 'sweetflips'
         const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '30', 10) || 30))
+        const forceFromQuery = searchParams.get('force')
+        let force = forceFromQuery === '1' || forceFromQuery === 'true'
 
         let videos: any[] = []
         let liveStreamUpdated = false
@@ -62,6 +64,9 @@ export async function POST(request: Request) {
             if (body && Array.isArray(body.videos)) {
                 videos = body.videos
                 console.log(`Received ${videos.length} videos from request body`)
+            }
+            if (body && typeof body.force === 'boolean') {
+                force = body.force
             }
         } catch (e) {
             // Body might be empty if we're just triggering the fetch
@@ -141,6 +146,12 @@ export async function POST(request: Request) {
             errors: 0
         }
 
+        const debug = {
+            unmatched: [] as Array<{ videoId: string; startedAt: string; title: string | null }>,
+            matchedNoChange: [] as Array<{ videoId: string; sessionId: string }>,
+            updatedPairs: [] as Array<{ videoId: string; sessionId: string }>,
+        }
+
         // Only process the most recent N videos (prevents accidental updates far back in history)
         if (videos.length > limit) {
             videos = [...videos]
@@ -217,10 +228,17 @@ export async function POST(request: Request) {
                         needsUpdate = true
                     }
 
-                    // Update title if missing
-                    if (videoTitle && (!matchingSession.session_title || matchingSession.session_title === 'Untitled Stream')) {
-                        updateData.session_title = videoTitle
-                        needsUpdate = true
+                    // Update title
+                    if (videoTitle) {
+                        const currentTitle = matchingSession.session_title || ''
+                        const shouldUpdateTitle = force
+                            ? currentTitle.trim() !== videoTitle
+                            : (!matchingSession.session_title || matchingSession.session_title === 'Untitled Stream')
+
+                        if (shouldUpdateTitle) {
+                            updateData.session_title = videoTitle
+                            needsUpdate = true
+                        }
                     }
 
                     // Store Kick VOD video id for future thumbnail fetching (schema says this is VOD id)
@@ -241,9 +259,17 @@ export async function POST(request: Request) {
                             data: updateData
                         })
                         stats.updated++
+                        debug.updatedPairs.push({ videoId: String(video?.id ?? ''), sessionId: String(matchingSession.id) })
                         console.log(`[Sync] Updated session ${matchingSession.id} with data from video ${video.id}`)
+                    } else {
+                        debug.matchedNoChange.push({ videoId: String(video?.id ?? ''), sessionId: String(matchingSession.id) })
                     }
                 } else {
+                    debug.unmatched.push({
+                        videoId: String(video?.id ?? ''),
+                        startedAt: videoStartedAt.toISOString(),
+                        title: videoTitle,
+                    })
                     console.log(`[Sync] No matching session found for video ${video.id} (${videoTitle || 'Untitled'}) started at ${videoStartedAt.toISOString()}`)
                 }
 
@@ -278,6 +304,7 @@ export async function POST(request: Request) {
                 ...stats,
                 liveStreamUpdated: liveStreamUpdated ? 1 : 0,
             },
+            debug: videos.length > 0 ? { ...debug, force } : undefined,
             note: !liveStreamUpdated && videos.length === 0
                 ? 'Sessions are created automatically when streams go live via the channel API. This sync only updates thumbnails for existing sessions.'
                 : undefined
