@@ -78,7 +78,7 @@ export async function POST(request: Request) {
                                         if (activeSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await tx.streamSession.update({
                                                 where: { id: activeSession.id },
-                                                data: { 
+                                                data: {
                                                     thumbnail_url: livestreamData.thumbnailUrl,
                                                     kick_stream_id: livestreamData.streamId || undefined,
                                                 },
@@ -132,7 +132,7 @@ export async function POST(request: Request) {
                                         if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await db.streamSession.update({
                                                 where: { id: existingSession.id },
-                                                data: { 
+                                                data: {
                                                     thumbnail_url: livestreamData.thumbnailUrl,
                                                     kick_stream_id: livestreamData.streamId || undefined,
                                                 },
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
                                         if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await db.streamSession.update({
                                                 where: { id: existingSession.id },
-                                                data: { 
+                                                data: {
                                                     thumbnail_url: livestreamData.thumbnailUrl,
                                                     kick_stream_id: livestreamData.streamId || undefined,
                                                 },

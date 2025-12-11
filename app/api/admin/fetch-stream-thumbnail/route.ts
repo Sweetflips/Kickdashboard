@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server'
 /**
  * POST /api/admin/fetch-stream-thumbnail
  * Fetch and update thumbnail for a specific stream session
- * 
+ *
  * NOTE: This only works for LIVE streams. For ended streams, thumbnails
  * must be captured while the stream is live or synced from VOD data.
  */
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
         // Kick blocks the VOD API, so we can't fetch historical thumbnails
         if (session.ended_at) {
             return NextResponse.json(
-                { 
+                {
                     error: 'Cannot refresh thumbnail for ended streams',
                     details: 'Thumbnails can only be refreshed for live streams. Historical thumbnails must be synced from VOD data.'
                 },
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
         // Update the session with new thumbnail and store the kick_stream_id if available
         await db.streamSession.update({
             where: { id: session.id },
-            data: { 
+            data: {
                 thumbnail_url: thumbnailUrl,
                 kick_stream_id: streamData.streamId || session.kick_stream_id,
             },

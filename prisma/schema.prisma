@@ -200,7 +200,7 @@ model Raffle {
   draw_seed            String? // For transparency
   number_of_winners    Int       @default(1)
   rigging_enabled      Boolean   @default(false)
-  wheel_background_url String?   
+  wheel_background_url String?
   center_logo_url      String?
   slice_opacity        Float?    @default(0.5)
   drawn_at             DateTime?

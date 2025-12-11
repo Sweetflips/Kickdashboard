@@ -611,15 +611,22 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                 return null
             }
 
+            // Debug: Log v2 API response
+            console.log(`[Kick API] V2 livestream response:`, JSON.stringify(livestream, null, 2).substring(0, 500))
+
             let thumbnailUrl: string | null = null
             if (livestream.thumbnail) {
                 thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
+                console.log(`[Kick API] V2 extracted thumbnail: ${thumbnailUrl}`)
             }
 
+            // Try to get the actual stream/session ID, not just broadcaster ID
             const streamId = livestream.id?.toString() ||
+                            livestream.session_id?.toString() ||
                             livestream.broadcaster_user_id?.toString() ||
                             v2Data.id?.toString() ||
                             'unknown'
+            console.log(`[Kick API] V2 using streamId: ${streamId}`)
 
             return {
                 streamId,
@@ -763,21 +770,30 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                     if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
                         const livestream = livestreamsData.data[0]
 
+                        // Debug: Log full livestream response to understand structure
+                        console.log(`[Kick API] Livestreams response:`, JSON.stringify(livestream, null, 2))
+
                         // Extract thumbnail from livestream (per docs.kick.com/apis/livestreams)
                         if (livestream.thumbnail) {
                             thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
-                            console.log(`[Kick API] Extracted thumbnail from livestreams endpoint: ${thumbnailUrl?.substring(0, 80)}...`)
+                            console.log(`[Kick API] Extracted thumbnail: ${thumbnailUrl}`)
+                        } else {
+                            console.warn(`[Kick API] No thumbnail field in livestream response`)
                         }
 
-                        // Use the actual livestream ID (session_id) - this is required for thumbnail URLs
-                        if (livestream.id) {
+                        // Use the actual livestream ID - check all possible fields
+                        // The livestream_id or stream_id should be unique per stream session
+                        if (livestream.livestream_id) {
+                            streamId = livestream.livestream_id.toString()
+                            console.log(`[Kick API] Using livestream_id: ${streamId}`)
+                        } else if (livestream.id) {
                             streamId = livestream.id.toString()
-                            console.log(`[Kick API] Using livestream ID: ${streamId}`)
+                            console.log(`[Kick API] Using id: ${streamId}`)
                         } else if (livestream.session_id) {
                             streamId = livestream.session_id.toString()
-                            console.log(`[Kick API] Using session ID: ${streamId}`)
+                            console.log(`[Kick API] Using session_id: ${streamId}`)
                         } else if (livestream.broadcaster_user_id) {
-                            // Fallback to broadcaster_user_id (not ideal but better than nothing)
+                            // Fallback to broadcaster_user_id (not ideal - this is the USER ID, not stream ID)
                             streamId = livestream.broadcaster_user_id.toString()
                             console.warn(`[Kick API] No livestream ID found, falling back to broadcaster_user_id: ${streamId}`)
                         } else if (livestream.channel_id) {
@@ -785,7 +801,7 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                             console.warn(`[Kick API] No livestream ID found, falling back to channel_id: ${streamId}`)
                         }
 
-                        console.log(`[Kick API] Stream is LIVE (found in /livestreams endpoint, streamId: ${streamId})`)
+                        console.log(`[Kick API] Stream is LIVE (streamId: ${streamId}, has thumbnail: ${!!thumbnailUrl})`)
                     } else {
                         // Empty data array means stream is not live
                         console.log(`[Kick API] Channel ${slug} has no active livestream (empty livestreams response)`)
