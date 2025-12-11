@@ -150,7 +150,7 @@ export async function awardPoint(
 
         // Early check for message_id uniqueness (quick exit before transaction)
         if (messageId) {
-            const existingPointHistory = await dbQueryWithRetry(() => db.pointHistory.findUnique({
+            const existingPointHistory = await dbQueryWithRetry(() => db.pointHistory.findFirst({
                 where: { message_id: messageId },
                 select: { points_earned: true },
             }))
