@@ -35,7 +35,7 @@ export function logErrorRateLimited(message: string, error?: any): void {
         } else {
             console.error(message)
         }
-        
+
         // Update the entry
         errorLogs.set(key, { message, lastLogged: now })
     }
@@ -53,7 +53,7 @@ export function logWarnRateLimited(message: string, error?: any): void {
         } else {
             console.warn(message)
         }
-        
+
         errorLogs.set(key, { message, lastLogged: now })
     }
 }
@@ -69,4 +69,3 @@ if (typeof setInterval !== 'undefined') {
         }
     }, 5 * 60000)
 }
-

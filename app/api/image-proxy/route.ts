@@ -61,7 +61,7 @@ export async function GET(request: Request) {
 
         // Normalize and validate URL
         let normalizedUrl = normalizeImageUrl(imageUrl)
-        
+
         // Handle invalid URLs by returning default image
         if (!normalizedUrl) {
             // For relative paths or malformed URLs, return default image

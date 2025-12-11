@@ -157,7 +157,7 @@ export async function claimJobs(batchSize: number = 10, lockTimeoutSeconds: numb
                 await new Promise(resolve => setTimeout(resolve, delay))
                 continue
             }
-            
+
             const isConnectionError = error?.code === 'P1001' ||
                                     error?.message?.includes("Can't reach database server") ||
                                     error?.message?.includes('PrismaClientInitializationError')

@@ -13,4 +13,3 @@ cmd = "node scripts/start.js"
 
 [providers]
 node = "18"
-
