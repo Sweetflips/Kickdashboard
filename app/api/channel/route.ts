@@ -319,9 +319,9 @@ async function fetchV2ChannelDataWithDedup(slug: string): Promise<{
                 const data = await response.json()
                 const parsed = parseV2ChannelData(data)
                 if (parsed) {
-                    parsed.rawData = data
+                    return { ...parsed, rawData: data }
                 }
-                return parsed
+                return null
             } finally {
                 releaseSlot()
             }
@@ -346,7 +346,21 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
     // If v2 API succeeded, we can use it directly
     if (v2Data) {
         // Return a mock Response object for backward compatibility
-        const mockResponse = new Response(JSON.stringify(v2Data.rawData || {}), {
+        // Reconstruct minimal channel data structure from parsed v2 data
+        const mockData = {
+            slug: slug,
+            broadcaster_user_id: v2Data.broadcaster_user_id,
+            followers_count: v2Data.followers_count,
+            livestream: v2Data.is_live ? {
+                session_title: v2Data.stream_title,
+                viewer_count: v2Data.viewer_count,
+                started_at: v2Data.started_at,
+                thumbnail: v2Data.thumbnail,
+                category: v2Data.category,
+                is_live: true,
+            } : null,
+        }
+        const mockResponse = new Response(JSON.stringify(mockData), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
         })
