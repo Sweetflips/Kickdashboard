@@ -245,6 +245,12 @@ export async function POST(request: Request) {
                     }
                 }
 
+                // If no thumbnail URL but we have a video ID, construct VOD thumbnail URL
+                // Kick VOD thumbnail format: https://videos.kick.com/video/{video_id}/thumbnails/thumbnail.jpeg
+                if (!thumbnailUrl && video.id) {
+                    thumbnailUrl = `https://videos.kick.com/video/${video.id}/thumbnails/thumbnail.jpeg`
+                }
+
                 // Find matching session in DB
                 // We look for a session started within 30 minutes of the video start time
                 const timeWindow = 30 * 60 * 1000 // 30 minutes
@@ -266,10 +272,19 @@ export async function POST(request: Request) {
                     const updateData: Prisma.StreamSessionUpdateInput = {}
                     let needsUpdate = false
 
-                    // Update thumbnail if missing or different
-                    if (thumbnailUrl && matchingSession.thumbnail_url !== thumbnailUrl) {
-                        updateData.thumbnail_url = thumbnailUrl
-                        needsUpdate = true
+                    // Update thumbnail if missing (preserve existing thumbnails)
+                    // Only update if session has no thumbnail, or if new thumbnail is provided and different
+                    if (thumbnailUrl) {
+                        if (!matchingSession.thumbnail_url) {
+                            // Session has no thumbnail - set it
+                            updateData.thumbnail_url = thumbnailUrl
+                            needsUpdate = true
+                        } else if (matchingSession.thumbnail_url !== thumbnailUrl) {
+                            // Session has thumbnail but it's different - update it
+                            // This allows refreshing thumbnails if needed
+                            updateData.thumbnail_url = thumbnailUrl
+                            needsUpdate = true
+                        }
                     }
 
                     // Update title if missing

@@ -4,10 +4,11 @@ import { isAdmin } from '@/lib/auth'
 
 /**
  * POST /api/admin/update-stream-thumbnail
- * Manually update thumbnail URL and/or kick_stream_id for a stream session
- * Accepts either:
- * - thumbnailUrl: Direct URL to set
- * - kickVideoId: Kick video/stream ID to construct thumbnail URL from
+ * Manually update thumbnail URL and/or Kick IDs for a stream session
+ * Accepts:
+ * - thumbnailUrl: Direct URL to set (for any source)
+ * - kickStreamId: Kick live stream ID (from /livestreams API)
+ * - kickVideoId: Kick VOD video ID (from videos endpoint) - constructs VOD thumbnail URL
  */
 export async function POST(request: Request) {
     try {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { sessionId, thumbnailUrl, kickVideoId } = body
+        const { sessionId, thumbnailUrl, kickStreamId, kickVideoId } = body
 
         if (!sessionId) {
             return NextResponse.json(
@@ -30,9 +31,9 @@ export async function POST(request: Request) {
             )
         }
 
-        if (!thumbnailUrl && !kickVideoId) {
+        if (!thumbnailUrl && !kickStreamId && !kickVideoId) {
             return NextResponse.json(
-                { error: 'Either thumbnailUrl or kickVideoId is required' },
+                { error: 'At least one of thumbnailUrl, kickStreamId, or kickVideoId is required' },
                 { status: 400 }
             )
         }
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
                 channel_slug: true,
                 thumbnail_url: true,
                 kick_stream_id: true,
+                kick_video_id: true,
             },
         })
 
@@ -59,6 +61,7 @@ export async function POST(request: Request) {
         const updateData: {
             thumbnail_url?: string | null
             kick_stream_id?: string | null
+            kick_video_id?: string | null
         } = {}
 
         // If thumbnailUrl is provided directly, use it
@@ -66,15 +69,19 @@ export async function POST(request: Request) {
             updateData.thumbnail_url = thumbnailUrl || null
         }
 
-        // If kickVideoId is provided, store it and construct thumbnail URL if needed
-        if (kickVideoId !== undefined) {
-            updateData.kick_stream_id = kickVideoId || null
+        // If kickStreamId is provided (for live streams), store it
+        if (kickStreamId !== undefined) {
+            updateData.kick_stream_id = kickStreamId || null
+        }
 
-            // If no direct thumbnailUrl provided but kickVideoId is, try to construct thumbnail URL
-            // Kick thumbnail URLs typically follow pattern: https://kick.com/thumbnail/{stream_id}
+        // If kickVideoId is provided (for VODs), store it and construct thumbnail URL if needed
+        if (kickVideoId !== undefined) {
+            updateData.kick_video_id = kickVideoId || null
+
+            // If no direct thumbnailUrl provided but kickVideoId is, construct VOD thumbnail URL
+            // Kick VOD thumbnail format: https://videos.kick.com/video/{video_id}/thumbnails/thumbnail.jpeg
             if (!thumbnailUrl && kickVideoId) {
-                // Try common Kick thumbnail URL patterns
-                updateData.thumbnail_url = `https://kick.com/thumbnail/${kickVideoId}`
+                updateData.thumbnail_url = `https://videos.kick.com/video/${kickVideoId}/thumbnails/thumbnail.jpeg`
             }
         }
 
@@ -91,6 +98,7 @@ export async function POST(request: Request) {
                 id: updatedSession.id.toString(),
                 thumbnail_url: updatedSession.thumbnail_url,
                 kick_stream_id: updatedSession.kick_stream_id,
+                kick_video_id: updatedSession.kick_video_id,
             },
         })
     } catch (error) {

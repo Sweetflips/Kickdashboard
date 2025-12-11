@@ -305,7 +305,7 @@ export async function DELETE(request: Request) {
             )
         }
 
-        // Delete related records first (chat messages and point history)
+        // Delete related records first (chat messages, point history, jobs)
         // This prevents foreign key constraint errors
         try {
             // Delete chat messages associated with this session
@@ -315,6 +315,16 @@ export async function DELETE(request: Request) {
 
             // Delete point history associated with this session
             await db.pointHistory.deleteMany({
+                where: { stream_session_id: sessionIdBigInt },
+            })
+
+            // Delete point award jobs associated with this session
+            await db.pointAwardJob.deleteMany({
+                where: { stream_session_id: sessionIdBigInt },
+            })
+
+            // Delete chat jobs associated with this session
+            await db.chatJob.deleteMany({
                 where: { stream_session_id: sessionIdBigInt },
             })
 
@@ -334,7 +344,7 @@ export async function DELETE(request: Request) {
                 return NextResponse.json(
                     {
                         error: 'Cannot delete stream session - it has related records that prevent deletion',
-                        details: 'This session has chat messages or point history that need to be deleted first',
+                        details: 'This session has related records (chat messages, point history, or jobs) that need to be deleted first',
                     },
                     { status: 409 }
                 )
