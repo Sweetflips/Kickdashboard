@@ -34,6 +34,9 @@ export default function AdminStreamsPage() {
     const [editThumbnailUrl, setEditThumbnailUrl] = useState('')
     const [editKickVideoId, setEditKickVideoId] = useState('')
     const [updatingThumbnail, setUpdatingThumbnail] = useState(false)
+    const [testSessionActive, setTestSessionActive] = useState(false)
+    const [testSessionLoading, setTestSessionLoading] = useState(false)
+    const [testSessionId, setTestSessionId] = useState<string | null>(null)
     const limit = 20
 
     useEffect(() => {
@@ -58,6 +61,7 @@ export default function AdminStreamsPage() {
                 }
                 setUserData({ is_admin: true })
                 fetchStreams()
+                checkTestSessionStatus()
             })
             .catch(() => router.push('/'))
     }, [router])
@@ -76,6 +80,83 @@ export default function AdminStreamsPage() {
             console.error('Error fetching streams:', error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const checkTestSessionStatus = async () => {
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            const response = await fetch('/api/admin/test-session', {
+                headers: { 'Authorization': `Bearer ${token}` },
+                credentials: 'include',
+            })
+            if (response.ok) {
+                const data = await response.json()
+                setTestSessionActive(data.hasActiveSession)
+                setTestSessionId(data.session?.id || null)
+            }
+        } catch (error) {
+            console.error('Error checking test session:', error)
+        }
+    }
+
+    const toggleTestSession = async () => {
+        if (testSessionLoading) return
+
+        try {
+            setTestSessionLoading(true)
+            const token = localStorage.getItem('kick_access_token')
+            
+            if (testSessionActive) {
+                // End the session
+                const response = await fetch('/api/admin/test-session', {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    credentials: 'include',
+                })
+                const result = await response.json()
+                if (response.ok && result.success) {
+                    setTestSessionActive(false)
+                    setTestSessionId(null)
+                    setSyncResult({
+                        success: true,
+                        message: 'Test session ended - points will stop being counted',
+                    })
+                    await fetchStreams()
+                } else {
+                    setSyncResult({
+                        success: false,
+                        error: result.error || 'Failed to end session',
+                    })
+                }
+            } else {
+                // Start a new session
+                const response = await fetch('/api/admin/test-session', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    credentials: 'include',
+                })
+                const result = await response.json()
+                if (response.ok && result.success) {
+                    setTestSessionActive(true)
+                    setTestSessionId(result.session?.id || null)
+                    setSyncResult({
+                        success: true,
+                        message: 'Test session started - points will now be counted!',
+                    })
+                    await fetchStreams()
+                } else {
+                    setSyncResult({
+                        success: false,
+                        error: result.error || 'Failed to start session',
+                    })
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling test session:', error)
+            setSyncResult({ success: false, error: 'Failed to toggle test session' })
+        } finally {
+            setTestSessionLoading(false)
         }
     }
 
@@ -364,8 +445,48 @@ export default function AdminStreamsPage() {
         <AppLayout>
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-kick-text">Stream Management</h1>
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-kick-text">Stream Management</h1>
+                        {testSessionActive && (
+                            <span className="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-full animate-pulse">
+                                TEST MODE ACTIVE
+                            </span>
+                        )}
+                    </div>
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={toggleTestSession}
+                            disabled={testSessionLoading}
+                            title={testSessionActive ? 'End test session - stop counting points' : 'Start test session - enable point counting for testing'}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                                testSessionActive
+                                    ? 'bg-red-600 text-white hover:bg-red-700'
+                                    : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                            } disabled:opacity-50`}
+                        >
+                            {testSessionLoading ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    {testSessionActive ? 'Stopping...' : 'Starting...'}
+                                </>
+                            ) : testSessionActive ? (
+                                <>
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                                    </svg>
+                                    End Test Session
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Start Test Session
+                                </>
+                            )}
+                        </button>
                         <button
                             onClick={handleFetchThumbnails}
                             disabled={fetchingThumbnails}
