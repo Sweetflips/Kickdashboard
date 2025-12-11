@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { getBroadcasterToken } from '@/lib/kick-api';
+import { getBroadcasterToken, refreshBroadcasterToken, clearTokenCache, getAppAccessToken, acquireRateLimitSlot } from '@/lib/kick-api';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
@@ -13,11 +13,49 @@ const INITIAL_RETRY_DELAY = 1000 // 1 second
 // Exponential backoff helper
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+// In-memory cache for channel data (5-10 second TTL)
+const channelCache = new Map<string, {
+    data: any
+    expiresAt: number
+}>()
+
+const CACHE_TTL_MS = 15000 // 15 seconds - balance between freshness and rate limiting
+
+// In-flight request tracking to prevent duplicate concurrent requests
+const inFlightRequests = new Map<string, Promise<any>>()
+
+function getCachedChannelData(slug: string): any | null {
+    const cached = channelCache.get(slug.toLowerCase())
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.data
+    }
+    if (cached) {
+        channelCache.delete(slug.toLowerCase())
+    }
+    return null
+}
+
+function setCachedChannelData(slug: string, data: any): void {
+    channelCache.set(slug.toLowerCase(), {
+        data,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+    })
+
+    // Clean up expired entries periodically (keep cache size reasonable)
+    if (channelCache.size > 100) {
+        const now = Date.now()
+        for (const [key, value] of channelCache.entries()) {
+            if (value.expiresAt <= now) {
+                channelCache.delete(key)
+            }
+        }
+    }
+}
+
 /**
- * Fetch channel metadata from v2 API (has more complete data like followers, title, viewers, category)
- * This is used to supplement the official API which may lack some fields
+ * Parse v2 API response into structured data
  */
-async function fetchV2ChannelData(slug: string): Promise<{
+function parseV2ChannelData(data: any): {
     followers_count: number
     viewer_count: number
     stream_title: string
@@ -25,49 +63,12 @@ async function fetchV2ChannelData(slug: string): Promise<{
     is_live: boolean
     started_at: string | null
     thumbnail: string | null
-} | null> {
+    broadcaster_user_id?: number
+    chatroom_id?: number
+} | null {
     try {
-        const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
-        console.log(`[Channel API] Fetching v2 API for metadata: ${url}`)
-
-        const response = await fetch(url, {
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
-            cache: 'no-store',
-        })
-
-        if (!response.ok) {
-            console.warn(`[Channel API] v2 API returned ${response.status}`)
-            return null
-        }
-
-        const data = await response.json()
-
-        // Log ALL important data from v2 API
-        console.log(`[Channel API] ========== V2 API FULL DATA ==========`)
-        console.log(`[Channel API] slug: ${data.slug}`)
-        console.log(`[Channel API] user.username: ${data.user?.username}`)
-        console.log(`[Channel API] followers_count: ${data.followers_count}`)
-        console.log(`[Channel API] subscriber_count: ${data.subscriber_count}`)
-        console.log(`[Channel API] verified: ${data.verified}`)
-
-        if (data.livestream) {
-            console.log(`[Channel API] livestream.id: ${data.livestream.id}`)
-            console.log(`[Channel API] livestream.session_title: ${data.livestream.session_title}`)
-            console.log(`[Channel API] livestream.is_live: ${data.livestream.is_live}`)
-            console.log(`[Channel API] livestream.viewer_count: ${data.livestream.viewer_count}`)
-            console.log(`[Channel API] livestream.started_at: ${data.livestream.started_at}`)
-            console.log(`[Channel API] livestream.thumbnail: ${JSON.stringify(data.livestream.thumbnail)}`)
-            console.log(`[Channel API] livestream.category: ${JSON.stringify(data.livestream.category)}`)
-            console.log(`[Channel API] livestream.categories: ${JSON.stringify(data.livestream.categories)}`)
-        } else {
-            console.log(`[Channel API] livestream: null (stream is offline)`)
-        }
-        console.log(`[Channel API] ========================================`)
-
         const livestream = data.livestream
+        const chatroom = data.chatroom
         let category: { id: number; name: string } | null = null
 
         // Extract category from livestream
@@ -104,9 +105,10 @@ async function fetchV2ChannelData(slug: string): Promise<{
             is_live: !!livestream?.is_live,
             started_at: livestream?.started_at || null,
             thumbnail,
+            broadcaster_user_id: data.broadcaster_user_id || data.user?.id || data.id,
+            chatroom_id: chatroom?.id || data.chatroom_id,
         }
     } catch (error) {
-        console.warn(`[Channel API] Failed to fetch v2 API:`, error instanceof Error ? error.message : 'Unknown error')
         return null
     }
 }
@@ -152,111 +154,115 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
         // This is the authoritative source for live status
         if (broadcasterUserId) {
             const livestreamsUrl = `${KICK_API_BASE}/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
-            console.log(`[Channel API] Checking official /livestreams endpoint for ${slug} (broadcaster_user_id: ${broadcasterUserId})`)
 
-            // Try without auth first
-            let livestreamsResponse = await fetch(livestreamsUrl, {
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                },
-                cache: 'no-store',
-            })
-
-            // If 401, retry with authentication
-            if (livestreamsResponse.status === 401) {
-                console.log(`[Channel API] /livestreams returned 401, retrying with auth`)
-                try {
-                    const token = await getBroadcasterToken()
-                    const clientId = process.env.KICK_CLIENT_ID
-
-                    const authHeaders: Record<string, string> = {
-                        'Authorization': `Bearer ${token}`,
+            // Acquire rate limit slot before making request
+            const releaseSlot = await acquireRateLimitSlot()
+            try {
+                // Try without auth first
+                let livestreamsResponse = await fetch(livestreamsUrl, {
+                    headers: {
                         'Accept': 'application/json',
                         'Content-Type': 'application/json',
-                    }
-                    if (clientId) {
-                        authHeaders['Client-Id'] = clientId
-                    }
+                    },
+                    cache: 'no-store',
+                })
 
-                    livestreamsResponse = await fetch(livestreamsUrl, {
-                        headers: authHeaders,
-                        cache: 'no-store',
-                    })
-                } catch (authError) {
-                    console.warn(`[Channel API] Failed to get auth token:`, authError instanceof Error ? authError.message : 'Unknown error')
+                // If 401, retry with authentication
+                if (livestreamsResponse.status === 401) {
+                    try {
+                        const token = await getBroadcasterToken()
+                        const clientId = process.env.KICK_CLIENT_ID
+
+                        const authHeaders: Record<string, string> = {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                        }
+                        if (clientId) {
+                            authHeaders['Client-Id'] = clientId
+                        }
+
+                        livestreamsResponse = await fetch(livestreamsUrl, {
+                            headers: authHeaders,
+                            cache: 'no-store',
+                        })
+                    } catch (authError) {
+                        console.warn(`[Channel API] Failed to get auth token:`, authError instanceof Error ? authError.message : 'Unknown error')
+                    }
                 }
-            }
 
-            if (livestreamsResponse.ok) {
-                const livestreamsData = await livestreamsResponse.json()
-                console.log(`[Channel API] /livestreams response:`, JSON.stringify(livestreamsData, null, 2).substring(0, 500))
+                if (livestreamsResponse.ok) {
+                    const livestreamsData = await livestreamsResponse.json()
 
-                // If data array has items, stream is LIVE
-                if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
-                    console.log(`[Channel API] Stream is LIVE (found in /livestreams endpoint)`)
-                    return { isLive: true }
+                    // If data array has items, stream is LIVE
+                    if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
+                        return { isLive: true }
+                    } else {
+                        // Empty data array means stream is OFFLINE
+                        return { isLive: false }
+                    }
                 } else {
-                    // Empty data array means stream is OFFLINE
-                    console.log(`[Channel API] Stream is OFFLINE (empty /livestreams response)`)
-                    return { isLive: false }
+                    console.warn(`[Channel API] /livestreams endpoint returned ${livestreamsResponse.status}`)
                 }
-            } else {
-                console.warn(`[Channel API] /livestreams endpoint returned ${livestreamsResponse.status}`)
+            } finally {
+                releaseSlot()
             }
         }
 
         // Fallback: Use official /channels endpoint with auth
         const channelsUrl = `${KICK_API_BASE}/channels?slug[]=${encodeURIComponent(slug)}`
-        console.log(`[Channel API] Fallback: Checking official /channels endpoint for ${slug}`)
 
         try {
-            const token = await getBroadcasterToken()
-            const clientId = process.env.KICK_CLIENT_ID
+            // Acquire rate limit slot before making request
+            const releaseSlot = await acquireRateLimitSlot()
+            try {
+                const token = await getBroadcasterToken()
+                const clientId = process.env.KICK_CLIENT_ID
 
-            const authHeaders: Record<string, string> = {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
+                const authHeaders: Record<string, string> = {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                }
+                if (clientId) {
+                    authHeaders['Client-Id'] = clientId
+                }
+
+                const response = await fetch(channelsUrl, {
+                    headers: authHeaders,
+                    cache: 'no-store',
+                })
+
+                if (!response.ok) {
+                    console.warn(`[Channel API] /channels endpoint returned ${response.status}`)
+                    return { isLive: false }
+                }
+
+                const responseData = await response.json()
+
+                // Parse response - format is { data: [channel] }
+                let channel = null
+                if (Array.isArray(responseData.data) && responseData.data.length > 0) {
+                    channel = responseData.data[0]
+                } else if (responseData.data && typeof responseData.data === 'object') {
+                    channel = responseData.data
+                }
+
+                if (!channel) {
+                    console.log(`[Channel API] /channels returned no channel data`)
+                    return { isLive: false }
+                }
+
+                // Check stream.is_live from /channels endpoint
+                const stream = channel.stream
+                if (!stream || !stream.is_live) {
+                    return { isLive: false }
+                }
+
+                return { isLive: true }
+            } finally {
+                releaseSlot()
             }
-            if (clientId) {
-                authHeaders['Client-Id'] = clientId
-            }
-
-            const response = await fetch(channelsUrl, {
-                headers: authHeaders,
-                cache: 'no-store',
-            })
-
-            if (!response.ok) {
-                console.warn(`[Channel API] /channels endpoint returned ${response.status}`)
-                return { isLive: false }
-            }
-
-            const responseData = await response.json()
-
-            // Parse response - format is { data: [channel] }
-            let channel = null
-            if (Array.isArray(responseData.data) && responseData.data.length > 0) {
-                channel = responseData.data[0]
-            } else if (responseData.data && typeof responseData.data === 'object') {
-                channel = responseData.data
-            }
-
-            if (!channel) {
-                console.log(`[Channel API] /channels returned no channel data`)
-                return { isLive: false }
-            }
-
-            // Check stream.is_live from /channels endpoint
-            const stream = channel.stream
-            if (!stream || !stream.is_live) {
-                console.log(`[Channel API] /channels shows stream is OFFLINE for ${slug}`)
-                return { isLive: false }
-            }
-
-            console.log(`[Channel API] /channels shows stream is LIVE for ${slug}`)
-            return { isLive: true }
         } catch (fallbackError) {
             console.warn(`[Channel API] Fallback /channels failed:`, fallbackError instanceof Error ? fallbackError.message : 'Unknown error')
             return { isLive: false }
@@ -267,39 +273,186 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
     }
 }
 
-async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promise<Response> {
-    // Use official /channels endpoint with auth
+/**
+ * Fetch v2 API data with deduplication - returns parsed data directly
+ */
+async function fetchV2ChannelDataWithDedup(slug: string): Promise<{
+    followers_count: number
+    viewer_count: number
+    stream_title: string
+    category: { id: number; name: string } | null
+    is_live: boolean
+    started_at: string | null
+    thumbnail: string | null
+    broadcaster_user_id?: number
+    rawData?: any
+} | null> {
+    const cacheKey = `v2:${slug.toLowerCase()}`
+
+    // Check if there's already an in-flight request for this slug
+    const inFlight = inFlightRequests.get(cacheKey)
+    if (inFlight) {
+        return inFlight
+    }
+
+    // Create new request promise
+    const requestPromise = (async () => {
+        try {
+            const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
+            const releaseSlot = await acquireRateLimitSlot()
+            try {
+                const controller = new AbortController()
+                const timeoutId = setTimeout(() => controller.abort(), 8000)
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    },
+                    signal: controller.signal,
+                    cache: 'no-store',
+                })
+
+                clearTimeout(timeoutId)
+
+                if (!response.ok) {
+                    return null
+                }
+
+                const data = await response.json()
+                const parsed = parseV2ChannelData(data)
+                if (parsed) {
+                    return { ...parsed, rawData: data }
+                }
+                return null
+            } finally {
+                releaseSlot()
+            }
+        } catch (error) {
+            return null
+        } finally {
+            // Remove from in-flight requests
+            inFlightRequests.delete(cacheKey)
+        }
+    })()
+
+    // Store in-flight request
+    inFlightRequests.set(cacheKey, requestPromise)
+
+    return requestPromise
+}
+
+async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promise<{ response: Response | null; v2Data: ReturnType<typeof parseV2ChannelData> | null }> {
+    // Try v2 API first (no auth required, more reliable)
+    const v2Data = await fetchV2ChannelDataWithDedup(slug)
+
+    // If v2 API succeeded, we can use it directly
+    if (v2Data) {
+        // Return a mock Response object for backward compatibility
+        // Reconstruct minimal channel data structure from parsed v2 data
+        const mockData = {
+            slug: slug,
+            broadcaster_user_id: v2Data.broadcaster_user_id,
+            followers_count: v2Data.followers_count,
+            livestream: v2Data.is_live ? {
+                session_title: v2Data.stream_title,
+                viewer_count: v2Data.viewer_count,
+                started_at: v2Data.started_at,
+                thumbnail: v2Data.thumbnail,
+                category: v2Data.category,
+                is_live: true,
+            } : null,
+        }
+        const mockResponse = new Response(JSON.stringify(mockData), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        })
+        return { response: mockResponse, v2Data }
+    }
+
+    // Fallback: Try official API without auth first
     const url = `${KICK_API_BASE}/channels?slug[]=${encodeURIComponent(slug)}`
 
     for (let attempt = 0; attempt < retries; attempt++) {
+        const releaseSlot = await acquireRateLimitSlot()
         try {
             const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 8000)
 
-            // Get auth token
-            const token = await getBroadcasterToken()
-            const clientId = process.env.KICK_CLIENT_ID
-
-            const headers: Record<string, string> = {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            }
-            if (clientId) {
-                headers['Client-Id'] = clientId
-            }
-
-            const response = await fetch(url, {
-                headers,
+            let response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
                 signal: controller.signal,
                 cache: 'no-store',
             })
 
             clearTimeout(timeoutId)
 
+            // If 401, try with auth
+            if (response.status === 401) {
+                try {
+                    let token = await getBroadcasterToken()
+                    const clientId = process.env.KICK_CLIENT_ID
+
+                    let authHeaders: Record<string, string> = {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    }
+                    if (clientId) {
+                        authHeaders['Client-Id'] = clientId
+                    }
+
+                    let controller2 = new AbortController()
+                    let timeoutId2 = setTimeout(() => controller2.abort(), 8000)
+
+                    response = await fetch(url, {
+                        headers: authHeaders,
+                        signal: controller2.signal,
+                        cache: 'no-store',
+                    })
+
+                    clearTimeout(timeoutId2)
+
+                    // If still 401, try refreshing the token
+                    if (response.status === 401) {
+                        clearTokenCache()
+                        const refreshedToken = await refreshBroadcasterToken()
+                        if (refreshedToken) {
+                            token = refreshedToken
+                            authHeaders['Authorization'] = `Bearer ${token}`
+                            controller2 = new AbortController()
+                            timeoutId2 = setTimeout(() => controller2.abort(), 8000)
+                            response = await fetch(url, {
+                                headers: authHeaders,
+                                signal: controller2.signal,
+                                cache: 'no-store',
+                            })
+                            clearTimeout(timeoutId2)
+                        } else {
+                            clearTokenCache()
+                            token = await getAppAccessToken()
+                            authHeaders['Authorization'] = `Bearer ${token}`
+                            controller2 = new AbortController()
+                            timeoutId2 = setTimeout(() => controller2.abort(), 8000)
+                            response = await fetch(url, {
+                                headers: authHeaders,
+                                signal: controller2.signal,
+                                cache: 'no-store',
+                            })
+                            clearTimeout(timeoutId2)
+                        }
+                    }
+                } catch (authError) {
+                    return { response: null, v2Data: null }
+                }
+            }
+
             // If successful or client error (4xx), return immediately
             if (response.ok || (response.status >= 400 && response.status < 500)) {
-                return response
+                return { response, v2Data: null }
             }
 
             // For server errors (5xx), retry with exponential backoff
@@ -309,17 +462,19 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
                 continue
             }
 
-            return response
+            return { response, v2Data: null }
         } catch (error) {
             if (attempt === retries - 1) {
-                throw error
+                return { response: null, v2Data: null }
             }
             const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt)
             await sleep(delay)
+        } finally {
+            releaseSlot()
         }
     }
 
-    throw new Error('Max retries exceeded')
+    return { response: null, v2Data: null }
 }
 
 /**
@@ -332,7 +487,8 @@ async function trackStreamSession(
     isLive: boolean,
     viewerCount: number,
     streamTitle: string,
-    thumbnailUrl: string | null
+    thumbnailUrl: string | null,
+    kickStreamId?: string | null
 ): Promise<void> {
     if (!broadcasterUserId) {
         return
@@ -355,6 +511,7 @@ async function trackStreamSession(
                 peak_viewer_count: true,
                 session_title: true,
                 thumbnail_url: true,
+                kick_stream_id: true,
             },
         })
 
@@ -367,28 +524,42 @@ async function trackStreamSession(
                         channel_slug: slug,
                         session_title: streamTitle || null,
                         thumbnail_url: thumbnailUrl,
+                        kick_stream_id: kickStreamId || null,
                         started_at: new Date(),
                         peak_viewer_count: viewerCount,
                     },
                 })
-                console.log(`✅ Stream is LIVE - created session ${session.id}`)
+                // Reduced logging verbosity
             } else {
                 // Stream is live and session exists - update it
                 const newPeak = Math.max(activeSession.peak_viewer_count, viewerCount)
+                const updateData: any = {
+                    session_title: streamTitle || activeSession.session_title,
+                    peak_viewer_count: newPeak,
+                    updated_at: new Date(),
+                }
+                if (thumbnailUrl) {
+                    updateData.thumbnail_url = thumbnailUrl
+                }
+                if (kickStreamId) {
+                    updateData.kick_stream_id = kickStreamId
+                }
                 await db.streamSession.update({
                     where: { id: activeSession.id },
-                    data: {
-                        session_title: streamTitle || activeSession.session_title,
-                        thumbnail_url: thumbnailUrl || activeSession.thumbnail_url,
-                        peak_viewer_count: newPeak,
-                        updated_at: new Date(),
-                    },
+                    data: updateData,
                 })
-                console.log(`✅ Stream is LIVE - updated session ${activeSession.id} (peak: ${newPeak})`)
+                // Reduced logging verbosity
             }
         } else {
-            // Stream is offline - end any active sessions
+            // Stream is offline - end any active sessions (except test sessions)
             if (activeSession) {
+                // Skip auto-closing test sessions (admin-created for testing)
+                const isTestSession = activeSession.session_title?.startsWith('[TEST]')
+                if (isTestSession) {
+                    // Don't auto-close test sessions - they must be manually ended
+                    return
+                }
+
                 const messageCount = await db.chatMessage.count({
                     where: { stream_session_id: activeSession.id },
                 })
@@ -422,47 +593,91 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const slug = searchParams.get('slug') || 'sweetflips'
 
-    console.log(`[Channel API] Fetching fresh data for ${slug}`)
-
     try {
-        const response = await fetchChannelWithRetry(slug)
-
-        if (!response.ok) {
-            const errorText = await response.text().catch(() => 'Unknown error')
-            console.error(`❌ Kick API error: ${response.status} - ${errorText.substring(0, 200)}`)
-            throw new Error(`Kick API error: ${response.status} - ${errorText.substring(0, 200)}`)
+        // Check cache first
+        const cachedData = getCachedChannelData(slug)
+        if (cachedData) {
+            return NextResponse.json(cachedData, {
+                headers: {
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                    Pragma: 'no-cache',
+                    Expires: '0',
+                },
+            })
         }
 
-        const responseData = await response.json()
+        const { response, v2Data: fetchedV2Data } = await fetchChannelWithRetry(slug)
 
-        // Parse response - official API returns { data: [channel] } format
         let channelData = null
-        if (Array.isArray(responseData.data) && responseData.data.length > 0) {
-            channelData = responseData.data[0]
-        } else if (responseData.data && typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
-            channelData = responseData.data
-        } else if (responseData.id || responseData.broadcaster_user_id || responseData.slug) {
-            // Direct channel object (legacy v2 format)
-            channelData = responseData
+        let broadcasterUserId: number | undefined = undefined
+        let v2Data = fetchedV2Data
+
+        if (response && response.ok) {
+            const responseData = await response.json()
+
+            // Parse response - official API returns { data: [channel] } format
+            if (Array.isArray(responseData.data) && responseData.data.length > 0) {
+                channelData = responseData.data[0]
+            } else if (responseData.data && typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
+                channelData = responseData.data
+            } else if (responseData.id || responseData.broadcaster_user_id || responseData.slug) {
+                // Direct channel object (legacy v2 format)
+                channelData = responseData
+            }
         }
 
+        // If official API failed or returned no data, use v2 API only
         if (!channelData) {
-            console.error(`[Channel API] Could not parse channel data. Response keys:`, Object.keys(responseData))
-            return NextResponse.json(
-                { error: 'Channel not found' },
-                { status: 404 }
-            )
-        }
+            if (!v2Data) {
+                return NextResponse.json(
+                    { error: 'Channel not found' },
+                    { status: 404 }
+                )
+            }
 
-        // Log channel data structure for debugging
-        console.log(`[Channel API] Channel data keys:`, Object.keys(channelData))
-        console.log(`[Channel API] Has stream:`, !!channelData.stream)
-        console.log(`[Channel API] Has livestream:`, !!channelData.livestream)
-        if (channelData.stream) {
-            console.log(`[Channel API] stream.is_live:`, channelData.stream.is_live)
-        }
-        if (channelData.livestream) {
-            console.log(`[Channel API] Livestream keys:`, Object.keys(channelData.livestream))
+            // Build channelData from v2 API response with all required fields
+            broadcasterUserId = v2Data.broadcaster_user_id
+            channelData = {
+                slug: slug,
+                username: slug, // Fallback to slug if username not available
+                broadcaster_user_id: v2Data.broadcaster_user_id,
+                followers_count: v2Data.followers_count,
+                chatroom_id: v2Data.chatroom_id, // Include chatroom_id from v2 data
+                user: {
+                    username: slug,
+                    id: v2Data.broadcaster_user_id,
+                },
+                livestream: v2Data.is_live ? {
+                    session_title: v2Data.stream_title,
+                    viewer_count: v2Data.viewer_count,
+                    started_at: v2Data.started_at,
+                    thumbnail: v2Data.thumbnail,
+                    category: v2Data.category,
+                    is_live: true,
+                } : null,
+            }
+        } else {
+            broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
+            // Use v2Data broadcaster_user_id if official API didn't provide it
+            if (!broadcasterUserId && v2Data?.broadcaster_user_id) {
+                broadcasterUserId = v2Data.broadcaster_user_id
+                // Ensure channelData has broadcaster_user_id
+                if (!channelData.broadcaster_user_id) {
+                    channelData.broadcaster_user_id = broadcasterUserId
+                }
+            }
+            // Ensure slug and username are present
+            if (!channelData.slug) {
+                channelData.slug = slug
+            }
+            if (!channelData.username && !channelData.user?.username) {
+                channelData.username = slug
+                if (!channelData.user) {
+                    channelData.user = { username: slug }
+                } else if (!channelData.user.username) {
+                    channelData.user.username = slug
+                }
+            }
         }
 
         // Extract stream data from livestream object
@@ -478,16 +693,21 @@ export async function GET(request: Request) {
             }
         }
 
-        // Get broadcaster_user_id first (needed for /livestreams endpoint)
-        const broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
+        // Get broadcaster_user_id if available
+        if (!broadcasterUserId) {
+            broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
+        }
 
-        // Fetch v2 API data for complete metadata (followers, title, viewers, category)
-        // The official API often lacks these fields
-        const v2Data = await fetchV2ChannelData(slug)
-
-        // Get live status from official /livestreams endpoint (authoritative source)
-        const apiStatus = await checkLiveStatusFromAPI(slug, broadcasterUserId)
-        let isLive = apiStatus.isLive
+        // Get live status - prefer v2 data if available, otherwise check official API
+        let isLive = false
+        if (v2Data && v2Data.is_live !== undefined) {
+            // Trust v2 API for live status (it's reliable and we already have it)
+            isLive = v2Data.is_live
+        } else {
+            // Only check official API if v2 didn't provide live status
+            const apiStatus = await checkLiveStatusFromAPI(slug, broadcasterUserId)
+            isLive = apiStatus.isLive
+        }
 
         // v2 API is PRIMARY source for metadata (most complete and accurate)
         let viewerCount = 0
@@ -496,6 +716,7 @@ export async function GET(request: Request) {
         let category: { id: number; name: string } | null = null
         let followerCount = 0
 
+        // Use v2 data if available (more complete metadata)
         if (v2Data) {
             viewerCount = v2Data.viewer_count
             streamTitle = v2Data.stream_title
@@ -506,15 +727,16 @@ export async function GET(request: Request) {
 
             // Also trust v2 for live status if official API failed
             if (!isLive && v2Data.is_live) {
-                console.log(`[Channel API] Official API says offline but v2 says live - using v2 status`)
                 isLive = true
             }
-
-            // Log v2 API response for debugging
-            console.log(`[Channel API] v2 API: title="${v2Data.stream_title}", viewers=${v2Data.viewer_count}, followers=${v2Data.followers_count}, category=${v2Data.category?.name || 'null'}`)
+        } else if (channelData && !v2Data) {
+            // If we didn't fetch v2 data separately, use what we have from channelData
+            viewerCount = livestream?.viewer_count || 0
+            streamTitle = livestream?.session_title || livestream?.stream_title || ''
+            followerCount = channelData.followers_count || 0
+            if (livestream?.started_at) streamStartedAt = livestream.started_at
         } else {
             // v2 API unavailable - use minimal fallback from channelData
-            console.warn(`[Channel API] v2 API unavailable, using fallback data`)
             streamTitle = livestream?.session_title || livestream?.stream_title || ''
             if (livestream?.thumbnail) {
                 if (typeof livestream.thumbnail === 'string') {
@@ -525,7 +747,8 @@ export async function GET(request: Request) {
             }
         }
 
-        console.log(`[Channel API] Final status for ${slug}: isLive=${isLive}, viewerCount=${viewerCount}, followers=${followerCount}, category=${category?.name || 'null'}, title="${streamTitle}", startedAt=${streamStartedAt}`)
+        // Log concise status summary (only when status changes or periodically)
+        // Reduced verbosity - log only important status changes
 
         // Fetch active session early for fallback logic
         let activeSession: {
@@ -535,6 +758,7 @@ export async function GET(request: Request) {
             peak_viewer_count: number;
             session_title: string | null;
             thumbnail_url: string | null;
+            kick_stream_id: string | null;
         } | null = null
         if (broadcasterUserId) {
             try {
@@ -552,6 +776,7 @@ export async function GET(request: Request) {
                         peak_viewer_count: true,
                         session_title: true,
                         thumbnail_url: true,
+                        kick_stream_id: true,
                     },
                 })
             } catch (err) {
@@ -559,14 +784,27 @@ export async function GET(request: Request) {
             }
         }
 
+        // Check if there's a test session active (admin-created for testing)
+        const isTestSession = activeSession?.session_title?.startsWith('[TEST]') || false
+
+        // If test session is active, override live status to show as live on dashboard
+        if (isTestSession && activeSession) {
+            isLive = true
+            streamTitle = activeSession.session_title || '[TEST] Test Session'
+            streamStartedAt = activeSession.started_at.toISOString()
+            // Set a test category
+            if (!category) {
+                category = { id: 0, name: 'Testing' }
+            }
+        }
+
         // Fallback: If API didn't provide started_at but stream is live, use database session time
         if (isLive && !streamStartedAt && activeSession) {
             streamStartedAt = activeSession.started_at.toISOString()
-            console.log(`[Channel API] Using database session start time as fallback: ${streamStartedAt}`)
         }
 
-        // Extract chatroom_id if available
-        const chatroomId = channelData.chatroom?.id || channelData.chatroom_id || null
+        // Extract chatroom_id if available - check multiple sources
+        const chatroomId = channelData.chatroom?.id || channelData.chatroom_id || v2Data?.chatroom_id || null
 
         // Get last live time from database
         let lastLiveTime: Date | null = null
@@ -607,20 +845,34 @@ export async function GET(request: Request) {
         // Track stream sessions
         await trackStreamSession(slug, broadcasterUserId, isLive, viewerCount, streamTitle, thumbnailUrl)
 
+        // Ensure channelData exists before spreading
+        if (!channelData) {
+            return NextResponse.json(
+                { error: 'Channel data not available' },
+                { status: 500 }
+            )
+        }
+
         // Prepare final response
-        return NextResponse.json({
+        const responseData = {
             ...channelData,
             broadcaster_user_id: broadcasterUserId,
             chatroom_id: chatroomId,
             is_live: isLive,
-            viewer_count: viewerCount,
+            is_test_session: isTestSession, // Flag to indicate test mode
+            viewer_count: isTestSession ? 1 : viewerCount, // Show 1 viewer for test sessions
             session_title: streamTitle,
             stream_started_at: isLive ? streamStartedAt : null,
             stream: livestream || null,
             category: category,
             followers_count: followerCount,
             last_live_at: lastLiveTime?.toISOString() || null,
-        }, {
+        }
+
+        // Cache the response
+        setCachedChannelData(slug, responseData)
+
+        return NextResponse.json(responseData, {
             headers: {
                 // Ensure no intermediate cache keeps a stale LIVE status
                 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
