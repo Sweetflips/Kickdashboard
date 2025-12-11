@@ -143,12 +143,13 @@ interface KickThumbnail {
     responsive?: string
 }
 
+// Official Kick API /livestreams response format (per api.kick.com/swagger/v1/doc.yaml)
 interface KickLivestream {
     broadcaster_user_id: number
     channel_id: number
     slug: string
     stream_title?: string
-    thumbnail: string | KickThumbnail | null
+    thumbnail: string | null  // Direct URL string per API docs
     viewer_count?: number
     started_at: string
     category?: {
@@ -159,7 +160,7 @@ interface KickLivestream {
     custom_tags?: string[]
     has_mature_content?: boolean
     language?: string
-    // Legacy fields for backward compatibility
+    // Legacy v2 API fields (not in official v1 API)
     id?: number
     session_title?: string | null
     is_live?: boolean
@@ -196,9 +197,10 @@ interface KickUser {
 }
 
 interface StreamThumbnail {
-    streamId: string
+    streamId: string              // broadcaster_user_id (Kick doesn't provide unique stream IDs)
     channelSlug: string
     thumbnailUrl: string | null
+    startedAt?: string            // Use started_at to match with local stream sessions
     width?: number
     height?: number
     fetchedAt: Date
@@ -768,40 +770,42 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                     // Livestreams API returns { data: [...] }
                     // If data array has items, stream is live and contains thumbnail
                     if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
-                        const livestream = livestreamsData.data[0]
+                        const livestream = livestreamsData.data[0] as KickLivestream
 
-                        // Debug: Log full livestream response to understand structure
+                        // Debug: Log livestream response
                         console.log(`[Kick API] Livestreams response:`, JSON.stringify(livestream, null, 2))
 
-                        // Extract thumbnail from livestream (per docs.kick.com/apis/livestreams)
+                        // Per official Kick API docs (api.kick.com/swagger/v1/doc.yaml):
+                        // thumbnail is a direct URL string, not an object
                         if (livestream.thumbnail) {
-                            thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
-                            console.log(`[Kick API] Extracted thumbnail: ${thumbnailUrl}`)
+                            // Handle both string and object formats for backwards compatibility
+                            if (typeof livestream.thumbnail === 'string') {
+                                thumbnailUrl = livestream.thumbnail
+                            } else {
+                                thumbnailUrl = extractThumbnailUrl(livestream.thumbnail)
+                            }
+                            console.log(`[Kick API] Thumbnail URL: ${thumbnailUrl}`)
                         } else {
                             console.warn(`[Kick API] No thumbnail field in livestream response`)
                         }
 
-                        // Use the actual livestream ID - check all possible fields
-                        // The livestream_id or stream_id should be unique per stream session
-                        if (livestream.livestream_id) {
-                            streamId = livestream.livestream_id.toString()
-                            console.log(`[Kick API] Using livestream_id: ${streamId}`)
-                        } else if (livestream.id) {
-                            streamId = livestream.id.toString()
-                            console.log(`[Kick API] Using id: ${streamId}`)
-                        } else if (livestream.session_id) {
-                            streamId = livestream.session_id.toString()
-                            console.log(`[Kick API] Using session_id: ${streamId}`)
-                        } else if (livestream.broadcaster_user_id) {
-                            // Fallback to broadcaster_user_id (not ideal - this is the USER ID, not stream ID)
-                            streamId = livestream.broadcaster_user_id.toString()
-                            console.warn(`[Kick API] No livestream ID found, falling back to broadcaster_user_id: ${streamId}`)
-                        } else if (livestream.channel_id) {
-                            streamId = livestream.channel_id.toString()
-                            console.warn(`[Kick API] No livestream ID found, falling back to channel_id: ${streamId}`)
+                        // Per official API docs: There is NO unique stream session ID!
+                        // The API only provides broadcaster_user_id and channel_id
+                        // We use broadcaster_user_id as the identifier
+                        streamId = livestream.broadcaster_user_id.toString()
+                        
+                        // Capture started_at for matching with local sessions
+                        const startedAt = livestream.started_at
+                        console.log(`[Kick API] Stream is LIVE - broadcaster: ${streamId}, started_at: ${startedAt}, thumbnail: ${thumbnailUrl ? 'yes' : 'no'}`)
+                        
+                        // Return early with all data
+                        return {
+                            streamId,
+                            channelSlug: slug,
+                            thumbnailUrl,
+                            startedAt,
+                            fetchedAt: new Date(),
                         }
-
-                        console.log(`[Kick API] Stream is LIVE (streamId: ${streamId}, has thumbnail: ${!!thumbnailUrl})`)
                     } else {
                         // Empty data array means stream is not live
                         console.log(`[Kick API] Channel ${slug} has no active livestream (empty livestreams response)`)
@@ -825,21 +829,9 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
             return null
         }
 
-        // If we got here, livestreams endpoint returned data (stream is live)
-        // But check if we actually got a thumbnail
-        if (!thumbnailUrl) {
-            console.warn(`[Kick API] Stream is live but no thumbnail found in livestreams response for ${slug} (streamId: ${streamId})`)
-            // Still return the data even without thumbnail, as stream is confirmed live
-        } else {
-            console.log(`[Kick API] Successfully found thumbnail for live stream ${slug}: ${thumbnailUrl.substring(0, 80)}...`)
-        }
-
-        return {
-            streamId,
-            channelSlug: slug,
-            thumbnailUrl,
-            fetchedAt: new Date(),
-        }
+        // If we reach here, something went wrong - we should have returned inside the if block
+        console.error(`[Kick API] Unexpected code path for ${slug}`)
+        return null
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         console.error(`[Kick API] Error fetching channel ${slug}:`, errorMessage)
@@ -917,7 +909,11 @@ export async function getLivestreams(filters?: {
         return apiResponse.data.map(livestream => ({
             streamId: livestream.broadcaster_user_id.toString(),
             channelSlug: livestream.slug || '',
-            thumbnailUrl: extractThumbnailUrl(livestream.thumbnail),
+            // Per API docs: thumbnail is a direct string URL
+            thumbnailUrl: typeof livestream.thumbnail === 'string' 
+                ? livestream.thumbnail 
+                : extractThumbnailUrl(livestream.thumbnail),
+            startedAt: livestream.started_at,
             fetchedAt: new Date(),
         }))
     } catch (error) {
@@ -1118,7 +1114,7 @@ async function syncThumbnailsFallback(
  * Fetches email, name, and profile_picture
  * Requires authentication (User Access Token)
  * Can fetch up to 50 users at once
- * 
+ *
  * RATE LIMITED: Uses global rate limiter to prevent API hammering
  */
 export async function getUsersByIds(userIds: number[]): Promise<Map<number, KickUser>> {
@@ -1152,7 +1148,7 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
             while (retryCount <= maxRetries && !batchSuccess) {
                 // ACQUIRE RATE LIMIT SLOT - This is the key change
                 const releaseSlot = await acquireRateLimitSlot()
-                
+
                 try {
                     const headers: Record<string, string> = {
                         'Authorization': `Bearer ${token}`,
@@ -1181,7 +1177,7 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
                         const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining')
                         const rateLimitLimit = response.headers.get('X-RateLimit-Limit')
                         const rateLimitReset = response.headers.get('X-RateLimit-Reset')
-                        
+
                         // Calculate wait time - prefer Retry-After header (RFC 7231)
                         let baseWaitTime = 5000 // Default 5 seconds
                         if (retryAfter) {
@@ -1191,15 +1187,15 @@ export async function getUsersByIds(userIds: number[]): Promise<Map<number, Kick
                             const resetTime = parseInt(rateLimitReset, 10) * 1000
                             baseWaitTime = Math.max(0, resetTime - Date.now()) + 1000 // Add 1s buffer
                         }
-                        
+
                         // Log rate limit info if available
                         if (rateLimitLimit && rateLimitRemaining) {
                             console.warn(`[Kick API] Rate limited (429) - Limit: ${rateLimitLimit}, Remaining: ${rateLimitRemaining}, Reset: ${rateLimitReset || 'unknown'}`)
                         }
-                        
+
                         // Exponential backoff with jitter (max 60 seconds)
                         const waitTime = Math.min(baseWaitTime * Math.pow(2, retryCount) + Math.random() * 1000, 60000)
-                        
+
                         // Trigger global backoff - all other requests will wait too
                         triggerGlobalBackoff(waitTime)
 
