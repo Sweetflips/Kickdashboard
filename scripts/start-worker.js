@@ -132,7 +132,7 @@ async function ensureTables() {
     console.error('❌ Database not reachable, exiting...');
     process.exit(1);
   }
-  
+
   await ensureTables();
 
   // Start chat worker (handles all writes: users, messages, points)
@@ -148,7 +148,9 @@ async function ensureTables() {
   });
 
   // Start point worker (processes point_award_jobs queue)
-  console.log('📝 Point Worker: Starting (processes point award jobs)...');
+  // NOTE: Currently idle - nothing enqueues to point_award_jobs anymore.
+  // Chat-worker handles points inline. Keeping this worker for potential future use.
+  console.log('📝 Point Worker: Starting (currently idle - no jobs enqueued)...');
   const pointWorkerProcess = spawn('npx', ['tsx', 'scripts/point-worker.ts'], {
     stdio: 'inherit',
     env: process.env

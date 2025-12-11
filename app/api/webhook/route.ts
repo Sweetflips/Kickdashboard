@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { isBot, awardPoint, awardEmotes } from '@/lib/points'
-import { getChannelWithLivestream } from '@/lib/kick-api'
-import { queueUserEnrichment } from '@/lib/user-enrichment'
+import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue'
 import type { ChatMessage } from '@/lib/chat-store'
 
 export const dynamic = 'force-dynamic'
@@ -102,334 +100,98 @@ export async function POST(request: Request) {
             timestamp: Date.now(),
         }
 
-        console.log('📝 Message before adding:', {
+        console.log('[webhook] 📝 Received message:', {
             message_id: message.message_id,
             sender: message.sender?.username,
+            broadcaster: message.broadcaster?.username,
             content: message.content?.substring(0, 50),
         })
 
-        // Save to database
+        // ═══════════════════════════════════════════════════════════════
+        // CHECK FOR ACTIVE STREAM SESSION (READ-ONLY)
+        // ═══════════════════════════════════════════════════════════════
+
+        const broadcasterUserId = BigInt(message.broadcaster.user_id)
+        let activeSession: { id: bigint; ended_at: Date | null } | null = null
+
         try {
-            const senderUserId = BigInt(message.sender.user_id)
-            const broadcasterUserId = BigInt(message.broadcaster.user_id)
-
-            // Helper function to upsert user with retry logic for serialization errors
-            const upsertUserWithRetry = async (userId: bigint, username: string, profilePicture: string | null, maxRetries = 3) => {
-                for (let attempt = 0; attempt < maxRetries; attempt++) {
-                    try {
-                        const result = await db.user.upsert({
-                            where: { kick_user_id: userId },
-                            update: {
-                                username: username,
-                                profile_picture_url: profilePicture || undefined,
-                            },
-                            create: {
-                                kick_user_id: userId,
-                                username: username,
-                                profile_picture_url: profilePicture,
-                            },
-                            select: {
-                                id: true,
-                                kick_user_id: true,
-                                username: true,
-                                profile_picture_url: true,
-                                bio: true,
-                                email: true,
-                            },
-                        })
-
-                        // Queue user for batch enrichment if missing data
-                        // This is batched to avoid rate limiting the Kick API
-                        const needsEnrichment = !result.email || !result.profile_picture_url || !result.bio
-                        if (needsEnrichment && Number(result.kick_user_id) > 0) {
-                            queueUserEnrichment(BigInt(result.kick_user_id), username)
-                        }
-
-                        return result
-                    } catch (error: any) {
-                        // Handle serialization errors (P4001) and deadlocks (P2034) with retry
-                        const isSerializationError = error?.code === 'P4001' ||
-                                                    error?.code === 'P2034' ||
-                                                    error?.message?.includes('could not serialize access') ||
-                                                    error?.message?.includes('concurrent update')
-
-                        if (isSerializationError && attempt < maxRetries - 1) {
-                            const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
-                            await new Promise(resolve => setTimeout(resolve, delay))
-                            continue
-                        }
-                        throw error
-                    }
-                }
-                throw new Error('Max retries exceeded for user upsert')
-            }
-
-            // Find or create sender user
-            let senderUser
-            try {
-                senderUser = await upsertUserWithRetry(
-                    senderUserId,
-                    message.sender.username,
-                    message.sender.profile_picture || null
-                )
-            } catch (error) {
-                console.error(`❌ Failed to upsert sender user ${senderUserId}:`, error)
-                throw error
-            }
-
-            // Find or create broadcaster user
-            let broadcasterUser
-            try {
-                broadcasterUser = await upsertUserWithRetry(
-                    broadcasterUserId,
-                    message.broadcaster.username,
-                    message.broadcaster.profile_picture || null
-                )
-            } catch (error) {
-                console.error(`❌ Failed to upsert broadcaster user ${broadcasterUserId}:`, error)
-                throw error
-            }
-
-            // Find active stream session for this broadcaster
-            let activeSession = await db.streamSession.findFirst({
+            activeSession = await db.streamSession.findFirst({
                 where: {
                     broadcaster_user_id: broadcasterUserId,
                     ended_at: null,
                 },
                 orderBy: { started_at: 'desc' },
+                select: { id: true, ended_at: true },
             })
-
-            // If no active session exists, check if stream is live and create session if needed
-            if (!activeSession) {
-                console.log(`🔍 No active session found for broadcaster ${broadcasterUserId} - checking stream status...`)
-                try {
-                    // Get broadcaster username from message or fetch from database
-                    const broadcasterSlug = message.broadcaster.channel_slug || broadcasterUser.username.toLowerCase()
-                    console.log(`📡 Checking Kick Dev API for channel: ${broadcasterSlug}`)
-
-                    // Use official Kick Dev API to check stream status
-                    const livestreamData = await getChannelWithLivestream(broadcasterSlug)
-
-                    if (livestreamData) {
-                        // Stream is live - official API returned data
-                        console.log(`📊 Stream status: LIVE (thumbnail: ${livestreamData.thumbnailUrl ? 'YES' : 'NO'})`)
-
-                        // Stream is live but no session exists - create one
-                        activeSession = await db.streamSession.create({
-                            data: {
-                                broadcaster_user_id: broadcasterUserId,
-                                channel_slug: broadcasterSlug,
-                                session_title: null, // Official API doesn't return title in this endpoint
-                                thumbnail_url: livestreamData.thumbnailUrl,
-                                kick_stream_id: livestreamData.streamId,
-                                started_at: new Date(),
-                                peak_viewer_count: 0,
-                            },
-                        })
-                        console.log(`✅ Stream is LIVE - created session ${activeSession.id} with thumbnail - points will now count!`)
-                    } else {
-                        // No livestream data means stream is offline or API failed
-                        console.log(`ℹ️ No livestream data from Kick Dev API - stream may be offline, points will not be awarded`)
-                    }
-                } catch (checkError) {
-                    // If we can't check stream status, assume offline
-                    console.warn(`⚠️ Could not check stream status for broadcaster ${broadcasterUserId}:`, checkError instanceof Error ? checkError.message : 'Unknown error')
-                }
+        } catch (error: any) {
+            // Non-critical - continue without session info
+            const isConnectionError = error?.code === 'P1001' ||
+                                    error?.message?.includes("Can't reach database server") ||
+                                    error?.message?.includes('PrismaClientInitializationError')
+            if (isConnectionError) {
+                console.warn('[webhook] Database connection error - continuing without session info')
             } else {
-                console.log(`✅ Active session found: ${activeSession.id} - points will count`)
+                console.warn('[webhook] Failed to fetch stream session:', error)
             }
+        }
 
-            // Determine if message was sent when offline
-            const sentWhenOffline = !activeSession
+        const sessionIsActive = activeSession !== null && activeSession.ended_at === null
 
-            // If there's an active session, double-check it's still active (prevent race conditions)
-            let sessionIsActive = false
-            if (activeSession) {
-                const sessionCheck = await db.streamSession.findUnique({
-                    where: { id: activeSession.id },
-                    select: { ended_at: true },
-                })
-                sessionIsActive = sessionCheck !== null && sessionCheck.ended_at === null
+        // ═══════════════════════════════════════════════════════════════
+        // PREPARE JOB PAYLOAD
+        // ═══════════════════════════════════════════════════════════════
+
+        // Extract emotes from content if not provided
+        let emotesToSave = message.emotes || []
+        if (!Array.isArray(emotesToSave) || emotesToSave.length === 0) {
+            const extractedEmotes = extractEmotesFromContent(message.content)
+            if (extractedEmotes.length > 0) {
+                emotesToSave = extractedEmotes
             }
+        }
 
-            // Calculate points earned (only when stream is active)
-            const senderUsername = message.sender.username.toLowerCase()
-            let pointsEarned = 0
-            if (!sentWhenOffline && sessionIsActive && !isBot(senderUsername)) {
-                const pointResult = await awardPoint(
-                    senderUserId,
-                    activeSession!.id,
-                    message.message_id,
-                    message.sender.identity?.badges
-                )
-                pointsEarned = pointResult.pointsEarned || 0
-                if (pointResult.awarded) {
-                    console.log(`✅ Awarded ${pointsEarned} point(s) to ${message.sender.username}`)
-                } else {
-                    console.log(`⏸️ Point not awarded to ${message.sender.username}: ${pointResult.reason}`)
-                }
-            } else {
-                if (sentWhenOffline) {
-                    console.log(`ℹ️ Message sent when stream is offline - no points awarded`)
-                } else if (isBot(senderUsername)) {
-                    console.log(`🤖 Skipped points for bot: ${message.sender.username}`)
-                }
-            }
+        const jobPayload: ChatJobPayload = {
+            message_id: message.message_id,
+            content: message.content,
+            timestamp: message.timestamp,
+            sender: {
+                kick_user_id: message.sender.user_id,
+                username: message.sender.username,
+                profile_picture: message.sender.profile_picture,
+                color: message.sender.identity?.username_color,
+                badges: message.sender.identity?.badges,
+                is_verified: message.sender.is_verified,
+                is_anonymous: message.sender.is_anonymous,
+            },
+            broadcaster: {
+                kick_user_id: message.broadcaster.user_id,
+                username: message.broadcaster.username,
+                profile_picture: message.broadcaster.profile_picture,
+            },
+            emotes: emotesToSave.length > 0 ? emotesToSave : null,
+            stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
+            is_stream_active: sessionIsActive,
+        }
 
-            // Extract emotes from content if not provided separately
-            let emotesToSave = message.emotes || []
-            if (!Array.isArray(emotesToSave) || emotesToSave.length === 0) {
-                // Try to extract emotes from content [emote:ID:Name] format
-                const extractedEmotes = extractEmotesFromContent(message.content)
-                if (extractedEmotes.length > 0) {
-                    emotesToSave = extractedEmotes
-                } else {
-                    emotesToSave = []
-                }
-            }
+        // ═══════════════════════════════════════════════════════════════
+        // ENQUEUE JOB FOR WORKER PROCESSING
+        // ═══════════════════════════════════════════════════════════════
 
-            // Count and track emotes (only when stream is live)
-            // Skip counting emotes from messages sent by bots or when offline
-            if (emotesToSave.length > 0 && !sentWhenOffline && sessionIsActive && !isBot(senderUsername)) {
-                try {
-                    await awardEmotes(senderUserId, emotesToSave)
-                } catch (emoteError) {
-                    // Don't fail message save if emote award fails
-                    console.warn('Failed to award emotes (non-critical):', emoteError)
-                }
-            }
+        console.log(`[webhook] 📤 Enqueueing job for message ${jobPayload.message_id} from ${jobPayload.sender.username} (session: ${jobPayload.stream_session_id || 'none'})`)
 
-            // Save message to database (use upsert to handle duplicates gracefully)
-            // Always save messages, even when offline
-            if (sentWhenOffline) {
-                // Save offline messages to separate table
-                await db.offlineChatMessage.upsert({
-                    where: { message_id: message.message_id },
-                    update: {
-                        sender_username: message.sender.username,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                    },
-                    create: {
-                        message_id: message.message_id,
-                        sender_user_id: senderUserId,
-                        sender_username: message.sender.username,
-                        broadcaster_user_id: broadcasterUserId,
-                        content: message.content,
-                        emotes: emotesToSave,
-                        timestamp: BigInt(message.timestamp),
-                        sender_username_color: message.sender.identity?.username_color || null,
-                        sender_badges: message.sender.identity?.badges || undefined,
-                        sender_is_verified: message.sender.is_verified || false,
-                        sender_is_anonymous: message.sender.is_anonymous || false,
-                    },
-                })
-                console.log(`✅ Saved offline message to database: ${message.message_id}`)
-            } else {
-                // Save online messages to regular table
-                // First check if message exists to preserve its stream_session_id if already assigned
-                const existingMessage = await db.chatMessage.findUnique({
-                    where: { message_id: message.message_id },
-                    select: { stream_session_id: true },
-                })
+        const enqueueResult = await enqueueChatJob(jobPayload)
 
-                // Only update stream_session_id if message doesn't have one yet (preserve existing session assignment)
-                // This prevents messages from previous streams from being reassigned to current stream
-                const updateData: any = {
-                    sender_username: message.sender.username,
-                    content: message.content,
-                    emotes: emotesToSave,
-                    timestamp: BigInt(message.timestamp),
-                    sender_username_color: message.sender.identity?.username_color || null,
-                    sender_badges: message.sender.identity?.badges || undefined,
-                    sender_is_verified: message.sender.is_verified || false,
-                    sender_is_anonymous: message.sender.is_anonymous || false,
-                    points_earned: pointsEarned,
-                    sent_when_offline: false,
-                }
-
-                // Only update stream_session_id if message doesn't have one yet (don't reassign from previous sessions)
-                if (!existingMessage?.stream_session_id && sessionIsActive) {
-                    updateData.stream_session_id = activeSession!.id
-                }
-
-                // Upsert message with retry logic for serialization errors
-                const upsertMessageWithRetry = async (maxRetries = 3) => {
-                    for (let attempt = 0; attempt < maxRetries; attempt++) {
-                        try {
-                            return await db.chatMessage.upsert({
-                                where: { message_id: message.message_id },
-                                update: updateData,
-                                create: {
-                                    message_id: message.message_id,
-                                    stream_session_id: sessionIsActive ? activeSession!.id : null,
-                                    sender_user_id: senderUserId,
-                                    sender_username: message.sender.username,
-                                    broadcaster_user_id: broadcasterUserId,
-                                    content: message.content,
-                                    emotes: emotesToSave,
-                                    timestamp: BigInt(message.timestamp),
-                                    sender_username_color: message.sender.identity?.username_color || null,
-                                    sender_badges: message.sender.identity?.badges || undefined,
-                                    sender_is_verified: message.sender.is_verified || false,
-                                    sender_is_anonymous: message.sender.is_anonymous || false,
-                                    points_earned: pointsEarned,
-                                    sent_when_offline: false,
-                                },
-                            })
-                        } catch (error: any) {
-                            // Handle serialization errors (P4001) and deadlocks (P2034) with retry
-                            const isSerializationError = error?.code === 'P4001' ||
-                                                        error?.code === 'P2034' ||
-                                                        error?.message?.includes('could not serialize access') ||
-                                                        error?.message?.includes('concurrent update')
-
-                            if (isSerializationError && attempt < maxRetries - 1) {
-                                const delay = Math.min(50 * Math.pow(2, attempt), 500) // 50ms, 100ms, 200ms max
-                                await new Promise(resolve => setTimeout(resolve, delay))
-                                continue
-                            }
-                            throw error
-                        }
-                    }
-                    throw new Error('Max retries exceeded for message upsert')
-                }
-
-                await upsertMessageWithRetry()
-                console.log(`✅ Saved message to database: ${message.message_id} (points: ${pointsEarned})`)
-            }
-
-            // Update stream session message count if session exists and is active
-            // Only count messages that were sent when online
-            if (sessionIsActive && activeSession) {
-                const messageCount = await db.chatMessage.count({
-                    where: {
-                        stream_session_id: activeSession.id,
-                    },
-                })
-                await db.streamSession.update({
-                    where: { id: activeSession.id },
-                    data: {
-                        total_messages: messageCount,
-                        updated_at: new Date(),
-                    },
-                })
-            }
-
-        } catch (dbError) {
-            console.error('❌ Error saving message to database:', dbError)
+        if (!enqueueResult.success) {
+            console.error(`[webhook] ❌ Failed to enqueue: ${enqueueResult.error}`)
             return NextResponse.json(
-                { error: 'Failed to save message to database', details: dbError instanceof Error ? dbError.message : 'Unknown error' },
+                { error: 'Failed to queue message for processing', received: true },
                 { status: 500 }
             )
         }
 
-        return NextResponse.json({ received: true, message: 'Chat message processed and saved to database' }, { status: 200 })
+        console.log(`[webhook] ✅ Job enqueued successfully for ${jobPayload.sender.username}`)
+
+        return NextResponse.json({ received: true, message: 'Chat message queued for processing' }, { status: 200 })
     } catch (error) {
         console.error('❌ Webhook error:', error)
         console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')

@@ -28,6 +28,7 @@ const BATCH_SIZE = parseInt(process.env.CHAT_WORKER_BATCH_SIZE || '50', 10)
 const POLL_INTERVAL_MS = parseInt(process.env.CHAT_WORKER_POLL_INTERVAL_MS || '500', 10)
 const CONCURRENCY = parseInt(process.env.CHAT_WORKER_CONCURRENCY || '10', 10)
 const STATS_INTERVAL_MS = parseInt(process.env.CHAT_WORKER_STATS_INTERVAL_MS || '60000', 10)
+const VERBOSE_LOGS = process.env.CHAT_WORKER_VERBOSE_LOGS === 'true'
 
 // Advisory lock ID to ensure only one worker instance runs
 const ADVISORY_LOCK_ID = BigInt('9223372036854775805') // Different from point-worker
@@ -105,6 +106,11 @@ process.on('SIGINT', () => shutdown('SIGINT'))
 async function processChatJob(job: ClaimedChatJob): Promise<void> {
     const startTime = Date.now()
     const payload = job.payload as ChatJobPayload
+
+    // Verbose logging for incoming jobs
+    if (VERBOSE_LOGS) {
+        console.log(`[chat-worker] 📥 Processing job id=${job.id}, message_id=${payload.message_id}, sender=${payload.sender.username}, broadcaster=${payload.broadcaster.username}, timestamp=${new Date(payload.timestamp).toISOString()}`)
+    }
 
     try {
         const senderUserId = BigInt(payload.sender.kick_user_id)
