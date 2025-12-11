@@ -74,13 +74,16 @@ export async function POST(request: Request) {
                                     })
 
                                     if (activeSession) {
-                                        // Update thumbnail if different
+                                        // Update thumbnail if different, also store kick_stream_id
                                         if (activeSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await tx.streamSession.update({
                                                 where: { id: activeSession.id },
-                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                                data: { 
+                                                    thumbnail_url: livestreamData.thumbnailUrl,
+                                                    kick_stream_id: livestreamData.streamId || undefined,
+                                                },
                                             })
-                                            console.log(`[Sync] Updated thumbnail for active session ${activeSession.id}`)
+                                            console.log(`[Sync] Updated thumbnail for active session ${activeSession.id} (kick_stream_id: ${livestreamData.streamId})`)
                                             liveStreamUpdated = true
                                         } else {
                                             console.log(`[Sync] Thumbnail already up to date for session ${activeSession.id}`)
@@ -95,11 +98,12 @@ export async function POST(request: Request) {
                                                 channel_slug: slug,
                                                 session_title: null, // Could fetch from livestreams API if needed
                                                 thumbnail_url: livestreamData.thumbnailUrl,
+                                                kick_stream_id: livestreamData.streamId || null,
                                                 started_at: new Date(),
                                                 peak_viewer_count: 0,
                                             },
                                         })
-                                        console.log(`[Sync] Created new active session ${newSession.id} with thumbnail`)
+                                        console.log(`[Sync] Created new active session ${newSession.id} with thumbnail (kick_stream_id: ${livestreamData.streamId})`)
                                         liveStreamUpdated = true
                                         sessionHandled = true
                                     }
@@ -128,7 +132,10 @@ export async function POST(request: Request) {
                                         if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await db.streamSession.update({
                                                 where: { id: existingSession.id },
-                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                                data: { 
+                                                    thumbnail_url: livestreamData.thumbnailUrl,
+                                                    kick_stream_id: livestreamData.streamId || undefined,
+                                                },
                                             })
                                             console.log(`[Sync] Unique constraint violation - updated thumbnail for session ${existingSession.id}`)
                                             liveStreamUpdated = true
@@ -158,7 +165,10 @@ export async function POST(request: Request) {
                                         if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await db.streamSession.update({
                                                 where: { id: existingSession.id },
-                                                data: { thumbnail_url: livestreamData.thumbnailUrl },
+                                                data: { 
+                                                    thumbnail_url: livestreamData.thumbnailUrl,
+                                                    kick_stream_id: livestreamData.streamId || undefined,
+                                                },
                                             })
                                             console.log(`[Sync] Race condition detected - updated thumbnail for session ${existingSession.id}`)
                                             liveStreamUpdated = true

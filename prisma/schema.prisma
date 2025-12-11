@@ -79,6 +79,7 @@ model StreamSession {
   id                          BigInt    @id @default(autoincrement())
   broadcaster_user_id         BigInt
   channel_slug                String
+  kick_stream_id              String?   // Kick's video/VOD ID for thumbnail fetching
   session_title               String?
   thumbnail_url               String?
   thumbnail_captured_at       DateTime?
