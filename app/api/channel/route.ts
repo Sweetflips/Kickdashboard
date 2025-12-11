@@ -624,11 +624,17 @@ export async function GET(request: Request) {
                 )
             }
 
-            // Build channelData from v2 API response
+            // Build channelData from v2 API response with all required fields
             broadcasterUserId = v2Data.broadcaster_user_id
             channelData = {
                 slug: slug,
+                username: slug, // Fallback to slug if username not available
+                broadcaster_user_id: v2Data.broadcaster_user_id,
                 followers_count: v2Data.followers_count,
+                user: {
+                    username: slug,
+                    id: v2Data.broadcaster_user_id,
+                },
                 livestream: v2Data.is_live ? {
                     session_title: v2Data.stream_title,
                     viewer_count: v2Data.viewer_count,
@@ -643,6 +649,22 @@ export async function GET(request: Request) {
             // Use v2Data broadcaster_user_id if official API didn't provide it
             if (!broadcasterUserId && v2Data?.broadcaster_user_id) {
                 broadcasterUserId = v2Data.broadcaster_user_id
+                // Ensure channelData has broadcaster_user_id
+                if (!channelData.broadcaster_user_id) {
+                    channelData.broadcaster_user_id = broadcasterUserId
+                }
+            }
+            // Ensure slug and username are present
+            if (!channelData.slug) {
+                channelData.slug = slug
+            }
+            if (!channelData.username && !channelData.user?.username) {
+                channelData.username = slug
+                if (!channelData.user) {
+                    channelData.user = { username: slug }
+                } else if (!channelData.user.username) {
+                    channelData.user.username = slug
+                }
             }
         }
 
