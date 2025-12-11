@@ -55,20 +55,33 @@ export function Toast({ message, type = 'info', duration = 3000, onClose }: Toas
         info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200',
     }
 
+    const titles: Record<ToastType, string> = {
+        success: 'Congratulations!',
+        error: 'Something went wrong',
+        warning: 'Heads up',
+        info: 'Info',
+    }
+
     return (
-        <div className={`flex items-center p-4 mb-4 border rounded-lg shadow-lg toast-enter ${styles[type]}`}>
-            <div className="flex-shrink-0 mr-3">
-                {icons[type]}
-            </div>
-            <div className="flex-1 text-sm font-medium">{message}</div>
+        <div className={`pointer-events-auto w-full max-w-md border rounded-xl shadow-2xl toast-enter ${styles[type]}`}>
+            <div className="flex items-start gap-3 p-4">
+                <div className="flex-shrink-0 mt-0.5">
+                    {icons[type]}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold">{titles[type]}</div>
+                    <div className="text-sm font-medium opacity-90 break-words">{message}</div>
+                </div>
             <button
                 onClick={onClose}
-                className="ml-4 flex-shrink-0 text-kick-text-secondary hover:text-kick-text transition-colors"
+                className="ml-2 flex-shrink-0 text-kick-text-secondary hover:text-kick-text transition-colors"
+                aria-label="Close"
             >
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
             </button>
+            </div>
         </div>
     )
 }
@@ -143,7 +156,8 @@ export function ToastContainer() {
     if (toasts.length === 0) return null
 
     return (
-        <div className="fixed top-4 right-4 z-[9999] max-w-md w-full space-y-2">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+            <div className="w-full max-w-md space-y-2">
             {toasts.map((toast) => (
                 <Toast
                     key={toast.id}
@@ -153,6 +167,7 @@ export function ToastContainer() {
                     onClose={() => toastManager.remove(toast.id)}
                 />
             ))}
+            </div>
         </div>
     )
 }

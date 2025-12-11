@@ -25,6 +25,7 @@ interface LayoutProps {
 export default function AppLayout({ children }: LayoutProps) {
     const router = useRouter()
     const pathname = usePathname()
+    const isAdminRoute = pathname?.startsWith('/admin') ?? false
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [userData, setUserData] = useState<UserData | null>(null)
@@ -35,6 +36,26 @@ export default function AppLayout({ children }: LayoutProps) {
         return false
     })
     const [utcTime, setUtcTime] = useState('')
+    const [userPoints, setUserPoints] = useState<number | null>(null)
+    const [pointsLoading, setPointsLoading] = useState(false)
+
+    const fetchUserPoints = async (kickUserId?: number) => {
+        if (!kickUserId) return
+        try {
+            setPointsLoading(true)
+            const res = await fetch(`/api/points?kick_user_id=${encodeURIComponent(String(kickUserId))}`, {
+                cache: 'no-store',
+            })
+            if (!res.ok) return
+            const data = await res.json()
+            const totalPoints = typeof data?.total_points === 'number' ? data.total_points : 0
+            setUserPoints(totalPoints)
+        } catch {
+            // ignore
+        } finally {
+            setPointsLoading(false)
+        }
+    }
 
     useEffect(() => {
         const updateTime = () => {
@@ -143,6 +164,65 @@ export default function AppLayout({ children }: LayoutProps) {
         fetchUserData()
         checkAdminStatus()
     }, [isAuthenticated])
+
+    // Keep points fresh in header
+    useEffect(() => {
+        if (!isAuthenticated) return
+        if (!userData?.id) return
+
+        fetchUserPoints(userData.id)
+        const interval = window.setInterval(() => fetchUserPoints(userData.id), 30_000)
+        return () => window.clearInterval(interval)
+    }, [isAuthenticated, userData?.id])
+
+    // Background preload for admin analytics (route + data) so navigation feels instant.
+    useEffect(() => {
+        if (!isAuthenticated || !isAdmin) return
+        if (typeof window === 'undefined') return
+
+        const token = getAccessToken()
+        if (!token) return
+
+        // Route prefetch
+        try {
+            ;(router as any).prefetch?.('/admin/analytics')
+        } catch {
+            // ignore
+        }
+
+        const key = 'admin_analytics_prefetch_v1'
+        const preload = async () => {
+            try {
+                // Skip if we already have very recent data in sessionStorage
+                const existing = sessionStorage.getItem(key)
+                if (existing) {
+                    const parsed = JSON.parse(existing)
+                    if (parsed?.ts && Date.now() - parsed.ts < 15_000) {
+                        return
+                    }
+                }
+
+                const res = await fetch('/api/admin/analytics/summary?topUsersLimit=50', {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+
+                if (!res.ok) return
+                const data = await res.json()
+                sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }))
+            } catch {
+                // ignore
+            }
+        }
+
+        // Use idle time if possible; fallback to short delay.
+        const w = window as any
+        if (typeof w.requestIdleCallback === 'function') {
+            w.requestIdleCallback(preload, { timeout: 2000 })
+        } else {
+            const t = window.setTimeout(preload, 300)
+            return () => window.clearTimeout(t)
+        }
+    }, [isAuthenticated, isAdmin, router])
 
     // Refresh user data when URL has success parameter (after OAuth callbacks)
     useEffect(() => {
@@ -296,6 +376,16 @@ export default function AppLayout({ children }: LayoutProps) {
                         </button>
                     </div>
                     <ul className="space-y-2">
+                        {!isAdminRoute && (
+                            <li className="mt-1 mb-2">
+                                <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h3a1 1 0 001-1v-3a1 1 0 011-1h2a1 1 0 011 1v3a1 1 0 001 1h3a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                                    </svg>
+                                    <span>Dashboard</span>
+                                </div>
+                            </li>
+                        )}
                         <li>
                             <Link href="/" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -321,21 +411,38 @@ export default function AppLayout({ children }: LayoutProps) {
                                 <span className="ml-3 text-body font-medium">Leaderboard</span>
                             </Link>
                         </li>
-                        <li className="mt-4 mb-2">
-                            <span className="text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
-                                Rewards
-                            </span>
-                        </li>
+                        {!isAdminRoute ? (
+                            <li className="mt-4 mb-2">
+                                <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                        <path d="M4 2a2 2 0 00-2 2v2a2 2 0 002 2v8a2 2 0 002 2h8a2 2 0 002-2V8a2 2 0 002-2V4a2 2 0 00-2-2H4zm0 2h12v2H4V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1z" />
+                                    </svg>
+                                    <span>Rewards</span>
+                                </div>
+                            </li>
+                        ) : (
+                            <li className="mt-4 mb-2">
+                                <span className="text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                    Rewards
+                                </span>
+                            </li>
+                        )}
                         <li>
                             <Link href="/raffles" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/raffles' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
                             }}>
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
+                                {!isAdminRoute ? (
+                                    <span className="w-5 h-5 flex items-center justify-center text-[18px] leading-none" aria-hidden="true">
+                                        🎟
+                                    </span>
+                                ) : (
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                                        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                )}
                                 <span className="ml-3 text-body font-medium">Raffles</span>
                             </Link>
                         </li>
@@ -362,9 +469,6 @@ export default function AppLayout({ children }: LayoutProps) {
                                     <path d="M3 15.055v-.684c.126.053.255.1.39.142 2.092.642 4.313.987 6.61.987 2.297 0 4.518-.345 6.61-.987.135-.041.264-.089.39-.142v.684c0 1.347-.985 2.53-2.363 2.686a41.454 41.454 0 01-9.274 0C3.985 17.585 3 16.402 3 15.055z" />
                                 </svg>
                                 <span className="ml-3 text-body font-medium">Achievements</span>
-                                <span className="ml-auto bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold px-2 py-0.5 rounded-full">
-                                    Soon
-                                </span>
                             </Link>
                         </li>
                         <li>
@@ -377,9 +481,6 @@ export default function AppLayout({ children }: LayoutProps) {
                                     <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                                 </svg>
                                 <span className="ml-3 text-body font-medium">Referrals</span>
-                                <span className="ml-auto bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-2 py-0.5 rounded-full">
-                                    Soon
-                                </span>
                             </Link>
                         </li>
                         {isAdmin && (
@@ -492,6 +593,16 @@ export default function AppLayout({ children }: LayoutProps) {
                                 </li>
                             </>
                         )}
+                        {!isAdminRoute && (
+                            <li className="mt-4 mb-2">
+                                <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                        <path fillRule="evenodd" d="M10 2a5 5 0 00-3.536 8.536A7.002 7.002 0 003 17a1 1 0 102 0 5 5 0 0110 0 1 1 0 102 0 7.002 7.002 0 00-3.464-6.464A5 5 0 0010 2zm-3 5a3 3 0 116 0 3 3 0 01-6 0z" clipRule="evenodd" />
+                                    </svg>
+                                    <span>Account</span>
+                                </div>
+                            </li>
+                        )}
                         <li>
                             <Link href="/profile" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -535,6 +646,18 @@ export default function AppLayout({ children }: LayoutProps) {
                             {isAuthenticated && utcTime && (
                                 <div className="hidden md:block text-sm text-gray-600 dark:text-kick-text-secondary font-mono">
                                     {utcTime}
+                                </div>
+                            )}
+                            {isAuthenticated && userData?.id && (
+                                <div
+                                    className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border"
+                                    title="Sweet Points (SP)"
+                                >
+                                    <span className="text-sm leading-none" aria-hidden="true">⭐</span>
+                                    <span className="text-sm font-semibold tabular-nums">
+                                        {pointsLoading && userPoints === null ? '…' : (userPoints ?? 0).toLocaleString()}
+                                    </span>
+                                    <span className="text-xs font-semibold text-gray-600 dark:text-kick-text-secondary">SP</span>
                                 </div>
                             )}
                             <ThemeToggle variant="button" />
