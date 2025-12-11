@@ -90,6 +90,11 @@ export async function POST(request: Request) {
                 orderBy: { started_at: 'desc' },
                 select: { id: true, ended_at: true },
             })
+            
+            // Debug: Log session lookup result (only first time per minute)
+            if (!activeSession) {
+                logWarnRateLimited(`[chat/save] No active session found for broadcaster ${broadcasterUserId}`)
+            }
         } catch (error: any) {
             // Non-critical - continue without session info
             // Use rate-limited logging to prevent spam when DB is down
