@@ -582,6 +582,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const slug = searchParams.get('slug') || 'sweetflips'
 
+    // Log incoming request
+    console.log(`[Channel API] GET request for slug: ${slug}`)
+
     try {
         // Check cache first
         const cachedData = getCachedChannelData(slug)

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 
-// Mark as dynamic to avoid caching
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  return NextResponse.json(
-    { status: 'ok', timestamp: new Date().toISOString() },
-    { status: 200 }
-  )
+    return NextResponse.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+    })
 }
