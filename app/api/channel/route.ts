@@ -511,6 +511,7 @@ async function trackStreamSession(
                 peak_viewer_count: true,
                 session_title: true,
                 thumbnail_url: true,
+                kick_video_id: true,
             },
         })
 
