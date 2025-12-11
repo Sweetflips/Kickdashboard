@@ -28,7 +28,6 @@ async function fetchV2ChannelData(slug: string): Promise<{
 } | null> {
     try {
         const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
-        console.log(`[Channel API] Fetching v2 API for metadata: ${url}`)
 
         const response = await fetch(url, {
             headers: {
@@ -130,7 +129,6 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
         // This is the authoritative source for live status
         if (broadcasterUserId) {
             const livestreamsUrl = `${KICK_API_BASE}/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
-            console.log(`[Channel API] Checking official /livestreams endpoint for ${slug} (broadcaster_user_id: ${broadcasterUserId})`)
 
             // Try without auth first
             let livestreamsResponse = await fetch(livestreamsUrl, {
@@ -170,11 +168,9 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
 
                 // If data array has items, stream is LIVE
                 if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
-                    console.log(`[Channel API] Stream is LIVE (found in /livestreams endpoint)`)
                     return { isLive: true }
                 } else {
                     // Empty data array means stream is OFFLINE
-                    console.log(`[Channel API] Stream is OFFLINE (empty /livestreams response)`)
                     return { isLive: false }
                 }
             } else {
@@ -184,7 +180,6 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
 
         // Fallback: Use official /channels endpoint with auth
         const channelsUrl = `${KICK_API_BASE}/channels?slug[]=${encodeURIComponent(slug)}`
-        console.log(`[Channel API] Fallback: Checking official /channels endpoint for ${slug}`)
 
         try {
             const token = await getBroadcasterToken()
@@ -227,11 +222,9 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
             // Check stream.is_live from /channels endpoint
             const stream = channel.stream
             if (!stream || !stream.is_live) {
-                console.log(`[Channel API] /channels shows stream is OFFLINE for ${slug}`)
                 return { isLive: false }
             }
 
-            console.log(`[Channel API] /channels shows stream is LIVE for ${slug}`)
             return { isLive: true }
         } catch (fallbackError) {
             console.warn(`[Channel API] Fallback /channels failed:`, fallbackError instanceof Error ? fallbackError.message : 'Unknown error')
@@ -488,8 +481,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const slug = searchParams.get('slug') || 'sweetflips'
 
-    console.log(`[Channel API] Fetching fresh data for ${slug}`)
-
     try {
         const response = await fetchChannelWithRetry(slug)
 
@@ -639,7 +630,6 @@ export async function GET(request: Request) {
         // Fallback: If API didn't provide started_at but stream is live, use database session time
         if (isLive && !streamStartedAt && activeSession) {
             streamStartedAt = activeSession.started_at.toISOString()
-            console.log(`[Channel API] Using database session start time as fallback: ${streamStartedAt}`)
         }
 
         // Extract chatroom_id if available
