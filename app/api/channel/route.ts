@@ -64,9 +64,11 @@ function parseV2ChannelData(data: any): {
     started_at: string | null
     thumbnail: string | null
     broadcaster_user_id?: number
+    chatroom_id?: number
 } | null {
     try {
         const livestream = data.livestream
+        const chatroom = data.chatroom
         let category: { id: number; name: string } | null = null
 
         // Extract category from livestream
@@ -104,6 +106,7 @@ function parseV2ChannelData(data: any): {
             started_at: livestream?.started_at || null,
             thumbnail,
             broadcaster_user_id: data.broadcaster_user_id || data.user?.id || data.id,
+            chatroom_id: chatroom?.id || data.chatroom_id,
         }
     } catch (error) {
         return null
@@ -638,6 +641,7 @@ export async function GET(request: Request) {
                 username: slug, // Fallback to slug if username not available
                 broadcaster_user_id: v2Data.broadcaster_user_id,
                 followers_count: v2Data.followers_count,
+                chatroom_id: v2Data.chatroom_id, // Include chatroom_id from v2 data
                 user: {
                     username: slug,
                     id: v2Data.broadcaster_user_id,
@@ -782,8 +786,8 @@ export async function GET(request: Request) {
             streamStartedAt = activeSession.started_at.toISOString()
         }
 
-        // Extract chatroom_id if available
-        const chatroomId = channelData.chatroom?.id || channelData.chatroom_id || null
+        // Extract chatroom_id if available - check multiple sources
+        const chatroomId = channelData.chatroom?.id || channelData.chatroom_id || v2Data?.chatroom_id || null
 
         // Get last live time from database
         let lastLiveTime: Date | null = null
