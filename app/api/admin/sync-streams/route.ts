@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const slug = searchParams.get('slug') || 'sweetflips'
+        const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '30', 10) || 30))
 
         let videos: any[] = []
         let liveStreamUpdated = false
@@ -103,7 +104,6 @@ export async function POST(request: Request) {
                             // Update existing session's thumbnail
                             const updated = await updateSessionMetadata(activeSession.id, {
                                 thumbnailUrl: livestreamData.thumbnailUrl,
-                                kickStreamId: livestreamData.streamId || null,
                             })
 
                             if (updated) {
@@ -141,6 +141,18 @@ export async function POST(request: Request) {
             errors: 0
         }
 
+        // Only process the most recent N videos (prevents accidental updates far back in history)
+        if (videos.length > limit) {
+            videos = [...videos]
+                .sort((a, b) => {
+                    const aTime = new Date(a?.start_time || a?.created_at || 0).getTime()
+                    const bTime = new Date(b?.start_time || b?.created_at || 0).getTime()
+                    return bTime - aTime
+                })
+                .slice(0, limit)
+            console.log(`[Sync] Limiting manual sync to ${limit} most recent videos`)
+        }
+
         // Process manually provided videos (for historical matching)
         for (const video of videos) {
             stats.processed++
@@ -161,15 +173,34 @@ export async function POST(request: Request) {
                 // Find matching session in DB by start time
                 const timeWindow = 30 * 60 * 1000 // 30 minutes
 
-                const matchingSession = await db.streamSession.findFirst({
+                const candidateSessions = await db.streamSession.findMany({
                     where: {
                         channel_slug: slug,
                         started_at: {
                             gte: new Date(videoStartedAt.getTime() - timeWindow),
                             lte: new Date(videoStartedAt.getTime() + timeWindow)
                         }
-                    }
+                    },
+                    orderBy: { started_at: 'desc' },
                 })
+
+                const matchingSession = candidateSessions
+                    .filter(s => !s.session_title?.startsWith('[TEST]'))
+                    .sort((a, b) => {
+                        const aDiff = Math.abs(a.started_at.getTime() - videoStartedAt.getTime())
+                        const bDiff = Math.abs(b.started_at.getTime() - videoStartedAt.getTime())
+
+                        // Prefer sessions missing thumbnail/kick id when diffs are close
+                        const aNeeds = (a.thumbnail_url ? 0 : 1) + (a.kick_stream_id ? 0 : 1)
+                        const bNeeds = (b.thumbnail_url ? 0 : 1) + (b.kick_stream_id ? 0 : 1)
+
+                        // Within 2 minutes, prioritize "needs data" over absolute time diff
+                        const closeWindow = 2 * 60 * 1000
+                        if (Math.abs(aDiff - bDiff) <= closeWindow && aNeeds !== bNeeds) {
+                            return bNeeds - aNeeds
+                        }
+                        return aDiff - bDiff
+                    })[0]
 
                 if (matchingSession) {
                     stats.matched++
@@ -181,6 +212,8 @@ export async function POST(request: Request) {
                     // Update thumbnail if missing or different
                     if (thumbnailUrl && matchingSession.thumbnail_url !== thumbnailUrl) {
                         updateData.thumbnail_url = thumbnailUrl
+                        updateData.thumbnail_captured_at = new Date()
+                        updateData.thumbnail_source = 'kick_vod'
                         needsUpdate = true
                     }
 

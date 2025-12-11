@@ -38,6 +38,16 @@ export default function AdminStreamsPage() {
     const [testSessionLoading, setTestSessionLoading] = useState(false)
     const [testSessionId, setTestSessionId] = useState<string | null>(null)
     const limit = 20
+    const MANUAL_SYNC_LIMIT = 30
+
+    const normalizeAndLimitVideos = (videos: any[]) => {
+        const sorted = [...videos].sort((a, b) => {
+            const aTime = new Date(a?.start_time || a?.created_at || 0).getTime()
+            const bTime = new Date(b?.start_time || b?.created_at || 0).getTime()
+            return bTime - aTime
+        })
+        return sorted.slice(0, MANUAL_SYNC_LIMIT)
+    }
 
     useEffect(() => {
         // Check admin access using dedicated endpoint
@@ -204,13 +214,14 @@ export default function AdminStreamsPage() {
 
                 if (kickResponse.ok) {
                     const videos = await kickResponse.json()
-                    console.log(`Fetched ${videos.length} videos client-side`)
+                    const limitedVideos = Array.isArray(videos) ? normalizeAndLimitVideos(videos) : []
+                    console.log(`Fetched ${Array.isArray(videos) ? videos.length : 0} videos client-side (sending ${limitedVideos.length})`)
 
                     // Send data to backend
                     const syncResponse = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ videos }),
+                        body: JSON.stringify({ videos: limitedVideos }),
                         credentials: 'include', // Include cookies for authentication
                     })
 
@@ -258,11 +269,14 @@ export default function AdminStreamsPage() {
                 return
             }
 
+            // Only sync the most recent N items to avoid accidental historical updates
+            const limitedVideos = normalizeAndLimitVideos(videos)
+
             const channelSlug = 'sweetflips'
             const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ videos }),
+                body: JSON.stringify({ videos: limitedVideos }),
                 credentials: 'include', // Include cookies for authentication
             })
 
