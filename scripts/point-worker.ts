@@ -6,6 +6,7 @@ const BATCH_SIZE = parseInt(process.env.POINT_WORKER_BATCH_SIZE || '50', 10)
 const POLL_INTERVAL_MS = parseInt(process.env.POINT_WORKER_POLL_INTERVAL_MS || '500', 10)
 const CONCURRENCY = parseInt(process.env.POINT_WORKER_CONCURRENCY || '10', 10)
 const STATS_INTERVAL_MS = parseInt(process.env.POINT_WORKER_STATS_INTERVAL_MS || '60000', 10) // 1 minute
+const IDLE_HEARTBEAT_INTERVAL_MS = 300000 // 5 minutes for idle heartbeat
 
 // Advisory lock ID to ensure only one worker instance runs
 const ADVISORY_LOCK_ID = BigInt('9223372036854775806')
@@ -13,6 +14,10 @@ const ADVISORY_LOCK_ID = BigInt('9223372036854775806')
 let isShuttingDown = false
 let activeWorkers = 0
 let advisoryLockAcquired = false
+
+// Stats tracking
+let processedCount = 0
+let errorCount = 0
 
 // Acquire PostgreSQL advisory lock to ensure only one worker instance runs
 async function acquireAdvisoryLock(): Promise<boolean> {
@@ -76,7 +81,7 @@ const shutdown = async (signal: string) => {
     }
 
     await releaseAdvisoryLock()
-    console.log(`[point-worker] Shutdown complete`)
+    console.log(`[point-worker] Shutdown complete (processed: ${processedCount}, errors: ${errorCount})`)
     process.exit(0)
 }
 
@@ -103,12 +108,18 @@ async function processBatch(): Promise<void> {
         return
     }
 
+    const jobDurations: number[] = []
+
     // Process jobs concurrently (up to concurrency limit)
     const processingPromises = jobs.map(async (job) => {
         activeWorkers++
+        const jobStartTime = Date.now()
         try {
             await processJob(job)
+            processedCount++
+            jobDurations.push(Date.now() - jobStartTime)
         } catch (error) {
+            errorCount++
             console.error(`[point-worker] Unexpected error processing job id=${job.id}:`, error)
         } finally {
             activeWorkers--
@@ -116,6 +127,12 @@ async function processBatch(): Promise<void> {
     })
 
     await Promise.all(processingPromises)
+
+    // Log batch completion if jobs were processed
+    if (jobDurations.length > 0) {
+        const avgDuration = Math.round(jobDurations.reduce((a, b) => a + b, 0) / jobDurations.length)
+        console.log(`[point-worker] Processed ${jobDurations.length} jobs [avg ${avgDuration}ms]`)
+    }
 }
 
 // Main worker loop
@@ -136,17 +153,32 @@ async function runWorker(): Promise<void> {
         try {
             await processBatch()
 
-            // Log stats periodically
+            // Smart logging - only log when interesting
             const now = Date.now()
-            if (now - lastStatsLog >= STATS_INTERVAL_MS) {
+            const timeSinceLastLog = now - lastStatsLog
+            const shouldLogStats = timeSinceLastLog >= STATS_INTERVAL_MS
+            const shouldLogHeartbeat = timeSinceLastLog >= IDLE_HEARTBEAT_INTERVAL_MS
+
+            if (shouldLogStats || shouldLogHeartbeat) {
                 const stats = await getQueueStats()
-                console.log(`[point-worker] Queue stats: pending=${stats.pending}, processing=${stats.processing}, completed=${stats.completed}, failed=${stats.failed}, staleLocks=${stats.staleLocks}`)
-                lastStatsLog = now
+                const hasActivity = stats.pending > 0 || stats.processing > 0 || stats.failed > 0 || stats.staleLocks > 0
+
+                // Log every minute if there's activity, or every 5 minutes as heartbeat if idle
+                if (hasActivity && shouldLogStats) {
+                    const staleLocksText = stats.staleLocks > 0 ? `, staleLocks=${stats.staleLocks}` : ''
+                    console.log(`[point-worker] Queue: pending=${stats.pending}, processing=${stats.processing}, completed=${stats.completed}, failed=${stats.failed}${staleLocksText} | Session: processed=${processedCount}, errors=${errorCount}`)
+                    lastStatsLog = now
+                } else if (!hasActivity && shouldLogHeartbeat) {
+                    // Quiet heartbeat when idle
+                    console.log(`[point-worker] Queue: pending=${stats.pending}, processing=${stats.processing}, completed=${stats.completed}, failed=${stats.failed} | Session: processed=${processedCount}, errors=${errorCount}`)
+                    lastStatsLog = now
+                }
             }
 
             // Wait before next poll
             await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
         } catch (error) {
+            errorCount++
             console.error(`[point-worker] Error in worker loop:`, error)
             // Wait a bit longer on error before retrying
             await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS * 2))
