@@ -1,196 +1,12 @@
 'use client'
 
 import AppLayout from '@/components/AppLayout'
+import { useToast } from '@/components/Toast'
+import { ACHIEVEMENTS } from '@/lib/achievements'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
-interface Achievement {
-    id: string
-    name: string
-    description?: string
-    requirement?: string
-    icon: string
-    reward: number
-    category: 'streams' | 'chat' | 'leaderboard' | 'community' | 'special'
-    tiers?: {
-        level: number
-        requirement: number
-        reward: number
-        unlocked?: boolean
-    }[]
-    progress?: number
-    maxProgress?: number
-    unlocked?: boolean
-}
-
-const ACHIEVEMENTS: Achievement[] = [
-    // Stream Achievements
-    {
-        id: 'stream-starter',
-        name: 'Stream Starter',
-        requirement: 'Watch your first 30 minutes.',
-        description: 'Welcome to the stream!',
-        icon: '🎬',
-        reward: 25,
-        category: 'streams',
-        unlocked: false,
-    },
-    {
-        id: 'getting-cozy',
-        name: 'Getting Cozy',
-        requirement: 'Watch 2 hours total.',
-        description: "You're settling in nicely.",
-        icon: '🛋️',
-        reward: 50,
-        category: 'streams',
-        unlocked: false,
-    },
-    {
-        id: 'dedicated-viewer',
-        name: 'Dedicated Viewer',
-        requirement: 'Watch 10 hours total.',
-        description: 'A real supporter!',
-        icon: '📺',
-        reward: 150,
-        category: 'streams',
-        unlocked: false,
-    },
-    {
-        id: 'stream-veteran',
-        name: 'Stream Veteran',
-        requirement: 'Watch 50 hours total.',
-        description: "You've survived many streams.",
-        icon: '🏅',
-        reward: 500,
-        category: 'streams',
-        unlocked: false,
-    },
-    {
-        id: 'ride-or-die',
-        name: 'Ride or Die',
-        requirement: 'Watch 200 hours total.',
-        icon: '🚀',
-        reward: 1500,
-        category: 'streams',
-        unlocked: false,
-    },
-    {
-        id: 'multi-stream-hopper',
-        name: 'Multi-Stream Hopper',
-        requirement: 'Watch 2 different SweetFlips streams in 24 hours.',
-        icon: '🔁',
-        reward: 50,
-        category: 'streams',
-        unlocked: false,
-    },
-
-    // Dashboard / Community Achievements
-    {
-        id: 'dashboard-addict',
-        name: 'Dashboard Addict',
-        requirement: 'Log into the dashboard 7 days in a month.',
-        icon: '📊',
-        reward: 100,
-        category: 'community',
-        unlocked: false,
-    },
-
-    // Raffle Achievements
-    {
-        id: 'raffle-participant',
-        name: 'Raffle Participant',
-        requirement: 'Enter one of the raffles.',
-        icon: '🎟️',
-        reward: 25,
-        category: 'community',
-        unlocked: false,
-    },
-    {
-        id: 'lucky-winner',
-        name: 'Lucky Winner',
-        requirement: 'Win a raffle.',
-        icon: '🍀',
-        reward: 200,
-        category: 'community',
-        unlocked: false,
-    },
-
-    // Chat Achievements
-    {
-        id: 'first-words',
-        name: 'First Words',
-        requirement: 'Send your first chat message.',
-        icon: '💬',
-        reward: 25,
-        category: 'chat',
-        unlocked: false,
-    },
-    {
-        id: 'chatterbox',
-        name: 'Chatterbox',
-        requirement: 'Send 1000 chat messages.',
-        icon: '🗣️',
-        reward: 100,
-        category: 'chat',
-        unlocked: false,
-    },
-    {
-        id: 'emote-master',
-        name: 'Emote Master',
-        requirement: 'Use 1500 emotes in chat.',
-        icon: '😎',
-        reward: 75,
-        category: 'chat',
-        unlocked: false,
-    },
-    {
-        id: 'super-social',
-        name: 'Super Social',
-        requirement: 'Send 4000 chat messages.',
-        icon: '🌐',
-        reward: 250,
-        category: 'chat',
-        unlocked: false,
-    },
-    {
-        id: 'daily-chatter',
-        name: 'Daily Chatter',
-        requirement: 'Send any message on 7 different days.',
-        icon: '📅',
-        reward: 75,
-        category: 'chat',
-        unlocked: false,
-    },
-
-    // Leaderboard / Special Achievements
-    {
-        id: 'top-g-chatter',
-        name: 'Top G Chatter',
-        requirement: 'Finish in the Top 3 leaderboard.',
-        icon: '🏆',
-        reward: 300,
-        category: 'leaderboard',
-        unlocked: false,
-    },
-    {
-        id: 'og-dash',
-        name: 'OG Dash',
-        requirement: 'Be one of the first 100 users in your dashboard.',
-        icon: '⭐',
-        reward: 150,
-        category: 'special',
-        unlocked: false,
-    },
-    {
-        id: 'sf-legend-of-the-month',
-        name: 'SF Legend of the Month',
-        requirement: 'Earn the most points this month.',
-        icon: '👑',
-        reward: 1500,
-        category: 'special',
-        unlocked: false,
-    },
-]
+type AchievementRuntimeStatus = { unlocked: boolean; claimed: boolean }
 
 const CATEGORY_INFO = {
     streams: { name: 'Streams', icon: '📺', color: 'bg-blue-500' },
@@ -202,11 +18,13 @@ const CATEGORY_INFO = {
 
 export default function AchievementsPage() {
     const router = useRouter()
+    const { showToast } = useToast()
     const [isConnected, setIsConnected] = useState(false)
     const [loading, setLoading] = useState(true)
     const [selectedCategory, setSelectedCategory] = useState<string>('all')
     const [userBalance, setUserBalance] = useState(0)
-    const [achievementStatuses, setAchievementStatuses] = useState<Record<string, boolean>>({})
+    const [achievementStatuses, setAchievementStatuses] = useState<Record<string, AchievementRuntimeStatus>>({})
+    const [dismissedClaimBanner, setDismissedClaimBanner] = useState(false)
 
     useEffect(() => {
         checkAuth()
@@ -273,16 +91,50 @@ export default function AchievementsPage() {
 
             const data = await response.json()
             if (Array.isArray(data.achievements)) {
-                const statusMap: Record<string, boolean> = {}
+                const statusMap: Record<string, AchievementRuntimeStatus> = {}
                 for (const a of data.achievements) {
                     if (a && typeof a.id === 'string') {
-                        statusMap[a.id] = !!a.unlocked
+                        statusMap[a.id] = { unlocked: !!a.unlocked, claimed: !!a.claimed }
                     }
                 }
                 setAchievementStatuses(statusMap)
             }
         } catch (error) {
             console.error('Error fetching achievements:', error)
+        }
+    }
+
+    const claimAchievement = async (achievementId: string) => {
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            if (!token) {
+                showToast('Not authenticated', 'error')
+                return
+            }
+
+            const res = await fetch(`/api/achievements/claim?access_token=${encodeURIComponent(token)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ achievementId }),
+            })
+
+            const payload = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                showToast(payload?.error || 'Failed to claim achievement', 'error')
+                return
+            }
+
+            if (payload?.alreadyClaimed) {
+                showToast('Already claimed', 'info')
+            } else {
+                const pts = typeof payload?.pointsAwarded === 'number' ? payload.pointsAwarded : null
+                showToast(`Achievement claimed${pts != null ? ` (+${pts} pts)` : ''}!`, 'success')
+            }
+
+            await Promise.all([fetchAchievements(), fetchUserBalance()])
+        } catch (e) {
+            console.error('Error claiming achievement:', e)
+            showToast('Failed to claim achievement', 'error')
         }
     }
 
@@ -297,17 +149,16 @@ export default function AchievementsPage() {
         return sum + a.reward
     }, 0)
 
-    const unlockedCount = ACHIEVEMENTS.filter(a => achievementStatuses[a.id]).length
+    const unlockedCount = ACHIEVEMENTS.filter(a => achievementStatuses[a.id]?.unlocked).length
 
     const totalEarnedPoints = ACHIEVEMENTS.reduce((sum, a) => {
-        if (achievementStatuses[a.id]) {
-            if (a.tiers) {
-                return sum + a.tiers.reduce((tierSum, t) => tierSum + t.reward, 0)
-            }
+        if (achievementStatuses[a.id]?.claimed) {
             return sum + a.reward
         }
         return sum
     }, 0)
+
+    const claimableCount = ACHIEVEMENTS.filter((a) => achievementStatuses[a.id]?.unlocked && !achievementStatuses[a.id]?.claimed).length
 
     if (loading) {
         return (
@@ -413,6 +264,26 @@ export default function AchievementsPage() {
                     </div>
                 </div>
 
+                {/* Claimable Banner */}
+                {!dismissedClaimBanner && claimableCount > 0 && (
+                    <div className="bg-kick-purple/10 dark:bg-kick-purple/20 border border-kick-purple/30 dark:border-kick-purple/50 rounded-xl p-4 flex items-start justify-between gap-4">
+                        <div>
+                            <p className="text-body font-semibold text-gray-900 dark:text-kick-text">
+                                You have {claimableCount} achievement{claimableCount === 1 ? '' : 's'} ready to claim
+                            </p>
+                            <p className="text-small text-gray-600 dark:text-kick-text-secondary">
+                                Claim them to add the points to your balance.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setDismissedClaimBanner(true)}
+                            className="px-3 py-2 text-sm font-medium rounded-lg bg-white/60 dark:bg-kick-surface border border-gray-200 dark:border-kick-border hover:bg-white dark:hover:bg-kick-surface-hover transition-colors"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                )}
+
                 {/* Category Filter */}
                 <div className="flex flex-wrap gap-2">
                     <button
@@ -444,7 +315,9 @@ export default function AchievementsPage() {
                 {/* Achievements Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredAchievements.map((achievement) => {
-                        const isUnlocked = achievementStatuses[achievement.id]
+                        const status = achievementStatuses[achievement.id]
+                        const isUnlocked = !!status?.unlocked
+                        const isClaimed = !!status?.claimed
                         return (
                         <div
                             key={achievement.id}
@@ -515,22 +388,30 @@ export default function AchievementsPage() {
                                                 <path d="M9.049 2.927c.765-1.36 2.722-1.36 3.486 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                             </svg>
                                             <span className="font-semibold">
-                                                {achievement.tiers
-                                                    ? `Up to ${achievement.tiers.reduce((sum, t) => sum + t.reward, 0).toLocaleString()}`
-                                                    : achievement.reward.toLocaleString()
-                                                } pts
+                                                {achievement.reward.toLocaleString()} pts
                                             </span>
                                         </div>
                                         <span className={
                                             `px-2 py-1 text-xs font-medium rounded ${
-                                                isUnlocked
+                                                isClaimed
+                                                    ? 'bg-kick-purple/10 text-kick-purple dark:bg-kick-purple/20 dark:text-kick-purple'
+                                                    : isUnlocked
                                                     ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
                                                     : 'bg-gray-200 dark:bg-kick-dark text-gray-500 dark:text-kick-text-muted'
                                             }`}
                                         >
-                                            {isUnlocked ? 'Unlocked' : 'Locked'}
+                                            {isClaimed ? 'Claimed' : isUnlocked ? 'Unlocked' : 'Locked'}
                                         </span>
                                     </div>
+
+                                    {isUnlocked && !isClaimed && (
+                                        <button
+                                            onClick={() => claimAchievement(achievement.id)}
+                                            className="mt-3 w-full px-4 py-2 rounded-lg bg-kick-green text-white font-semibold hover:bg-kick-green/90 transition-colors"
+                                        >
+                                            Claim +{achievement.reward.toLocaleString()} pts
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>

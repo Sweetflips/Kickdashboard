@@ -5,6 +5,7 @@ import Script from 'next/script'
 import AppLayout from '../../components/AppLayout'
 import ThemeToggle from '../../components/ThemeToggle'
 import { useToast } from '../../components/Toast'
+import { ACHIEVEMENTS } from '@/lib/achievements'
 
 interface UserData {
     id?: number
@@ -15,7 +16,7 @@ interface UserData {
     [key: string]: any
 }
 
-type TabType = 'general' | 'preferences' | 'connected' | 'security'
+type TabType = 'general' | 'preferences' | 'connected' | 'achievements' | 'security'
 
 interface ConnectedAccount {
     provider: 'kick' | 'discord' | 'telegram'
@@ -23,6 +24,8 @@ interface ConnectedAccount {
     username?: string
     userId?: string
 }
+
+type AchievementRuntimeStatus = { unlocked: boolean; claimed: boolean }
 
 export default function ProfilePage() {
     const [userData, setUserData] = useState<UserData | null>(null)
@@ -38,6 +41,9 @@ export default function ProfilePage() {
     const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([])
     const [loadingAccounts, setLoadingAccounts] = useState(false)
     const [telegramAuthUrl, setTelegramAuthUrl] = useState<string | null>(null)
+    const [achievementStatuses, setAchievementStatuses] = useState<Record<string, AchievementRuntimeStatus>>({})
+    const [loadingAchievements, setLoadingAchievements] = useState(false)
+    const [connectAchievementBanner, setConnectAchievementBanner] = useState<{ visible: boolean; label: string } | null>(null)
     const { showToast } = useToast()
 
     const fetchUserData = async () => {
@@ -77,6 +83,66 @@ export default function ProfilePage() {
             setLoadingAccounts(false)
         }
     }, [userData?.id])
+
+    const fetchAchievements = useCallback(async () => {
+        setLoadingAchievements(true)
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            if (!token) return
+
+            const response = await fetch(`/api/achievements?access_token=${encodeURIComponent(token)}`)
+            if (!response.ok) return
+
+            const data = await response.json()
+            if (Array.isArray(data.achievements)) {
+                const statusMap: Record<string, AchievementRuntimeStatus> = {}
+                for (const a of data.achievements) {
+                    if (a && typeof a.id === 'string') {
+                        statusMap[a.id] = { unlocked: !!a.unlocked, claimed: !!a.claimed }
+                    }
+                }
+                setAchievementStatuses(statusMap)
+            }
+        } catch (error) {
+            console.error('❌ [PROFILE] Failed to fetch achievements:', error)
+        } finally {
+            setLoadingAchievements(false)
+        }
+    }, [])
+
+    const claimAchievement = async (achievementId: string) => {
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            if (!token) {
+                showToast('Not authenticated', 'error')
+                return
+            }
+
+            const res = await fetch(`/api/achievements/claim?access_token=${encodeURIComponent(token)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ achievementId }),
+            })
+
+            const payload = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                showToast(payload?.error || 'Failed to claim achievement', 'error')
+                return
+            }
+
+            if (payload?.alreadyClaimed) {
+                showToast('Already claimed', 'info')
+            } else {
+                const pts = typeof payload?.pointsAwarded === 'number' ? payload.pointsAwarded : null
+                showToast(`Achievement claimed${pts != null ? ` (+${pts} pts)` : ''}!`, 'success')
+            }
+
+            await fetchAchievements()
+        } catch (e) {
+            console.error('Error claiming achievement:', e)
+            showToast('Failed to claim achievement', 'error')
+        }
+    }
 
     const handleConnectAccount = async (provider: 'discord' | 'telegram') => {
         if (!userData?.id) {
@@ -148,6 +214,8 @@ export default function ProfilePage() {
         const tab = params.get('tab')
         if (tab === 'connected') {
             setActiveTab('connected')
+        } else if (tab === 'achievements') {
+            setActiveTab('achievements')
         }
     }, [])
 
@@ -156,6 +224,12 @@ export default function ProfilePage() {
             fetchConnectedAccounts()
         }
     }, [userData?.id, activeTab, fetchConnectedAccounts])
+
+    useEffect(() => {
+        if (activeTab === 'achievements') {
+            fetchAchievements()
+        }
+    }, [activeTab, fetchAchievements])
 
     useEffect(() => {
         // Clear Telegram auth URL if Telegram is connected
@@ -177,11 +251,18 @@ export default function ProfilePage() {
             if (tab === 'connected') {
                 setActiveTab('connected')
             }
+            if (success === 'discord_connected') {
+                setConnectAchievementBanner({ visible: true, label: 'Discord Connected (+25 pts) achievement unlocked' })
+            } else if (success === 'true') {
+                // Telegram widget currently redirects with success=true
+                setConnectAchievementBanner({ visible: true, label: 'Telegram Connected (+25 pts) achievement unlocked' })
+            }
             // Clear Telegram widget state immediately
             setTelegramAuthUrl(null)
             // Refresh connected accounts after a short delay to ensure DB is updated
             setTimeout(() => {
                 fetchConnectedAccounts()
+                fetchAchievements()
             }, 500)
             showToast('Account connected successfully!', 'success')
             // Clean URL but preserve tab
@@ -198,7 +279,7 @@ export default function ProfilePage() {
             const newUrl = tab === 'connected' ? '/profile?tab=connected' : '/profile'
             window.history.replaceState({}, '', newUrl)
         }
-    }, [userData?.id, fetchConnectedAccounts])
+    }, [userData?.id, fetchConnectedAccounts, fetchAchievements, showToast])
 
     // Also check URL params when userData becomes available (handles case where userData loads before URL check)
     useEffect(() => {
@@ -376,6 +457,11 @@ export default function ProfilePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
         )},
+        { id: 'achievements' as TabType, label: 'Achievements', icon: (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.955a1 1 0 00.95.69h4.157c.969 0 1.371 1.24.588 1.81l-3.362 2.443a1 1 0 00-.364 1.118l1.286 3.955c.3.921-.755 1.688-1.54 1.118l-3.362-2.443a1 1 0 00-1.176 0l-3.362 2.443c-.784.57-1.838-.197-1.539-1.118l1.286-3.955a1 1 0 00-.364-1.118L2.98 9.382c-.783-.57-.38-1.81.588-1.81h4.157a1 1 0 00.95-.69l1.286-3.955z" />
+            </svg>
+        )},
         { id: 'security' as TabType, label: 'Security', icon: (
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -429,6 +515,33 @@ export default function ProfilePage() {
                         {/* Main Content */}
                         <div className="lg:col-span-3">
                             <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
+                                {connectAchievementBanner?.visible && (
+                                    <div className="mb-6 bg-kick-purple/10 dark:bg-kick-purple/20 border border-kick-purple/30 dark:border-kick-purple/50 rounded-lg p-4 flex items-start justify-between gap-4">
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-900 dark:text-kick-text">
+                                                {connectAchievementBanner.label}
+                                            </p>
+                                            <p className="text-xs text-gray-600 dark:text-kick-text-secondary mt-1">
+                                                Go claim it to add the points to your balance.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setActiveTab('achievements')}
+                                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-kick-green hover:bg-kick-green/90 text-white rounded-md transition-colors text-xs font-medium"
+                                            >
+                                                View & Claim
+                                            </button>
+                                            <button
+                                                onClick={() => setConnectAchievementBanner({ visible: false, label: connectAchievementBanner.label })}
+                                                className="inline-flex items-center justify-center px-3 py-1.5 bg-white/60 dark:bg-kick-surface border border-gray-200 dark:border-kick-border rounded-md transition-colors text-xs font-medium hover:bg-white dark:hover:bg-kick-surface-hover"
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* General Tab - Combined Overview, Profile, and Account */}
                                 {activeTab === 'general' && (
                                     <div className="space-y-8">
@@ -938,6 +1051,115 @@ export default function ProfilePage() {
                                                 </div>
                                             )}
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* Achievements Tab */}
+                                {activeTab === 'achievements' && (
+                                    <div className="space-y-6">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <h2 className="text-xl font-bold text-gray-900 dark:text-kick-text">Achievements</h2>
+                                                <p className="text-sm text-gray-600 dark:text-kick-text-secondary mt-1">
+                                                    Your unlocked achievements show up here. Claim any that are ready to add points.
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => fetchAchievements()}
+                                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-md transition-colors text-xs font-medium hover:bg-gray-200 dark:hover:bg-kick-surface"
+                                                disabled={loadingAchievements}
+                                            >
+                                                {loadingAchievements ? 'Refreshing…' : 'Refresh'}
+                                            </button>
+                                        </div>
+
+                                        {(() => {
+                                            const unlockedAchievements = ACHIEVEMENTS.filter((a) => achievementStatuses[a.id]?.unlocked)
+                                            const claimableCount = unlockedAchievements.filter((a) => !achievementStatuses[a.id]?.claimed).length
+
+                                            if (loadingAchievements && unlockedAchievements.length === 0) {
+                                                return (
+                                                    <div className="flex items-center justify-center h-40 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border">
+                                                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-kick-purple"></div>
+                                                    </div>
+                                                )
+                                            }
+
+                                            return (
+                                                <div className="space-y-4">
+                                                    {claimableCount > 0 && (
+                                                        <div className="bg-kick-purple/10 dark:bg-kick-purple/20 border border-kick-purple/30 dark:border-kick-purple/50 rounded-lg p-4">
+                                                            <p className="text-sm font-semibold text-gray-900 dark:text-kick-text">
+                                                                {claimableCount} achievement{claimableCount === 1 ? '' : 's'} ready to claim
+                                                            </p>
+                                                            <p className="text-xs text-gray-600 dark:text-kick-text-secondary mt-1">
+                                                                Claim them to add points to your balance.
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {unlockedAchievements.length === 0 ? (
+                                                        <div className="p-6 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border text-center">
+                                                            <p className="text-sm font-medium text-gray-900 dark:text-kick-text">No unlocked achievements yet</p>
+                                                            <p className="text-xs text-gray-600 dark:text-kick-text-secondary mt-1">
+                                                                Watch streams, chat, join raffles, and connect accounts to unlock achievements.
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {unlockedAchievements.map((a) => {
+                                                                const status = achievementStatuses[a.id]
+                                                                const isClaimed = !!status?.claimed
+                                                                return (
+                                                                    <div
+                                                                        key={a.id}
+                                                                        className="p-4 bg-white dark:bg-kick-surface rounded-lg border border-gray-200 dark:border-kick-border"
+                                                                    >
+                                                                        <div className="flex items-start gap-3">
+                                                                            <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-kick-dark flex items-center justify-center text-2xl flex-shrink-0">
+                                                                                {a.icon}
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-center justify-between gap-2">
+                                                                                    <p className="text-sm font-semibold text-gray-900 dark:text-kick-text truncate">
+                                                                                        {a.name}
+                                                                                    </p>
+                                                                                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                                                        isClaimed
+                                                                                            ? 'bg-kick-purple/10 text-kick-purple dark:bg-kick-purple/20 dark:text-kick-purple'
+                                                                                            : 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
+                                                                                    }`}>
+                                                                                        {isClaimed ? 'Claimed' : 'Unlocked'}
+                                                                                    </span>
+                                                                                </div>
+                                                                                {a.requirement && (
+                                                                                    <p className="text-xs text-gray-600 dark:text-kick-text-secondary mt-1">
+                                                                                        {a.requirement}
+                                                                                    </p>
+                                                                                )}
+                                                                                <div className="flex items-center justify-between mt-3 gap-3">
+                                                                                    <p className="text-xs font-semibold text-kick-purple">
+                                                                                        +{a.reward.toLocaleString()} pts
+                                                                                    </p>
+                                                                                    {!isClaimed && (
+                                                                                        <button
+                                                                                            onClick={() => claimAchievement(a.id)}
+                                                                                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-kick-green hover:bg-kick-green/90 text-white rounded-md transition-colors text-xs font-semibold"
+                                                                                        >
+                                                                                            Claim
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })()}
                                     </div>
                                 )}
 
