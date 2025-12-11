@@ -74,18 +74,16 @@ export async function POST(request: Request) {
                                     })
 
                                     if (activeSession) {
-                                        // Update thumbnail and kick_stream_id if different
-                                        const needsUpdate = activeSession.thumbnail_url !== livestreamData.thumbnailUrl ||
-                                                          activeSession.kick_stream_id !== livestreamData.streamId
-                                        if (needsUpdate) {
+                                        // Update thumbnail if different, also store kick_stream_id
+                                        if (activeSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await tx.streamSession.update({
                                                 where: { id: activeSession.id },
                                                 data: {
                                                     thumbnail_url: livestreamData.thumbnailUrl,
-                                                    kick_stream_id: livestreamData.streamId,
+                                                    kick_stream_id: livestreamData.streamId || undefined,
                                                 },
                                             })
-                                            console.log(`[Sync] Updated thumbnail and kick_stream_id for active session ${activeSession.id}`)
+                                            console.log(`[Sync] Updated thumbnail for active session ${activeSession.id} (kick_stream_id: ${livestreamData.streamId})`)
                                             liveStreamUpdated = true
                                         } else {
                                             console.log(`[Sync] Thumbnail already up to date for session ${activeSession.id}`)
@@ -100,12 +98,12 @@ export async function POST(request: Request) {
                                                 channel_slug: slug,
                                                 session_title: null, // Could fetch from livestreams API if needed
                                                 thumbnail_url: livestreamData.thumbnailUrl,
-                                                kick_stream_id: livestreamData.streamId,
+                                                kick_stream_id: livestreamData.streamId || null,
                                                 started_at: new Date(),
                                                 peak_viewer_count: 0,
                                             },
                                         })
-                                        console.log(`[Sync] Created new active session ${newSession.id} with thumbnail`)
+                                        console.log(`[Sync] Created new active session ${newSession.id} with thumbnail (kick_stream_id: ${livestreamData.streamId})`)
                                         liveStreamUpdated = true
                                         sessionHandled = true
                                     }
@@ -130,18 +128,16 @@ export async function POST(request: Request) {
                                     })
 
                                     if (existingSession) {
-                                        // Another request created the session - update thumbnail and kick_stream_id
-                                        const needsUpdate = existingSession.thumbnail_url !== livestreamData.thumbnailUrl ||
-                                                          existingSession.kick_stream_id !== livestreamData.streamId
-                                        if (needsUpdate) {
+                                        // Another request created the session - update thumbnail
+                                        if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await db.streamSession.update({
                                                 where: { id: existingSession.id },
                                                 data: {
                                                     thumbnail_url: livestreamData.thumbnailUrl,
-                                                    kick_stream_id: livestreamData.streamId,
+                                                    kick_stream_id: livestreamData.streamId || undefined,
                                                 },
                                             })
-                                            console.log(`[Sync] Unique constraint violation - updated thumbnail and kick_stream_id for session ${existingSession.id}`)
+                                            console.log(`[Sync] Unique constraint violation - updated thumbnail for session ${existingSession.id}`)
                                             liveStreamUpdated = true
                                         } else {
                                             console.log(`[Sync] Unique constraint violation - session ${existingSession.id} already has correct thumbnail`)
@@ -165,18 +161,16 @@ export async function POST(request: Request) {
                                     })
 
                                     if (existingSession) {
-                                        // Another request created the session - update thumbnail and kick_stream_id
-                                        const needsUpdate = existingSession.thumbnail_url !== livestreamData.thumbnailUrl ||
-                                                          existingSession.kick_stream_id !== livestreamData.streamId
-                                        if (needsUpdate) {
+                                        // Another request created the session - update thumbnail
+                                        if (existingSession.thumbnail_url !== livestreamData.thumbnailUrl) {
                                             await db.streamSession.update({
                                                 where: { id: existingSession.id },
                                                 data: {
                                                     thumbnail_url: livestreamData.thumbnailUrl,
-                                                    kick_stream_id: livestreamData.streamId,
+                                                    kick_stream_id: livestreamData.streamId || undefined,
                                                 },
                                             })
-                                            console.log(`[Sync] Race condition detected - updated thumbnail and kick_stream_id for session ${existingSession.id}`)
+                                            console.log(`[Sync] Race condition detected - updated thumbnail for session ${existingSession.id}`)
                                             liveStreamUpdated = true
                                         } else {
                                             console.log(`[Sync] Race condition detected - session ${existingSession.id} already has correct thumbnail`)
@@ -245,12 +239,6 @@ export async function POST(request: Request) {
                     }
                 }
 
-                // If no thumbnail URL but we have a video ID, construct VOD thumbnail URL
-                // Kick VOD thumbnail format: https://videos.kick.com/video/{video_id}/thumbnails/thumbnail.jpeg
-                if (!thumbnailUrl && video.id) {
-                    thumbnailUrl = `https://videos.kick.com/video/${video.id}/thumbnails/thumbnail.jpeg`
-                }
-
                 // Find matching session in DB
                 // We look for a session started within 30 minutes of the video start time
                 const timeWindow = 30 * 60 * 1000 // 30 minutes
@@ -272,19 +260,10 @@ export async function POST(request: Request) {
                     const updateData: Prisma.StreamSessionUpdateInput = {}
                     let needsUpdate = false
 
-                    // Update thumbnail if missing (preserve existing thumbnails)
-                    // Only update if session has no thumbnail, or if new thumbnail is provided and different
-                    if (thumbnailUrl) {
-                        if (!matchingSession.thumbnail_url) {
-                            // Session has no thumbnail - set it
-                            updateData.thumbnail_url = thumbnailUrl
-                            needsUpdate = true
-                        } else if (matchingSession.thumbnail_url !== thumbnailUrl) {
-                            // Session has thumbnail but it's different - update it
-                            // This allows refreshing thumbnails if needed
-                            updateData.thumbnail_url = thumbnailUrl
-                            needsUpdate = true
-                        }
+                    // Update thumbnail if missing or different
+                    if (thumbnailUrl && matchingSession.thumbnail_url !== thumbnailUrl) {
+                        updateData.thumbnail_url = thumbnailUrl
+                        needsUpdate = true
                     }
 
                     // Update title if missing
@@ -299,19 +278,13 @@ export async function POST(request: Request) {
                         needsUpdate = true
                     }
 
-                    // Update kick_video_id if missing or different (this is the VOD video ID)
-                    if (video.id && matchingSession.kick_video_id !== video.id.toString()) {
-                        updateData.kick_video_id = video.id.toString()
-                        needsUpdate = true
-                    }
-
                     if (needsUpdate) {
                         await db.streamSession.update({
                             where: { id: matchingSession.id },
                             data: updateData
                         })
                         stats.updated++
-                        console.log(`Updated session ${matchingSession.id} with data from video ${video.id} (kick_video_id: ${video.id})`)
+                        console.log(`Updated session ${matchingSession.id} with data from video ${video.id}`)
                     }
                 } else {
                     console.log(`No matching session found for video ${video.id} (${video.title}) started at ${videoStartedAt.toISOString()}`)
