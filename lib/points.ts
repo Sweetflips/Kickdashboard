@@ -220,7 +220,7 @@ export async function awardPoint(
 
                     // Double-check message_id uniqueness inside transaction (defense in depth)
                     if (messageId) {
-                        const existingHistory = await tx.pointHistory.findUnique({
+                        const existingHistory = await tx.pointHistory.findFirst({
                             where: { message_id: messageId },
                             select: { id: true },
                         })
