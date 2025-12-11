@@ -547,8 +547,15 @@ async function trackStreamSession(
                 // Reduced logging verbosity
             }
         } else {
-            // Stream is offline - end any active sessions
+            // Stream is offline - end any active sessions (except test sessions)
             if (activeSession) {
+                // Skip auto-closing test sessions (admin-created for testing)
+                const isTestSession = activeSession.session_title?.startsWith('[TEST]')
+                if (isTestSession) {
+                    // Don't auto-close test sessions - they must be manually ended
+                    return
+                }
+
                 const messageCount = await db.chatMessage.count({
                     where: { stream_session_id: activeSession.id },
                 })
