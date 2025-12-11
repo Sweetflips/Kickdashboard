@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
+import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 
 const verboseQueueLogging = process.env.CHAT_QUEUE_VERBOSE_LOGS === 'true'
 
@@ -71,6 +72,11 @@ export async function enqueueChatJob(payload: ChatJobPayload): Promise<{ success
                 return { success: false, error: 'Table missing' }
             }
 
+            // Check if it's a connection error (P1001 - Can't reach database server)
+            const isConnectionError = error?.code === 'P1001' ||
+                                    error?.message?.includes("Can't reach database server") ||
+                                    error?.message?.includes('PrismaClientInitializationError')
+
             // Handle connection pool exhaustion with retry
             const isRetryableError = error?.code === 'P2024' ||
                                     error?.code === 'P2028' ||
@@ -83,7 +89,12 @@ export async function enqueueChatJob(payload: ChatJobPayload): Promise<{ success
                 continue
             }
 
-            console.error(`[enqueueChatJob] Failed to enqueue job for messageId=${payload.message_id}:`, error)
+            // Use rate-limited logging for connection errors to prevent spam
+            if (isConnectionError) {
+                logErrorRateLimited(`[enqueueChatJob] Database connection error (messageId=${payload.message_id})`, error)
+            } else {
+                logErrorRateLimited(`[enqueueChatJob] Failed to enqueue job for messageId=${payload.message_id}`, error)
+            }
             return { success: false, error: error?.message || 'Unknown error' }
         }
     }
@@ -156,7 +167,16 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
                 await new Promise(resolve => setTimeout(resolve, delay))
                 continue
             }
-            console.error('[claimChatJobs] Failed to claim jobs:', error)
+            
+            const isConnectionError = error?.code === 'P1001' ||
+                                    error?.message?.includes("Can't reach database server") ||
+                                    error?.message?.includes('PrismaClientInitializationError')
+            
+            if (isConnectionError) {
+                logErrorRateLimited('[claimChatJobs] Database connection error', error)
+            } else {
+                logErrorRateLimited('[claimChatJobs] Failed to claim jobs', error)
+            }
             return []
         }
     }
@@ -176,8 +196,15 @@ export async function completeChatJob(jobId: bigint): Promise<void> {
                 locked_at: null,
             },
         })
-    } catch (error) {
-        console.error(`[completeChatJob] Failed to mark job ${jobId} as completed:`, error)
+    } catch (error: any) {
+        const isConnectionError = error?.code === 'P1001' ||
+                                error?.message?.includes("Can't reach database server") ||
+                                error?.message?.includes('PrismaClientInitializationError')
+        if (isConnectionError) {
+            logErrorRateLimited(`[completeChatJob] Database connection error (jobId=${jobId})`, error)
+        } else {
+            logErrorRateLimited(`[completeChatJob] Failed to mark job ${jobId} as completed`, error)
+        }
     }
 }
 
@@ -196,8 +223,15 @@ export async function failChatJob(jobId: bigint, error: string, attempts: number
                 processed_at: shouldRetry ? null : new Date(),
             },
         })
-    } catch (updateError) {
-        console.error(`[failChatJob] Failed to update job status:`, updateError)
+    } catch (updateError: any) {
+        const isConnectionError = updateError?.code === 'P1001' ||
+                                updateError?.message?.includes("Can't reach database server") ||
+                                updateError?.message?.includes('PrismaClientInitializationError')
+        if (isConnectionError) {
+            logErrorRateLimited(`[failChatJob] Database connection error`, updateError)
+        } else {
+            logErrorRateLimited(`[failChatJob] Failed to update job status`, updateError)
+        }
     }
 }
 
@@ -232,8 +266,15 @@ export async function getChatQueueStats(): Promise<{
             failed,
             staleLocks: Number(staleLocks[0]?.count || 0),
         }
-    } catch (error) {
-        console.error('[getChatQueueStats] Failed to get queue stats:', error)
+    } catch (error: any) {
+        const isConnectionError = error?.code === 'P1001' ||
+                                error?.message?.includes("Can't reach database server") ||
+                                error?.message?.includes('PrismaClientInitializationError')
+        if (isConnectionError) {
+            logErrorRateLimited('[getChatQueueStats] Database connection error', error)
+        } else {
+            logErrorRateLimited('[getChatQueueStats] Failed to get queue stats', error)
+        }
         return { pending: 0, processing: 0, completed: 0, failed: 0, staleLocks: 0 }
     }
 }

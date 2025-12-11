@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { awardPoint, awardEmotes } from '@/lib/points'
 import { Prisma } from '@prisma/client'
+import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 
 const verboseQueueLogging = process.env.POINT_QUEUE_VERBOSE_LOGS === 'true'
 
@@ -74,7 +75,14 @@ export async function enqueuePointJob(params: EnqueuePointJobParams): Promise<vo
             }
 
             // Log but don't throw - queue failures shouldn't break message saving
-            console.error(`[enqueuePointJob] Failed to enqueue job for messageId=${params.messageId}:`, error)
+            const isConnectionError = error?.code === 'P1001' ||
+                                    error?.message?.includes("Can't reach database server") ||
+                                    error?.message?.includes('PrismaClientInitializationError')
+            if (isConnectionError) {
+                logErrorRateLimited(`[enqueuePointJob] Database connection error (messageId=${params.messageId})`, error)
+            } else {
+                logErrorRateLimited(`[enqueuePointJob] Failed to enqueue job for messageId=${params.messageId}`, error)
+            }
             return // Give up after retries
         }
     }
@@ -149,7 +157,15 @@ export async function claimJobs(batchSize: number = 10, lockTimeoutSeconds: numb
                 await new Promise(resolve => setTimeout(resolve, delay))
                 continue
             }
-            console.error('[claimJobs] Failed to claim jobs:', error)
+            
+            const isConnectionError = error?.code === 'P1001' ||
+                                    error?.message?.includes("Can't reach database server") ||
+                                    error?.message?.includes('PrismaClientInitializationError')
+            if (isConnectionError) {
+                logErrorRateLimited('[claimJobs] Database connection error', error)
+            } else {
+                logErrorRateLimited('[claimJobs] Failed to claim jobs', error)
+            }
             return []
         }
     }
@@ -252,7 +268,14 @@ export async function processJob(job: ClaimedJob): Promise<{ success: boolean; p
             },
         })).catch(updateError => {
             // Log but don't fail - job will be picked up by stale lock recovery
-            console.error(`[processJob] Failed to update job status: ${updateError}`)
+            const isConnectionError = updateError?.code === 'P1001' ||
+                                    updateError?.message?.includes("Can't reach database server") ||
+                                    updateError?.message?.includes('PrismaClientInitializationError')
+            if (isConnectionError) {
+                logErrorRateLimited(`[processJob] Database connection error (jobId=${job.id})`, updateError)
+            } else {
+                logErrorRateLimited(`[processJob] Failed to update job status (jobId=${job.id})`, updateError)
+            }
         })
 
         if (shouldRetry) {
@@ -300,8 +323,15 @@ export async function getQueueStats(): Promise<{
             failed: failed,
             staleLocks: Number(staleLocks[0]?.count || 0),
         }
-    } catch (error) {
-        console.error('[getQueueStats] Failed to get queue stats:', error)
+    } catch (error: any) {
+        const isConnectionError = error?.code === 'P1001' ||
+                                error?.message?.includes("Can't reach database server") ||
+                                error?.message?.includes('PrismaClientInitializationError')
+        if (isConnectionError) {
+            logErrorRateLimited('[getQueueStats] Database connection error', error)
+        } else {
+            logErrorRateLimited('[getQueueStats] Failed to get queue stats', error)
+        }
         return {
             pending: 0,
             processing: 0,

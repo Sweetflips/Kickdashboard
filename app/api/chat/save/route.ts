@@ -1,6 +1,7 @@
 import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue';
 import type { ChatMessage } from '@/lib/chat-store';
 import { db } from '@/lib/db';
+import { logErrorRateLimited, logWarnRateLimited } from '@/lib/rate-limited-logger';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
@@ -89,9 +90,17 @@ export async function POST(request: Request) {
                 orderBy: { started_at: 'desc' },
                 select: { id: true, ended_at: true },
             })
-        } catch (error) {
+        } catch (error: any) {
             // Non-critical - continue without session info
-            console.warn('Failed to fetch stream session:', error)
+            // Use rate-limited logging to prevent spam when DB is down
+            const isConnectionError = error?.code === 'P1001' ||
+                                    error?.message?.includes("Can't reach database server") ||
+                                    error?.message?.includes('PrismaClientInitializationError')
+            if (isConnectionError) {
+                logWarnRateLimited('[chat/save] Database connection error - continuing without session info', error)
+            } else {
+                logWarnRateLimited('Failed to fetch stream session:', error)
+            }
         }
 
         const sessionIsActive = activeSession !== null && activeSession.ended_at === null
@@ -139,7 +148,7 @@ export async function POST(request: Request) {
         const enqueueResult = await enqueueChatJob(jobPayload)
 
         if (!enqueueResult.success) {
-            console.error(`Failed to enqueue chat job: ${enqueueResult.error}`)
+            // Error already logged with rate limiting in enqueueChatJob
             return NextResponse.json(
                 { error: 'Failed to queue message for processing' },
                 { status: 500 }

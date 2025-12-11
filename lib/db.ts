@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { logErrorRateLimited } from './rate-limited-logger'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -25,10 +26,12 @@ const getDatabaseUrl = () => {
 
 // CRITICAL: Always use singleton pattern in both dev and production
 // This prevents multiple PrismaClient instances from creating separate connection pools
+// Disable Prisma's built-in logging to prevent connection error spam
+// We handle errors with rate-limited logging in our code instead
 export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+    log: [], // Disable all Prisma logging - we handle errors with rate-limited logger
     datasources: {
       db: {
         url: getDatabaseUrl(),
