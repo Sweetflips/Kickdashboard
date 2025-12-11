@@ -159,13 +159,89 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // STEP 2: DETERMINE IF STREAM IS OFFLINE
+        // STEP 2: CHECK/CREATE STREAM SESSION IF NEEDED
         // ═══════════════════════════════════════════════════════════════
 
-        const sentWhenOffline = !payload.is_stream_active || !payload.stream_session_id
+        let streamSessionId = payload.stream_session_id
+
+        // If no session ID provided, check for active session or create one
+        if (!streamSessionId) {
+            try {
+                // Check for existing active session
+                const activeSession = await db.streamSession.findFirst({
+                    where: {
+                        broadcaster_user_id: broadcasterUserId,
+                        ended_at: null,
+                    },
+                    orderBy: { started_at: 'desc' },
+                    select: { id: true },
+                })
+
+                if (activeSession) {
+                    streamSessionId = activeSession.id
+                } else {
+                    // No active session - create one (stream might have just gone live)
+                    // Use broadcaster username as channel slug
+                    const channelSlug = payload.broadcaster.username.toLowerCase()
+                    try {
+                        const newSession = await db.streamSession.create({
+                            data: {
+                                broadcaster_user_id: broadcasterUserId,
+                                channel_slug: channelSlug,
+                                session_title: null,
+                                thumbnail_url: null,
+                                kick_stream_id: null,
+                                started_at: new Date(),
+                                peak_viewer_count: 0,
+                            },
+                        })
+                        streamSessionId = newSession.id
+                        if (VERBOSE_LOGS) {
+                            console.log(`[chat-worker] ✅ Created new stream session ${streamSessionId} for broadcaster ${payload.broadcaster.username}`)
+                        }
+                    } catch (createError: any) {
+                        // If unique constraint violation or concurrent creation, check again
+                        if (createError?.code === 'P2002' || createError?.code === 'P2034') {
+                            // Another worker created the session - fetch it
+                            const retrySession = await db.streamSession.findFirst({
+                                where: {
+                                    broadcaster_user_id: broadcasterUserId,
+                                    ended_at: null,
+                                },
+                                orderBy: { started_at: 'desc' },
+                                select: { id: true },
+                            })
+                            if (retrySession) {
+                                streamSessionId = retrySession.id
+                            }
+                        } else {
+                            throw createError
+                        }
+                    }
+                }
+            } catch (error: any) {
+                // Non-critical - continue without session
+                const isConnectionError = error?.code === 'P1001' ||
+                                        error?.message?.includes("Can't reach database server") ||
+                                        error?.message?.includes('PrismaClientInitializationError')
+                if (isConnectionError) {
+                    if (VERBOSE_LOGS) {
+                        console.warn(`[chat-worker] Database connection error - continuing without session`)
+                    }
+                } else {
+                    console.warn(`[chat-worker] Failed to check/create stream session:`, error)
+                }
+            }
+        }
 
         // ═══════════════════════════════════════════════════════════════
-        // STEP 3: SAVE MESSAGE
+        // STEP 3: DETERMINE IF STREAM IS OFFLINE
+        // ═══════════════════════════════════════════════════════════════
+
+        const sentWhenOffline = !streamSessionId || (!payload.is_stream_active && !streamSessionId)
+
+        // ═══════════════════════════════════════════════════════════════
+        // STEP 4: SAVE MESSAGE
         // ═══════════════════════════════════════════════════════════════
 
         let pointsEarned = 0
@@ -204,7 +280,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
             await db.chatMessage.upsert({
                 where: { message_id: payload.message_id },
                 update: {
-                    stream_session_id: payload.stream_session_id,
+                    stream_session_id: streamSessionId,
                     sender_username: payload.sender.username,
                     content: payload.content,
                     emotes: payload.emotes || undefined,
@@ -217,7 +293,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                 },
                 create: {
                     message_id: payload.message_id,
-                    stream_session_id: payload.stream_session_id,
+                    stream_session_id: streamSessionId,
                     sender_user_id: senderUserId,
                     sender_username: payload.sender.username,
                     broadcaster_user_id: broadcasterUserId,
@@ -234,7 +310,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
             })
 
             // ═══════════════════════════════════════════════════════════════
-            // STEP 4: AWARD POINTS (only for live stream messages)
+            // STEP 5: AWARD POINTS (only for live stream messages)
             // ═══════════════════════════════════════════════════════════════
 
             if (!isBot(senderUsernameLower)) {
@@ -243,11 +319,11 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
 
                 if (botDetection.isBot) {
                     pointsReason = 'Bot detected'
-                } else if (payload.stream_session_id) {
+                } else if (streamSessionId) {
                     // Award points
                     const pointResult = await awardPoint(
                         senderUserId,
-                        payload.stream_session_id,
+                        streamSessionId,
                         payload.message_id,
                         payload.sender.badges
                     )
@@ -275,7 +351,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // STEP 5: MARK JOB COMPLETE
+        // STEP 6: MARK JOB COMPLETE
         // ═══════════════════════════════════════════════════════════════
 
         await completeChatJob(job.id)
