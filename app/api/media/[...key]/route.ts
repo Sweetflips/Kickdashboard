@@ -72,13 +72,10 @@ export async function GET(
       ? 'public, max-age=31536000, immutable'
       : 'public, max-age=3600'
 
-    // NextResponse expects a web-compatible BodyInit; convert Node Buffer -> ArrayBuffer
-    const arrayBuffer = object.body.buffer.slice(
-      object.body.byteOffset,
-      object.body.byteOffset + object.body.byteLength
-    )
+    // NextResponse BodyInit typing is picky in Node; send a Uint8Array (Buffer is a Uint8Array at runtime)
+    const body: Uint8Array = object.body
 
-    return new NextResponse(arrayBuffer, {
+    return new NextResponse(body, {
       headers: {
         'Content-Type': object.contentType || 'application/octet-stream',
         'Cache-Control': cacheControl,
