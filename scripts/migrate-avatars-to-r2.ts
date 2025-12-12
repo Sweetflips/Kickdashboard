@@ -12,6 +12,7 @@
 
 import { PrismaClient } from '@prisma/client'
 import { uploadToR2 } from '../lib/r2'
+import { buildMediaUrlFromKey } from '../lib/media-url'
 import sharp from 'sharp'
 import { randomBytes } from 'crypto'
 
@@ -95,7 +96,7 @@ async function migrateAvatars() {
           },
         })
 
-        const serveUrl = `/api/media/${r2Key}`
+        const serveUrl = buildMediaUrlFromKey(r2Key)
 
         // Update database
         await db.user.update({

@@ -1,6 +1,8 @@
 import { db } from '@/lib/db'
 import { memoryCache } from '@/lib/memory-cache'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 
 // Allow caching but revalidate frequently for fresh data
 export const dynamic = 'force-dynamic'
@@ -246,6 +248,41 @@ function makeRowComparatorV2(sortBy: SortBy) {
     }
 }
 
+/**
+ * Retry helper for Prisma queries that may hit transient errors
+ */
+async function withRetry<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 3,
+    operation: string = 'database operation'
+): Promise<T> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            return await fn()
+        } catch (error: any) {
+            const isRetryableError =
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                (error.code === 'P2024' || error.code === 'P2034' || error.code === 'P4001' || error.code === 'P2028') ||
+                (error instanceof Error && (
+                    error.message.includes('could not serialize access') ||
+                    error.message.includes('concurrent update') ||
+                    error.message.includes('connection pool') ||
+                    error.message.includes('timeout')
+                ))
+
+            if (isRetryableError && attempt < maxRetries - 1) {
+                const delay = Math.min(100 * Math.pow(2, attempt), 1000) // Exponential backoff: 100ms, 200ms, 400ms max
+                const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined
+                console.warn(`[${operation}] Retryable error (attempt ${attempt + 1}/${maxRetries}), retrying after ${delay}ms...`, code || error.message)
+                await new Promise(resolve => setTimeout(resolve, delay))
+                continue
+            }
+            throw error
+        }
+    }
+    throw new Error(`Max retries exceeded for ${operation}`)
+}
+
 function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
     const user = row.user
     const hasKickLogin = !!user.last_login_at
@@ -257,7 +294,7 @@ function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
         user_id: user.id.toString(),
         kick_user_id: user.kick_user_id.toString(),
         username: user.username,
-        profile_picture_url: user.custom_profile_picture_url || user.profile_picture_url,
+        profile_picture_url: rewriteApiMediaUrlToCdn(user.custom_profile_picture_url || user.profile_picture_url),
         total_points: row.total_points,
         total_emotes: row.total_emotes,
         total_messages: row.total_messages,
@@ -283,8 +320,9 @@ async function buildLeaderboardRowsV2(sortBy: SortBy, dateFilter: DateRangeFilte
 }
 
 async function buildOverallRowsV2(): Promise<RowV2[]> {
-    const [userPoints, messageCounts, streamPairs] = await Promise.all([
-        db.userSweetCoins.findMany({
+    // Fetch users with sweet coins first
+    const userPoints = await withRetry(
+        () => db.userSweetCoins.findMany({
             include: {
                 user: {
                     select: {
@@ -300,18 +338,59 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
                 },
             },
         }),
-        db.chatMessage.groupBy({
-            by: ['sender_user_id'],
-            where: { sent_when_offline: false },
-            _count: { id: true },
-        }),
-        db.chatMessage.groupBy({
-            by: ['sender_user_id', 'stream_session_id'],
-            where: {
-                sent_when_offline: false,
-                stream_session_id: { not: null },
-            },
-        }),
+        3,
+        'buildOverallRowsV2: fetch userSweetCoins'
+    )
+
+    if (userPoints.length === 0) return []
+
+    // Derive kick_user_ids to scope queries (keep as BigInt for Prisma compatibility)
+    const kickUserIds = userPoints.map(up => {
+        const kickId = (up.user as any).kick_user_id
+        return typeof kickId === 'bigint' ? kickId : BigInt(kickId)
+    }).filter(Boolean)
+
+    if (kickUserIds.length === 0) {
+        // No valid kick_user_ids, return rows with zero stats
+        return userPoints.map((up) => {
+            const user = up.user as unknown as UserSummaryV2
+            return {
+                user,
+                total_points: up.total_sweet_coins,
+                total_emotes: up.total_emotes,
+                total_messages: 0,
+                streams_watched: 0,
+                last_point_earned_at: up.last_sweet_coin_earned_at || null,
+            }
+        })
+    }
+
+    // Scope groupBy queries to these specific users
+    const [messageCounts, streamPairs] = await Promise.all([
+        withRetry(
+            () => db.chatMessage.groupBy({
+                by: ['sender_user_id'],
+                where: {
+                    sent_when_offline: false,
+                    sender_user_id: { in: kickUserIds },
+                },
+                _count: { id: true },
+            }),
+            3,
+            'buildOverallRowsV2: messageCounts groupBy'
+        ),
+        withRetry(
+            () => db.chatMessage.groupBy({
+                by: ['sender_user_id', 'stream_session_id'],
+                where: {
+                    sent_when_offline: false,
+                    stream_session_id: { not: null },
+                    sender_user_id: { in: kickUserIds },
+                },
+            }),
+            3,
+            'buildOverallRowsV2: streamPairs groupBy'
+        ),
     ])
 
     const messagesMap = new Map<bigint, number>()
@@ -338,19 +417,24 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
 }
 
 async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<RowV2[]> {
-    const pointAgg = await db.sweetCoinHistory.groupBy({
-        by: ['user_id'],
-        where: { earned_at: dateFilter },
-        _sum: { sweet_coins_earned: true },
-        _max: { earned_at: true },
-    })
+    const pointAgg = await withRetry(
+        () => db.sweetCoinHistory.groupBy({
+            by: ['user_id'],
+            where: { earned_at: dateFilter },
+            _sum: { sweet_coins_earned: true },
+            _max: { earned_at: true },
+        }),
+        3,
+        'buildDateFilteredRowsV2: sweetCoinHistory groupBy'
+    )
 
     if (pointAgg.length === 0) return []
 
     const userIds = pointAgg.map(a => a.user_id)
 
-    const [users, messageCounts, streamPairs, emoteCounts] = await Promise.all([
-        db.user.findMany({
+    // Fetch users first
+    const users = await withRetry(
+        () => db.user.findMany({
             where: { id: { in: userIds } },
             select: {
                 id: true,
@@ -363,50 +447,95 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
                 telegram_connected: true,
             },
         }),
-        db.chatMessage.groupBy({
-            by: ['sender_user_id'],
-            where: {
-                created_at: dateFilter,
-                sent_when_offline: false,
-            },
-            _count: { id: true },
-        }),
-        db.chatMessage.groupBy({
-            by: ['sender_user_id', 'stream_session_id'],
-            where: {
-                created_at: dateFilter,
-                sent_when_offline: false,
-                stream_session_id: { not: null },
-            },
-        }),
-        db.chatMessage.groupBy({
-            by: ['sender_user_id'],
-            where: {
-                created_at: dateFilter,
-                sent_when_offline: false,
-                has_emotes: true,
-            },
-            _count: { id: true },
-        }),
-    ])
+        3,
+        'buildDateFilteredRowsV2: fetch users'
+    )
 
     const userById = new Map<bigint, UserSummaryV2>()
     users.forEach((u) => userById.set(u.id, u as unknown as UserSummaryV2))
 
+    // Derive kick_user_ids to scope queries (keep as BigInt for Prisma compatibility)
+    const kickUserIds = users.map(u => {
+        const kickId = u.kick_user_id
+        return typeof kickId === 'bigint' ? kickId : BigInt(kickId)
+    }).filter(Boolean)
+
+    // Use Promise.allSettled so non-critical stats can fall back to 0
+    const [messageResult, streamResult, emoteResult] = await Promise.allSettled([
+        kickUserIds.length > 0
+            ? withRetry(
+                () => db.chatMessage.groupBy({
+                    by: ['sender_user_id'],
+                    where: {
+                        created_at: dateFilter,
+                        sent_when_offline: false,
+                        sender_user_id: { in: kickUserIds },
+                    },
+                    _count: { id: true },
+                }),
+                3,
+                'buildDateFilteredRowsV2: messageCounts groupBy'
+            )
+            : Promise.resolve([]),
+        kickUserIds.length > 0
+            ? withRetry(
+                () => db.chatMessage.groupBy({
+                    by: ['sender_user_id', 'stream_session_id'],
+                    where: {
+                        created_at: dateFilter,
+                        sent_when_offline: false,
+                        stream_session_id: { not: null },
+                        sender_user_id: { in: kickUserIds },
+                    },
+                }),
+                3,
+                'buildDateFilteredRowsV2: streamPairs groupBy'
+            )
+            : Promise.resolve([]),
+        kickUserIds.length > 0
+            ? withRetry(
+                () => db.chatMessage.groupBy({
+                    by: ['sender_user_id'],
+                    where: {
+                        created_at: dateFilter,
+                        sent_when_offline: false,
+                        has_emotes: true,
+                        sender_user_id: { in: kickUserIds },
+                    },
+                    _count: { id: true },
+                }),
+                3,
+                'buildDateFilteredRowsV2: emoteCounts groupBy'
+            )
+            : Promise.resolve([]),
+    ])
+
     const messagesMap = new Map<bigint, number>()
-    messageCounts.forEach((row) => {
-        messagesMap.set(row.sender_user_id, Number(row._count.id))
-    })
+    if (messageResult.status === 'fulfilled') {
+        messageResult.value.forEach((row) => {
+            messagesMap.set(row.sender_user_id, Number(row._count.id))
+        })
+    } else {
+        console.warn('[buildDateFilteredRowsV2] Failed to fetch message counts, using defaults:', messageResult.reason)
+    }
 
     const streamsMap = new Map<bigint, number>()
-    streamPairs.forEach((row) => {
-        streamsMap.set(row.sender_user_id, (streamsMap.get(row.sender_user_id) || 0) + 1)
-    })
+    if (streamResult.status === 'fulfilled') {
+        streamResult.value.forEach((row) => {
+            streamsMap.set(row.sender_user_id, (streamsMap.get(row.sender_user_id) || 0) + 1)
+        })
+    } else {
+        console.warn('[buildDateFilteredRowsV2] Failed to fetch stream pairs, using defaults:', streamResult.reason)
+    }
 
     const emotesMap = new Map<bigint, number>()
-    emoteCounts.forEach((row) => {
-        emotesMap.set(row.sender_user_id, Number(row._count.id))
-    })
+    if (emoteResult.status === 'fulfilled') {
+        emoteResult.value.forEach((row) => {
+            emotesMap.set(row.sender_user_id, Number(row._count.id))
+        })
+    } else {
+        console.warn('[buildDateFilteredRowsV2] Failed to fetch emote counts, using defaults:', emoteResult.reason)
+    }
 
     return pointAgg
         .map((agg) => {
@@ -520,7 +649,7 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
             user_id: userId.toString(),
             kick_user_id: kickUserId.toString(),
             username: user.username,
-            profile_picture_url: user.custom_profile_picture_url || user.profile_picture_url,
+            profile_picture_url: rewriteApiMediaUrlToCdn(user.custom_profile_picture_url || user.profile_picture_url),
             total_points: up.total_sweet_coins,
             total_emotes: up.total_emotes,
             total_messages: messagesMap.get(kickUserId) || 0,
@@ -697,7 +826,7 @@ async function fetchDateFilteredLeaderboard(
             user_id: userId.toString(),
             kick_user_id: kickUserId.toString(),
             username: user.username,
-            profile_picture_url: user.custom_profile_picture_url || user.profile_picture_url,
+            profile_picture_url: rewriteApiMediaUrlToCdn(user.custom_profile_picture_url || user.profile_picture_url),
             total_points: pointsMap.get(userId) || 0,
             total_emotes: emotesMap.get(kickUserId) || 0,
             total_messages: messagesMap.get(kickUserId) || 0,

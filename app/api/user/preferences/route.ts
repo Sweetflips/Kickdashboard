@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthenticatedUser } from '@/lib/auth'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export async function GET(request: Request) {
     try {
@@ -46,8 +47,8 @@ export async function GET(request: Request) {
         return NextResponse.json({
             kick_user_id: user.kick_user_id.toString(),
             username: user.username,
-            profile_picture_url: user.profile_picture_url,
-            custom_profile_picture_url: user.custom_profile_picture_url,
+            profile_picture_url: rewriteApiMediaUrlToCdn(user.profile_picture_url),
+            custom_profile_picture_url: rewriteApiMediaUrlToCdn(user.custom_profile_picture_url),
             notifications_enabled: user.notifications_enabled,
             email_notifications_enabled: user.email_notifications_enabled,
             chat_font_size: user.chat_font_size,
@@ -109,7 +110,7 @@ export async function PATCH(request: Request) {
             success: true,
             preferences: {
                 kick_user_id: user.kick_user_id.toString(),
-                custom_profile_picture_url: user.custom_profile_picture_url,
+                custom_profile_picture_url: rewriteApiMediaUrlToCdn(user.custom_profile_picture_url),
                 notifications_enabled: user.notifications_enabled,
                 email_notifications_enabled: user.email_notifications_enabled,
                 chat_font_size: user.chat_font_size,

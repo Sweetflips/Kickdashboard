@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 /**
  * Get all chat messages for a specific stream session
@@ -95,7 +96,7 @@ export async function GET(
                 user_id: Number(msg.sender.kick_user_id),
                 username: msg.sender_username,
                 is_verified: msg.sender_is_verified || false,
-                profile_picture: msg.sender.custom_profile_picture_url || msg.sender.profile_picture_url || undefined,
+                profile_picture: rewriteApiMediaUrlToCdn(msg.sender.custom_profile_picture_url || msg.sender.profile_picture_url) || undefined,
                 channel_slug: '',
                 identity: {
                     username_color: msg.sender_username_color || '#FFFFFF',

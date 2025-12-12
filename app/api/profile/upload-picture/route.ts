@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { uploadToR2 } from '@/lib/r2'
+import { buildMediaUrlFromKey } from '@/lib/media-url'
 import sharp from 'sharp'
 import { randomBytes } from 'crypto'
 
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
         console.log(`   └─ ✅ Successfully uploaded to R2\n`)
 
         // Generate the serve URL
-        const serveUrl = `/api/media/${r2Key}`
+        const serveUrl = buildMediaUrlFromKey(r2Key)
 
         // Save to database
         console.log('🗄️  [DATABASE] Saving profile picture to database...')

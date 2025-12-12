@@ -1,6 +1,7 @@
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
                 referee: {
                     id: ref.referee.id,
                     username: ref.referee.username,
-                    profilePicture: ref.referee.profile_picture_url,
+                    profilePicture: rewriteApiMediaUrlToCdn(ref.referee.profile_picture_url),
                 },
                 sweet_coins: refereeSweetCoins,
                 referredAt: ref.created_at,

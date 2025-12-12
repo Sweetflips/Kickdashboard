@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,7 +76,10 @@ export async function GET(request: Request) {
                     channel_slug: streamSession.channel_slug,
                     started_at: streamSession.started_at.toISOString(),
                     ended_at: streamSession.ended_at?.toISOString() || null,
-                    broadcaster: streamSession.broadcaster,
+                    broadcaster: {
+                        ...streamSession.broadcaster,
+                        profile_picture_url: rewriteApiMediaUrlToCdn(streamSession.broadcaster.profile_picture_url),
+                    },
                 },
                 payouts: [],
                 summary: {
@@ -163,7 +167,10 @@ export async function GET(request: Request) {
                     channel_slug: streamSession.channel_slug,
                     started_at: streamSession.started_at.toISOString(),
                     ended_at: streamSession.ended_at?.toISOString() || null,
-                    broadcaster: streamSession.broadcaster,
+                    broadcaster: {
+                        ...streamSession.broadcaster,
+                        profile_picture_url: rewriteApiMediaUrlToCdn(streamSession.broadcaster.profile_picture_url),
+                    },
                 },
                 payouts: [],
                 summary: {
@@ -194,7 +201,7 @@ export async function GET(request: Request) {
                 user_id: p.user_id.toString(),
                 kick_user_id: user?.kick_user_id.toString() || '',
                 username: user?.username || 'Unknown',
-                profile_picture_url: user?.custom_profile_picture_url || user?.profile_picture_url || null,
+                profile_picture_url: rewriteApiMediaUrlToCdn(user?.custom_profile_picture_url || user?.profile_picture_url || null),
                 sweet_coins: p.sweet_coins,
                 multiplier: p.multiplier,
                 weighted_sweet_coins: Number(p.weightedSweetCoins.toFixed(2)),
@@ -215,7 +222,10 @@ export async function GET(request: Request) {
                 ended_at: streamSession.ended_at?.toISOString() || null,
                 total_messages: streamSession.total_messages,
                 peak_viewer_count: streamSession.peak_viewer_count,
-                broadcaster: streamSession.broadcaster,
+                broadcaster: {
+                    ...streamSession.broadcaster,
+                    profile_picture_url: rewriteApiMediaUrlToCdn(streamSession.broadcaster.profile_picture_url),
+                },
             },
             payouts,
             summary: {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,7 +153,7 @@ export async function GET(request: Request) {
                         user_id: Number(offlineMsg.broadcaster.kick_user_id),
                         username: offlineMsg.broadcaster.username,
                         is_verified: false,
-                        profile_picture: offlineMsg.broadcaster.profile_picture_url || undefined,
+                        profile_picture: rewriteApiMediaUrlToCdn(offlineMsg.broadcaster.profile_picture_url) || undefined,
                         channel_slug: '',
                         identity: null,
                     },
@@ -164,7 +165,7 @@ export async function GET(request: Request) {
                             offlineMsg.sender_username,
                             (offlineMsg.sender_badges as any) || []
                         ),
-                        profile_picture: offlineMsg.sender.profile_picture_url || undefined,
+                        profile_picture: rewriteApiMediaUrlToCdn(offlineMsg.sender.profile_picture_url) || undefined,
                         channel_slug: '',
                         identity: {
                             username_color: offlineMsg.sender_username_color || '#FFFFFF',
@@ -187,7 +188,7 @@ export async function GET(request: Request) {
                         user_id: Number(onlineMsg.broadcaster.kick_user_id),
                         username: onlineMsg.broadcaster.username,
                         is_verified: false,
-                        profile_picture: onlineMsg.broadcaster.profile_picture_url || undefined,
+                        profile_picture: rewriteApiMediaUrlToCdn(onlineMsg.broadcaster.profile_picture_url) || undefined,
                         channel_slug: onlineMsg.stream_session?.channel_slug || '',
                         identity: null,
                     },
@@ -199,7 +200,7 @@ export async function GET(request: Request) {
                             onlineMsg.sender_username,
                             (onlineMsg.sender_badges as any) || []
                         ),
-                        profile_picture: onlineMsg.sender.profile_picture_url || undefined,
+                        profile_picture: rewriteApiMediaUrlToCdn(onlineMsg.sender.profile_picture_url) || undefined,
                         channel_slug: '',
                         identity: {
                             username_color: onlineMsg.sender_username_color || '#FFFFFF',

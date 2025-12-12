@@ -1,6 +1,7 @@
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,7 +70,7 @@ export async function GET(
             username: winner.entry.user.username,
             user_id: winner.entry.user.id.toString(),
             entry_id: winner.entry.id.toString(),
-            profile_picture: winner.entry.user.profile_picture_url,
+            profile_picture: rewriteApiMediaUrlToCdn(winner.entry.user.profile_picture_url),
             tickets: winner.entry.tickets,
             selected_at: winner.selected_at.toISOString(),
             selected_ticket_index: winner.selected_ticket_index !== null ? Number(winner.selected_ticket_index) : null,

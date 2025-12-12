@@ -1,6 +1,7 @@
 import { isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
                     userId: purchase.user.id.toString(),
                     kickUserId: purchase.user.kick_user_id.toString(),
                     username: purchase.user.username,
-                    profilePicture: purchase.user.profile_picture_url,
+                        profilePicture: rewriteApiMediaUrlToCdn(purchase.user.profile_picture_url),
                     totalTickets: 0,
                     totalPointsSpent: 0,
                     purchases: [],
@@ -155,7 +156,7 @@ export async function GET(request: NextRequest) {
                 userId: purchase.user.id.toString(),
                 kickUserId: purchase.user.kick_user_id.toString(),
                 username: purchase.user.username,
-                profilePicture: purchase.user.profile_picture_url,
+                profilePicture: rewriteApiMediaUrlToCdn(purchase.user.profile_picture_url),
                 tickets: purchase.tickets,
                 pointsSpent,
                 purchasedAt: purchase.created_at.toISOString(),

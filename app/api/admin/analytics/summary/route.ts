@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -221,7 +222,7 @@ export async function GET(request: Request) {
                 return {
                     rank: idx + 1,
                     username: entry.user.username,
-                    profile_picture_url: entry.user.custom_profile_picture_url || entry.user.profile_picture_url,
+                    profile_picture_url: rewriteApiMediaUrlToCdn(entry.user.custom_profile_picture_url || entry.user.profile_picture_url),
                     total_sweet_coins: activityBreakdown.sweet_coins,
                     total_emotes: activityBreakdown.emotes,
                     activity_breakdown: activityBreakdown,

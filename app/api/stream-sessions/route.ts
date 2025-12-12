@@ -2,6 +2,7 @@ import { isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,10 +113,15 @@ export async function GET(request: Request) {
                 total_messages: session.total_messages || 0,
                 duration_seconds: duration,
                 duration_formatted: duration !== null && duration >= 0 ? formatDuration(duration) : null,
-                broadcaster: session.broadcaster || {
-                    username: 'Unknown',
-                    profile_picture_url: null,
-                },
+                broadcaster: session.broadcaster
+                    ? {
+                        ...session.broadcaster,
+                        profile_picture_url: rewriteApiMediaUrlToCdn(session.broadcaster.profile_picture_url),
+                    }
+                    : {
+                        username: 'Unknown',
+                        profile_picture_url: null,
+                    },
             }
         })
 

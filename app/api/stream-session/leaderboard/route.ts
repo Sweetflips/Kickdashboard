@@ -1,6 +1,7 @@
 import { isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { memoryCache } from '@/lib/memory-cache'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -352,7 +353,7 @@ export async function GET(request: Request) {
                 user_id: stats.userId.toString(),
                 kick_user_id: kickUserId?.toString() || '',
                 username: user?.username || 'Unknown',
-                profile_picture_url: user?.custom_profile_picture_url || user?.profile_picture_url || null,
+                profile_picture_url: rewriteApiMediaUrlToCdn(user?.custom_profile_picture_url || user?.profile_picture_url || null),
                 points_earned: stats.points,
                 messages_sent: stats.messages,
                 emotes_used: stats.emotes,

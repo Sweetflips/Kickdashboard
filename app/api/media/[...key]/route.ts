@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getFromR2 } from '@/lib/r2'
+import { getMediaCdnBaseUrl, signCdnPath } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,24 @@ export async function GET(
         { error: 'Forbidden: Hotlinking not allowed' },
         { status: 403 }
       )
+    }
+
+    // If a CDN base is configured, redirect to a short-lived signed CDN URL.
+    // The CDN (Cloudflare Worker) enforces signature and serves bytes from private R2.
+    const cdnBase = getMediaCdnBaseUrl()
+    const signingSecret = process.env.MEDIA_CDN_SIGNING_SECRET || ''
+    if (cdnBase && signingSecret) {
+      const isVersioned = /\/\d+_[a-zA-Z0-9]+\./.test(key)
+      const exp = Math.floor(Date.now() / 1000) + (isVersioned ? 86400 : 900) // 24h for versioned, 15m otherwise
+      const sig = await signCdnPath(key, exp, signingSecret)
+      const cdnUrl = `${cdnBase.replace(/\/+$/, '')}/${key.replace(/^\/+/, '')}?exp=${exp}&sig=${sig}`
+      return NextResponse.redirect(cdnUrl, {
+        status: 302,
+        headers: {
+          // Cache redirect briefly (the signed URL itself is short-lived)
+          'Cache-Control': isVersioned ? 'public, max-age=300' : 'public, max-age=60',
+        },
+      })
     }
 
     // Fetch from R2
