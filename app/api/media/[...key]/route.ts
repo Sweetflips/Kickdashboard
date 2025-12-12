@@ -72,8 +72,8 @@ export async function GET(
       ? 'public, max-age=31536000, immutable'
       : 'public, max-age=3600'
 
-    // NextResponse BodyInit typing is picky in Node; send a Uint8Array (Buffer is a Uint8Array at runtime)
-    const body: Uint8Array = object.body
+    // Convert Buffer to ArrayBuffer slice for NextResponse BodyInit compatibility
+    const body = object.body.buffer.slice(object.body.byteOffset, object.body.byteOffset + object.body.byteLength) as ArrayBuffer
 
     return new NextResponse(body, {
       headers: {
