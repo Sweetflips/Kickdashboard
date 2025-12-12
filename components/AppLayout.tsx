@@ -353,19 +353,17 @@ export default function AppLayout({ children }: LayoutProps) {
             {/* Sidebar */}
             <aside className={`fixed top-0 left-0 z-40 w-64 h-screen transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 bg-white dark:bg-kick-surface border-r border-gray-200 dark:border-kick-border`}>
                 <div className="h-full px-3 py-4 overflow-y-auto">
-                    <div className="flex items-center justify-between mb-8 px-2">
-                        <div className="flex items-center gap-3">
-                            <Link href="/" className="flex items-center">
-                                <Image
-                                    src="/icons/kick.jpg"
-                                    alt="Kick Logo"
-                                    width={32}
-                                    height={32}
-                                    className="rounded-lg"
-                                />
-                            </Link>
-                            <h2 className="text-h4 font-semibold text-gray-900 dark:text-kick-text">Dashboard</h2>
-                        </div>
+                    <div className="flex items-center justify-between mb-5 px-2">
+                        <Link href="/" className="flex items-center">
+                            <Image
+                                src="/icons/kick.jpg"
+                                alt="Kick Logo"
+                                width={30}
+                                height={30}
+                                className="rounded-lg"
+                                priority
+                            />
+                        </Link>
                         <button
                             onClick={() => setSidebarOpen(false)}
                             className="lg:hidden text-gray-600 dark:text-kick-text-secondary hover:text-gray-900 dark:hover:text-kick-text"
@@ -378,7 +376,7 @@ export default function AppLayout({ children }: LayoutProps) {
                     <ul className="space-y-2">
                         {!isAdminRoute && (
                             <li className="mt-1 mb-2">
-                                <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                <div className="flex items-center gap-2 px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
                                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h3a1 1 0 001-1v-3a1 1 0 011-1h2a1 1 0 011 1v3a1 1 0 001 1h3a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                                     </svg>
@@ -387,7 +385,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </li>
                         )}
                         <li>
-                            <Link href="/" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -399,7 +397,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/activity" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/activity' || pathname?.startsWith('/activity/') ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/activity" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/activity' || pathname?.startsWith('/activity/') ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -411,7 +409,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/leaderboard" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/leaderboard' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/leaderboard" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/leaderboard' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -425,7 +423,7 @@ export default function AppLayout({ children }: LayoutProps) {
                         </li>
                         {!isAdminRoute ? (
                             <li className="mt-4 mb-2">
-                                <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                <div className="flex items-center gap-2 px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
                                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path d="M4 2a2 2 0 00-2 2v2a2 2 0 002 2v8a2 2 0 002 2h8a2 2 0 002-2V8a2 2 0 002-2V4a2 2 0 00-2-2H4zm0 2h12v2H4V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1z" />
                                     </svg>
@@ -434,13 +432,13 @@ export default function AppLayout({ children }: LayoutProps) {
                             </li>
                         ) : (
                             <li className="mt-4 mb-2">
-                                <span className="text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                <span className="px-2 py-2 block text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
                                     Rewards
                                 </span>
                             </li>
                         )}
                         <li>
-                            <Link href="/raffles" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/raffles' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -459,7 +457,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/shop" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/shop' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/shop" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/shop' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -471,7 +469,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/achievements" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/achievements' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/achievements" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/achievements' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -484,7 +482,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/referrals" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/referrals' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/referrals" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/referrals' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -498,12 +496,12 @@ export default function AppLayout({ children }: LayoutProps) {
                         {isAdmin && (
                             <>
                                 <li className="mt-4 mb-2">
-                                    <div className="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-secondary uppercase tracking-wider">
+                                    <div className="px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
                                         Admin
                                     </div>
                                 </li>
                                 <li>
-                                    <Link href="/streams" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    <Link href="/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)
                                         }
@@ -515,7 +513,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/admin/analytics" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/analytics' || pathname === '/analytics' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    <Link href="/admin/analytics" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/analytics' || pathname === '/analytics' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)
                                         }
@@ -528,7 +526,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/admin/raffles" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/raffles' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    <Link href="/admin/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)
                                         }
@@ -541,7 +539,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/admin/streams" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/streams' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    <Link href="/admin/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/streams' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)
                                         }
@@ -553,7 +551,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/admin/users" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/users' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    <Link href="/admin/users" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/users' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)
                                         }
@@ -565,7 +563,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/admin/payouts" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/payouts' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    <Link href="/admin/payouts" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/payouts' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)
                                         }
@@ -578,7 +576,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/admin/purchases" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/purchases' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    <Link href="/admin/purchases" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/purchases' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)
                                         }
@@ -591,7 +589,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/admin/promo-codes" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/admin/promo-codes' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                    <Link href="/admin/promo-codes" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/promo-codes' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)
                                         }
@@ -607,7 +605,7 @@ export default function AppLayout({ children }: LayoutProps) {
                         )}
                         {!isAdminRoute && (
                             <li className="mt-4 mb-2">
-                                <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-gray-500 dark:text-kick-text-muted uppercase tracking-wider">
+                                <div className="flex items-center gap-2 px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
                                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path fillRule="evenodd" d="M10 2a5 5 0 00-3.536 8.536A7.002 7.002 0 003 17a1 1 0 102 0 5 5 0 0110 0 1 1 0 102 0 7.002 7.002 0 00-3.464-6.464A5 5 0 0010 2zm-3 5a3 3 0 116 0 3 3 0 01-6 0z" clipRule="evenodd" />
                                     </svg>
@@ -616,7 +614,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </li>
                         )}
                         <li>
-                            <Link href="/profile" className={`flex items-center p-2 rounded-lg transition-colors ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text' : 'text-gray-600 dark:text-kick-text-secondary hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/profile" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -662,8 +660,8 @@ export default function AppLayout({ children }: LayoutProps) {
                             )}
                             {isAuthenticated && userData?.id && (
                                 <div
-                                    className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border"
-                                    title="Sweet Coins"
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border"
+                                    title="Points"
                                 >
                                     <Image
                                         src="/icons/Sweetflipscoin.png"
@@ -674,6 +672,9 @@ export default function AppLayout({ children }: LayoutProps) {
                                     />
                                     <span className="text-sm font-semibold tabular-nums">
                                         {pointsLoading && userPoints === null ? '…' : (userPoints ?? 0).toLocaleString()}
+                                    </span>
+                                    <span className="hidden md:inline text-sm font-medium text-gray-600 dark:text-kick-text-secondary">
+                                        Points
                                     </span>
                                 </div>
                             )}
