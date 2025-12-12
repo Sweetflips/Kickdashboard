@@ -201,7 +201,7 @@ export async function purchaseTickets(
             // Log transaction (for purchase history)
             await tx.$executeRaw`
               INSERT INTO purchase_transactions (
-                user_id, type, quantity, points_spent, item_name, advent_item_id, raffle_id, metadata
+                    user_id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, metadata
               )
               VALUES (
                 ${userId}, ${'raffle_ticket'}, ${quantity}, ${totalCost}, ${raffle.title}, NULL, ${raffleId}, NULL

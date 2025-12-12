@@ -10,12 +10,12 @@ type Group = {
   item: string
   type: string
   totalQuantity: number
-  totalPointsSpent: number
+  totalSweetCoinsSpent: number
   transactions: Array<{
     id: string
     created_at: string
     quantity: number
-    points_spent: number
+    sweet_coins_spent: number
   }>
   transactionsCount: number
   lastPurchased: string
@@ -176,7 +176,7 @@ export default function PurchaseHistoryClient() {
           <div>Item</div>
           <div>Type</div>
           <div>Total qty</div>
-          <div>Total points</div>
+          <div>Total Sweet Coins</div>
           <div>Transactions</div>
           <div>Last purchased</div>
           <div>Status</div>
@@ -217,7 +217,7 @@ export default function PurchaseHistoryClient() {
                       </div>
                       <div className="text-sm text-gray-700 dark:text-kick-text-secondary">{g.type}</div>
                       <div className="text-sm text-gray-900 dark:text-kick-text tabular-nums">{g.totalQuantity.toLocaleString()}</div>
-                      <div className="text-sm text-gray-900 dark:text-kick-text tabular-nums">{g.totalPointsSpent.toLocaleString()} Points</div>
+                      <div className="text-sm text-gray-900 dark:text-kick-text tabular-nums">{g.totalSweetCoinsSpent.toLocaleString()} Sweet Coins</div>
                       <div className="text-sm text-gray-700 dark:text-kick-text-secondary tabular-nums">{g.transactionsCount}</div>
                       <div className="text-sm text-gray-700 dark:text-kick-text-secondary">{formatUtc(g.lastPurchased)}</div>
                       <div className="text-sm">
@@ -240,7 +240,7 @@ export default function PurchaseHistoryClient() {
                                 {formatUtc(t.created_at)}
                               </div>
                               <div className="text-sm text-gray-900 dark:text-kick-text">
-                                <span className="font-medium tabular-nums">{t.quantity}</span> ticket{t.quantity === 1 ? '' : 's'} ({t.points_spent.toLocaleString()} Points)
+                                <span className="font-medium tabular-nums">{t.quantity}</span> ticket{t.quantity === 1 ? '' : 's'} ({t.sweet_coins_spent.toLocaleString()} Sweet Coins)
                               </div>
                             </div>
                           ))}

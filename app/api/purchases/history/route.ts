@@ -10,7 +10,7 @@ type TxRow = {
   id: bigint
   type: string
   quantity: number
-  points_spent: number
+  sweet_coins_spent: number
   item_name: string
   advent_item_id: string | null
   raffle_id: bigint | null
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
     const { rows } = await db.$transaction(async (tx) => {
       await backfillMissingPurchaseTransactions(tx as any, auth.userId)
       const rows = await tx.$queryRaw<TxRow[]>`
-        SELECT id, type, quantity, points_spent, item_name, advent_item_id, raffle_id, created_at
+        SELECT id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, created_at
         FROM purchase_transactions
         WHERE user_id = ${auth.userId}
           AND (${from}::timestamptz IS NULL OR created_at >= ${from}::timestamptz)
@@ -104,12 +104,12 @@ export async function GET(request: NextRequest) {
       item: string
       type: string
       totalQuantity: number
-      totalPointsSpent: number
+      totalSweetCoinsSpent: number
       transactions: Array<{
         id: string
         created_at: string
         quantity: number
-        points_spent: number
+        sweet_coins_spent: number
       }>
       transactionsCount: number
       lastPurchased: string
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         id: r.id.toString(),
         created_at: r.created_at.toISOString(),
         quantity: r.quantity,
-        points_spent: r.points_spent,
+        sweet_coins_spent: r.sweet_coins_spent,
       }
 
       if (!existing) {
@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
           item: r.item_name,
           type: typeLabel(r.type),
           totalQuantity: r.quantity,
-          totalPointsSpent: r.points_spent,
+          totalSweetCoinsSpent: r.sweet_coins_spent,
           transactions: [tx],
           transactionsCount: 1,
           lastPurchased: tx.created_at,
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
         })
       } else {
         existing.totalQuantity += r.quantity
-        existing.totalPointsSpent += r.points_spent
+        existing.totalSweetCoinsSpent += r.sweet_coins_spent
         existing.transactions.push(tx)
         existing.transactionsCount += 1
         if (tx.created_at > existing.lastPurchased) existing.lastPurchased = tx.created_at

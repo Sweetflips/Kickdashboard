@@ -20,7 +20,7 @@ export async function ensurePurchaseTransactionsTable(tx: TxLike) {
       "user_id" BIGINT NOT NULL,
       "type" TEXT NOT NULL,
       "quantity" INTEGER NOT NULL,
-      "points_spent" INTEGER NOT NULL,
+      "sweet_coins_spent" INTEGER NOT NULL,
       "item_name" TEXT NOT NULL,
       "advent_item_id" TEXT,
       "raffle_id" BIGINT,
@@ -119,7 +119,7 @@ export async function backfillMissingPurchaseTransactions(tx: TxLike, userId: bi
 
     await tx.$executeRaw`
       INSERT INTO purchase_transactions (
-        user_id, type, quantity, points_spent, item_name, advent_item_id, raffle_id, metadata, created_at
+        user_id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, metadata, created_at
       )
       VALUES (
         ${userId}, ${'advent_ticket'}, ${remaining}, ${pointsSpent}, ${itemName}, ${p.item_id}, NULL, ${metadata as any}, ${p.created_at}
@@ -169,7 +169,7 @@ export async function backfillMissingPurchaseTransactions(tx: TxLike, userId: bi
 
     await tx.$executeRaw`
       INSERT INTO purchase_transactions (
-        user_id, type, quantity, points_spent, item_name, advent_item_id, raffle_id, metadata, created_at
+        user_id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, metadata, created_at
       )
       VALUES (
         ${userId}, ${'raffle_ticket'}, ${remaining}, ${pointsSpent}, ${itemName}, NULL, ${e.raffle_id}, ${metadata as any}, ${e.created_at}

@@ -9,7 +9,7 @@ type Row = {
   id: bigint
   type: string
   quantity: number
-  points_spent: number
+  sweet_coins_spent: number
   item_name: string
   advent_item_id: string | null
   raffle_id: bigint | null
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const { rows } = await db.$transaction(async (tx) => {
       await backfillMissingPurchaseTransactions(tx as any, auth.userId)
       const rows = await tx.$queryRaw<Row[]>`
-        SELECT id, type, quantity, points_spent, item_name, advent_item_id, raffle_id, created_at
+        SELECT id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, created_at
         FROM purchase_transactions
         WHERE user_id = ${auth.userId}
         ORDER BY created_at DESC
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         id: r.id.toString(),
         type: r.type,
         quantity: r.quantity,
-        points_spent: r.points_spent,
+        sweet_coins_spent: r.sweet_coins_spent,
         item_name: r.item_name,
         advent_item_id: r.advent_item_id,
         raffle_id: r.raffle_id ? r.raffle_id.toString() : null,

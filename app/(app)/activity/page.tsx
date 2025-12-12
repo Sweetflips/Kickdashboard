@@ -9,7 +9,7 @@ type RecentPurchase = {
   id: string
   type: string
   quantity: number
-  points_spent: number
+  sweet_coins_spent: number
   item_name: string
   created_at: string
 }
@@ -82,7 +82,7 @@ export default function MyActivityPage() {
                 id: String(p.id),
                 type: String(p.type),
                 quantity: Number(p.quantity) || 0,
-                points_spent: Number(p.points_spent) || 0,
+                sweet_coins_spent: Number(p.sweet_coins_spent) || 0,
                 item_name: String(p.item_name || 'Item'),
                 created_at: String(p.created_at),
               }))
@@ -123,10 +123,10 @@ export default function MyActivityPage() {
       const key = `${p.type}:${p.item_name}`
       const prev = byItem.get(key)
       if (!prev) {
-        byItem.set(key, { item: p.item_name, qty: p.quantity, points: p.points_spent, tx: 1, latest: p.created_at })
+        byItem.set(key, { item: p.item_name, qty: p.quantity, points: p.sweet_coins_spent, tx: 1, latest: p.created_at })
       } else {
         prev.qty += p.quantity
-        prev.points += p.points_spent
+        prev.points += p.sweet_coins_spent
         prev.tx += 1
         if (p.created_at > prev.latest) prev.latest = p.created_at
       }
@@ -138,7 +138,7 @@ export default function MyActivityPage() {
       if (g.tx > 1) {
         return `You purchased ${g.qty} ${unit} for ${g.item} (${g.tx} transactions)`
       }
-      return `${g.item} – ${g.qty} ${unit} (${g.points.toLocaleString()} Points)`
+      return `${g.item} – ${g.qty} ${unit} (${g.points.toLocaleString()} Sweet Coins)`
     })
   }, [purchases])
 
@@ -147,7 +147,7 @@ export default function MyActivityPage() {
         <div className="mb-6">
           <h1 className="text-h2 font-semibold text-gray-900 dark:text-kick-text">My Activity</h1>
           <p className="text-body text-gray-600 dark:text-kick-text-secondary">
-            Your personal dashboard across points, raffles, purchases, and connected accounts.
+            Your personal dashboard across Sweet Coins, raffles, purchases, and connected accounts.
           </p>
         </div>
 
@@ -158,21 +158,21 @@ export default function MyActivityPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Your Points */}
+          {/* Your Sweet Coins */}
           <div className="rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface p-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
                 <Image src="/icons/Sweetflipscoin.png" alt="" width={20} height={20} />
               </div>
               <div>
-                <div className="text-sm font-medium text-gray-900 dark:text-kick-text">Your Points</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-kick-text">Your Sweet Coins</div>
                 <div className="text-h3 font-semibold text-gray-900 dark:text-kick-text tabular-nums">
                   {loading ? '…' : (points ?? 0).toLocaleString()}
                 </div>
               </div>
             </div>
             <div className="mt-3 text-sm text-gray-600 dark:text-kick-text-secondary">
-              Earn points by chatting on stream or completing quests.
+              Earn Sweet Coins by chatting on stream or completing quests.
             </div>
           </div>
 
