@@ -44,6 +44,35 @@ function startWebServer() {
     process.stdout.write('🚀 Starting Next.js on port ' + port + '...\n');
     process.stdout.write('📂 PATH includes: ' + binPath + '\n');
 
+    const ensureStandaloneAssets = (standaloneDir) => {
+      try {
+        const rootDir = process.cwd();
+
+        const linkOrCopyDir = (src, dest) => {
+          if (!fs.existsSync(src) || fs.existsSync(dest)) return;
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+
+          // Prefer symlink/junction; fall back to copy.
+          try {
+            const isWindows = process.platform === 'win32';
+            fs.symlinkSync(src, dest, isWindows ? 'junction' : 'dir');
+          } catch (e) {
+            fs.cpSync(src, dest, { recursive: true });
+          }
+        };
+
+        // Standalone server.js does `process.chdir(__dirname)`,
+        // so it expects `public/` and `.next/static` relative to the standalone dir.
+        linkOrCopyDir(path.join(rootDir, 'public'), path.join(standaloneDir, 'public'));
+
+        const staticSrc = path.join(rootDir, '.next', 'static');
+        const staticDest = path.join(standaloneDir, '.next', 'static');
+        linkOrCopyDir(staticSrc, staticDest);
+      } catch (e) {
+        process.stdout.write('⚠️ Failed to prepare standalone assets: ' + (e && e.message ? e.message : String(e)) + '\n');
+      }
+    };
+
     // Prefer standalone server output when present.
     // This avoids "Failed to find Server Action" issues that happen when deploying only standalone artifacts
     // but starting with `next start` (which expects .next/server/server-reference-manifest.json in the root build).
@@ -64,6 +93,7 @@ function startWebServer() {
       nextProcess = spawnNode(['server.js'], { PORT: port, HOSTNAME: hostname });
     } else if (fs.existsSync(nextStandaloneServer)) {
       process.stdout.write('🚀 Using standalone server (.next/standalone/server.js)\n');
+      ensureStandaloneAssets(path.join(process.cwd(), '.next', 'standalone'));
       nextProcess = spawnNode([path.join('.next', 'standalone', 'server.js')], { PORT: port, HOSTNAME: hostname });
     } else {
       // Fallback to `next start` (works when the full `.next` directory is present).

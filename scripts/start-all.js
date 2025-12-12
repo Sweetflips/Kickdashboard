@@ -3,6 +3,29 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+function ensureStandaloneAssets(standaloneDir) {
+  try {
+    const rootDir = process.cwd();
+
+    const linkOrCopyDir = (src, dest) => {
+      if (!fs.existsSync(src) || fs.existsSync(dest)) return;
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+
+      try {
+        const isWindows = process.platform === 'win32';
+        fs.symlinkSync(src, dest, isWindows ? 'junction' : 'dir');
+      } catch (e) {
+        fs.cpSync(src, dest, { recursive: true });
+      }
+    };
+
+    linkOrCopyDir(path.join(rootDir, 'public'), path.join(standaloneDir, 'public'));
+    linkOrCopyDir(path.join(rootDir, '.next', 'static'), path.join(standaloneDir, '.next', 'static'));
+  } catch (e) {
+    console.warn('⚠️ Failed to prepare standalone assets:', e && e.message ? e.message : String(e));
+  }
+}
+
 console.log('🚀 Starting all services...');
 console.log(`📂 Working directory: ${process.cwd()}`);
 console.log(`🔧 Node version: ${process.version}`);
@@ -81,6 +104,7 @@ try {
     });
   } else if (fs.existsSync(nextStandaloneServer)) {
     console.log('🚀 Using standalone server (.next/standalone/server.js)');
+    ensureStandaloneAssets(path.join(process.cwd(), '.next', 'standalone'));
     webProcess = spawn(process.execPath, [path.join('.next', 'standalone', 'server.js')], {
       stdio: 'inherit',
       env: { ...envWithPath, PORT: port, HOSTNAME: hostname },
