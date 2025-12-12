@@ -1,4 +1,5 @@
-name = "kickdashboard-cdn"
+# cloudflare/cdn-worker/wrangler.toml
+name = 'kickdashboard'
 main = "src/index.ts"
 compatibility_date = "2025-12-01"
 
