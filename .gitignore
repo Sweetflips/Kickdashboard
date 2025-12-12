@@ -35,7 +35,7 @@ yarn-error.log*
 next-env.d.ts
 
 # prisma
-prisma/migrations/
+# NOTE: Prisma migrations should be committed so environments (Railway, prod) can run `prisma migrate deploy`.
 
 # env files (never commit these)
 .env
