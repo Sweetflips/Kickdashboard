@@ -72,8 +72,13 @@ export async function GET(
       ? 'public, max-age=31536000, immutable'
       : 'public, max-age=3600'
 
-    // Return Buffer as Response
-    return new NextResponse(object.body, {
+    // NextResponse expects a web-compatible BodyInit; convert Node Buffer -> ArrayBuffer
+    const arrayBuffer = object.body.buffer.slice(
+      object.body.byteOffset,
+      object.body.byteOffset + object.body.byteLength
+    )
+
+    return new NextResponse(arrayBuffer, {
       headers: {
         'Content-Type': object.contentType || 'application/octet-stream',
         'Cache-Control': cacheControl,
