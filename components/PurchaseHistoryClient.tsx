@@ -78,7 +78,6 @@ export default function PurchaseHistoryClient() {
           page: String(page),
         })
         const res = await fetch(`/api/purchases/history?${qs.toString()}`, {
-          cache: 'no-store',
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         })
         const data = await res.json().catch(() => null)

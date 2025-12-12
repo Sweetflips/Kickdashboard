@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import AppLayout from '../../components/AppLayout'
 
 interface LeaderboardEntry {
     rank: number
@@ -188,8 +187,7 @@ export default function LeaderboardPage() {
     }
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                         <h1 className="text-h2 font-semibold text-gray-900 dark:text-kick-text">Leaderboard</h1>
@@ -441,6 +439,5 @@ export default function LeaderboardPage() {
                     )}
                 </div>
             </div>
-        </AppLayout>
     )
 }

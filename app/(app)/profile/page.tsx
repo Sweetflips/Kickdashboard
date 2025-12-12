@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import Script from 'next/script'
-import AppLayout from '../../components/AppLayout'
-import ThemeToggle from '../../components/ThemeToggle'
+import ThemeToggle from '@/components/ThemeToggle'
 import { useToast } from '../../components/Toast'
 import { ACHIEVEMENTS } from '@/lib/achievements'
 
@@ -481,8 +480,7 @@ export default function ProfilePage() {
     const initials = username.charAt(0).toUpperCase()
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 {/* Header */}
                 <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-kick-text mb-2">Profile Settings</h1>
@@ -1248,6 +1246,5 @@ export default function ProfilePage() {
                     </div>
                 )}
             </div>
-        </AppLayout>
     )
 }

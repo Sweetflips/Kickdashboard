@@ -1,7 +1,6 @@
 'use client'
 
 import AdventCard from '@/components/AdventCard'
-import AppLayout from '@/components/AppLayout'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -120,17 +119,14 @@ export default function ShopPage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+      </div>
     )
   }
 
   if (!isConnected) {
     return (
-      <AppLayout>
         <div className="max-w-2xl mx-auto text-center py-12">
           <h2 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-4">
             Connect your Kick account to access the shop
@@ -145,12 +141,10 @@ export default function ShopPage() {
             Connect Kick
           </button>
         </div>
-      </AppLayout>
     )
   }
 
   return (
-    <AppLayout>
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-800 to-indigo-900 relative overflow-hidden">
         {/* Snowflake decorations */}
         <div className="absolute inset-0 pointer-events-none">
@@ -284,6 +278,5 @@ export default function ShopPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   )
 }

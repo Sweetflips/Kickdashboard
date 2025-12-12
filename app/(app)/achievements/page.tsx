@@ -1,6 +1,5 @@
 'use client'
 
-import AppLayout from '@/components/AppLayout'
 import { useToast } from '@/components/Toast'
 import { ACHIEVEMENTS } from '@/lib/achievements'
 import Image from 'next/image'
@@ -182,17 +181,14 @@ export default function AchievementsPage() {
 
     if (loading) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     if (!isConnected) {
         return (
-            <AppLayout>
                 <div className="max-w-2xl mx-auto text-center py-12">
                     <h2 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-4">
                         Connect your Kick account to view achievements
@@ -207,12 +203,10 @@ export default function AchievementsPage() {
                         Connect Kick
                     </button>
                 </div>
-            </AppLayout>
         )
     }
 
     return (
-        <AppLayout>
             <div className="space-y-6">
                 {/* Hero */}
                 <div className="relative overflow-hidden bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-2xl p-8 text-white">
@@ -468,6 +462,5 @@ export default function AchievementsPage() {
                     </a>
                 </div>
             </div>
-        </AppLayout>
     )
 }

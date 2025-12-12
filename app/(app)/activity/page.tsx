@@ -1,6 +1,5 @@
 'use client'
 
-import AppLayout from '@/components/AppLayout'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
@@ -54,10 +53,10 @@ export default function MyActivityPage() {
         setKickUsername(user.username || user.name || null)
 
         const [pointsRes, ticketsRes, purchasesRes, accountsRes] = await Promise.all([
-          fetch(`/api/points?kick_user_id=${encodeURIComponent(String(user.id))}`, { cache: 'no-store' }),
-          fetch(`/api/raffles/my-tickets`, { cache: 'no-store', headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`/api/purchases/recent?limit=25`, { cache: 'no-store', headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`/api/connected-accounts?kick_user_id=${encodeURIComponent(String(user.id))}`, { cache: 'no-store' }),
+          fetch(`/api/points?kick_user_id=${encodeURIComponent(String(user.id))}`),
+          fetch(`/api/raffles/my-tickets`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/purchases/recent?limit=25`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/connected-accounts?kick_user_id=${encodeURIComponent(String(user.id))}`),
         ])
 
         if (pointsRes.ok) {
@@ -144,8 +143,7 @@ export default function MyActivityPage() {
   }, [purchases])
 
   return (
-    <AppLayout>
-      <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto">
         <div className="mb-6">
           <h1 className="text-h2 font-semibold text-gray-900 dark:text-kick-text">My Activity</h1>
           <p className="text-body text-gray-600 dark:text-kick-text-secondary">
@@ -284,6 +282,5 @@ export default function MyActivityPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   )
 }

@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import AppLayout from '@/components/AppLayout'
 import RaffleCard from '@/components/RaffleCard'
-import HowToEarnPointsModal from '@/components/HowToEarnPointsModal'
+import PointsBar from '@/components/PointsBar'
 import WinnerClaimModal from '@/components/WinnerClaimModal'
 import { Toast } from '@/components/Toast'
 
@@ -73,7 +72,6 @@ export default function RafflesPage() {
     const [raffles, setRaffles] = useState<Raffle[]>([])
     const [myTickets, setMyTickets] = useState<MyTicket[]>([])
     const [history, setHistory] = useState<HistoryRaffle[]>([])
-    const [showHowToModal, setShowHowToModal] = useState(false)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
     const [historyFilter, setHistoryFilter] = useState<'all' | 'entered'>('all')
     const [selectedWinningRaffle, setSelectedWinningRaffle] = useState<{
@@ -226,37 +224,32 @@ export default function RafflesPage() {
 
     if (loading) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     if (!isConnected) {
         return (
-            <AppLayout>
-                <div className="max-w-2xl mx-auto text-center py-12">
-                    <h2 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-4">
-                        Connect your Kick account to join raffles
-                    </h2>
-                    <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
-                        Raffles are reserved for verified Kick viewers. Connect your account to see available raffles and use your points.
-                    </p>
-                    <button
-                        onClick={() => router.push('/login')}
-                        className="px-6 py-3 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark transition-colors"
-                    >
-                        Connect Kick
-                    </button>
-                </div>
-            </AppLayout>
+            <div className="max-w-2xl mx-auto text-center py-12">
+                <h2 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-4">
+                    Connect your Kick account to join raffles
+                </h2>
+                <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
+                    Raffles are reserved for verified Kick viewers. Connect your account to see available raffles and use your points.
+                </p>
+                <button
+                    onClick={() => router.push('/login')}
+                    className="px-6 py-3 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark transition-colors"
+                >
+                    Connect Kick
+                </button>
+            </div>
         )
     }
 
     return (
-        <AppLayout>
             <div className="space-y-6">
                 {/* Header */}
                 <div>
@@ -268,40 +261,7 @@ export default function RafflesPage() {
                     </p>
                 </div>
 
-                {/* Points Summary */}
-                <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div>
-                                <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary">
-                                    Your points
-                                </p>
-                                <p className="text-h3 font-semibold text-gray-900 dark:text-kick-text">
-                                    {userBalance.toLocaleString()}
-                                </p>
-                            </div>
-                            <div className="relative group">
-                                <svg
-                                    className="w-5 h-5 text-gray-400 dark:text-kick-text-muted cursor-help"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <div className="absolute left-0 bottom-full mb-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                    You earn points automatically by chatting during SweetFlips streams. • 1 point every 5 minutes while chatting • 2 points every 5 minutes if you are a Kick subscriber
-                                </div>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => setShowHowToModal(true)}
-                            className="px-4 py-2 text-small font-medium text-kick-purple hover:text-kick-purple-dark transition-colors"
-                        >
-                            How to earn points
-                        </button>
-                    </div>
-                </div>
+                <PointsBar points={userBalance} />
 
                 {/* Tabs */}
                 <div className="border-b border-gray-200 dark:border-kick-border">
@@ -545,7 +505,6 @@ export default function RafflesPage() {
                 )}
             </div>
 
-            <HowToEarnPointsModal isOpen={showHowToModal} onClose={() => setShowHowToModal(false)} />
 
             <WinnerClaimModal
                 isOpen={selectedWinningRaffle !== null}
@@ -560,6 +519,5 @@ export default function RafflesPage() {
                     onClose={() => setToast(null)}
                 />
             )}
-        </AppLayout>
     )
 }

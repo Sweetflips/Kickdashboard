@@ -43,9 +43,7 @@ export default function AppLayout({ children }: LayoutProps) {
         if (!kickUserId) return
         try {
             setPointsLoading(true)
-            const res = await fetch(`/api/points?kick_user_id=${encodeURIComponent(String(kickUserId))}`, {
-                cache: 'no-store',
-            })
+            const res = await fetch(`/api/points?kick_user_id=${encodeURIComponent(String(kickUserId))}`)
             if (!res.ok) return
             const data = await res.json()
             const totalPoints = typeof data?.total_points === 'number' ? data.total_points : 0

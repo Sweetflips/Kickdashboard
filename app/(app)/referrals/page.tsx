@@ -1,6 +1,5 @@
 'use client'
 
-import AppLayout from '@/components/AppLayout'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -159,37 +158,32 @@ export default function ReferralsPage() {
 
     if (loading) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     if (!isConnected) {
         return (
-            <AppLayout>
-                <div className="max-w-2xl mx-auto text-center py-12">
-                    <h2 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-4">
-                        Connect your Kick account to access referrals
-                    </h2>
-                    <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
-                        Invite friends and earn bonus Sweet Coins when they become active members of the community!
-                    </p>
-                    <button
-                        onClick={() => router.push('/login')}
-                        className="px-6 py-3 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark transition-colors"
-                    >
-                        Connect Kick
-                    </button>
-                </div>
-            </AppLayout>
+            <div className="max-w-2xl mx-auto text-center py-12">
+                <h2 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-4">
+                    Connect your Kick account to access referrals
+                </h2>
+                <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
+                    Invite friends and earn bonus Sweet Coins when they become active members of the community!
+                </p>
+                <button
+                    onClick={() => router.push('/login')}
+                    className="px-6 py-3 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark transition-colors"
+                >
+                    Connect Kick
+                </button>
+            </div>
         )
     }
 
     return (
-        <AppLayout>
             <div className="space-y-6">
                 {/* Referral Code Section */}
                 <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
@@ -548,6 +542,5 @@ export default function ReferralsPage() {
                     </a>
                 </div>
             </div>
-        </AppLayout>
     )
 }

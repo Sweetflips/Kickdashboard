@@ -77,16 +77,16 @@ model User {
 }
 
 model PurchaseTransaction {
-  id            BigInt   @id @default(autoincrement())
-  user_id       BigInt
-  type          String // advent_ticket | raffle_ticket | reward | bundle (future)
-  quantity      Int
-  points_spent  Int
-  item_name     String
+  id             BigInt   @id @default(autoincrement())
+  user_id        BigInt
+  type           String // advent_ticket | raffle_ticket | reward | bundle (future)
+  quantity       Int
+  points_spent   Int
+  item_name      String
   advent_item_id String?
-  raffle_id     BigInt?
-  metadata      Json?
-  created_at    DateTime @default(now())
+  raffle_id      BigInt?
+  metadata       Json?
+  created_at     DateTime @default(now())
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -101,7 +101,7 @@ model StreamSession {
   id                          BigInt    @id @default(autoincrement())
   broadcaster_user_id         BigInt
   channel_slug                String
-  kick_stream_id              String?   // Kick's video/VOD ID for thumbnail fetching
+  kick_stream_id              String? // Kick's video/VOD ID for thumbnail fetching
   session_title               String?
   thumbnail_url               String?
   thumbnail_captured_at       DateTime?
@@ -157,6 +157,10 @@ model ChatMessage {
   sender         User           @relation("SenderMessages", fields: [sender_user_id], references: [kick_user_id])
   broadcaster    User           @relation("BroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
 
+  @@index([stream_session_id, sent_when_offline])
+  @@index([sender_user_id, stream_session_id])
+  @@index([broadcaster_user_id, created_at])
+  @@index([has_emotes])
   @@map("chat_messages")
 }
 
@@ -217,6 +221,9 @@ model PointHistory {
   user           User           @relation(fields: [user_id], references: [id])
   stream_session StreamSession? @relation(fields: [stream_session_id], references: [id])
 
+  @@index([stream_session_id])
+  @@index([user_id, earned_at])
+  @@index([earned_at])
   @@map("point_history")
 }
 
@@ -490,9 +497,9 @@ model WheelOverlayState {
   updated_at           DateTime @updatedAt
   created_at           DateTime @default(now())
 
-  raffle    Raffle?               @relation(fields: [raffle_id], references: [id], onDelete: SetNull)
-  entrants  WheelOverlayEntrant[]
-  spins     WheelOverlaySpin[]
+  raffle   Raffle?               @relation(fields: [raffle_id], references: [id], onDelete: SetNull)
+  entrants WheelOverlayEntrant[]
+  spins    WheelOverlaySpin[]
 
   @@map("wheel_overlay_state")
 }
@@ -512,16 +519,16 @@ model WheelOverlayEntrant {
 }
 
 model WheelOverlaySpin {
-  id                BigInt   @id @default(autoincrement())
-  overlay_key       String
-  version           Int
-  mode              String // raffle | custom
-  raffle_id         BigInt?
+  id                  BigInt   @id @default(autoincrement())
+  overlay_key         String
+  version             Int
+  mode                String // raffle | custom
+  raffle_id           BigInt?
   target_ticket_index Int
-  winner_label      String
-  winner_user_id    BigInt?
-  winner_entry_id   BigInt?
-  created_at        DateTime @default(now())
+  winner_label        String
+  winner_user_id      BigInt?
+  winner_entry_id     BigInt?
+  created_at          DateTime @default(now())
 
   overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
 

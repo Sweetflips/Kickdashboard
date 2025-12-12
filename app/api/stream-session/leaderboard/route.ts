@@ -1,11 +1,12 @@
 import { isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { memoryCache } from '@/lib/memory-cache'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Get top 10 chatters for stream session
+ * Get top chatters for stream session
  * GET /api/stream-session/leaderboard?broadcaster_user_id=123&session_id=456
  * If session_id is provided, get leaderboard for that session (admin-only for past streams)
  * Otherwise, get leaderboard for active session (public)
@@ -46,13 +47,10 @@ export async function GET(request: Request) {
         }
 
         if (sessionId) {
-            // Get specific session
             session = await findSessionWithRetry(() => db.streamSession.findUnique({
                 where: { id: BigInt(sessionId) },
             }))
         } else if (broadcasterUserId) {
-            // Find active stream session ONLY (no fallback to past sessions)
-            // When stream is offline, return empty leaderboard
             session = await findSessionWithRetry(() => db.streamSession.findFirst({
                 where: {
                     broadcaster_user_id: BigInt(broadcasterUserId),
@@ -61,9 +59,7 @@ export async function GET(request: Request) {
                 orderBy: { started_at: 'desc' },
             }))
 
-            // If no active session, return empty leaderboard (stream is offline)
             if (!session) {
-                // Stream is offline - return empty without logging
                 return NextResponse.json({
                     leaderboard: [],
                     session_id: null,
@@ -72,6 +68,10 @@ export async function GET(request: Request) {
                         total_messages: 0,
                         total_points: 0,
                         unique_chatters: 0,
+                    },
+                }, {
+                    headers: {
+                        'Cache-Control': 'public, max-age=5, stale-while-revalidate=10',
                     },
                 })
             }
@@ -83,7 +83,6 @@ export async function GET(request: Request) {
         }
 
         if (!session) {
-            // No session found, return empty leaderboard
             return NextResponse.json({
                 leaderboard: [],
                 session_id: null,
@@ -96,10 +95,7 @@ export async function GET(request: Request) {
             })
         }
 
-        // Only check for active session when querying by broadcaster_user_id
-        // When session_id is provided, allow querying ended sessions
         if (!sessionId && session.ended_at !== null) {
-            // Session was ended and we're querying by broadcaster_user_id - return empty leaderboard
             return NextResponse.json({
                 leaderboard: [],
                 session_id: null,
@@ -112,13 +108,41 @@ export async function GET(request: Request) {
             })
         }
 
-        // Helper function to execute queries with retry logic for connection pool and serialization errors
+        // Cache key - use session ID for active sessions, or session_id param for past sessions
+        const cacheKey = `stream-leaderboard:${session.id.toString()}`
+        const cacheTTL = session.ended_at === null ? 3000 : 30000 // 3s for active, 30s for ended
+
+        // Try cache first
+        const cached = memoryCache.get<{
+            leaderboard: any[]
+            stats: any
+            session: any
+        }>(cacheKey)
+
+        if (cached) {
+            return NextResponse.json({
+                leaderboard: cached.leaderboard,
+                session_id: cached.session.id.toString(),
+                session_title: cached.session.session_title,
+                started_at: cached.session.started_at.toISOString(),
+                ended_at: cached.session.ended_at?.toISOString() || null,
+                has_active_session: cached.session.ended_at === null,
+                stats: cached.stats,
+            }, {
+                headers: {
+                    'Cache-Control': session.ended_at === null
+                        ? 'public, max-age=3, stale-while-revalidate=5'
+                        : 'public, max-age=30, stale-while-revalidate=60',
+                },
+            })
+        }
+
+        // Helper function to execute queries with retry logic
         const executeQueryWithRetry = async <T>(queryFn: () => Promise<T>, maxRetries = 5): Promise<T> => {
             for (let attempt = 0; attempt < maxRetries; attempt++) {
                 try {
                     return await queryFn()
                 } catch (error: any) {
-                    // Handle connection pool exhaustion (P2024), serialization (P4001), deadlocks (P2034)
                     const isRetryableError = error?.code === 'P2024' ||
                         error?.code === 'P4001' ||
                         error?.code === 'P2034' ||
@@ -137,157 +161,164 @@ export async function GET(request: Request) {
             throw new Error('Max retries exceeded')
         }
 
-        // Get all messages for this session to count per user
-        // Filter out offline messages and invalid user IDs
-        // Note: stream_session_id is sufficient filter - no need for created_at filter
-        // as messages are already associated with the correct session
-        const allMessages = await executeQueryWithRetry(() => db.chatMessage.findMany({
-            where: {
-                stream_session_id: session.id,
-                sent_when_offline: false, // Only count messages sent during live stream
-                sender_user_id: {
-                    gt: BigInt(0), // Exclude invalid/anonymous user IDs (0 or negative)
+        // Use groupBy/aggregate instead of fetching all messages
+        const [messageCounts, pointsByUser, totalPointsResult, totalMessagesResult] = await Promise.all([
+            // Message counts per user (using kick_user_id from sender_user_id)
+            executeQueryWithRetry(() => db.chatMessage.groupBy({
+                by: ['sender_user_id'],
+                where: {
+                    stream_session_id: session.id,
+                    sent_when_offline: false,
+                    sender_user_id: { gt: BigInt(0) },
                 },
+                _count: {
+                    id: true,
+                },
+            })),
+            // Points aggregated by user (internal user_id)
+            executeQueryWithRetry(() => db.pointHistory.groupBy({
+                by: ['user_id'],
+                where: {
+                    stream_session_id: session.id,
+                },
+                _sum: {
+                    points_earned: true,
+                },
+            })),
+            // Total points for stats
+            executeQueryWithRetry(() => db.pointHistory.aggregate({
+                where: {
+                    stream_session_id: session.id,
+                },
+                _sum: {
+                    points_earned: true,
+                },
+            })),
+            // Total messages for stats
+            executeQueryWithRetry(() => db.chatMessage.count({
+                where: {
+                    stream_session_id: session.id,
+                    sent_when_offline: false,
+                    sender_user_id: { gt: BigInt(0) },
+                },
+            })),
+        ])
+
+        const totalPoints = totalPointsResult._sum.points_earned || 0
+        const totalMessages = totalMessagesResult
+        const uniqueChatters = messageCounts.length
+
+        // Get kick_user_ids from message counts to fetch user details
+        const kickUserIds = messageCounts.map(m => m.sender_user_id)
+
+        // Batch fetch user details (no N+1)
+        const users = await executeQueryWithRetry(() => db.user.findMany({
+            where: {
+                kick_user_id: { in: kickUserIds },
             },
             select: {
-                sender_user_id: true, // This is kick_user_id
+                id: true,
+                kick_user_id: true,
+                username: true,
+                profile_picture_url: true,
+                custom_profile_picture_url: true,
+            },
+        }))
+
+        // Create maps for lookups
+        const kickUserIdToUser = new Map(users.map(u => [Number(u.kick_user_id), u]))
+        const userIdToPoints = new Map(pointsByUser.map(p => [Number(p.user_id), p._sum.points_earned || 0]))
+
+        // Get emotes count - need to query messages with emotes
+        // Since we can't filter JSON in groupBy, fetch messages with emotes only
+        const messagesWithEmotes = await executeQueryWithRetry(() => db.chatMessage.findMany({
+            where: {
+                stream_session_id: session.id,
+                sent_when_offline: false,
+                sender_user_id: { in: kickUserIds, gt: BigInt(0) },
+                has_emotes: true, // Use the indexed field
+            },
+            select: {
+                sender_user_id: true,
                 emotes: true,
             },
         }))
 
-        // Get total points earned in this session
-        const totalPointsResult = await executeQueryWithRetry(() => db.pointHistory.aggregate({
-            where: {
-                stream_session_id: session.id,
-            },
-            _sum: {
-                points_earned: true,
-            },
-        }))
-
-        const totalPoints = totalPointsResult._sum.points_earned || 0
-        const totalMessages = allMessages.length
-        // Count unique chatters - filter out invalid user IDs and only count messages from when session started
-        const uniqueChatters = new Set(
-            allMessages
-                .filter(m => m.sender_user_id > BigInt(0)) // Double-check filter
-                .map(m => m.sender_user_id.toString())
-        ).size
-
-        // Get points aggregated by user (user_id is internal ID)
-        const pointsByUser = await executeQueryWithRetry(() => db.pointHistory.groupBy({
-            by: ['user_id'],
-            where: {
-                stream_session_id: session.id,
-            },
-            _sum: {
-                points_earned: true,
-            },
-        }))
-
-        // Create a map of kick_user_id to internal user_id for lookup
-        const kickUserIdToInternalId = new Map<bigint, bigint>()
-
-        // Get all unique kick_user_ids from messages
-        const kickUserIds = [...new Set(allMessages.map(m => m.sender_user_id))]
-
-        // Convert kick_user_ids to internal user IDs
-        if (kickUserIds.length > 0) {
-            const users = await executeQueryWithRetry(() => db.user.findMany({
-                where: {
-                    kick_user_id: { in: kickUserIds },
-                },
-                select: {
-                    id: true,
-                    kick_user_id: true,
-                },
-            }))
-
-            for (const user of users) {
-                kickUserIdToInternalId.set(user.kick_user_id, user.id)
+        // Count emotes per user
+        const emotesMap = new Map<number, number>()
+        messagesWithEmotes.forEach((msg) => {
+            const kickUserId = Number(msg.sender_user_id)
+            const emotes = msg.emotes
+            if (emotes && Array.isArray(emotes) && emotes.length > 0) {
+                const emoteCount = emotes.reduce((total: number, emote: any) => {
+                    if (emote && typeof emote === 'object') {
+                        if (emote.positions && Array.isArray(emote.positions)) {
+                            return total + emote.positions.length
+                        }
+                        if (emote.position && Array.isArray(emote.position)) {
+                            return total + emote.position.length
+                        }
+                    }
+                    return total
+                }, 0)
+                if (emoteCount > 0) {
+                    emotesMap.set(kickUserId, (emotesMap.get(kickUserId) || 0) + emoteCount)
+                }
             }
-        }
+        })
 
-        // Create a map of internal user_id to stats (use string keys for consistent BigInt comparison)
-        const userStatsMap = new Map<string, {
+        // Build user stats map
+        const userStatsMap = new Map<number, {
             points: number
             messages: number
             emotes: number
+            userId: bigint
         }>()
 
-        // Count messages and emotes per user (convert kick_user_id to internal ID)
-        let totalEmotesCounted = 0
-        let messagesWithEmotes = 0
+        // Process message counts
+        messageCounts.forEach((count) => {
+            const kickUserId = Number(count.sender_user_id)
+            const user = kickUserIdToUser.get(kickUserId)
+            if (!user) return
 
-        for (const msg of allMessages) {
-            const internalUserId = kickUserIdToInternalId.get(msg.sender_user_id)
-            if (!internalUserId) continue // Skip if user not found
+            const userId = Number(user.id)
+            const points = userIdToPoints.get(userId) || 0
 
-            const key = internalUserId.toString()
-            const existing = userStatsMap.get(key) || { points: 0, messages: 0, emotes: 0 }
-            existing.messages = (existing.messages || 0) + 1
+            userStatsMap.set(kickUserId, {
+                points,
+                messages: count._count.id,
+                emotes: emotesMap.get(kickUserId) || 0,
+                userId: user.id,
+            })
+        })
 
-            // Count emotes if present - handle Prisma JSON field
-            let emotesData = msg.emotes
-            if (emotesData !== null && emotesData !== undefined) {
-                // Prisma returns JSON as parsed object, but handle string case
-                if (typeof emotesData === 'string') {
-                    try {
-                        emotesData = JSON.parse(emotesData)
-                    } catch {
-                        emotesData = null
-                    }
-                }
+        // Add users with points but no messages (shouldn't happen, but be safe)
+        pointsByUser.forEach((pt) => {
+            const userId = Number(pt.user_id)
+            const user = users.find(u => Number(u.id) === userId)
+            if (!user) return
 
-                // Check if it's an array with items
-                if (Array.isArray(emotesData) && emotesData.length > 0) {
-                    messagesWithEmotes++
-                    const emoteCount = emotesData.reduce((total: number, emote: any) => {
-                        if (emote && typeof emote === 'object') {
-                            // Handle emote object with positions array
-                            if (emote.positions && Array.isArray(emote.positions)) {
-                                return total + emote.positions.length
-                            }
-                            // Handle case where positions might be in different format
-                            if (emote.position && Array.isArray(emote.position)) {
-                                return total + emote.position.length
-                            }
-                        }
-                        return total
-                    }, 0)
-                    if (emoteCount > 0) {
-                        existing.emotes = (existing.emotes || 0) + emoteCount
-                        totalEmotesCounted += emoteCount
-                    }
-                }
+            const kickUserId = Number(user.kick_user_id)
+            if (!userStatsMap.has(kickUserId)) {
+                userStatsMap.set(kickUserId, {
+                    points: pt._sum.points_earned || 0,
+                    messages: 0,
+                    emotes: 0,
+                    userId: user.id,
+                })
             }
+        })
 
-            userStatsMap.set(key, existing)
-        }
-
-        // Add points (preserve existing messages and emotes)
-        for (const pt of pointsByUser) {
-            const key = pt.user_id.toString()
-            const existing = userStatsMap.get(key) || { points: 0, messages: 0, emotes: 0 }
-            // Preserve existing emotes and messages when updating points
-            existing.points = pt._sum.points_earned || 0
-            userStatsMap.set(key, existing)
-        }
-
-        // Convert to array and sort by points (descending), but include users with emotes even if no points
-        const userStatsArray = Array.from(userStatsMap.entries())
-            .map(([user_id, stats]) => ({ user_id: BigInt(user_id), ...stats }))
+        // Convert to array and sort
+        const userStatsArray = Array.from(userStatsMap.values())
             .sort((a, b) => {
-                // Sort by points first, then by messages if points are equal
                 if (b.points !== a.points) {
                     return b.points - a.points
                 }
                 return b.messages - a.messages
             })
-        // No limit - show all users
 
-        // Calculate shared ranks (dense ranking)
-        // Users with the same points share the same rank, next rank is consecutive (1,1,2 not 1,1,3)
+        // Calculate ranks
         const ranksArray: number[] = []
         let currentRank = 1
         for (let i = 0; i < userStatsArray.length; i++) {
@@ -297,53 +328,68 @@ export async function GET(request: Request) {
                 const prevEntry = userStatsArray[i - 1]
                 const currEntry = userStatsArray[i]
                 if (currEntry.points === prevEntry.points) {
-                    // Same points = same rank
                     ranksArray.push(ranksArray[i - 1])
                 } else {
-                    // Different points = next consecutive rank
                     currentRank++
                     ranksArray.push(currentRank)
                 }
             }
         }
 
-        // Get user details for each chatter
-        const leaderboard = await Promise.all(
-            userStatsArray.map(async (entry, index) => {
-                const user = await db.user.findUnique({
-                    where: { id: entry.user_id },
-                    select: {
-                        kick_user_id: true,
-                        username: true,
-                        profile_picture_url: true,
-                        custom_profile_picture_url: true,
-                    },
-                })
+        // Build leaderboard with user details
+        // Create reverse map: userId -> kickUserId
+        const userIdToKickUserId = new Map<bigint, number>()
+        users.forEach(u => {
+            userIdToKickUserId.set(u.id, Number(u.kick_user_id))
+        })
 
-                return {
-                    rank: ranksArray[index],
-                    user_id: entry.user_id.toString(),
-                    kick_user_id: user?.kick_user_id.toString() || '',
-                    username: user?.username || 'Unknown',
-                    profile_picture_url: user?.custom_profile_picture_url || user?.profile_picture_url || null,
-                    points_earned: entry.points,
-                    messages_sent: entry.messages,
-                    emotes_used: entry.emotes,
-                }
-            })
-        )
+        const leaderboard = userStatsArray.map((stats, index) => {
+            const kickUserId = userIdToKickUserId.get(stats.userId)
+            const user = kickUserId ? kickUserIdToUser.get(kickUserId) : null
+
+            return {
+                rank: ranksArray[index],
+                user_id: stats.userId.toString(),
+                kick_user_id: kickUserId?.toString() || '',
+                username: user?.username || 'Unknown',
+                profile_picture_url: user?.custom_profile_picture_url || user?.profile_picture_url || null,
+                points_earned: stats.points,
+                messages_sent: stats.messages,
+                emotes_used: stats.emotes,
+            }
+        })
+
+        const result = {
+            leaderboard,
+            stats: {
+                total_messages: totalMessages,
+                total_points: totalPoints,
+                unique_chatters: uniqueChatters,
+            },
+            session: {
+                id: session.id,
+                session_title: session.session_title,
+                started_at: session.started_at,
+                ended_at: session.ended_at,
+            },
+        }
+
+        // Cache the result
+        memoryCache.set(cacheKey, result, cacheTTL)
 
         return NextResponse.json({
-            leaderboard,
+            leaderboard: result.leaderboard,
             session_id: session.id.toString(),
             session_title: session.session_title,
             started_at: session.started_at.toISOString(),
             ended_at: session.ended_at?.toISOString() || null,
             has_active_session: session.ended_at === null,
-            stats: {
-                total_messages: totalMessages,
-                total_points: totalPoints,
-                unique_chatters: uniqueChatters,
+            stats: result.stats,
+        }, {
+            headers: {
+                'Cache-Control': session.ended_at === null
+                    ? 'public, max-age=3, stale-while-revalidate=5'
+                    : 'public, max-age=30, stale-while-revalidate=60',
             },
         })
     } catch (error) {

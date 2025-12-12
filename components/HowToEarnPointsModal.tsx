@@ -30,19 +30,37 @@ export default function HowToEarnPointsModal({ isOpen, onClose }: HowToEarnPoint
 
                 <div className="space-y-4">
                     <p className="text-body text-gray-700 dark:text-kick-text-secondary">
-                        You earn points by hanging out and chatting during SweetFlips streams.
+                        Earn points by being active during streams and in the community.
                     </p>
 
                     <ul className="space-y-2 text-body text-gray-700 dark:text-kick-text-secondary">
                         <li className="flex items-start">
                             <span className="mr-2">•</span>
-                            <span>1 point every 5 minutes while you are active in chat</span>
+                            <span>Watch streams and stay active</span>
                         </li>
                         <li className="flex items-start">
                             <span className="mr-2">•</span>
-                            <span>2 points every 5 minutes if you are a Kick subscriber</span>
+                            <span>Chat during streams (main source of points)</span>
+                        </li>
+                        <li className="flex items-start">
+                            <span className="mr-2">•</span>
+                            <span>Join raffles and community events</span>
+                        </li>
+                        <li className="flex items-start">
+                            <span className="mr-2">•</span>
+                            <span>Be active in the community and keep showing up</span>
                         </li>
                     </ul>
+
+                    <div className="rounded-lg bg-gray-50 dark:bg-kick-surface-hover border border-gray-200 dark:border-kick-border p-3">
+                        <p className="text-small font-medium text-gray-900 dark:text-kick-text mb-1">
+                            Chat points
+                        </p>
+                        <ul className="space-y-1 text-small text-gray-700 dark:text-kick-text-secondary">
+                            <li>• 1 point every 5 minutes while you are active in chat</li>
+                            <li>• 2 points every 5 minutes if you are a Kick subscriber</li>
+                        </ul>
+                    </div>
 
                     <p className="text-small text-gray-600 dark:text-kick-text-muted">
                         Extra points may be given during special events or quests. Keep an eye on stream announcements.

@@ -2,8 +2,7 @@
 
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import AppLayout from '../components/AppLayout'
-import ChatFrame from '../components/ChatFrame'
+import ChatFrame from '@/components/ChatFrame'
 import PromoCodeModal from '../components/PromoCodeModal'
 import { Toast } from '../components/Toast'
 
@@ -288,7 +287,7 @@ export default function Dashboard() {
     const channelName = channelData?.user?.username || channelData?.username || 'sweetflips'
 
     return (
-        <AppLayout>
+        <>
             {loading ? (
                 <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
@@ -676,6 +675,6 @@ export default function Dashboard() {
                     onClose={() => setToast(null)}
                 />
             )}
-        </AppLayout>
+        </>
     )
 }
