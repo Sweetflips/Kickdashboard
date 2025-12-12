@@ -3,8 +3,8 @@
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import ChatFrame from '@/components/ChatFrame'
-import PromoCodeModal from '../components/PromoCodeModal'
-import { Toast } from '../components/Toast'
+import PromoCodeModal from '@/components/PromoCodeModal'
+import { Toast } from '@/components/Toast'
 
 interface Stream {
     is_live: boolean

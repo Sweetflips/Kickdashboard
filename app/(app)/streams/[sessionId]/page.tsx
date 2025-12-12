@@ -3,7 +3,6 @@
 import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import AppLayout from '../../../components/AppLayout'
 
 interface StreamSession {
     id: string
@@ -271,27 +270,22 @@ export default function StreamDetailPage() {
 
     if (loading && !session) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     if (error && !session) {
         return (
-            <AppLayout>
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                    <p className="text-red-800 dark:text-red-200">Error: {error}</p>
-                </div>
-            </AppLayout>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                <p className="text-red-800 dark:text-red-200">Error: {error}</p>
+            </div>
         )
     }
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 {/* Header */}
                 <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
                     <button
@@ -726,7 +720,6 @@ export default function StreamDetailPage() {
                         </div>
                     </div>
                 )}
-            </div>
-        </AppLayout>
+        </div>
     )
 }

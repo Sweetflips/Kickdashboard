@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import Script from 'next/script'
 import ThemeToggle from '@/components/ThemeToggle'
-import { useToast } from '../../components/Toast'
+import { useToast } from '@/components/Toast'
 import { ACHIEVEMENTS } from '@/lib/achievements'
 
 interface UserData {

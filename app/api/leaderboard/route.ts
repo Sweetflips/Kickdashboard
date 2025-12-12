@@ -17,14 +17,11 @@ export async function GET(request: Request) {
         const endDate = searchParams.get('endDate')
         const hasDateFilter = startDate && endDate
 
-        let dateFilter: { gte?: Date; lte?: Date } | undefined
+        let dateFilter: { gte: Date; lte: Date } | null = null
         if (hasDateFilter) {
             const start = new Date(startDate + 'T00:00:00.000Z')
             const end = new Date(endDate + 'T23:59:59.999Z')
-            dateFilter = {
-                gte: start,
-                lte: end,
-            }
+            dateFilter = { gte: start, lte: end }
         }
 
         // Cache key includes all parameters

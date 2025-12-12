@@ -250,6 +250,7 @@ export default function RafflesPage() {
     }
 
     return (
+        <>
             <div className="space-y-6">
                 {/* Header */}
                 <div>
@@ -505,7 +506,6 @@ export default function RafflesPage() {
                 )}
             </div>
 
-
             <WinnerClaimModal
                 isOpen={selectedWinningRaffle !== null}
                 onClose={() => setSelectedWinningRaffle(null)}
@@ -519,5 +519,6 @@ export default function RafflesPage() {
                     onClose={() => setToast(null)}
                 />
             )}
+        </>
     )
 }

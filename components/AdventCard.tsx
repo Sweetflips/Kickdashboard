@@ -9,6 +9,12 @@ import AdventBuyModal from './AdventBuyModal'
 // Updated to force reload of new images from Advent Calendar - Final folder
 const IMAGE_VERSION = '7'
 
+function formatPurchaseDeadlineLabel(raffleDay: number): string {
+  const deadline = new Date(Date.UTC(2025, 11, raffleDay - 1, 23, 59, 0))
+  const datePart = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' }).format(deadline)
+  return `Available until ${datePart}, 23:59 UTC`
+}
+
 interface AdventCardProps {
   item: {
     id: string
@@ -29,6 +35,7 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
   const [imageError, setImageError] = useState(false)
   const countdown = getUnlockCountdown(item.day)
   const imageUrl = useMemo(() => `${item.image}?v=${IMAGE_VERSION}`, [item.image])
+  const purchaseDeadlineLabel = useMemo(() => formatPurchaseDeadlineLabel(item.day), [item.day])
 
   const handleBuy = async (quantity: number) => {
     const response = await fetch(`/api/advent/${item.id}/buy`, {
@@ -54,6 +61,13 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
         <div className="absolute top-2 left-2 z-10">
           <div className="bg-gradient-to-r from-yellow-400 via-orange-400 to-orange-500 text-white font-bold px-3 py-1 rounded-full shadow-lg text-sm">
             {item.pointsCost.toLocaleString()} pts
+          </div>
+        </div>
+
+        {/* Purchase deadline */}
+        <div className="absolute bottom-2 left-2 right-2 z-30 pointer-events-none">
+          <div className="bg-black/35 backdrop-blur-sm text-white text-[11px] font-semibold px-2 py-1 rounded-md text-center border border-white/15">
+            {purchaseDeadlineLabel}
           </div>
         </div>
 
@@ -83,8 +97,8 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
             <div className="text-white text-center">
               {item.isPast ? (
                 <>
-                  <div className="text-2xl font-bold mb-2">🎲 Drawn</div>
-                  <div className="text-sm">This day has passed</div>
+                  <div className="text-2xl font-bold mb-2">Sales Closed</div>
+                  <div className="text-sm">Ticket sales ended for this day.</div>
                 </>
               ) : (
                 <>
@@ -117,7 +131,7 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
               : 'bg-white/10 text-white/60 cursor-not-allowed'
             }`}
         >
-          {item.isPast ? 'Closed' : item.unlocked ? 'Buy Tickets' : 'Coming Soon'}
+          {item.isPast ? 'Sales Closed' : item.unlocked ? 'Buy Tickets' : 'Coming Soon'}
         </button>
         {item.userTickets > 0 && (
           <div className="px-3 py-2 rounded-lg text-sm font-semibold bg-purple-600 text-white flex items-center">
