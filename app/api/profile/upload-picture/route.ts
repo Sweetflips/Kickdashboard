@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { uploadToR2 } from '@/lib/r2'
+import sharp from 'sharp'
+import { randomBytes } from 'crypto'
 
 /**
  * Upload profile picture endpoint
@@ -66,18 +69,50 @@ export async function POST(request: Request) {
         console.log('👤 [USER INFO]')
         console.log(`   └─ Kick User ID: ${userId}\n`)
 
-        // Convert file to base64 data URI
+        // Process image with sharp: resize, crop to square, convert to WebP
         console.log('💾 [IMAGE PROCESSING]')
         const bytes = await file.arrayBuffer()
-        const buffer = Buffer.from(bytes)
-        const base64 = buffer.toString('base64')
-        const mimeType = file.type || 'image/jpeg'
-        const dataUri = `data:${mimeType};base64,${base64}`
+        const inputBuffer = Buffer.from(bytes)
 
-        console.log(`   ├─ File Size: ${(buffer.length / 1024).toFixed(2)} KB`)
-        console.log(`   ├─ MIME Type: ${mimeType}`)
-        console.log(`   ├─ Base64 Length: ${base64.length} characters`)
-        console.log(`   └─ ✅ Image converted to base64 data URI\n`)
+        console.log(`   ├─ Original Size: ${(inputBuffer.length / 1024).toFixed(2)} KB`)
+        console.log(`   ├─ Original MIME Type: ${file.type}`)
+
+        // Process image: resize to 256x256 square, convert to WebP
+        const processedBuffer = await sharp(inputBuffer)
+          .resize(256, 256, {
+            fit: 'cover',
+            position: 'center',
+          })
+          .webp({ quality: 85 })
+          .toBuffer()
+
+        console.log(`   ├─ Processed Size: ${(processedBuffer.length / 1024).toFixed(2)} KB`)
+        console.log(`   ├─ Format: WebP`)
+        console.log(`   └─ ✅ Image processed\n`)
+
+        // Generate versioned key: avatars/<kickUserId>/<timestamp>_<random>.webp
+        const timestamp = Date.now()
+        const random = randomBytes(8).toString('hex')
+        const r2Key = `avatars/${userId}/${timestamp}_${random}.webp`
+
+        console.log('☁️  [R2 UPLOAD] Uploading to R2...')
+        console.log(`   ├─ R2 Key: ${r2Key}`)
+
+        // Upload to R2
+        await uploadToR2({
+          key: r2Key,
+          body: processedBuffer,
+          contentType: 'image/webp',
+          metadata: {
+            original_filename: file.name || 'avatar',
+            uploaded_at: new Date().toISOString(),
+          },
+        })
+
+        console.log(`   └─ ✅ Successfully uploaded to R2\n`)
+
+        // Generate the serve URL
+        const serveUrl = `/api/media/${r2Key}`
 
         // Save to database
         console.log('🗄️  [DATABASE] Saving profile picture to database...')
@@ -101,11 +136,11 @@ export async function POST(request: Request) {
 
                 await db.user.update({
                     where: { kick_user_id: kickUserId },
-                    data: { custom_profile_picture_url: dataUri },
+                    data: { custom_profile_picture_url: serveUrl },
                 })
 
-                console.log(`   ├─ New custom profile picture stored in database`)
-                console.log(`   ├─ Data URI length: ${dataUri.length} characters`)
+                console.log(`   ├─ New custom profile picture URL stored in database`)
+                console.log(`   ├─ Serve URL: ${serveUrl}`)
                 console.log(`   └─ ✅ Successfully saved to database\n`)
             } else {
                 console.warn(`   └─ ⚠️  User ${userId} not found in database`)
@@ -133,13 +168,13 @@ export async function POST(request: Request) {
 
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
         console.log(`✅ [SUCCESS] Profile picture upload completed`)
-        console.log(`   └─ Stored in database as data URI`)
+        console.log(`   └─ Stored in R2 and URL saved to database`)
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
 
         return NextResponse.json({
             success: true,
-            url: dataUri,
-            message: 'Profile picture uploaded and saved to database successfully'
+            url: serveUrl,
+            message: 'Profile picture uploaded and saved successfully'
         })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'

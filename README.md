@@ -51,6 +51,7 @@ Edit `.env.local` with your configuration:
 - `KICK_CLIENT_ID` - Your Kick OAuth client ID
 - `KICK_CLIENT_SECRET` - Your Kick OAuth client secret
 - `NEXT_PUBLIC_APP_URL` - Your application URL
+- **R2 Storage** (for user-uploaded images) - See [R2_SETUP.md](./docs/R2_SETUP.md) for detailed setup
 
 4. Set up the database:
 ```bash
@@ -91,6 +92,12 @@ See `.env.example` for all available environment variables.
 - `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` - Discord OAuth
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` - Telegram bot
 - Pusher credentials for real-time features
+- **R2 Storage** (for user-uploaded images):
+  - `R2_ACCOUNT_ID` - Cloudflare R2 account ID
+  - `R2_ACCESS_KEY_ID` - R2 access key ID
+  - `R2_SECRET_ACCESS_KEY` - R2 secret access key
+  - `R2_BUCKET` - R2 bucket name
+  - `ALLOWED_MEDIA_DOMAINS` - Comma-separated list of allowed domains for media hotlink protection (defaults to current domain)
 
 ## Project Structure
 
