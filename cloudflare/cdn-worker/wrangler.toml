@@ -11,4 +11,9 @@ PUBLIC_HOST = "cdn.kickdashboard.com"
 binding = "MEDIA_BUCKET"
 bucket_name = "sweetflips-media"
 
-
+[observability]
+[observability.logs]
+enabled = false
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
