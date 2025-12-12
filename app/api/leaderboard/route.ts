@@ -6,40 +6,113 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 15 // Revalidate every 15 seconds
 
+type SortBy = 'points' | 'messages' | 'streams' | 'emotes'
+type DateRangeFilter = { gte: Date; lte: Date }
+
+type VerificationMethods = { kick: boolean; discord: boolean; telegram: boolean }
+
+export type LeaderboardEntry = {
+    rank: number
+    user_id: string
+    kick_user_id: string
+    username: string
+    profile_picture_url: string | null
+    total_points: number
+    total_emotes: number
+    total_messages: number
+    streams_watched: number
+    last_point_earned_at: string | null
+    is_verified: boolean
+    last_login_at: string | null
+    verification_methods: VerificationMethods
+}
+
+type ViewerSummary = {
+    rank: number | null
+    total_points: number
+    total_emotes: number
+    total_messages: number
+    streams_watched: number
+}
+
+type CachedLeaderboard = { rows: LeaderboardEntry[] }
+
+function parseSortBy(value: string | null): SortBy {
+    switch (value) {
+        case 'messages':
+        case 'streams':
+        case 'emotes':
+        case 'points':
+            return value
+        default:
+            return 'points'
+    }
+}
+
+function parseViewerKickUserId(value: string | null): string | null {
+    if (!value) return null
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    if (!/^\d+$/.test(trimmed)) return null
+    try {
+        return BigInt(trimmed).toString()
+    } catch {
+        return null
+    }
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
-        const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100) // Cap at 100
-        const offset = parseInt(searchParams.get('offset') || '0')
+        const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '50', 10) || 50))
+        const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0)
+        const sortBy = parseSortBy(searchParams.get('sortBy'))
+        const viewerKickUserIdStr = parseViewerKickUserId(searchParams.get('viewer_kick_user_id'))
 
         // Date filtering
         const startDate = searchParams.get('startDate')
         const endDate = searchParams.get('endDate')
-        const hasDateFilter = startDate && endDate
+        const hasDateFilter = Boolean(startDate && endDate)
 
-        let dateFilter: { gte: Date; lte: Date } | null = null
+        let dateFilter: DateRangeFilter | null = null
         if (hasDateFilter) {
-            const start = new Date(startDate + 'T00:00:00.000Z')
-            const end = new Date(endDate + 'T23:59:59.999Z')
+            const start = new Date(String(startDate) + 'T00:00:00.000Z')
+            const end = new Date(String(endDate) + 'T23:59:59.999Z')
             dateFilter = { gte: start, lte: end }
         }
 
-        // Cache key includes all parameters
-        const cacheKey = `leaderboard:${limit}:${offset}:${startDate || 'all'}:${endDate || 'all'}`
+        // Cache key excludes viewer + pagination (so the heavy work is reused)
+        const cacheKey = `leaderboard:v2:${sortBy}:${startDate || 'all'}:${endDate || 'all'}`
         const cacheTTL = hasDateFilter ? 30000 : 15000 // 30s for date-filtered, 15s for overall
 
         // Try cache first
-        const cached = memoryCache.get<{
-            leaderboard: any[]
-            total: number
-        }>(cacheKey)
+        const cached = memoryCache.get<CachedLeaderboard>(cacheKey)
 
         if (cached) {
+            const paged = cached.rows.slice(offset, offset + limit)
+
+            const viewerEntry = viewerKickUserIdStr
+                ? cached.rows.find(r => r.kick_user_id === viewerKickUserIdStr) || null
+                : null
+            const viewer: ViewerSummary | null = viewerKickUserIdStr
+                ? viewerEntry
+                    ? {
+                        rank: viewerEntry.rank,
+                        total_points: viewerEntry.total_points,
+                        total_emotes: viewerEntry.total_emotes,
+                        total_messages: viewerEntry.total_messages,
+                        streams_watched: viewerEntry.streams_watched,
+                    }
+                    : { rank: null, total_points: 0, total_emotes: 0, total_messages: 0, streams_watched: 0 }
+                : null
+
             return NextResponse.json({
-                leaderboard: cached.leaderboard,
-                total: cached.total,
+                leaderboard: paged,
+                total: cached.rows.length,
                 limit,
                 offset,
+                sortBy,
+                viewer,
             }, {
                 headers: {
                     'Cache-Control': 'public, max-age=15, stale-while-revalidate=30',
@@ -50,21 +123,34 @@ export async function GET(request: Request) {
         // Fetch data with caching wrapper
         const result = await memoryCache.getOrSet(
             cacheKey,
-            async () => {
-                if (hasDateFilter && dateFilter) {
-                    return await fetchDateFilteredLeaderboard(limit, offset, dateFilter)
-                } else {
-                    return await fetchOverallLeaderboard(limit, offset)
-                }
-            },
+            async () => ({ rows: await buildLeaderboardRowsV2(sortBy, dateFilter) }),
             cacheTTL
         )
 
+        const paged = result.rows.slice(offset, offset + limit)
+
+        const viewerEntry = viewerKickUserIdStr
+            ? result.rows.find(r => r.kick_user_id === viewerKickUserIdStr) || null
+            : null
+        const viewer: ViewerSummary | null = viewerKickUserIdStr
+            ? viewerEntry
+                ? {
+                    rank: viewerEntry.rank,
+                    total_points: viewerEntry.total_points,
+                    total_emotes: viewerEntry.total_emotes,
+                    total_messages: viewerEntry.total_messages,
+                    streams_watched: viewerEntry.streams_watched,
+                }
+                : { rank: null, total_points: 0, total_emotes: 0, total_messages: 0, streams_watched: 0 }
+            : null
+
         return NextResponse.json({
-            leaderboard: result.leaderboard,
-            total: result.total,
+            leaderboard: paged,
+            total: result.rows.length,
             limit,
             offset,
+            sortBy,
+            viewer,
         }, {
             headers: {
                 'Cache-Control': 'public, max-age=15, stale-while-revalidate=30',
@@ -77,6 +163,238 @@ export async function GET(request: Request) {
             { status: 500 }
         )
     }
+}
+
+type UserSummaryV2 = {
+    id: bigint
+    kick_user_id: bigint
+    username: string
+    profile_picture_url: string | null
+    custom_profile_picture_url: string | null
+    last_login_at: Date | null
+    discord_connected: boolean
+    telegram_connected: boolean
+}
+
+type RowV2 = {
+    user: UserSummaryV2
+    total_points: number
+    total_emotes: number
+    total_messages: number
+    streams_watched: number
+    last_point_earned_at: Date | null
+}
+
+function compareBigIntAsc(a: bigint, b: bigint): number {
+    if (a < b) return -1
+    if (a > b) return 1
+    return 0
+}
+
+function getSortKeyGettersV2(sortBy: SortBy): Array<(r: RowV2) => number> {
+    switch (sortBy) {
+        case 'messages':
+            return [r => r.total_messages, r => r.total_points, r => r.total_emotes, r => r.streams_watched]
+        case 'streams':
+            return [r => r.streams_watched, r => r.total_points, r => r.total_messages, r => r.total_emotes]
+        case 'emotes':
+            return [r => r.total_emotes, r => r.total_points, r => r.total_messages, r => r.streams_watched]
+        case 'points':
+        default:
+            return [r => r.total_points, r => r.total_messages, r => r.total_emotes, r => r.streams_watched]
+    }
+}
+
+function makeRowComparatorV2(sortBy: SortBy) {
+    const getters = getSortKeyGettersV2(sortBy)
+    return (a: RowV2, b: RowV2) => {
+        for (const getter of getters) {
+            const diff = getter(b) - getter(a)
+            if (diff !== 0) return diff
+        }
+        // Stable tiebreaker (no last-login sorting)
+        return compareBigIntAsc(a.user.id, b.user.id)
+    }
+}
+
+function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
+    const user = row.user
+    const hasKickLogin = !!user.last_login_at
+    const hasDiscord = user.discord_connected || false
+    const hasTelegram = user.telegram_connected || false
+
+    return {
+        rank,
+        user_id: user.id.toString(),
+        kick_user_id: user.kick_user_id.toString(),
+        username: user.username,
+        profile_picture_url: user.custom_profile_picture_url || user.profile_picture_url,
+        total_points: row.total_points,
+        total_emotes: row.total_emotes,
+        total_messages: row.total_messages,
+        streams_watched: row.streams_watched,
+        last_point_earned_at: row.last_point_earned_at?.toISOString() || null,
+        is_verified: hasKickLogin || hasDiscord || hasTelegram,
+        last_login_at: user.last_login_at?.toISOString() || null,
+        verification_methods: {
+            kick: hasKickLogin,
+            discord: hasDiscord,
+            telegram: hasTelegram,
+        },
+    }
+}
+
+async function buildLeaderboardRowsV2(sortBy: SortBy, dateFilter: DateRangeFilter | null): Promise<LeaderboardEntry[]> {
+    const rows = dateFilter
+        ? await buildDateFilteredRowsV2(dateFilter)
+        : await buildOverallRowsV2()
+
+    rows.sort(makeRowComparatorV2(sortBy))
+    return rows.map((row, idx) => formatEntryV2(row, idx + 1))
+}
+
+async function buildOverallRowsV2(): Promise<RowV2[]> {
+    const [userPoints, messageCounts, streamPairs] = await Promise.all([
+        db.userPoints.findMany({
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        kick_user_id: true,
+                        username: true,
+                        profile_picture_url: true,
+                        custom_profile_picture_url: true,
+                        last_login_at: true,
+                        discord_connected: true,
+                        telegram_connected: true,
+                    },
+                },
+            },
+        }),
+        db.chatMessage.groupBy({
+            by: ['sender_user_id'],
+            where: { sent_when_offline: false },
+            _count: { id: true },
+        }),
+        db.chatMessage.groupBy({
+            by: ['sender_user_id', 'stream_session_id'],
+            where: {
+                sent_when_offline: false,
+                stream_session_id: { not: null },
+            },
+        }),
+    ])
+
+    const messagesMap = new Map<bigint, number>()
+    messageCounts.forEach((row) => {
+        messagesMap.set(row.sender_user_id, Number(row._count.id))
+    })
+
+    const streamsMap = new Map<bigint, number>()
+    streamPairs.forEach((row) => {
+        streamsMap.set(row.sender_user_id, (streamsMap.get(row.sender_user_id) || 0) + 1)
+    })
+
+    return userPoints.map((up) => {
+        const user = up.user as unknown as UserSummaryV2
+        return {
+            user,
+            total_points: up.total_points,
+            total_emotes: up.total_emotes,
+            total_messages: messagesMap.get(user.kick_user_id) || 0,
+            streams_watched: streamsMap.get(user.kick_user_id) || 0,
+            last_point_earned_at: up.last_point_earned_at || null,
+        }
+    })
+}
+
+async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<RowV2[]> {
+    const pointAgg = await db.pointHistory.groupBy({
+        by: ['user_id'],
+        where: { earned_at: dateFilter },
+        _sum: { points_earned: true },
+        _max: { earned_at: true },
+    })
+
+    if (pointAgg.length === 0) return []
+
+    const userIds = pointAgg.map(a => a.user_id)
+
+    const [users, messageCounts, streamPairs, emoteCounts] = await Promise.all([
+        db.user.findMany({
+            where: { id: { in: userIds } },
+            select: {
+                id: true,
+                kick_user_id: true,
+                username: true,
+                profile_picture_url: true,
+                custom_profile_picture_url: true,
+                last_login_at: true,
+                discord_connected: true,
+                telegram_connected: true,
+            },
+        }),
+        db.chatMessage.groupBy({
+            by: ['sender_user_id'],
+            where: {
+                created_at: dateFilter,
+                sent_when_offline: false,
+            },
+            _count: { id: true },
+        }),
+        db.chatMessage.groupBy({
+            by: ['sender_user_id', 'stream_session_id'],
+            where: {
+                created_at: dateFilter,
+                sent_when_offline: false,
+                stream_session_id: { not: null },
+            },
+        }),
+        db.chatMessage.groupBy({
+            by: ['sender_user_id'],
+            where: {
+                created_at: dateFilter,
+                sent_when_offline: false,
+                has_emotes: true,
+            },
+            _count: { id: true },
+        }),
+    ])
+
+    const userById = new Map<bigint, UserSummaryV2>()
+    users.forEach((u) => userById.set(u.id, u as unknown as UserSummaryV2))
+
+    const messagesMap = new Map<bigint, number>()
+    messageCounts.forEach((row) => {
+        messagesMap.set(row.sender_user_id, Number(row._count.id))
+    })
+
+    const streamsMap = new Map<bigint, number>()
+    streamPairs.forEach((row) => {
+        streamsMap.set(row.sender_user_id, (streamsMap.get(row.sender_user_id) || 0) + 1)
+    })
+
+    const emotesMap = new Map<bigint, number>()
+    emoteCounts.forEach((row) => {
+        emotesMap.set(row.sender_user_id, Number(row._count.id))
+    })
+
+    return pointAgg
+        .map((agg) => {
+            const user = userById.get(agg.user_id)
+            if (!user) return null
+
+            const kickId = user.kick_user_id
+            return {
+                user,
+                total_points: agg._sum.points_earned || 0,
+                total_emotes: emotesMap.get(kickId) || 0,
+                total_messages: messagesMap.get(kickId) || 0,
+                streams_watched: streamsMap.get(kickId) || 0,
+                last_point_earned_at: agg._max.earned_at || null,
+            }
+        })
+        .filter(Boolean) as RowV2[]
 }
 
 /**

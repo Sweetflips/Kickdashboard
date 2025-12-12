@@ -24,6 +24,16 @@ interface LeaderboardEntry {
 
 type DateFilterMode = 'overall' | 'custom' | 'today' | 'last7days' | 'last30days' | 'last90days'
 
+type SortBy = 'points' | 'messages' | 'streams' | 'emotes'
+
+interface ViewerSummary {
+    rank: number | null
+    total_points: number
+    total_emotes: number
+    total_messages: number
+    streams_watched: number
+}
+
 export default function LeaderboardPage() {
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
     const [loading, setLoading] = useState(true)
@@ -31,9 +41,12 @@ export default function LeaderboardPage() {
     const [total, setTotal] = useState(0)
     const [offset, setOffset] = useState(0)
     const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
-    const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('overall')
+    const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('last7days')
     const [startDate, setStartDate] = useState<string>('')
     const [endDate, setEndDate] = useState<string>('')
+    const [sortBy, setSortBy] = useState<SortBy>('points')
+    const [viewerKickUserId, setViewerKickUserId] = useState<string | null>(null)
+    const [viewer, setViewer] = useState<ViewerSummary | null>(null)
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
     const limit = 50
 
@@ -87,16 +100,39 @@ export default function LeaderboardPage() {
         }
     }, [startDate, endDate])
 
+    // Fetch current user's Kick user id (for "Your position" bar)
+    useEffect(() => {
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            if (!token) return
+
+            fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
+                .then(res => (res.ok ? res.json() : null))
+                .then((data) => {
+                    if (data?.id) {
+                        setViewerKickUserId(String(data.id))
+                    }
+                })
+                .catch(() => {})
+        } catch {
+            // ignore
+        }
+    }, [])
+
     const fetchLeaderboard = useCallback(async (newOffset: number = 0) => {
         try {
             setLoading(true)
             setError(null)
 
-            let url = `/api/leaderboard?limit=${limit}&offset=${newOffset}`
+            let url = `/api/leaderboard?limit=${limit}&offset=${newOffset}&sortBy=${encodeURIComponent(sortBy)}`
 
             const dateRange = getDateRange(dateFilterMode)
             if (dateRange) {
                 url += `&startDate=${encodeURIComponent(dateRange.start)}&endDate=${encodeURIComponent(dateRange.end)}`
+            }
+
+            if (viewerKickUserId) {
+                url += `&viewer_kick_user_id=${encodeURIComponent(viewerKickUserId)}`
             }
 
             const response = await fetch(url)
@@ -106,12 +142,13 @@ export default function LeaderboardPage() {
             const data = await response.json()
             setLeaderboard(data.leaderboard)
             setTotal(data.total)
+            setViewer(data.viewer ?? null)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unknown error')
         } finally {
             setLoading(false)
         }
-    }, [dateFilterMode, getDateRange])
+    }, [dateFilterMode, getDateRange, sortBy, viewerKickUserId])
 
     useEffect(() => {
         setOffset(0)
@@ -186,6 +223,34 @@ export default function LeaderboardPage() {
         return `#${rank}`
     }
 
+    const rangeLabel = (() => {
+        switch (dateFilterMode) {
+            case 'today':
+                return 'today'
+            case 'last7days':
+                return 'this week'
+            case 'last30days':
+                return 'in the last 30 days'
+            case 'last90days':
+                return 'in the last 90 days'
+            case 'overall':
+                return 'overall'
+            case 'custom':
+                return 'in this range'
+            default:
+                return 'in this range'
+        }
+    })()
+
+    const yourPositionText = (() => {
+        if (!viewerKickUserId) return 'Loading your position…'
+        if (!viewer) return 'Loading your position…'
+        if (typeof viewer.rank === 'number') {
+            return `You are #${viewer.rank} ${rangeLabel} — keep chatting to climb!`
+        }
+        return `You are not ranked ${rangeLabel} yet — keep chatting to join the leaderboard!`
+    })()
+
     return (
         <div className="space-y-6">
                 <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
@@ -223,7 +288,7 @@ export default function LeaderboardPage() {
                                             : 'bg-gray-100 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text hover:bg-gray-200 dark:hover:bg-kick-surface-hover'
                                     }`}
                                 >
-                                    Last 7 Days
+                                    This Week
                                 </button>
                                 <button
                                     onClick={() => handleDateFilterChange('last30days')}
@@ -257,6 +322,26 @@ export default function LeaderboardPage() {
                                 </button>
                             </div>
 
+                            {/* Sorting */}
+                            <div className="flex items-center justify-end gap-2">
+                                <span className="text-sm font-medium text-gray-700 dark:text-kick-text-secondary">
+                                    Sort by
+                                </span>
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => {
+                                        setSortBy(e.target.value as SortBy)
+                                        setOffset(0)
+                                    }}
+                                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-kick-border rounded-md bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
+                                >
+                                    <option value="points">Points</option>
+                                    <option value="messages">Messages sent</option>
+                                    <option value="streams">Streams watched</option>
+                                    <option value="emotes">Emotes used</option>
+                                </select>
+                            </div>
+
                             {dateFilterMode === 'custom' && (
                                 <div className="flex items-center gap-2">
                                     <input
@@ -280,6 +365,13 @@ export default function LeaderboardPage() {
                                 </div>
                             )}
                         </div>
+                    </div>
+
+                    {/* Your Position */}
+                    <div className="sticky top-0 z-10 -mx-6 mb-4 px-6 py-3 bg-gray-50/95 dark:bg-kick-surface-hover/95 backdrop-blur border-y border-gray-200 dark:border-kick-border">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-kick-text">
+                            {yourPositionText}
+                        </p>
                     </div>
 
                     {loading ? (
