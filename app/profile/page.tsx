@@ -533,7 +533,7 @@ export default function ProfilePage() {
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => setActiveTab('achievements')}
-                                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-kick-green hover:bg-kick-green/90 text-white rounded-md transition-colors text-xs font-medium"
+                                                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-kick-green hover:bg-kick-green/90 text-white rounded-lg transition-all text-sm font-extrabold tracking-tight shadow-[0_10px_30px_rgba(34,197,94,0.25)] ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-kick-green/60"
                                             >
                                                 View & Claim
                                             </button>
@@ -1149,7 +1149,7 @@ export default function ProfilePage() {
                                                                                     {!isClaimed && (
                                                                                         <button
                                                                                             onClick={() => claimAchievement(a.id)}
-                                                                                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-kick-green hover:bg-kick-green/90 text-white rounded-md transition-colors text-xs font-semibold"
+                                                                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-kick-green hover:bg-kick-green/90 text-white rounded-lg transition-all text-sm font-extrabold tracking-tight shadow-[0_10px_30px_rgba(34,197,94,0.22)] ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-kick-green/60"
                                                                                         >
                                                                                             Claim
                                                                                         </button>

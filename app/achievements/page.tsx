@@ -428,7 +428,7 @@ export default function AchievementsPage() {
                                     {isUnlocked && !isClaimed && (
                                         <button
                                             onClick={() => claimAchievement(achievement.id)}
-                                            className="mt-3 inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-kick-green text-white text-xs font-semibold hover:bg-kick-green/90 transition-colors"
+                                            className="mt-3 inline-flex items-center justify-center px-4 py-2 rounded-lg bg-kick-green text-white text-sm font-extrabold tracking-tight shadow-[0_10px_30px_rgba(34,197,94,0.25)] ring-1 ring-white/10 hover:bg-kick-green/90 hover:shadow-[0_12px_34px_rgba(34,197,94,0.30)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-kick-green/60"
                                         >
                                             <span className="mr-1">Claim +{achievement.reward.toLocaleString()}</span>
                                             <Image

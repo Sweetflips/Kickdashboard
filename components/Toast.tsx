@@ -84,7 +84,8 @@ export function Toast({ message, type = 'info', duration = 3000, onClose }: Toas
     return (
         <div
             className={[
-                'pointer-events-auto w-full max-w-xl rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.45)] toast-enter',
+                'pointer-events-auto w-full max-w-xl rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.45)] toast-enter relative overflow-hidden',
+                type === 'success' ? 'toast-success' : '',
                 chrome.base,
                 chrome[type],
             ].join(' ')}
@@ -93,7 +94,7 @@ export function Toast({ message, type = 'info', duration = 3000, onClose }: Toas
         >
             <div className="flex items-start gap-4 p-6">
                 <div className="flex-shrink-0 mt-0.5">
-                    <span className={iconColor}>{icons[type]}</span>
+                    <span className={[iconColor, type === 'success' ? 'toast-success-icon' : ''].join(' ')}>{icons[type]}</span>
                 </div>
                 <div className={`flex-1 min-w-0 ${text.base}`}>
                     <div className="text-lg font-extrabold tracking-tight">
@@ -188,7 +189,7 @@ export function ToastContainer() {
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+            <div className="absolute inset-0 bg-black/25" />
             <div className="w-full max-w-xl space-y-2">
             {toasts.map((toast) => (
                 <Toast
