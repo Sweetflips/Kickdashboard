@@ -563,7 +563,7 @@ export default function UsersPage() {
 
                         {/* Points */}
                         <div className="text-right">
-                          <div className="font-semibold text-kick-purple">{user.total_points.toLocaleString()}</div>
+                          <div className="font-semibold text-kick-purple">{(user.total_points ?? 0).toLocaleString()}</div>
                           <div className="text-xs text-gray-500 dark:text-kick-text-secondary">points</div>
                         </div>
 
@@ -617,11 +617,11 @@ export default function UsersPage() {
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-gray-500 dark:text-kick-text-secondary">Points:</span>
-                                  <span className="text-kick-purple font-semibold">{user.total_points.toLocaleString()}</span>
+                                  <span className="text-kick-purple font-semibold">{(user.total_points ?? 0).toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-gray-500 dark:text-kick-text-secondary">Emotes:</span>
-                                  <span className="text-kick-green font-semibold">{user.total_emotes.toLocaleString()}</span>
+                                  <span className="text-kick-green font-semibold">{(user.total_emotes ?? 0).toLocaleString()}</span>
                                 </div>
                               </div>
 
@@ -853,7 +853,7 @@ export default function UsersPage() {
               <p className="text-sm text-gray-600 dark:text-kick-text-secondary">User:</p>
               <p className="font-semibold text-gray-900 dark:text-kick-text">{selectedUser.username}</p>
               <p className="text-sm text-gray-600 dark:text-kick-text-secondary mt-1">
-                Current Points: <span className="font-bold text-kick-purple">{selectedUser.total_points.toLocaleString()}</span>
+                Current Points: <span className="font-bold text-kick-purple">{(selectedUser.total_points ?? 0).toLocaleString()}</span>
               </p>
             </div>
 

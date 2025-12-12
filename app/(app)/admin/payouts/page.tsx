@@ -211,40 +211,40 @@ export default function PayoutsPage() {
                 return [
                     p.rank.toString(),
                     p.username,
-                    p.points.toString(),
-                    p.multiplier > 1 ? `+${((p.multiplier - 1) * 100).toFixed(0)}%` : '-',
-                    p.weighted_points.toFixed(2),
-                    p.payout.toFixed(roundTo),
-                    p.percentage.toFixed(2),
+                    (p.points ?? 0).toString(),
+                    (p.multiplier ?? 1) > 1 ? `+${(((p.multiplier ?? 1) - 1) * 100).toFixed(0)}%` : '-',
+                    (p.weighted_points ?? 0).toFixed(2),
+                    (p.payout ?? 0).toFixed(roundTo),
+                    (p.percentage ?? 0).toFixed(2),
                 ]
             }
             return [
                 p.rank.toString(),
                 p.username,
-                p.points.toString(),
-                p.payout.toFixed(roundTo),
-                p.percentage.toFixed(2),
+                (p.points ?? 0).toString(),
+                (p.payout ?? 0).toFixed(roundTo),
+                (p.percentage ?? 0).toFixed(2),
             ]
         })
 
         // Add summary rows
         rows.push([])
         rows.push(['Summary'])
-        rows.push(['Total Points', payoutData.summary.total_points.toString()])
+        rows.push(['Total Points', (payoutData.summary.total_points ?? 0).toString()])
         if (payoutData.summary.rank_bonus) {
-            rows.push(['Total Weighted Points', payoutData.summary.total_weighted_points.toString()])
-            rows.push(['Rank Bonus', 'Enabled (1st +100%, 2nd +75%, 3rd +50%)'])
+            rows.push(['Total Weighted Points', (payoutData.summary.total_weighted_points ?? 0).toString()])
+            rows.push(['Rank Bonus', 'Enabled (1st +50%, 2nd +30%, 3rd +15%, 4th +8%, 5th +4%)'])
         }
-        rows.push(['Dollar per Point', `$${payoutData.summary.dollar_per_point.toFixed(6)}`])
-        rows.push(['Total Payout', `$${payoutData.summary.total_payout.toFixed(roundTo)}`])
-        rows.push(['Budget', `$${payoutData.summary.budget.toFixed(2)}`])
-        rows.push(['Recipients', payoutData.summary.participant_count.toString()])
-        rows.push(['Total Participants', payoutData.summary.total_participants.toString()])
+        rows.push(['Dollar per Point', `$${(payoutData.summary.dollar_per_point ?? 0).toFixed(6)}`])
+        rows.push(['Total Payout', `$${(payoutData.summary.total_payout ?? 0).toFixed(roundTo)}`])
+        rows.push(['Budget', `$${(payoutData.summary.budget ?? 0).toFixed(2)}`])
+        rows.push(['Recipients', (payoutData.summary.participant_count ?? 0).toString()])
+        rows.push(['Total Participants', (payoutData.summary.total_participants ?? 0).toString()])
         if (payoutData.summary.top_n) {
             rows.push(['Rank Filter', `Rank 1-${payoutData.summary.top_n}`])
         }
         if (payoutData.summary.rounding_difference !== 0) {
-            rows.push(['Rounding Difference', `$${payoutData.summary.rounding_difference.toFixed(roundTo)}`])
+            rows.push(['Rounding Difference', `$${(payoutData.summary.rounding_difference ?? 0).toFixed(roundTo)}`])
         }
 
         const csvContent = [
@@ -455,19 +455,19 @@ export default function PayoutsPage() {
                             <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-4">
                                 <div className="text-sm text-gray-600 dark:text-kick-text-secondary">Total Points</div>
                                 <div className="text-2xl font-bold text-gray-900 dark:text-kick-text">
-                                    {payoutData.summary.total_points.toLocaleString()}
+                                    {(payoutData.summary.total_points ?? 0).toLocaleString()}
                                 </div>
                             </div>
                             <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-4">
                                 <div className="text-sm text-gray-600 dark:text-kick-text-secondary">$/Point</div>
                                 <div className="text-2xl font-bold text-kick-green">
-                                    ${payoutData.summary.dollar_per_point.toFixed(4)}
+                                    ${(payoutData.summary.dollar_per_point ?? 0).toFixed(4)}
                                 </div>
                             </div>
                             <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-4">
                                 <div className="text-sm text-gray-600 dark:text-kick-text-secondary">Total Payout</div>
                                 <div className="text-2xl font-bold text-kick-purple">
-                                    ${payoutData.summary.total_payout.toFixed(roundTo)}
+                                    ${(payoutData.summary.total_payout ?? 0).toFixed(roundTo)}
                                 </div>
                             </div>
                             <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-4">
@@ -484,7 +484,7 @@ export default function PayoutsPage() {
                             <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-4">
                                 <div className="text-sm text-gray-600 dark:text-kick-text-secondary">Budget</div>
                                 <div className="text-2xl font-bold text-gray-900 dark:text-kick-text">
-                                    ${payoutData.summary.budget.toFixed(2)}
+                                    ${(payoutData.summary.budget ?? 0).toFixed(2)}
                                 </div>
                             </div>
                         </div>
@@ -564,14 +564,14 @@ export default function PayoutsPage() {
                                                     </td>
                                                     <td className="py-4 px-4 text-right">
                                                         <span className="font-semibold text-kick-purple">
-                                                            {entry.points.toLocaleString()}
+                                                            {(entry.points ?? 0).toLocaleString()}
                                                         </span>
                                                     </td>
                                                     {payoutData.summary.rank_bonus && (
                                                         <td className="py-4 px-4 text-right">
-                                                            {entry.multiplier > 1 ? (
+                                                            {(entry.multiplier ?? 1) > 1 ? (
                                                                 <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200">
-                                                                    +{((entry.multiplier - 1) * 100).toFixed(0)}%
+                                                                    +{(((entry.multiplier ?? 1) - 1) * 100).toFixed(0)}%
                                                                 </span>
                                                             ) : (
                                                                 <span className="text-gray-400 dark:text-kick-text-muted text-sm">—</span>
@@ -580,12 +580,12 @@ export default function PayoutsPage() {
                                                     )}
                                                     <td className="py-4 px-4 text-right">
                                                         <span className="font-bold text-kick-green text-lg">
-                                                            ${entry.payout.toFixed(roundTo)}
+                                                            ${(entry.payout ?? 0).toFixed(roundTo)}
                                                         </span>
                                                     </td>
                                                     <td className="py-4 px-4 text-right">
                                                         <span className="text-gray-600 dark:text-kick-text-secondary">
-                                                            {entry.percentage.toFixed(2)}%
+                                                            {(entry.percentage ?? 0).toFixed(2)}%
                                                         </span>
                                                     </td>
                                                 </tr>
@@ -600,7 +600,7 @@ export default function PayoutsPage() {
                         {payoutData.summary.top_n && payoutData.summary.total_participants > payoutData.summary.participant_count && (
                             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                                 <p className="text-blue-800 dark:text-blue-200 text-sm">
-                                    <strong>Rank Filter (up to rank {payoutData.summary.top_n}):</strong> Showing {payoutData.summary.participant_count} recipients out of {payoutData.summary.total_participants} total participants. All users with the same points share the same rank. The ${payoutData.summary.budget.toFixed(2)} budget is split only among these ranks.
+                                    <strong>Rank Filter (up to rank {payoutData.summary.top_n}):</strong> Showing {payoutData.summary.participant_count} recipients out of {payoutData.summary.total_participants} total participants. All users with the same points share the same rank. The ${(payoutData.summary.budget ?? 0).toFixed(2)} budget is split only among these ranks.
                                 </p>
                             </div>
                         )}
@@ -609,7 +609,7 @@ export default function PayoutsPage() {
                         {payoutData.summary.rounding_difference !== 0 && (
                             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                                 <p className="text-yellow-800 dark:text-yellow-200 text-sm">
-                                    <strong>Note:</strong> Due to rounding, the total payout (${payoutData.summary.total_payout.toFixed(roundTo)}) differs from the budget (${payoutData.summary.budget.toFixed(2)}) by ${Math.abs(payoutData.summary.rounding_difference).toFixed(roundTo)}.
+                                    <strong>Note:</strong> Due to rounding, the total payout (${(payoutData.summary.total_payout ?? 0).toFixed(roundTo)}) differs from the budget (${(payoutData.summary.budget ?? 0).toFixed(2)}) by ${Math.abs(payoutData.summary.rounding_difference ?? 0).toFixed(roundTo)}.
                                 </p>
                             </div>
                         )}

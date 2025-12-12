@@ -260,7 +260,7 @@ export default function AdminPromoCodesPage() {
                     </div>
                     <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-4">
                         <p className="text-small text-gray-600 dark:text-kick-text-secondary mb-1">Points Given</p>
-                        <p className="text-h3 font-bold text-amber-600">{promoCodes.reduce((sum, code) => sum + (code.current_uses * code.points_value), 0).toLocaleString()}</p>
+                        <p className="text-h3 font-bold text-amber-600">{promoCodes.reduce((sum, code) => sum + (code.current_uses * (code.points_value ?? 0)), 0).toLocaleString()}</p>
                     </div>
                 </div>
 
@@ -294,7 +294,7 @@ export default function AdminPromoCodesPage() {
                                                 <div className="text-xs text-gray-500 dark:text-kick-text-muted">by {code.created_by}</div>
                                             </td>
                                             <td className="py-4 px-4">
-                                                <span className="font-bold text-kick-purple">{code.points_value.toLocaleString()}</span>
+                                                <span className="font-bold text-kick-purple">{(code.points_value ?? 0).toLocaleString()}</span>
                                             </td>
                                             <td className="py-4 px-4">
                                                 <div className="text-gray-900 dark:text-kick-text">

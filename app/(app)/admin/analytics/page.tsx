@@ -370,25 +370,25 @@ export default function AnalyticsPage() {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                                 <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
                                     <p className="text-sm opacity-90 mb-2">Total Views</p>
-                                    <p className="text-3xl font-bold">{stats.totalViews.toLocaleString()}</p>
+                                    <p className="text-3xl font-bold">{(stats.totalViews ?? 0).toLocaleString()}</p>
                                 </div>
                                 <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
                                     <p className="text-sm opacity-90 mb-2">Total Messages</p>
-                                    <p className="text-3xl font-bold">{stats.totalMessages.toLocaleString()}</p>
+                                    <p className="text-3xl font-bold">{(stats.totalMessages ?? 0).toLocaleString()}</p>
                                 </div>
                                 <div className="bg-kick-green/80 dark:bg-kick-green/60 rounded-lg p-6 text-white">
                                     <p className="text-sm opacity-90 mb-2">Active Users</p>
-                                    <p className="text-3xl font-bold">{stats.activeUsers.toLocaleString()}</p>
+                                    <p className="text-3xl font-bold">{(stats.activeUsers ?? 0).toLocaleString()}</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                 <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
                                     <p className="text-sm opacity-90 mb-2">Total Streams</p>
-                                    <p className="text-3xl font-bold">{stats.totalStreams.toLocaleString()}</p>
+                                    <p className="text-3xl font-bold">{(stats.totalStreams ?? 0).toLocaleString()}</p>
                                 </div>
                                 <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
                                     <p className="text-sm opacity-90 mb-2">Total Points Awarded</p>
-                                    <p className="text-3xl font-bold">{stats.totalPoints.toLocaleString()}</p>
+                                    <p className="text-3xl font-bold">{(stats.totalPoints ?? 0).toLocaleString()}</p>
                                 </div>
                             </div>
 
@@ -398,29 +398,29 @@ export default function AnalyticsPage() {
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-4 border border-gray-200 dark:border-kick-border">
                                         <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-1">Total Messages</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{activityTypes.messages.toLocaleString()}</p>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.messages ?? 0).toLocaleString()}</p>
                                     </div>
                                     <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-4 border border-gray-200 dark:border-kick-border">
                                         <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-1">Messages with Emotes</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{activityTypes.messages_with_emotes.toLocaleString()}</p>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.messages_with_emotes ?? 0).toLocaleString()}</p>
                                         <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
-                                            {activityTypes.messages > 0
-                                                ? `${((activityTypes.messages_with_emotes / activityTypes.messages) * 100).toFixed(1)}%`
+                                            {(activityTypes.messages ?? 0) > 0
+                                                ? `${(((activityTypes.messages_with_emotes ?? 0) / (activityTypes.messages ?? 0)) * 100).toFixed(1)}%`
                                                 : '0%'}
                                         </p>
                                     </div>
                                     <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-4 border border-gray-200 dark:border-kick-border">
                                         <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-1">Text Only Messages</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{activityTypes.messages_with_text_only.toLocaleString()}</p>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.messages_with_text_only ?? 0).toLocaleString()}</p>
                                         <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
-                                            {activityTypes.messages > 0
-                                                ? `${((activityTypes.messages_with_text_only / activityTypes.messages) * 100).toFixed(1)}%`
+                                            {(activityTypes.messages ?? 0) > 0
+                                                ? `${(((activityTypes.messages_with_text_only ?? 0) / (activityTypes.messages ?? 0)) * 100).toFixed(1)}%`
                                                 : '0%'}
                                         </p>
                                     </div>
                                     <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-4 border border-gray-200 dark:border-kick-border">
                                         <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-1">Total Emotes Sent</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{activityTypes.emotes.toLocaleString()}</p>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.emotes ?? 0).toLocaleString()}</p>
                                     </div>
                                 </div>
                             </div>
@@ -433,31 +433,31 @@ export default function AnalyticsPage() {
                                         <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 dark:from-purple-500/20 dark:to-purple-600/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary mb-1">Avg Messages/Stream</p>
                                             <p className="text-xl font-bold text-gray-900 dark:text-kick-text">
-                                                {overallStats.performance_metrics.avg_messages_per_stream.toLocaleString()}
+                                                {(overallStats.performance_metrics.avg_messages_per_stream ?? 0).toLocaleString()}
                                             </p>
                                         </div>
                                         <div className="bg-gradient-to-br from-green-500/10 to-green-600/10 dark:from-green-500/20 dark:to-green-600/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary mb-1">Avg Viewers/Stream</p>
                                             <p className="text-xl font-bold text-gray-900 dark:text-kick-text">
-                                                {overallStats.performance_metrics.avg_viewers_per_stream.toLocaleString()}
+                                                {(overallStats.performance_metrics.avg_viewers_per_stream ?? 0).toLocaleString()}
                                             </p>
                                         </div>
                                         <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 dark:from-blue-500/20 dark:to-blue-600/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary mb-1">Avg Messages/Viewer</p>
                                             <p className="text-xl font-bold text-gray-900 dark:text-kick-text">
-                                                {overallStats.performance_metrics.engagement_rate.toFixed(2)}
+                                                {(overallStats.performance_metrics.engagement_rate ?? 0).toFixed(2)}
                                             </p>
                                         </div>
                                         <div className="bg-gradient-to-br from-orange-500/10 to-orange-600/10 dark:from-orange-500/20 dark:to-orange-600/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary mb-1">Avg Messages/User</p>
                                             <p className="text-xl font-bold text-gray-900 dark:text-kick-text">
-                                                {overallStats.performance_metrics.avg_messages_per_user.toLocaleString()}
+                                                {(overallStats.performance_metrics.avg_messages_per_user ?? 0).toLocaleString()}
                                             </p>
                                         </div>
                                         <div className="bg-gradient-to-br from-pink-500/10 to-pink-600/10 dark:from-pink-500/20 dark:to-pink-600/20 rounded-lg p-4 border border-pink-200 dark:border-pink-800">
                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary mb-1">Streams Analyzed</p>
                                             <p className="text-xl font-bold text-gray-900 dark:text-kick-text">
-                                                {overallStats.performance_metrics.total_streams_analyzed.toLocaleString()}
+                                                {(overallStats.performance_metrics.total_streams_analyzed ?? 0).toLocaleString()}
                                             </p>
                                         </div>
                                     </div>
@@ -507,7 +507,7 @@ export default function AnalyticsPage() {
                                                         <p className="text-xs text-gray-600 dark:text-kick-text-secondary mb-1">
                                                             {engagementLabels[type] || type}
                                                         </p>
-                                                        <p className="text-xl font-bold text-gray-900 dark:text-kick-text">{count.toLocaleString()}</p>
+                                                        <p className="text-xl font-bold text-gray-900 dark:text-kick-text">{(count ?? 0).toLocaleString()}</p>
                                                         <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
                                                             {totalEngagement > 0 ? `${((count / totalEngagement) * 100).toFixed(1)}%` : '0%'}
                                                         </p>
@@ -540,7 +540,7 @@ export default function AnalyticsPage() {
                                                                 {stream.title}
                                                             </p>
                                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary">
-                                                                {stream.messages.toLocaleString()} messages • {stream.viewers.toLocaleString()} viewers • {new Date(stream.date).toLocaleDateString()}
+                                                                {(stream.messages ?? 0).toLocaleString()} messages • {(stream.viewers ?? 0).toLocaleString()} viewers • {new Date(stream.date).toLocaleDateString()}
                                                             </p>
                                                         </div>
                                                     </div>
@@ -668,24 +668,24 @@ export default function AnalyticsPage() {
                                                             </div>
                                                         </td>
                                                         <td className="py-3 px-4 text-right">
-                                                            <span className="font-bold text-kick-purple">{user.activity_score.toLocaleString()}</span>
+                                                            <span className="font-bold text-kick-purple">{(user.activity_score ?? 0).toLocaleString()}</span>
                                                         </td>
                                                         <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
-                                                            {user.activity_breakdown.points.toLocaleString()}
+                                                            {(user.activity_breakdown?.points ?? 0).toLocaleString()}
                                                         </td>
                                                         <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
-                                                            {user.activity_breakdown.messages.toLocaleString()}
+                                                            {(user.activity_breakdown?.messages ?? 0).toLocaleString()}
                                                         </td>
                                                         <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
-                                                            {user.activity_breakdown.emotes.toLocaleString()}
+                                                            {(user.activity_breakdown?.emotes ?? 0).toLocaleString()}
                                                         </td>
                                                         <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
                                                             {user.activity_breakdown.streams_watched}
                                                         </td>
                                                         <td className="py-3 px-4 text-right text-sm text-gray-600 dark:text-kick-text-secondary">
-                                                            {user.activity_breakdown.avg_points_per_stream.toFixed(1)} pts
+                                                            {(user.activity_breakdown?.avg_points_per_stream ?? 0).toFixed(1)} pts
                                                             <br />
-                                                            {user.activity_breakdown.avg_messages_per_stream.toFixed(1)} msgs
+                                                            {(user.activity_breakdown?.avg_messages_per_stream ?? 0).toFixed(1)} msgs
                                                         </td>
                                                     </tr>
                                                     {isExpanded && user.engagement_breakdown && (
@@ -695,7 +695,7 @@ export default function AnalyticsPage() {
                                                                     <div className="flex items-center gap-6 text-sm">
                                                                         <div>
                                                                             <span className="text-gray-600 dark:text-kick-text-secondary">Avg Message Length: </span>
-                                                                            <span className="font-semibold text-gray-900 dark:text-kick-text">{user.engagement_breakdown.avg_message_length.toFixed(1)} chars</span>
+                                                                            <span className="font-semibold text-gray-900 dark:text-kick-text">{(user.engagement_breakdown?.avg_message_length ?? 0).toFixed(1)} chars</span>
                                                                         </div>
                                                                         <div>
                                                                             <span className="text-gray-600 dark:text-kick-text-secondary">Longest Message: </span>

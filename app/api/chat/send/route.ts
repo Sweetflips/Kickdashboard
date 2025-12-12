@@ -44,7 +44,8 @@ async function sendMessageWithRetry(
         const refreshedToken = await refreshBroadcasterToken()
         if (refreshedToken) {
             // Retry with refreshed token
-            return sendMessageWithRetry(refreshedToken, broadcasterUserId, content, type, retries, authRetries - 1)
+            const result = await sendMessageWithRetry(refreshedToken, broadcasterUserId, content, type, retries, authRetries - 1)
+            return { ...result, newToken: result.newToken ?? refreshedToken }
         }
     }
 

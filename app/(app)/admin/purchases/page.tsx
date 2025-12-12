@@ -285,7 +285,7 @@ export default function AdminPurchasesPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-500 dark:text-kick-text-secondary">Total Buyers</p>
-                                <p className="text-h2 font-bold text-gray-900 dark:text-kick-text">{totals.totalUsers.toLocaleString()}</p>
+                                <p className="text-h2 font-bold text-gray-900 dark:text-kick-text">{(totals.totalUsers ?? 0).toLocaleString()}</p>
                             </div>
                         </div>
                     </div>
@@ -299,7 +299,7 @@ export default function AdminPurchasesPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-500 dark:text-kick-text-secondary">Total Tickets Sold</p>
-                                <p className="text-h2 font-bold text-gray-900 dark:text-kick-text">{totals.totalTickets.toLocaleString()}</p>
+                                <p className="text-h2 font-bold text-gray-900 dark:text-kick-text">{(totals.totalTickets ?? 0).toLocaleString()}</p>
                             </div>
                         </div>
                     </div>
@@ -313,7 +313,7 @@ export default function AdminPurchasesPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-500 dark:text-kick-text-secondary">Total Points Spent</p>
-                                <p className="text-h2 font-bold text-gray-900 dark:text-kick-text">{totals.totalPointsSpent.toLocaleString()}</p>
+                                <p className="text-h2 font-bold text-gray-900 dark:text-kick-text">{(totals.totalPointsSpent ?? 0).toLocaleString()}</p>
                             </div>
                         </div>
                     </div>
@@ -419,12 +419,12 @@ export default function AdminPurchasesPage() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className="text-body text-gray-900 dark:text-kick-text font-semibold">
-                                                        {user.totalTickets.toLocaleString()}
+                                                        {(user.totalTickets ?? 0).toLocaleString()}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className="text-body text-amber-600 dark:text-amber-400 font-semibold">
-                                                        {user.totalPointsSpent.toLocaleString()}
+                                                        {(user.totalPointsSpent ?? 0).toLocaleString()}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4">
@@ -516,13 +516,13 @@ export default function AdminPurchasesPage() {
                                                     <div className="text-right">
                                                         <p className="text-small text-gray-500 dark:text-kick-text-secondary">Total Tickets</p>
                                                         <p className="text-h3 font-bold text-gray-900 dark:text-kick-text">
-                                                            {raffle.totalTickets.toLocaleString()}
+                                                            {(raffle.totalTickets ?? 0).toLocaleString()}
                                                         </p>
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-small text-gray-500 dark:text-kick-text-secondary">Points Spent</p>
                                                         <p className="text-h3 font-bold text-amber-600 dark:text-amber-400">
-                                                            {raffle.totalPointsSpent.toLocaleString()}
+                                                            {(raffle.totalPointsSpent ?? 0).toLocaleString()}
                                                         </p>
                                                     </div>
                                                     <button className="text-kick-purple hover:text-kick-purple-dark">
