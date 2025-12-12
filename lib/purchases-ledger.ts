@@ -1,10 +1,14 @@
 import { ADVENT_ITEMS } from '@/lib/advent-calendar'
 
 type TxLike = {
-  $queryRaw: any
-  $executeRaw: any
-  adventPurchase: any
-  raffleEntry: any
+  $queryRaw: <T = unknown>(query: TemplateStringsArray, ...values: any[]) => Promise<T>
+  $executeRaw: (query: TemplateStringsArray, ...values: any[]) => Promise<unknown>
+  adventPurchase: {
+    findMany: (args: any) => Promise<any[]>
+  }
+  raffleEntry: {
+    findMany: (args: any) => Promise<any[]>
+  }
 }
 
 export async function ensurePurchaseTransactionsTable(tx: TxLike) {
@@ -97,7 +101,10 @@ export async function backfillMissingPurchaseTransactions(tx: TxLike, userId: bi
     GROUP BY advent_item_id
   `
   const adventById = new Map<string, number>(
-    (adventSums || []).map(r => [r.advent_item_id, typeof r.qty === 'bigint' ? Number(r.qty) : Number(r.qty || 0)])
+    (adventSums || []).map((r: { advent_item_id: string; qty: bigint | number | null }) => [
+      r.advent_item_id,
+      typeof r.qty === 'bigint' ? Number(r.qty) : Number(r.qty || 0),
+    ])
   )
 
   for (const p of advent) {
@@ -145,7 +152,10 @@ export async function backfillMissingPurchaseTransactions(tx: TxLike, userId: bi
     GROUP BY raffle_id
   `
   const raffleById = new Map<string, number>(
-    (raffleSums || []).map(r => [r.raffle_id.toString(), typeof r.qty === 'bigint' ? Number(r.qty) : Number(r.qty || 0)])
+    (raffleSums || []).map((r: { raffle_id: bigint; qty: bigint | number | null }) => [
+      r.raffle_id.toString(),
+      typeof r.qty === 'bigint' ? Number(r.qty) : Number(r.qty || 0),
+    ])
   )
 
   for (const e of raffles) {
