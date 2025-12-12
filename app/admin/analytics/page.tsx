@@ -258,70 +258,64 @@ export default function AnalyticsPage() {
                     return
                 }
                 setUserData({ is_admin: true })
+
+                // If we have prefetched analytics in sessionStorage, render immediately.
+                try {
+                    const cached = sessionStorage.getItem('admin_analytics_prefetch_v1')
+                    if (cached) {
+                        const parsed = JSON.parse(cached)
+                        if (parsed?.data) {
+                            applySummary(parsed.data)
+                            setLoading(false)
+                        }
+                    }
+                } catch {
+                    // ignore
+                }
+
+                // Always do a live refresh in background.
                 fetchAnalytics()
             })
             .catch(() => router.push('/'))
     }, [router])
 
+    const applySummary = (summary: any) => {
+        const totals = summary?.totals || {}
+        const overall = summary?.overall_stats || null
+        const users = summary?.users || []
+
+        setStats({
+            totalViews: totals.total_views || 0,
+            totalMessages: overall?.total_messages || 0,
+            activeUsers: totals.total_users || 0,
+            totalStreams: totals.total_streams || 0,
+            totalPoints: overall?.total_points || 0,
+        })
+
+        if (overall?.activity_types) {
+            setActivityTypes(overall.activity_types)
+        }
+        setOverallStats(overall)
+        setTopUsers(users)
+    }
+
     const fetchAnalytics = async () => {
         try {
             setLoading(true)
-
-            // Fetch total messages
-            const messagesResponse = await fetch('/api/chat?limit=1')
-            const messagesData = messagesResponse.ok ? await messagesResponse.json() : { total: 0 }
-
-            // Fetch total streams
-            const streamsResponse = await fetch('/api/stream-sessions?limit=1', {
-                credentials: 'include', // Include cookies for authentication
-            })
-            const streamsData = streamsResponse.ok ? await streamsResponse.json() : { total: 0 }
-
-            // Fetch total users and points
-            const leaderboardResponse = await fetch('/api/leaderboard?limit=1')
-            const leaderboardData = leaderboardResponse.ok ? await leaderboardResponse.json() : { total: 0, leaderboard: [] }
-
-            // Calculate total points
-            const totalPointsResponse = await fetch('/api/leaderboard?limit=1000')
-            const totalPointsData = totalPointsResponse.ok ? await totalPointsResponse.json() : { leaderboard: [] }
-            const totalPoints = totalPointsData.leaderboard.reduce((sum: number, entry: any) => sum + entry.total_points, 0)
-
-            // Get unique users from messages (approximate active users)
-            const activeUsers = leaderboardData.total || 0
-
-            // Calculate total views from stream sessions
-            const streamsDetailResponse = await fetch('/api/stream-sessions?limit=1000', {
-                credentials: 'include', // Include cookies for authentication
-            })
-            const streamsDetailData = streamsDetailResponse.ok ? await streamsDetailResponse.json() : { sessions: [] }
-            const totalViews = streamsDetailData.sessions.reduce((sum: number, session: any) => sum + session.peak_viewer_count, 0)
-
-            // Fetch detailed analytics
             const token = localStorage.getItem('kick_access_token')
-            const detailedResponse = await fetch('/api/analytics/detailed?limit=50', {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            })
-            const detailedData = detailedResponse.ok ? await detailedResponse.json() : { users: [], overall_stats: {} }
-
-            setStats({
-                totalViews,
-                totalMessages: messagesData.total || 0,
-                activeUsers,
-                totalStreams: streamsData.total || 0,
-                totalPoints,
+            const response = await fetch('/api/admin/analytics/summary?topUsersLimit=50', {
+                headers: { Authorization: `Bearer ${token}` },
             })
 
-            if (detailedData.overall_stats) {
-                if (detailedData.overall_stats.activity_types) {
-                    setActivityTypes(detailedData.overall_stats.activity_types)
+            const data = response.ok ? await response.json() : null
+            if (data) {
+                applySummary(data)
+                // Refresh cached prefetch payload
+                try {
+                    sessionStorage.setItem('admin_analytics_prefetch_v1', JSON.stringify({ ts: Date.now(), data }))
+                } catch {
+                    // ignore
                 }
-                setOverallStats(detailedData.overall_stats)
-            }
-
-            if (detailedData.users) {
-                setTopUsers(detailedData.users)
             }
         } catch (error) {
             console.error('Failed to fetch analytics:', error)

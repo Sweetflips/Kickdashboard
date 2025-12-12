@@ -23,6 +23,7 @@ import { claimChatJobs, completeChatJob, failChatJob, getChatQueueStats, type Cl
 import { awardPoint, awardEmotes, isBot } from '../lib/points'
 import { detectBotMessage } from '../lib/bot-detection'
 import { queueUserEnrichment } from '../lib/user-enrichment'
+import { analyzeEngagementType, countExclamations, countSentences, hasEmotes, messageLength } from '../lib/analytics-classifier'
 
 const BATCH_SIZE = parseInt(process.env.CHAT_WORKER_BATCH_SIZE || '50', 10)
 const POLL_INTERVAL_MS = parseInt(process.env.CHAT_WORKER_POLL_INTERVAL_MS || '500', 10)
@@ -220,6 +221,12 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
         let pointsReason: string | null = null
 
         if (sentWhenOffline) {
+            const derivedHasEmotes = hasEmotes(payload.emotes, payload.content)
+            const derivedEngagementType = analyzeEngagementType(payload.content, derivedHasEmotes)
+            const derivedLength = messageLength(payload.content)
+            const derivedExclamations = countExclamations(payload.content)
+            const derivedSentences = countSentences(payload.content)
+
             // Save to offline messages table
             await db.offlineChatMessage.upsert({
                 where: { message_id: payload.message_id },
@@ -227,12 +234,17 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     sender_username: payload.sender.username,
                     content: payload.content,
                     emotes: payload.emotes || undefined,
+                    has_emotes: derivedHasEmotes,
+                    engagement_type: derivedEngagementType,
+                    message_length: derivedLength,
+                    exclamation_count: derivedExclamations,
+                    sentence_count: derivedSentences,
                     timestamp: BigInt(payload.timestamp),
                     sender_username_color: payload.sender.color || null,
                     sender_badges: payload.sender.badges || undefined,
                     sender_is_verified: payload.sender.is_verified || false,
                     sender_is_anonymous: payload.sender.is_anonymous || false,
-                },
+                } as any,
                 create: {
                     message_id: payload.message_id,
                     sender_user_id: senderUserId,
@@ -240,14 +252,25 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     broadcaster_user_id: broadcasterUserId,
                     content: payload.content,
                     emotes: payload.emotes || undefined,
+                    has_emotes: derivedHasEmotes,
+                    engagement_type: derivedEngagementType,
+                    message_length: derivedLength,
+                    exclamation_count: derivedExclamations,
+                    sentence_count: derivedSentences,
                     timestamp: BigInt(payload.timestamp),
                     sender_username_color: payload.sender.color || null,
                     sender_badges: payload.sender.badges || undefined,
                     sender_is_verified: payload.sender.is_verified || false,
                     sender_is_anonymous: payload.sender.is_anonymous || false,
-                },
+                } as any,
             })
         } else {
+            const derivedHasEmotes = hasEmotes(payload.emotes, payload.content)
+            const derivedEngagementType = analyzeEngagementType(payload.content, derivedHasEmotes)
+            const derivedLength = messageLength(payload.content)
+            const derivedExclamations = countExclamations(payload.content)
+            const derivedSentences = countSentences(payload.content)
+
             // Save to chat messages table (with session)
             await db.chatMessage.upsert({
                 where: { message_id: payload.message_id },
@@ -256,13 +279,18 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     sender_username: payload.sender.username,
                     content: payload.content,
                     emotes: payload.emotes || undefined,
+                    has_emotes: derivedHasEmotes,
+                    engagement_type: derivedEngagementType,
+                    message_length: derivedLength,
+                    exclamation_count: derivedExclamations,
+                    sentence_count: derivedSentences,
                     timestamp: BigInt(payload.timestamp),
                     sender_username_color: payload.sender.color || null,
                     sender_badges: payload.sender.badges || undefined,
                     sender_is_verified: payload.sender.is_verified || false,
                     sender_is_anonymous: payload.sender.is_anonymous || false,
                     sent_when_offline: false,
-                },
+                } as any,
                 create: {
                     message_id: payload.message_id,
                     stream_session_id: streamSessionId,
@@ -271,6 +299,11 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     broadcaster_user_id: broadcasterUserId,
                     content: payload.content,
                     emotes: payload.emotes || undefined,
+                    has_emotes: derivedHasEmotes,
+                    engagement_type: derivedEngagementType,
+                    message_length: derivedLength,
+                    exclamation_count: derivedExclamations,
+                    sentence_count: derivedSentences,
                     timestamp: BigInt(payload.timestamp),
                     sender_username_color: payload.sender.color || null,
                     sender_badges: payload.sender.badges || undefined,
@@ -278,7 +311,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     sender_is_anonymous: payload.sender.is_anonymous || false,
                     points_earned: 0,
                     sent_when_offline: false,
-                },
+                } as any,
             })
 
             // ═══════════════════════════════════════════════════════════════
