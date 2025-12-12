@@ -5,8 +5,8 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 /**
- * POST /api/admin/users/award-points
- * Manually award points to a user
+ * POST /api/admin/users/award-sweet-coins
+ * Manually award sweet coins to a user
  */
 export async function POST(request: Request) {
     try {
@@ -19,26 +19,26 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { kick_user_id, points, reason } = body
+        const { kick_user_id, sweet_coins, reason } = body
 
-        if (!kick_user_id || !points) {
+        if (!kick_user_id || !sweet_coins) {
             return NextResponse.json(
-                { error: 'kick_user_id and points are required' },
+                { error: 'kick_user_id and sweet_coins are required' },
                 { status: 400 }
             )
         }
 
-        const pointsValue = parseInt(points)
-        if (isNaN(pointsValue) || pointsValue === 0) {
+        const sweetCoinsValue = parseInt(sweet_coins)
+        if (isNaN(sweetCoinsValue) || sweetCoinsValue === 0) {
             return NextResponse.json(
-                { error: 'Points must be a non-zero number' },
+                { error: 'Sweet coins must be a non-zero number' },
                 { status: 400 }
             )
         }
 
-        if (Math.abs(pointsValue) > 1000000) {
+        if (Math.abs(sweetCoinsValue) > 1000000) {
             return NextResponse.json(
-                { error: 'Points value too large (max ±1,000,000)' },
+                { error: 'Sweet coins value too large (max ±1,000,000)' },
                 { status: 400 }
             )
         }
@@ -58,26 +58,26 @@ export async function POST(request: Request) {
 
         // Use transaction to ensure atomicity
         const result = await db.$transaction(async (tx) => {
-            // Update or create user points
-            const userPoints = await tx.userPoints.upsert({
+            // Update or create user sweet coins
+            const userSweetCoins = await tx.userSweetCoins.upsert({
                 where: { user_id: user.id },
                 update: {
-                    total_points: {
-                        increment: pointsValue,
+                    total_sweet_coins: {
+                        increment: sweetCoinsValue,
                     },
                 },
                 create: {
                     user_id: user.id,
-                    total_points: Math.max(0, pointsValue), // Ensure non-negative
+                    total_sweet_coins: Math.max(0, sweetCoinsValue), // Ensure non-negative
                     total_emotes: 0,
                 },
             })
 
-            // Create point history entry
-            await tx.pointHistory.create({
+            // Create sweet coin history entry
+            await tx.sweetCoinHistory.create({
                 data: {
                     user_id: user.id,
-                    points_earned: pointsValue,
+                    sweet_coins_earned: sweetCoinsValue,
                     message_id: `admin-award-${Date.now()}`,
                     stream_session_id: null,
                     earned_at: new Date(),
@@ -86,22 +86,22 @@ export async function POST(request: Request) {
 
             return {
                 username: user.username,
-                new_total: userPoints.total_points,
-                points_awarded: pointsValue,
+                new_total: userSweetCoins.total_sweet_coins,
+                sweet_coins_awarded: sweetCoinsValue,
             }
         })
 
         return NextResponse.json({
             success: true,
             ...result,
-            message: `Successfully ${pointsValue > 0 ? 'awarded' : 'deducted'} ${Math.abs(pointsValue).toLocaleString()} points ${pointsValue > 0 ? 'to' : 'from'} ${result.username}`,
+            message: `Successfully ${sweetCoinsValue > 0 ? 'awarded' : 'deducted'} ${Math.abs(sweetCoinsValue).toLocaleString()} Sweet Coins ${sweetCoinsValue > 0 ? 'to' : 'from'} ${result.username}`,
             reason: reason || null,
         })
     } catch (error) {
-        console.error('Error awarding points:', error)
+        console.error('Error awarding sweet coins:', error)
         return NextResponse.json(
             {
-                error: 'Failed to award points',
+                error: 'Failed to award sweet coins',
                 details: error instanceof Error ? error.message : 'Unknown error',
             },
             { status: 500 }

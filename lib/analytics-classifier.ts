@@ -93,3 +93,4 @@ export function analyzeEngagementType(content: string, hasEmotesFlag: boolean): 
 
     return 'regular'
 }
+

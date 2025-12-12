@@ -28,13 +28,13 @@ export async function GET(request: Request) {
         }
 
         // Cache key
-        const cacheKey = `points:${kickUserId}`
+        const cacheKey = `sweet_coins:${kickUserId}`
         const cacheTTL = 10000 // 10 seconds
 
         // Try cache first
         const cached = memoryCache.get<{
             kick_user_id: string
-            total_points: number
+            total_sweet_coins: number
             is_subscriber: boolean
         }>(cacheKey)
 
@@ -50,13 +50,13 @@ export async function GET(request: Request) {
         const result = await memoryCache.getOrSet(
             cacheKey,
             async () => {
-                // Get user with points relation in a single query
+                // Get user with sweet_coins relation in a single query
                 const user = await db.user.findUnique({
                     where: { kick_user_id: kickUserIdBigInt },
                     include: {
-                        points: {
+                        sweet_coins: {
                             select: {
-                                total_points: true,
+                                total_sweet_coins: true,
                                 is_subscriber: true,
                             },
                         },
@@ -64,18 +64,18 @@ export async function GET(request: Request) {
                 })
 
                 if (!user) {
-                    // User not found - return 0 points (they may not have chatted yet)
+                    // User not found - return 0 sweet coins (they may not have chatted yet)
                     return {
                         kick_user_id: kickUserId,
-                        total_points: 0,
+                        total_sweet_coins: 0,
                         is_subscriber: false,
                     }
                 }
 
                 return {
                     kick_user_id: kickUserId,
-                    total_points: user.points?.total_points || 0,
-                    is_subscriber: user.points?.is_subscriber || false,
+                    total_sweet_coins: user.sweet_coins?.total_sweet_coins || 0,
+                    is_subscriber: user.sweet_coins?.is_subscriber || false,
                 }
             },
             cacheTTL
@@ -87,9 +87,9 @@ export async function GET(request: Request) {
             },
         })
     } catch (error) {
-        console.error('Error fetching user points:', error)
+        console.error('Error fetching user sweet coins:', error)
         return NextResponse.json(
-            { error: 'Failed to fetch user points', details: error instanceof Error ? error.message : 'Unknown error' },
+            { error: 'Failed to fetch user sweet coins', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         )
     }

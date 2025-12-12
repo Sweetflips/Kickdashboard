@@ -20,7 +20,7 @@ console.log('')
 
 import { db } from '../lib/db'
 import { claimChatJobs, completeChatJob, failChatJob, getChatQueueStats, type ClaimedChatJob, type ChatJobPayload } from '../lib/chat-queue'
-import { awardPoint, awardEmotes, isBot } from '../lib/points'
+import { awardSweetCoins, awardEmotes, isBot } from '../lib/sweet-coins'
 import { detectBotMessage } from '../lib/bot-detection'
 import { queueUserEnrichment } from '../lib/user-enrichment'
 import { analyzeEngagementType, countExclamations, countSentences, hasEmotes, messageLength } from '../lib/analytics-classifier'
@@ -309,7 +309,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     sender_badges: payload.sender.badges || undefined,
                     sender_is_verified: payload.sender.is_verified || false,
                     sender_is_anonymous: payload.sender.is_anonymous || false,
-                    points_earned: 0,
+                    sweet_coins_earned: 0,
                     sent_when_offline: false,
                 } as any,
             })
@@ -326,14 +326,14 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     pointsReason = 'Bot detected'
                 } else if (streamSessionId) {
                     // Award points
-                    const pointResult = await awardPoint(
+                    const pointResult = await awardSweetCoins(
                         senderUserId,
                         streamSessionId,
                         payload.message_id,
                         payload.sender.badges
                     )
 
-                    pointsEarned = pointResult.pointsEarned || 0
+                    pointsEarned = pointResult.sweetCoinsEarned || 0
                     pointsReason = pointResult.reason || null
 
                     // Award emotes
@@ -347,8 +347,8 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     await db.chatMessage.updateMany({
                         where: { message_id: payload.message_id },
                         data: {
-                            points_earned: pointsEarned,
-                            points_reason: pointsReason,
+                            sweet_coins_earned: pointsEarned,
+                            sweet_coins_reason: pointsReason,
                         },
                     }).catch(() => {})
                 }

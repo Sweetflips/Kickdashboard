@@ -322,7 +322,7 @@ export default function UsersPage() {
       const token = localStorage.getItem('kick_access_token')
       if (!token) return
 
-      const response = await fetch('/api/admin/users/award-points', {
+      const response = await fetch('/api/admin/users/award-sweet-coins', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -330,7 +330,7 @@ export default function UsersPage() {
         },
         body: JSON.stringify({
           kick_user_id: selectedUser.kick_user_id,
-          points: parseInt(awardPoints),
+          sweet_coins: parseInt(awardPoints),
           reason: awardReason || null,
         }),
       })

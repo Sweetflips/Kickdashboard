@@ -62,18 +62,18 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            4. Points and Rewards System
+                            4. Sweet Coins and Rewards System
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
-                            The Service offers a points system where users can earn points through various activities
-                            such as watching streams and participating in chat. Points have no monetary value and
+                            The Service offers a Sweet Coins system where users can earn Sweet Coins through various activities
+                            such as watching streams and participating in chat. Sweet Coins have no monetary value and
                             cannot be exchanged for real currency.
                         </p>
                         <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2 mb-4">
-                            <li>Points are virtual rewards for community engagement only</li>
-                            <li>Points cannot be transferred between accounts</li>
-                            <li>We reserve the right to adjust point balances to correct errors or abuse</li>
-                            <li>Points may expire or be reset at our discretion with reasonable notice</li>
+                            <li>Sweet Coins are virtual rewards for community engagement only</li>
+                            <li>Sweet Coins cannot be transferred between accounts</li>
+                            <li>We reserve the right to adjust Sweet Coin balances to correct errors or abuse</li>
+                            <li>Sweet Coins may expire or be reset at our discretion with reasonable notice</li>
                         </ul>
                     </section>
 
@@ -82,19 +82,19 @@ export default function TermsOfService() {
                             5. Raffles and Giveaways
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
-                            The Service may offer raffles and giveaways where users can use points to purchase entries.
+                            The Service may offer raffles and giveaways where users can use Sweet Coins to purchase entries.
                             By participating:
                         </p>
                         <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2 mb-4">
                             <li>You acknowledge that winning is based on random selection</li>
-                            <li>All entries are final and points spent are non-refundable</li>
+                            <li>All entries are final and Sweet Coins spent are non-refundable</li>
                             <li>Winners are responsible for any taxes on prizes in their jurisdiction</li>
                             <li>Prize fulfillment is subject to winner verification and eligibility</li>
                             <li>We reserve the right to disqualify entries that violate these terms</li>
                         </ul>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             Raffles are for entertainment purposes only and do not constitute gambling as no real
-                            money is wagered. Points are earned through participation, not purchased.
+                            money is wagered. Sweet Coins are earned through participation, not purchased.
                         </p>
                     </section>
 

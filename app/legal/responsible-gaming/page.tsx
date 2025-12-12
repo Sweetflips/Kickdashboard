@@ -26,9 +26,9 @@ export default function ResponsibleGaming() {
                             <div>
                                 <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-1">Important Notice</h3>
                                 <p className="text-sm text-amber-700 dark:text-amber-300">
-                                    SweetFlips raffles and giveaways are for entertainment purposes only. Points are earned
+                                    SweetFlips raffles and giveaways are for entertainment purposes only. Sweet Coins are earned
                                     through community participation and have no monetary value. No real money is wagered or
-                                    can be won through our points system.
+                                    can be won through our Sweet Coins system.
                                 </p>
                             </div>
                         </div>
@@ -40,7 +40,7 @@ export default function ResponsibleGaming() {
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             SweetFlips is committed to providing a fun and safe entertainment experience for our
-                            community. While our raffle system uses virtual points (not real money), we believe
+                            community. While our raffle system uses virtual Sweet Coins (not real money), we believe
                             in promoting responsible participation in all gaming-like activities.
                         </p>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
@@ -55,13 +55,13 @@ export default function ResponsibleGaming() {
                         </h2>
                         <div className="bg-gray-50 dark:bg-kick-surface-hover rounded-xl p-6 mb-4">
                             <h3 className="text-lg font-medium text-gray-800 dark:text-kick-text mb-3">
-                                How Points Work
+                                How Sweet Coins Work
                             </h3>
                             <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2">
-                                <li>Points are earned by watching streams and participating in chat</li>
-                                <li>Points cannot be purchased with real money</li>
-                                <li>Points cannot be exchanged for cash or real currency</li>
-                                <li>Points have no monetary value outside the platform</li>
+                                <li>Sweet Coins are earned by watching streams and participating in chat</li>
+                                <li>Sweet Coins cannot be purchased with real money</li>
+                                <li>Sweet Coins cannot be exchanged for cash or real currency</li>
+                                <li>Sweet Coins have no monetary value outside the platform</li>
                             </ul>
                         </div>
 

@@ -41,3 +41,4 @@ echo "- Builder: Change from 'Nixpacks' to 'Dockerfile'"
 echo "- Healthcheck Path: Change from '/' to '/health'"
 echo "- Healthcheck Timeout: Set to 5000"
 
+

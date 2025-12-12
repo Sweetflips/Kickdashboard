@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 /**
- * Get updated points for specific messages
- * POST /api/chat/points
+ * Get updated sweet coins for specific messages
+ * POST /api/chat/sweet-coins
  * Body: { messageIds: string[] }
  */
 export async function POST(request: Request) {
@@ -21,8 +21,8 @@ export async function POST(request: Request) {
         // Limit to 100 messages per request
         const limitedIds = messageIds.slice(0, 100)
 
-        // Fetch updated points for these messages with retry logic for connection pool exhaustion
-        let messages: { message_id: string; points_earned: number; points_reason: string | null }[] = []
+        // Fetch updated sweet coins for these messages with retry logic for connection pool exhaustion
+        let messages: { message_id: string; sweet_coins_earned: number; sweet_coins_reason: string | null }[] = []
         for (let attempt = 0; attempt < 3; attempt++) {
             try {
                 messages = await db.chatMessage.findMany({
@@ -31,8 +31,8 @@ export async function POST(request: Request) {
                     },
                     select: {
                         message_id: true,
-                        points_earned: true,
-                        points_reason: true,
+                        sweet_coins_earned: true,
+                        sweet_coins_reason: true,
                     },
                 })
                 break
@@ -46,19 +46,19 @@ export async function POST(request: Request) {
         }
 
         // Create a map for quick lookup
-        const pointsMap = new Map(
+        const sweetCoinsMap = new Map(
             messages.map((msg) => [
                 msg.message_id,
                 {
-                    points_earned: msg.points_earned,
-                    points_reason: msg.points_reason,
+                    sweet_coins_earned: msg.sweet_coins_earned,
+                    sweet_coins_reason: msg.sweet_coins_reason,
                 },
             ])
         )
 
         return NextResponse.json({
             success: true,
-            points: Object.fromEntries(pointsMap),
+            sweet_coins: Object.fromEntries(sweetCoinsMap),
         })
     } catch (error) {
         // Filter out ECONNRESET errors (client disconnects) - not real errors
@@ -66,12 +66,12 @@ export async function POST(request: Request) {
             (('code' in error && (error as any).code === 'ECONNRESET') || error.message.includes('aborted'))
 
         if (!isConnectionReset) {
-            console.error('Error fetching message points:', error)
+            console.error('Error fetching message sweet coins:', error)
         }
 
         return NextResponse.json(
             {
-                error: 'Failed to fetch message points',
+                error: 'Failed to fetch message sweet coins',
                 details: error instanceof Error ? error.message : 'Unknown error',
             },
             { status: 500 }

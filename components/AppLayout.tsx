@@ -43,10 +43,10 @@ export default function AppLayout({ children }: LayoutProps) {
         if (!kickUserId) return
         try {
             setPointsLoading(true)
-            const res = await fetch(`/api/points?kick_user_id=${encodeURIComponent(String(kickUserId))}`)
+            const res = await fetch(`/api/sweet-coins?kick_user_id=${encodeURIComponent(String(kickUserId))}`)
             if (!res.ok) return
             const data = await res.json()
-            const totalPoints = typeof data?.total_points === 'number' ? data.total_points : 0
+            const totalPoints = typeof data?.total_sweet_coins === 'number' ? data.total_sweet_coins : 0
             setUserPoints(totalPoints)
         } catch {
             // ignore
@@ -652,7 +652,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             {isAuthenticated && userData?.id && (
                                 <div
                                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border"
-                                    title="Points"
+                                    title="Sweet Coins"
                                 >
                                     <Image
                                         src="/icons/Sweetflipscoin.png"
@@ -665,7 +665,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                         {pointsLoading && userPoints === null ? '…' : (userPoints ?? 0).toLocaleString()}
                                     </span>
                                     <span className="hidden md:inline text-sm font-medium text-gray-600 dark:text-kick-text-secondary">
-                                        Points
+                                        Sweet Coins
                                     </span>
                                 </div>
                             )}

@@ -1,7 +1,7 @@
 'use client'
 
 import AdventCard from '@/components/AdventCard'
-import PointsBar from '@/components/PointsBar'
+import SweetCoinsBar from '@/components/SweetCoinsBar'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -86,10 +86,10 @@ export default function ShopPage() {
       if (response.ok) {
         const data = await response.json()
         if (data.id) {
-          const pointsResponse = await fetch(`/api/points?kick_user_id=${data.id}`)
+          const pointsResponse = await fetch(`/api/sweet-coins?kick_user_id=${data.id}`)
           if (pointsResponse.ok) {
             const pointsData = await pointsResponse.json()
-            setUserBalance(pointsData.total_points || 0)
+            setUserBalance(pointsData.total_sweet_coins || 0)
           }
         }
       }
@@ -198,7 +198,7 @@ export default function ShopPage() {
           </div>
 
           <div className="max-w-2xl mx-auto mb-6">
-            <PointsBar points={userBalance} />
+            <SweetCoinsBar points={userBalance} />
           </div>
 
           {/* Shop Sections */}

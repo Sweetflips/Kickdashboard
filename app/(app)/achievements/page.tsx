@@ -69,10 +69,10 @@ export default function AchievementsPage() {
             if (response.ok) {
                 const data = await response.json()
                 if (data.id) {
-                    const pointsResponse = await fetch(`/api/points?kick_user_id=${data.id}`)
+                    const pointsResponse = await fetch(`/api/sweet-coins?kick_user_id=${data.id}`)
                     if (pointsResponse.ok) {
                         const pointsData = await pointsResponse.json()
-                        setUserBalance(pointsData.total_points || 0)
+                        setUserBalance(pointsData.total_sweet_coins || 0)
                     }
                 }
             }
@@ -146,7 +146,9 @@ export default function AchievementsPage() {
                             </div>
                         )}
                     </div>,
-                    'success'
+                    'success',
+                    3000,
+                    'Achievement Claimed'
                 )
             }
 

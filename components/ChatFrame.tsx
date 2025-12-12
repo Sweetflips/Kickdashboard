@@ -40,8 +40,8 @@ interface ChatMessage {
         positions: Array<{ s: number; e: number }>
     }>
     timestamp: number
-    points_earned?: number
-    points_reason?: string
+    sweet_coins_earned?: number
+    sweet_coins_reason?: string
     sent_when_offline?: boolean
 }
 
@@ -1040,8 +1040,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                 if (msg.message_id === message.message_id) {
                                     return {
                                         ...msg,
-                                        points_earned: pointsValue,
-                                        points_reason: pointsReasonValue,
+                                        sweet_coins_earned: pointsValue,
+                                        sweet_coins_reason: pointsReasonValue,
                                     }
                                 }
                                 return msg
@@ -1054,8 +1054,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                 if (msg.message_id === message.message_id) {
                                     return {
                                         ...msg,
-                                        points_earned: pointsValue,
-                                        points_reason: pointsReasonValue,
+                                        sweet_coins_earned: pointsValue,
+                                        sweet_coins_reason: pointsReasonValue,
                                     }
                                 }
                                 return msg
@@ -1110,9 +1110,9 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                         // Check if message is pending points
                         return (
                             !msg.sent_when_offline &&
-                            (msg.points_earned === undefined ||
-                                msg.points_earned === 0 ||
-                                msg.points_reason === 'pending')
+                            (msg.sweet_coins_earned === undefined ||
+                                msg.sweet_coins_earned === 0 ||
+                                msg.sweet_coins_reason === 'pending')
                         )
                     })
                     .map((msg) => msg.message_id)
@@ -1122,8 +1122,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                     return currentMessages // No change
                 }
 
-                // Fetch updated points (async, don't await)
-                fetch('/api/chat/points', {
+                // Fetch updated sweet coins (async, don't await)
+                fetch('/api/chat/sweet-coins', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1137,24 +1137,24 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                         return response.json()
                     })
                     .then((data) => {
-                        if (!data || !data.points) {
+                        if (!data || !data.sweet_coins) {
                             return
                         }
 
-                        // Update messages with new points
+                        // Update messages with new sweet coins
                         setChatMessages((prev) => {
                             return prev.map((msg) => {
-                                const updated = data.points[msg.message_id]
-                                if (updated && updated.points_earned !== undefined) {
+                                const updated = data.sweet_coins[msg.message_id]
+                                if (updated && updated.sweet_coins_earned !== undefined) {
                                     // Only update if points changed
                                     if (
-                                        msg.points_earned !== updated.points_earned ||
-                                        msg.points_reason !== updated.points_reason
+                                        msg.sweet_coins_earned !== updated.sweet_coins_earned ||
+                                        msg.sweet_coins_reason !== updated.sweet_coins_reason
                                     ) {
                                         return {
                                             ...msg,
-                                            points_earned: updated.points_earned,
-                                            points_reason: updated.points_reason || undefined,
+                                            sweet_coins_earned: updated.sweet_coins_earned,
+                                            sweet_coins_reason: updated.sweet_coins_reason || undefined,
                                         }
                                     }
                                 }
@@ -1165,16 +1165,16 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                         // Also update pinned messages
                         setPinnedMessages((prev) => {
                             return prev.map((msg) => {
-                                const updated = data.points[msg.message_id]
-                                if (updated && updated.points_earned !== undefined) {
+                                const updated = data.sweet_coins[msg.message_id]
+                                if (updated && updated.sweet_coins_earned !== undefined) {
                                     if (
-                                        msg.points_earned !== updated.points_earned ||
-                                        msg.points_reason !== updated.points_reason
+                                        msg.sweet_coins_earned !== updated.sweet_coins_earned ||
+                                        msg.sweet_coins_reason !== updated.sweet_coins_reason
                                     ) {
                                         return {
                                             ...msg,
-                                            points_earned: updated.points_earned,
-                                            points_reason: updated.points_reason || undefined,
+                                            sweet_coins_earned: updated.sweet_coins_earned,
+                                            sweet_coins_reason: updated.sweet_coins_reason || undefined,
                                         }
                                     }
                                 }
@@ -1677,9 +1677,9 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                 {renderMessageWithEmotes(message.content, message.emotes, emoteMap)}
                                             </span>
                                             <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
-                                                {!message.sent_when_offline && message.points_earned !== undefined ? (
-                                                    message.points_earned === 0 ? (
-                                                        message.points_reason === 'Kick account not connected' ? (
+                                                {!message.sent_when_offline && message.sweet_coins_earned !== undefined ? (
+                                                    message.sweet_coins_earned === 0 ? (
+                                                        message.sweet_coins_reason === 'Kick account not connected' ? (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/20 dark:bg-red-500/30 text-red-600 dark:text-red-400 border border-red-500/40 dark:border-red-500/50">
                                                                 <Image
                                                                     src="/logos/kick-icon.svg"
@@ -1699,12 +1699,12 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                                     className="w-3.5 h-3.5"
                                                                     title="Message sent too quickly (rate limited)"
                                                                 />
-                                                                <span>0 pts</span>
+                                                                <span>0 Sweet Coins</span>
                                                             </span>
                                                         )
                                                     ) : (
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-kick-green/20 dark:bg-kick-green/30 text-kick-green dark:text-kick-green border border-kick-green/30 dark:border-kick-green/50">
-                                                            +{message.points_earned} {message.points_earned !== 1 ? 'pts' : 'pt'}
+                                                            +{message.sweet_coins_earned} {message.sweet_coins_earned !== 1 ? 'Sweet Coins' : 'Sweet Coin'}
                                                         </span>
                                                     )
                                                 ) : null}
@@ -1919,9 +1919,9 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                         {renderMessageWithEmotes(message.content, message.emotes, emoteMap)}
                                                     </span>
                                                     <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
-                                                        {!message.sent_when_offline && message.points_earned !== undefined ? (
-                                                            message.points_earned === 0 ? (
-                                                                message.points_reason === 'Kick account not connected' ? (
+                                                        {!message.sent_when_offline && message.sweet_coins_earned !== undefined ? (
+                                                            message.sweet_coins_earned === 0 ? (
+                                                                message.sweet_coins_reason === 'Kick account not connected' ? (
                                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/20 dark:bg-red-500/30 text-red-600 dark:text-red-400 border border-red-500/40 dark:border-red-500/50">
                                                                         <Image
                                                                             src="/logos/kick-icon.svg"
@@ -1941,12 +1941,12 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                                             className="w-3.5 h-3.5"
                                                                             title="Message sent too quickly (rate limited)"
                                                                         />
-                                                                        <span>0 pts</span>
+                                                                        <span>0 Sweet Coins</span>
                                                                     </span>
                                                                 )
                                                             ) : (
                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-kick-green/20 dark:bg-kick-green/30 text-kick-green dark:text-kick-green border border-kick-green/30 dark:border-kick-green/50">
-                                                                    +{message.points_earned} {message.points_earned !== 1 ? 'pts' : 'pt'}
+                                                                    +{message.sweet_coins_earned} {message.sweet_coins_earned !== 1 ? 'Sweet Coins' : 'Sweet Coin'}
                                                                 </span>
                                                             )
                                                         ) : null}

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getQueueStats } from '@/lib/point-queue'
+import { getQueueStats } from '@/lib/sweet-coin-queue'
 import { isAdmin } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Get queue statistics for point award jobs
- * GET /api/admin/points/queue-stats
+ * Get queue statistics for sweet coin award jobs
+ * GET /api/admin/sweet-coins/queue-stats
  * Requires admin authentication
  */
 export async function GET(request: Request) {

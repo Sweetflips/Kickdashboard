@@ -630,7 +630,7 @@ export default function Dashboard() {
                                     <div>
                                         <p className="font-medium text-body">Stream is offline</p>
                                         <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
-                                            The leaderboard will appear when the stream goes live. Points are only awarded during live streams.
+                                            The leaderboard will appear when the stream goes live. Sweet Coins are only awarded during live streams.
                                         </p>
                                     </div>
                                 </div>
@@ -659,10 +659,10 @@ export default function Dashboard() {
                 onClose={() => setShowPromoCodeModal(false)}
                 onSuccess={(points) => {
                     setToast({
-                        message: `🎉 Success! You earned ${points.toLocaleString()} points!`,
+                        message: `🎉 Success! You earned ${points.toLocaleString()} Sweet Coins!`,
                         type: 'success'
                     })
-                    // Refresh channel data to update points display
+                    // Refresh channel data to update Sweet Coins display
                     fetchChannelData()
                 }}
             />

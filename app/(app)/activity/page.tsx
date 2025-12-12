@@ -53,7 +53,7 @@ export default function MyActivityPage() {
         setKickUsername(user.username || user.name || null)
 
         const [pointsRes, ticketsRes, purchasesRes, accountsRes] = await Promise.all([
-          fetch(`/api/points?kick_user_id=${encodeURIComponent(String(user.id))}`),
+          fetch(`/api/sweet-coins?kick_user_id=${encodeURIComponent(String(user.id))}`),
           fetch(`/api/raffles/my-tickets`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`/api/purchases/recent?limit=25`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`/api/connected-accounts?kick_user_id=${encodeURIComponent(String(user.id))}`),
@@ -61,7 +61,7 @@ export default function MyActivityPage() {
 
         if (pointsRes.ok) {
           const data = await pointsRes.json()
-          setPoints(typeof data?.total_points === 'number' ? data.total_points : 0)
+          setPoints(typeof data?.total_sweet_coins === 'number' ? data.total_sweet_coins : 0)
         }
 
         if (ticketsRes.ok) {

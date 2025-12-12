@@ -9,13 +9,14 @@ interface ToastProps {
     type?: ToastType
     duration?: number
     onClose?: () => void
+    title?: string
 }
 
 interface ToastItem extends ToastProps {
     id: string
 }
 
-export function Toast({ message, type = 'info', duration = 3000, onClose }: ToastProps) {
+export function Toast({ message, type = 'info', duration = 3000, onClose, title }: ToastProps) {
     useEffect(() => {
         if (duration > 0) {
             const timer = setTimeout(() => {
@@ -98,7 +99,7 @@ export function Toast({ message, type = 'info', duration = 3000, onClose }: Toas
                 </div>
                 <div className={`flex-1 min-w-0 ${text.base}`}>
                     <div className="text-lg font-extrabold tracking-tight">
-                        {titles[type]}
+                        {title || titles[type]}
                     </div>
                     <div className={`mt-1 text-base font-semibold ${text.muted} break-words`}>
                         {message}
@@ -135,9 +136,9 @@ class ToastManager {
         this.listeners.forEach(listener => listener([...this.toasts]))
     }
 
-    show(message: React.ReactNode, type: ToastType = 'info', duration: number = 3000) {
+    show(message: React.ReactNode, type: ToastType = 'info', duration: number = 3000, title?: string) {
         const id = `toast-${++toastIdCounter}-${Date.now()}`
-        const toast: ToastItem = { id, message, type, duration }
+        const toast: ToastItem = { id, message, type, duration, title }
         this.toasts.push(toast)
         this.notify()
 
@@ -175,8 +176,8 @@ export function useToast() {
         return unsubscribe
     }, [])
 
-    const showToast = (message: React.ReactNode, type: ToastType = 'info', duration: number = 3000) => {
-        return toastManager.show(message, type, duration)
+    const showToast = (message: React.ReactNode, type: ToastType = 'info', duration: number = 3000, title?: string) => {
+        return toastManager.show(message, type, duration, title)
     }
 
     return { toasts, showToast }
@@ -197,6 +198,7 @@ export function ToastContainer() {
                     message={toast.message}
                     type={toast.type}
                     duration={toast.duration}
+                    title={toast.title}
                     onClose={() => toastManager.remove(toast.id)}
                 />
             ))}

@@ -67,7 +67,7 @@ export default function PrivacyPolicy() {
                         </p>
                         <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2 mb-6">
                             <li>Chat messages sent during streams (content and timestamps)</li>
-                            <li>Points earned and spent</li>
+                            <li>Sweet Coins earned and spent</li>
                             <li>Raffle entries and results</li>
                             <li>Stream viewing activity</li>
                             <li>Feature usage and preferences</li>
@@ -154,7 +154,7 @@ export default function PrivacyPolicy() {
                         <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2">
                             <li>Account data is retained until you request deletion</li>
                             <li>Chat messages may be retained for analytics and moderation purposes</li>
-                            <li>Points and transaction history are retained for record-keeping</li>
+                            <li>Sweet Coins and transaction history are retained for record-keeping</li>
                             <li>Technical logs are typically retained for 90 days</li>
                         </ul>
                     </section>

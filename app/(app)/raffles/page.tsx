@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RaffleCard from '@/components/RaffleCard'
-import PointsBar from '@/components/PointsBar'
+import SweetCoinsBar from '@/components/SweetCoinsBar'
 import WinnerClaimModal from '@/components/WinnerClaimModal'
 import { Toast } from '@/components/Toast'
 
@@ -126,10 +126,10 @@ export default function RafflesPage() {
             if (response.ok) {
                 const data = await response.json()
                 if (data.id) {
-                    const pointsResponse = await fetch(`/api/points?kick_user_id=${data.id}`)
+                    const pointsResponse = await fetch(`/api/sweet-coins?kick_user_id=${data.id}`)
                     if (pointsResponse.ok) {
                         const pointsData = await pointsResponse.json()
-                        setUserBalance(pointsData.total_points || 0)
+                        setUserBalance(pointsData.total_sweet_coins || 0)
                         setIsSubscriber(pointsData.is_subscriber || false)
                     } else {
                         console.error('Failed to fetch points:', await pointsResponse.text())
@@ -262,7 +262,7 @@ export default function RafflesPage() {
                     </p>
                 </div>
 
-                <PointsBar points={userBalance} />
+                <SweetCoinsBar points={userBalance} />
 
                 {/* Tabs */}
                 <div className="border-b border-gray-200 dark:border-kick-border">

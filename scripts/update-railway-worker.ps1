@@ -37,3 +37,4 @@ Write-Host "- Builder: Change from 'Nixpacks' to 'Dockerfile'"
 Write-Host "- Healthcheck Path: Change from '/' to '/health'"
 Write-Host "- Healthcheck Timeout: Set to 5000"
 
+

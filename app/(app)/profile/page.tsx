@@ -137,7 +137,9 @@ export default function ProfilePage() {
                     <span className="text-base font-semibold text-gray-900 dark:text-kick-text">
                         Achievement claimed{pts != null ? ` (+${pts.toLocaleString()} Sweet Coins)` : ''}!
                     </span>,
-                    'success'
+                    'success',
+                    3000,
+                    'Achievement Claimed'
                 )
             }
 

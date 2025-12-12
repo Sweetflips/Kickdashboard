@@ -53,8 +53,8 @@ model User {
   updated_at                  DateTime  @updatedAt
 
   // Relations
-  points                       UserPoints?
-  point_history                PointHistory[]
+  sweet_coins                  UserSweetCoins?
+  sweet_coin_history           SweetCoinHistory[]
   sent_messages                ChatMessage[]         @relation("SenderMessages")
   broadcaster_messages         ChatMessage[]         @relation("BroadcasterMessages")
   offline_sent_messages        OfflineChatMessage[]  @relation("OfflineSenderMessages")
@@ -81,7 +81,7 @@ model PurchaseTransaction {
   user_id        BigInt
   type           String // advent_ticket | raffle_ticket | reward | bundle (future)
   quantity       Int
-  points_spent   Int
+  sweet_coins_spent   Int
   item_name      String
   advent_item_id String?
   raffle_id      BigInt?
@@ -119,7 +119,7 @@ model StreamSession {
   // Relations
   broadcaster   User           @relation(fields: [broadcaster_user_id], references: [kick_user_id])
   chat_messages ChatMessage[]
-  point_history PointHistory[]
+  sweet_coin_history SweetCoinHistory[]
 
   // Partial unique index enforced at database level via migration
   // Ensures only one active session per broadcaster
@@ -147,8 +147,8 @@ model ChatMessage {
   sender_badges         Json?
   sender_is_verified    Boolean  @default(false)
   sender_is_anonymous   Boolean  @default(false)
-  points_earned         Int      @default(0)
-  points_reason         String?
+  sweet_coins_earned         Int      @default(0)
+  sweet_coins_reason         String?
   sent_when_offline     Boolean  @default(false)
   created_at            DateTime @default(now())
 
@@ -192,27 +192,27 @@ model OfflineChatMessage {
   @@map("offline_chat_messages")
 }
 
-model UserPoints {
-  id                   BigInt    @id @default(autoincrement())
-  user_id              BigInt    @unique
-  total_points         Int       @default(0)
-  total_emotes         Int       @default(0)
-  last_point_earned_at DateTime?
-  is_subscriber        Boolean   @default(false)
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
+model UserSweetCoins {
+  id                        BigInt    @id @default(autoincrement())
+  user_id                   BigInt    @unique
+  total_sweet_coins         Int       @default(0)
+  total_emotes               Int       @default(0)
+  last_sweet_coin_earned_at DateTime?
+  is_subscriber             Boolean   @default(false)
+  created_at                DateTime  @default(now())
+  updated_at                 DateTime  @updatedAt
 
   // Relations
   user User @relation(fields: [user_id], references: [id])
 
-  @@map("user_points")
+  @@map("user_sweet_coins")
 }
 
-model PointHistory {
+model SweetCoinHistory {
   id                BigInt   @id @default(autoincrement())
   user_id           BigInt
   stream_session_id BigInt?
-  points_earned     Int      @default(1)
+  sweet_coins_earned     Int      @default(1)
   message_id        String?  @unique
   earned_at         DateTime @default(now())
   created_at        DateTime @default(now())
@@ -224,7 +224,7 @@ model PointHistory {
   @@index([stream_session_id])
   @@index([user_id, earned_at])
   @@index([earned_at])
-  @@map("point_history")
+  @@map("sweet_coin_history")
 }
 
 model Raffle {
@@ -333,7 +333,7 @@ model UserSession {
 model PromoCode {
   id           BigInt    @id @default(autoincrement())
   code         String    @unique
-  points_value Int
+  sweet_coins_value Int
   max_uses     Int? // null = unlimited
   current_uses Int       @default(0)
   expires_at   DateTime?
@@ -356,7 +356,7 @@ model PromoCodeRedemption {
   id             BigInt   @id @default(autoincrement())
   promo_code_id  BigInt
   user_id        BigInt
-  points_awarded Int
+  sweet_coins_awarded Int
   redeemed_at    DateTime @default(now())
 
   // Relations
@@ -369,7 +369,7 @@ model PromoCodeRedemption {
   @@map("promo_code_redemptions")
 }
 
-model PointAwardJob {
+model SweetCoinAwardJob {
   id                BigInt    @id @default(autoincrement())
   kick_user_id      BigInt
   stream_session_id BigInt?
@@ -386,7 +386,7 @@ model PointAwardJob {
 
   @@index([status, created_at])
   @@index([status, locked_at])
-  @@map("point_award_jobs")
+  @@map("sweet_coin_award_jobs")
 }
 
 // Full chat message job queue - worker handles ALL writes
@@ -467,8 +467,8 @@ model ReferralReward {
   referrer_user_id BigInt
   referee_user_id  BigInt
   tier_id          String // 'starter', 'active', 'dedicated', 'superfan', 'legend'
-  required_points  Int // Points threshold that was reached
-  reward_points    Int // Points awarded to referrer
+  required_sweet_coins  Int // Sweet Coins threshold that was reached
+  reward_sweet_coins    Int // Sweet Coins awarded to referrer
   awarded_at       DateTime @default(now())
   created_at       DateTime @default(now())
 

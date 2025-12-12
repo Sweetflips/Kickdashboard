@@ -6,7 +6,7 @@ console.log('🔄 POINT WORKER STARTING')
 console.log('========================================')
 console.log('')
 
-import { claimJobs, processJob, getQueueStats } from '../lib/point-queue'
+import { claimJobs, processJob, getQueueStats } from '../lib/sweet-coin-queue'
 import { db } from '../lib/db'
 
 const BATCH_SIZE = parseInt(process.env.POINT_WORKER_BATCH_SIZE || '50', 10)
