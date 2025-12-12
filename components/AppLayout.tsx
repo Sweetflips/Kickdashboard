@@ -352,7 +352,7 @@ export default function AppLayout({ children }: LayoutProps) {
             <aside className={`fixed top-0 left-0 z-40 w-64 h-screen transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 bg-white dark:bg-kick-surface border-r border-gray-200 dark:border-kick-border`}>
                 <div className="h-full px-3 py-4 overflow-y-auto">
                     <div className="flex items-center justify-between mb-5 px-2">
-                        <Link href="/" className="flex items-center">
+                        <Link href="/" className="flex items-center gap-3">
                             <Image
                                 src="/icons/kick.jpg"
                                 alt="Kick Logo"
@@ -361,6 +361,9 @@ export default function AppLayout({ children }: LayoutProps) {
                                 className="rounded-lg"
                                 priority
                             />
+                            <span className="text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
+                                Dashboard
+                            </span>
                         </Link>
                         <button
                             onClick={() => setSidebarOpen(false)}
@@ -372,16 +375,6 @@ export default function AppLayout({ children }: LayoutProps) {
                         </button>
                     </div>
                     <ul className="space-y-2">
-                        {!isAdminRoute && (
-                            <li className="mt-1 mb-2">
-                                <div className="flex items-center gap-2 px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h3a1 1 0 001-1v-3a1 1 0 011-1h2a1 1 0 011 1v3a1 1 0 001 1h3a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                                    </svg>
-                                    <span>Dashboard</span>
-                                </div>
-                            </li>
-                        )}
                         <li>
                             <Link href="/" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
