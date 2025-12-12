@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import crypto from 'crypto'
 import { buildEntryRanges, deterministicRandomInt, findEntryForIndex } from './raffle-utils'
+import { backfillPurchaseTransactionsIfEmpty, ensurePurchaseTransactionsTable } from './purchases-ledger'
 
 export interface PurchaseTicketsResult {
     success: boolean
@@ -47,11 +48,15 @@ export async function purchaseTickets(
 
         // Use transaction to ensure atomicity
         const result = await db.$transaction(async (tx) => {
+            await backfillPurchaseTransactionsIfEmpty(tx as any, userId)
+            await ensurePurchaseTransactionsTable(tx as any)
+
             // Lock raffle row for update
             const raffle = await tx.raffle.findUnique({
                 where: { id: raffleId },
                 select: {
                     id: true,
+                    title: true,
                     ticket_cost: true,
                     max_tickets_per_user: true,
                     total_tickets_cap: true,
@@ -192,6 +197,16 @@ export async function purchaseTickets(
                     },
                 })
             }
+
+            // Log transaction (for purchase history)
+            await tx.$executeRaw`
+              INSERT INTO purchase_transactions (
+                user_id, type, quantity, points_spent, item_name, advent_item_id, raffle_id, metadata
+              )
+              VALUES (
+                ${userId}, ${'raffle_ticket'}, ${quantity}, ${totalCost}, ${raffle.title}, NULL, ${raffleId}, NULL
+              )
+            `
 
             // Get updated balance
             const updatedPoints = await tx.userPoints.findUnique({

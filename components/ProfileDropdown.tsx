@@ -189,6 +189,16 @@ function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
                             </svg>
                             Profile & Settings
                         </Link>
+                        <Link
+                            href="/activity"
+                            onClick={() => setIsOpen(false)}
+                            className="flex items-center px-4 py-2 text-sm text-gray-900 dark:text-kick-text hover:bg-gray-100 dark:hover:bg-kick-surface-hover"
+                        >
+                            <span className="w-5 h-5 mr-3 flex items-center justify-center text-[18px] leading-none" aria-hidden="true">
+                                📌
+                            </span>
+                            My Activity
+                        </Link>
                     </div>
                     <div className="border-t border-gray-200 dark:border-kick-border py-1">
                         <button

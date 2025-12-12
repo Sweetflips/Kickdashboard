@@ -1,6 +1,7 @@
 import { ADVENT_ITEMS, isDayPast, isDayUnlocked } from '@/lib/advent-calendar'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { backfillPurchaseTransactionsIfEmpty, ensurePurchaseTransactionsTable } from '@/lib/purchases-ledger'
 import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 
@@ -70,6 +71,9 @@ export async function POST(
 
     // Use transaction to ensure atomicity
     const result = await db.$transaction(async (tx) => {
+      await backfillPurchaseTransactionsIfEmpty(tx as any, auth.userId)
+      await ensurePurchaseTransactionsTable(tx as any)
+
       // Get current purchase count
       const existingPurchase = await tx.adventPurchase.findUnique({
         where: {
@@ -109,6 +113,7 @@ export async function POST(
 
       const currentBalance = userPoints[0].total_points
       const totalCost = item.pointsCost * quantity
+      const itemName = `Day ${item.day} – Advent Ticket`
 
       if (currentBalance < totalCost) {
         throw new Error(`Not enough points. You have ${currentBalance} points, need ${totalCost} points.`)
@@ -149,6 +154,16 @@ export async function POST(
           },
         })
       }
+
+      // Log transaction (for purchase history)
+      await tx.$executeRaw`
+        INSERT INTO purchase_transactions (
+          user_id, type, quantity, points_spent, item_name, advent_item_id, raffle_id, metadata
+        )
+        VALUES (
+          ${auth.userId}, ${'advent_ticket'}, ${quantity}, ${totalCost}, ${itemName}, ${itemId}, NULL, NULL
+        )
+      `
 
       // Get updated balance
       const updatedPoints = await tx.userPoints.findUnique({

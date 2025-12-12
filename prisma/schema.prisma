@@ -64,6 +64,7 @@ model User {
   raffles_created              Raffle[]
   raffle_entries               RaffleEntry[]
   advent_purchases             AdventPurchase[]
+  purchase_transactions        PurchaseTransaction[]
   advent_days_drawn            AdventDayStatus[]
   promo_codes_created          PromoCode[]           @relation("PromoCodeCreator")
   promo_code_redemptions       PromoCodeRedemption[] @relation("PromoCodeRedemptions")
@@ -73,6 +74,27 @@ model User {
   referral_rewards_earned      ReferralReward[]
 
   @@map("users")
+}
+
+model PurchaseTransaction {
+  id            BigInt   @id @default(autoincrement())
+  user_id       BigInt
+  type          String // advent_ticket | raffle_ticket | reward | bundle (future)
+  quantity      Int
+  points_spent  Int
+  item_name     String
+  advent_item_id String?
+  raffle_id     BigInt?
+  metadata      Json?
+  created_at    DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([type, created_at])
+  @@index([raffle_id])
+  @@index([advent_item_id])
+  @@map("purchase_transactions")
 }
 
 model StreamSession {
@@ -114,6 +136,12 @@ model ChatMessage {
   broadcaster_user_id   BigInt
   content               String   @db.Text
   emotes                Json?
+  // Derived fields for fast analytics (computed at ingest time by worker)
+  has_emotes            Boolean  @default(false)
+  engagement_type       String   @default("regular")
+  message_length        Int      @default(0)
+  exclamation_count     Int      @default(0)
+  sentence_count        Int      @default(0)
   timestamp             BigInt
   sender_username_color String?
   sender_badges         Json?
@@ -140,6 +168,12 @@ model OfflineChatMessage {
   broadcaster_user_id   BigInt
   content               String   @db.Text
   emotes                Json?
+  // Derived fields for fast analytics (computed at ingest time by worker)
+  has_emotes            Boolean  @default(false)
+  engagement_type       String   @default("regular")
+  message_length        Int      @default(0)
+  exclamation_count     Int      @default(0)
+  sentence_count        Int      @default(0)
   timestamp             BigInt
   sender_username_color String?
   sender_badges         Json?
