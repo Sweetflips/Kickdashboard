@@ -830,7 +830,6 @@ export default function UsersPage() {
             </>
           )}
         </div>
-      </div>
 
       {/* Award Points Modal */}
       {showAwardModal && selectedUser && (

@@ -559,7 +559,6 @@ export default function AdminRafflesPage() {
                         </table>
                     </div>
                 )}
-            </div>
 
             {toast && (
                 <Toast

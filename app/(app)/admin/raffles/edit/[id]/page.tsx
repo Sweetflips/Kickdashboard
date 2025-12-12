@@ -559,7 +559,6 @@ export default function EditRafflePage() {
                         </button>
                     </div>
                 </form>
-            </div>
 
             {toast && (
                 <Toast

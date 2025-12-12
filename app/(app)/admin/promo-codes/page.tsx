@@ -453,7 +453,6 @@ export default function AdminPromoCodesPage() {
                         </div>
                     </div>
                 )}
-            </div>
 
             {toast && (
                 <Toast

@@ -376,7 +376,6 @@ export default function CreateRafflePage() {
                         </button>
                     </div>
                 </form>
-            </div>
 
             {toast && (
                 <Toast

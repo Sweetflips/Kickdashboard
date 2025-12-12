@@ -595,7 +595,6 @@ export default function AdminPurchasesPage() {
                         </div>
                     )
                 )}
-            </div>
 
             {toast && (
                 <Toast
