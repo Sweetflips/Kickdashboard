@@ -32,8 +32,8 @@ export async function GET(request: Request) {
                         id: true,
                         username: true,
                         profile_picture_url: true,
-                        points: {
-                            select: { total_points: true }
+                        sweet_coins: {
+                            select: { total_sweet_coins: true }
                         }
                     }
                 }
@@ -49,15 +49,15 @@ export async function GET(request: Request) {
 
         // Calculate stats
         const totalReferrals = referrals.length
-        const totalEarned = rewards.reduce((sum: number, r: any) => sum + r.reward_points, 0)
+        const totalEarned = rewards.reduce((sum: number, r: any) => sum + r.reward_sweet_coins, 0)
 
         // Build referral list with milestone data
         const referralsList = referrals.map((ref: any) => {
-            const refereePoints = ref.referee.points?.total_points || 0
-            const completedMilestones = REFERRAL_TIERS.filter(t => refereePoints >= t.requiredPoints)
+            const refereeSweetCoins = ref.referee.sweet_coins?.total_sweet_coins || 0
+            const completedMilestones = REFERRAL_TIERS.filter(t => refereeSweetCoins >= t.requiredPoints)
             const earnedFromThisReferral = rewards
                 .filter((r: any) => r.referee_user_id === ref.referee_user_id)
-                .reduce((sum: number, r: any) => sum + r.reward_points, 0)
+                .reduce((sum: number, r: any) => sum + r.reward_sweet_coins, 0)
 
             return {
                 id: ref.id,
@@ -66,9 +66,9 @@ export async function GET(request: Request) {
                     username: ref.referee.username,
                     profilePicture: ref.referee.profile_picture_url,
                 },
-                points: refereePoints,
+                sweet_coins: refereeSweetCoins,
                 referredAt: ref.created_at,
-                earnedPoints: earnedFromThisReferral,
+                earnedSweetCoins: earnedFromThisReferral,
                 completedTiers: completedMilestones.map(t => t.id),
             }
         })
@@ -76,21 +76,21 @@ export async function GET(request: Request) {
         // Calculate pending rewards (next unclaimed milestone)
         let pendingRewards = 0
         for (const ref of referrals) {
-            const refereePoints = ref.referee.points?.total_points || 0
+            const refereeSweetCoins = ref.referee.sweet_coins?.total_sweet_coins || 0
             const earnedTiers = rewards
                 .filter((r: any) => r.referee_user_id === ref.referee_user_id)
                 .map((r: any) => r.tier_id)
 
             for (const tier of REFERRAL_TIERS) {
-                if (refereePoints >= tier.requiredPoints && !earnedTiers.includes(tier.id)) {
+                if (refereeSweetCoins >= tier.requiredPoints && !earnedTiers.includes(tier.id)) {
                     pendingRewards += tier.yourReward
                 }
             }
         }
 
-        // Count active referrals (those who have earned at least some points)
+        // Count active referrals (those who have earned at least some Sweet Coins)
         const activeReferrals = referrals.filter(
-            (ref: any) => (ref.referee.points?.total_points || 0) > 0
+            (ref: any) => (ref.referee.sweet_coins?.total_sweet_coins || 0) > 0
         ).length
 
         return NextResponse.json({

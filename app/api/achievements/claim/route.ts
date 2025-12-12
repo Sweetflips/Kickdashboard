@@ -41,36 +41,36 @@ export async function POST(request: Request) {
     try {
       await db.$transaction(async (tx) => {
         // Create history entry first (idempotency is enforced by unique message_id)
-        await tx.pointHistory.create({
+        await tx.sweetCoinHistory.create({
           data: {
             user_id: auth.userId,
             stream_session_id: null,
-            points_earned: def.reward,
+            sweet_coins_earned: def.reward,
             message_id: claimKey,
             earned_at: now,
           },
         })
 
-        await tx.userPoints.upsert({
+        await tx.userSweetCoins.upsert({
           where: { user_id: auth.userId },
           update: {
-            total_points: { increment: def.reward },
+            total_sweet_coins: { increment: def.reward },
           },
           create: {
             user_id: auth.userId,
-            total_points: def.reward,
+            total_sweet_coins: def.reward,
             total_emotes: 0,
           },
         })
       })
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        return NextResponse.json({ claimed: true, alreadyClaimed: true, pointsAwarded: 0 })
+        return NextResponse.json({ claimed: true, alreadyClaimed: true, sweetCoinsAwarded: 0 })
       }
       throw e
     }
 
-    return NextResponse.json({ claimed: true, alreadyClaimed: false, pointsAwarded: def.reward })
+    return NextResponse.json({ claimed: true, alreadyClaimed: false, sweetCoinsAwarded: def.reward })
   } catch (error) {
     console.error('Error claiming achievement:', error)
     return NextResponse.json(

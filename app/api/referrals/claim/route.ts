@@ -35,8 +35,8 @@ export async function POST(request: Request) {
             include: {
                 referee: {
                     select: {
-                        points: {
-                            select: { total_points: true }
+                        sweet_coins: {
+                            select: { total_sweet_coins: true }
                         }
                     }
                 }
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: 'No referral found for user' })
         }
 
-        const refereePoints = referral.referee.points?.total_points || 0
+        const refereePoints = referral.referee.sweet_coins?.total_sweet_coins || 0
         const referrerId = referral.referrer_user_id
 
         // Check each tier and award if not already awarded
@@ -73,38 +73,38 @@ export async function POST(request: Request) {
                                 referrer_user_id: referrerId,
                                 referee_user_id: refereeUserId,
                                 tier_id: tier.id,
-                                required_points: tier.requiredPoints,
-                                reward_points: tier.yourReward,
+                                required_sweet_coins: tier.requiredPoints,
+                                reward_sweet_coins: tier.yourReward,
                             }
                         })
 
-                        // Add points to referrer
-                        const referrerPoints = await db.userPoints.findUnique({
+                        // Add Sweet Coins to referrer
+                        const referrerPoints = await db.userSweetCoins.findUnique({
                             where: { user_id: referrerId }
                         })
 
                         if (referrerPoints) {
-                            await db.userPoints.update({
+                            await db.userSweetCoins.update({
                                 where: { user_id: referrerId },
                                 data: {
-                                    total_points: {
+                                    total_sweet_coins: {
                                         increment: tier.yourReward
                                     }
                                 }
                             })
                         }
 
-                        // Log the point award
-                        await db.pointHistory.create({
+                        // Log the Sweet Coins award
+                        await db.sweetCoinHistory.create({
                             data: {
                                 user_id: referrerId,
-                                points_earned: tier.yourReward,
+                                sweet_coins_earned: tier.yourReward,
                             }
                         })
 
                         awardedRewards.push({
                             tier: tier.id,
-                            points: tier.yourReward,
+                            sweet_coins: tier.yourReward,
                             rewardId: reward.id
                         })
 

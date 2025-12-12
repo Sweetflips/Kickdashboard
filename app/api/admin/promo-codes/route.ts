@@ -51,7 +51,7 @@ export async function GET(request: Request) {
             codes: promoCodes.map(code => ({
                 id: code.id.toString(),
                 code: code.code,
-                points_value: code.points_value,
+                sweet_coins_value: code.sweet_coins_value,
                 max_uses: code.max_uses,
                 current_uses: code.current_uses,
                 expires_at: code.expires_at?.toISOString() || null,
@@ -91,18 +91,18 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { code, points_value, max_uses, expires_at, quantity = 1 } = body
+        const { code, sweet_coins_value, max_uses, expires_at, quantity = 1 } = body
 
-        if (!code || !points_value) {
+        if (!code || !sweet_coins_value) {
             return NextResponse.json(
-                { error: 'code and points_value are required' },
+                { error: 'code and sweet_coins_value are required' },
                 { status: 400 }
             )
         }
 
-        if (points_value < 1 || points_value > 1000000) {
+        if (sweet_coins_value < 1 || sweet_coins_value > 1000000) {
             return NextResponse.json(
-                { error: 'points_value must be between 1 and 1,000,000' },
+                { error: 'sweet_coins_value must be between 1 and 1,000,000' },
                 { status: 400 }
             )
         }
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
             const promoCode = await db.promoCode.create({
                 data: {
                     code: finalCode,
-                    points_value: parseInt(points_value),
+                    sweet_coins_value: parseInt(sweet_coins_value),
                     max_uses: max_uses ? parseInt(max_uses) : null,
                     expires_at: expires_at ? new Date(expires_at) : null,
                     created_by: auth.userId,
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
             createdCodes.push({
                 id: promoCode.id.toString(),
                 code: promoCode.code,
-                points_value: promoCode.points_value,
+                sweet_coins_value: promoCode.sweet_coins_value,
                 max_uses: promoCode.max_uses,
                 expires_at: promoCode.expires_at?.toISOString() || null,
             })

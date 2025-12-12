@@ -114,7 +114,7 @@ export async function GET(
             content: msg.content,
             emotes: (msg.emotes as any) || [],
             timestamp: Number(msg.timestamp),
-            points_earned: msg.points_earned || 0,
+            sweet_coins_earned: msg.sweet_coins_earned || 0,
         }))
 
         return NextResponse.json({

@@ -56,18 +56,18 @@ export async function GET(request: Request) {
             )
         }
 
-        // Get all points earned in this stream session, grouped by user
-        const pointsByUser = await db.pointHistory.groupBy({
+        // Get all Sweet Coins earned in this stream session, grouped by user
+        const sweetCoinsByUser = await db.sweetCoinHistory.groupBy({
             by: ['user_id'],
             where: {
                 stream_session_id: BigInt(streamSessionId),
             },
             _sum: {
-                points_earned: true,
+                sweet_coins_earned: true,
             },
         })
 
-        if (pointsByUser.length === 0) {
+        if (sweetCoinsByUser.length === 0) {
             return NextResponse.json({
                 stream_session: {
                     id: streamSession.id.toString(),
@@ -79,8 +79,8 @@ export async function GET(request: Request) {
                 },
                 payouts: [],
                 summary: {
-                    total_points: 0,
-                    dollar_per_point: 0,
+                    total_sweet_coins: 0,
+                    dollar_per_sweet_coin: 0,
                     total_payout: 0,
                     budget,
                     participant_count: 0,
@@ -89,7 +89,7 @@ export async function GET(request: Request) {
         }
 
         // Get user details for all participants
-        const userIds = pointsByUser.map(p => p.user_id)
+        const userIds = sweetCoinsByUser.map(p => p.user_id)
         const users = await db.user.findMany({
             where: {
                 id: { in: userIds },
@@ -113,18 +113,18 @@ export async function GET(request: Request) {
             3: 1.5,
         }
 
-        // Build initial sorted list by points
-        const sortedByPoints = pointsByUser
+        // Build initial sorted list by Sweet Coins
+        const sortedBySweetCoins = sweetCoinsByUser
             .map(p => ({
                 user_id: p.user_id,
-                points: p._sum.points_earned || 0,
+                sweet_coins: p._sum.sweet_coins_earned || 0,
             }))
-            .sort((a, b) => b.points - a.points)
+            .sort((a, b) => b.sweet_coins - a.sweet_coins)
 
         // Assign ranks using DENSE ranking (1, 1, 1, 2, 3, ...) - ties share rank, next unique value gets next rank
         let currentRank = 1
-        const withRanks = sortedByPoints.map((p, index) => {
-            if (index > 0 && p.points < sortedByPoints[index - 1].points) {
+        const withRanks = sortedBySweetCoins.map((p, index) => {
+            if (index > 0 && p.sweet_coins < sortedBySweetCoins[index - 1].sweet_coins) {
                 currentRank++ // Dense ranking: next different value gets next rank number
             }
             return { ...p, rank: currentRank }
@@ -141,21 +141,21 @@ export async function GET(request: Request) {
             eligibleUsers = withRanks.filter(u => u.rank <= topN)
         }
 
-        // Calculate weighted points (with rank bonus if enabled)
+        // Calculate weighted Sweet Coins (with rank bonus if enabled)
         const usersWithWeightedPoints = eligibleUsers.map(u => {
             const multiplier = rankBonus ? (RANK_MULTIPLIERS[u.rank] || 1.0) : 1.0
             return {
                 ...u,
                 multiplier,
-                weightedPoints: u.points * multiplier,
+                weightedSweetCoins: u.sweet_coins * multiplier,
             }
         })
 
-        // Calculate total weighted points
-        const totalWeightedPoints = usersWithWeightedPoints.reduce((sum, p) => sum + p.weightedPoints, 0)
-        const totalPoints = eligibleUsers.reduce((sum, p) => sum + p.points, 0)
+        // Calculate total weighted Sweet Coins
+        const totalWeightedSweetCoins = usersWithWeightedPoints.reduce((sum, p) => sum + p.weightedSweetCoins, 0)
+        const totalSweetCoins = eligibleUsers.reduce((sum, p) => sum + p.sweet_coins, 0)
 
-        if (totalPoints === 0) {
+        if (totalSweetCoins === 0) {
             return NextResponse.json({
                 stream_session: {
                     id: streamSession.id.toString(),
@@ -167,8 +167,8 @@ export async function GET(request: Request) {
                 },
                 payouts: [],
                 summary: {
-                    total_points: 0,
-                    dollar_per_point: 0,
+                    total_sweet_coins: 0,
+                    dollar_per_sweet_coin: 0,
                     total_payout: 0,
                     budget,
                     participant_count: 0,
@@ -180,14 +180,14 @@ export async function GET(request: Request) {
         }
 
         // Calculate dollar per weighted point (uses weighted points if rank bonus enabled)
-        const dollarPerWeightedPoint = budget / totalWeightedPoints
+        const dollarPerWeightedSweetCoin = budget / totalWeightedSweetCoins
 
         // Build payouts array for eligible users only
         const payouts = usersWithWeightedPoints.map(p => {
             const user = userMap.get(p.user_id.toString())
-            const rawPayout = p.weightedPoints * dollarPerWeightedPoint
+            const rawPayout = p.weightedSweetCoins * dollarPerWeightedSweetCoin
             const payout = roundTo >= 0 ? Number(rawPayout.toFixed(roundTo)) : rawPayout
-            const percentage = (p.weightedPoints / totalWeightedPoints) * 100
+            const percentage = (p.weightedSweetCoins / totalWeightedSweetCoins) * 100
 
             return {
                 rank: p.rank,
@@ -195,9 +195,9 @@ export async function GET(request: Request) {
                 kick_user_id: user?.kick_user_id.toString() || '',
                 username: user?.username || 'Unknown',
                 profile_picture_url: user?.custom_profile_picture_url || user?.profile_picture_url || null,
-                points: p.points,
+                sweet_coins: p.sweet_coins,
                 multiplier: p.multiplier,
-                weighted_points: Number(p.weightedPoints.toFixed(2)),
+                weighted_sweet_coins: Number(p.weightedSweetCoins.toFixed(2)),
                 payout,
                 percentage: Number(percentage.toFixed(2)),
             }
@@ -219,10 +219,10 @@ export async function GET(request: Request) {
             },
             payouts,
             summary: {
-                total_points: totalPoints,
-                total_weighted_points: Number(totalWeightedPoints.toFixed(2)),
-                dollar_per_point: Number((budget / totalPoints).toFixed(6)),
-                dollar_per_weighted_point: Number(dollarPerWeightedPoint.toFixed(6)),
+                total_sweet_coins: totalSweetCoins,
+                total_weighted_sweet_coins: Number(totalWeightedSweetCoins.toFixed(2)),
+                dollar_per_sweet_coin: Number((budget / totalSweetCoins).toFixed(6)),
+                dollar_per_weighted_sweet_coin: Number(dollarPerWeightedSweetCoin.toFixed(6)),
                 total_payout: Number(actualTotalPayout.toFixed(roundTo)),
                 budget,
                 participant_count: payouts.length,

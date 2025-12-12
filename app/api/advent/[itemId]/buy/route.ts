@@ -95,35 +95,35 @@ export async function POST(
         )
       }
 
-      // Lock user points row for update
+      // Lock user Sweet Coins row for update
       const userPoints = await tx.$queryRaw<Array<{
         id: bigint
         user_id: bigint
-        total_points: number
+        total_sweet_coins: number
       }>>`
-        SELECT id, user_id, total_points
-        FROM user_points
+        SELECT id, user_id, total_sweet_coins
+        FROM user_sweet_coins
         WHERE user_id = ${auth.userId}
         FOR UPDATE
       `
 
       if (!userPoints || userPoints.length === 0) {
-        throw new Error('User points record not found')
+        throw new Error('User Sweet Coins record not found')
       }
 
-      const currentBalance = userPoints[0].total_points
+      const currentBalance = userPoints[0].total_sweet_coins
       const totalCost = item.pointsCost * quantity
       const itemName = `Day ${item.day} – Advent Ticket`
 
       if (currentBalance < totalCost) {
-        throw new Error(`Not enough points. You have ${currentBalance} points, need ${totalCost} points.`)
+        throw new Error(`Not enough Sweet Coins. You have ${currentBalance} Sweet Coins, need ${totalCost} Sweet Coins.`)
       }
 
-      // Deduct points
-      await tx.userPoints.update({
+      // Deduct Sweet Coins
+      await tx.userSweetCoins.update({
         where: { user_id: auth.userId },
         data: {
-          total_points: {
+          total_sweet_coins: {
             decrement: totalCost,
           },
           updated_at: new Date(),
@@ -158,7 +158,7 @@ export async function POST(
       // Log transaction (for purchase history)
       await tx.$executeRaw`
         INSERT INTO purchase_transactions (
-          user_id, type, quantity, points_spent, item_name, advent_item_id, raffle_id, metadata
+          user_id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, metadata
         )
         VALUES (
           ${auth.userId}, ${'advent_ticket'}, ${quantity}, ${totalCost}, ${itemName}, ${itemId}, NULL, NULL
@@ -166,15 +166,15 @@ export async function POST(
       `
 
       // Get updated balance
-      const updatedPoints = await tx.userPoints.findUnique({
+      const updatedPoints = await tx.userSweetCoins.findUnique({
         where: { user_id: auth.userId },
-        select: { total_points: true },
+        select: { total_sweet_coins: true },
       })
 
       return {
         success: true,
         ticketsPurchased: quantity,
-        newBalance: updatedPoints?.total_points || 0,
+        newBalance: updatedPoints?.total_sweet_coins || 0,
         totalTickets: newTotalTickets,
       }
     }, {

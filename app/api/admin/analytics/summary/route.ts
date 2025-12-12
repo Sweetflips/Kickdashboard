@@ -27,8 +27,8 @@ export async function GET(request: Request) {
         ] = await Promise.all([
             db.chatMessage.count(),
             db.user.count(),
-            db.userPoints.aggregate({ _sum: { total_points: true } }),
-            db.userPoints.aggregate({ _sum: { total_emotes: true } }),
+            db.userSweetCoins.aggregate({ _sum: { total_sweet_coins: true } }),
+            db.userSweetCoins.aggregate({ _sum: { total_emotes: true } }),
             db.chatMessage.count({ where: { has_emotes: true } }),
             db.streamSession.count({ where: { ended_at: { not: null } } }),
             db.streamSession.aggregate({ where: { ended_at: { not: null } }, _sum: { peak_viewer_count: true } }),
@@ -113,8 +113,8 @@ export async function GET(request: Request) {
             }))
 
         // Top users (fast, no per-user full scans)
-        const topUsers = await db.userPoints.findMany({
-            orderBy: { total_points: 'desc' },
+        const topUsers = await db.userSweetCoins.findMany({
+            orderBy: { total_sweet_coins: 'desc' },
             take: topUsersLimit,
             include: {
                 user: {
@@ -204,16 +204,16 @@ export async function GET(request: Request) {
                     messages: totalMessagesForUser,
                     emotes: entry.total_emotes || 0,
                     messages_with_emotes: messagesWithEmotesForUser,
-                    points: entry.total_points || 0,
+                    sweet_coins: entry.total_sweet_coins || 0,
                     streams_watched: streamsWatched,
-                    avg_points_per_stream: streamsWatched > 0 ? Number(((entry.total_points || 0) / streamsWatched).toFixed(2)) : 0,
+                    avg_sweet_coins_per_stream: streamsWatched > 0 ? Number(((entry.total_sweet_coins || 0) / streamsWatched).toFixed(2)) : 0,
                     avg_messages_per_stream: streamsWatched > 0 ? Number((totalMessagesForUser / streamsWatched).toFixed(2)) : 0,
                 }
 
                 const engagement_types_for_user = engagementMap.get(key) || {}
 
                 const activityScore =
-                    (activityBreakdown.points * 2) +
+                    (activityBreakdown.sweet_coins * 2) +
                     (activityBreakdown.messages * 1) +
                     (activityBreakdown.emotes * 0.5) +
                     (activityBreakdown.streams_watched * 10)
@@ -222,7 +222,7 @@ export async function GET(request: Request) {
                     rank: idx + 1,
                     username: entry.user.username,
                     profile_picture_url: entry.user.custom_profile_picture_url || entry.user.profile_picture_url,
-                    total_points: activityBreakdown.points,
+                    total_sweet_coins: activityBreakdown.sweet_coins,
                     total_emotes: activityBreakdown.emotes,
                     activity_breakdown: activityBreakdown,
                     engagement_breakdown: {
@@ -232,7 +232,7 @@ export async function GET(request: Request) {
                         total_messages_analyzed: lenAgg.total,
                     },
                     activity_score: Math.round(activityScore),
-                    last_point_earned_at: entry.last_point_earned_at?.toISOString() || null,
+                    last_sweet_coin_earned_at: entry.last_sweet_coin_earned_at?.toISOString() || null,
                 }
             })
             .sort((a, b) => b.activity_score - a.activity_score)
@@ -242,7 +242,7 @@ export async function GET(request: Request) {
             users,
             overall_stats: {
                 total_messages: totalMessages,
-                total_points: totalPointsAgg._sum.total_points || 0,
+                total_sweet_coins: totalPointsAgg._sum.total_sweet_coins || 0,
                 activity_types,
                 engagement_types,
                 avg_message_length,

@@ -176,22 +176,22 @@ export async function GET(request: Request) {
                 },
             })),
             // Points aggregated by user (internal user_id)
-            executeQueryWithRetry(() => db.pointHistory.groupBy({
+            executeQueryWithRetry(() => db.sweetCoinHistory.groupBy({
                 by: ['user_id'],
                 where: {
                     stream_session_id: session.id,
                 },
                 _sum: {
-                    points_earned: true,
+                    sweet_coins_earned: true,
                 },
             })),
             // Total points for stats
-            executeQueryWithRetry(() => db.pointHistory.aggregate({
+            executeQueryWithRetry(() => db.sweetCoinHistory.aggregate({
                 where: {
                     stream_session_id: session.id,
                 },
                 _sum: {
-                    points_earned: true,
+                    sweet_coins_earned: true,
                 },
             })),
             // Total messages for stats
@@ -204,7 +204,7 @@ export async function GET(request: Request) {
             })),
         ])
 
-        const totalPoints = totalPointsResult._sum.points_earned || 0
+        const totalPoints = totalPointsResult._sum.sweet_coins_earned || 0
         const totalMessages = totalMessagesResult
         const uniqueChatters = messageCounts.length
 
@@ -227,7 +227,7 @@ export async function GET(request: Request) {
 
         // Create maps for lookups
         const kickUserIdToUser = new Map(users.map(u => [Number(u.kick_user_id), u]))
-        const userIdToPoints = new Map(pointsByUser.map(p => [Number(p.user_id), p._sum.points_earned || 0]))
+        const userIdToPoints = new Map(pointsByUser.map(p => [Number(p.user_id), p._sum.sweet_coins_earned || 0]))
 
         // Get emotes count - need to query messages with emotes
         // Since we can't filter JSON in groupBy, fetch messages with emotes only
@@ -301,7 +301,7 @@ export async function GET(request: Request) {
             const kickUserId = Number(user.kick_user_id)
             if (!userStatsMap.has(kickUserId)) {
                 userStatsMap.set(kickUserId, {
-                    points: pt._sum.points_earned || 0,
+                    points: pt._sum.sweet_coins_earned || 0,
                     messages: 0,
                     emotes: 0,
                     userId: user.id,

@@ -6,7 +6,7 @@ export function makeAchievementClaimKey(achievementId: string, userId: bigint) {
 }
 
 export async function computeAchievementUnlocks(auth: { userId: bigint; kickUserId: bigint }) {
-  const [user, userPoints] = await Promise.all([
+  const [user, userSweetCoins] = await Promise.all([
     db.user.findUnique({
       where: { id: auth.userId },
       select: {
@@ -16,10 +16,10 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
         telegram_connected: true,
       },
     }),
-    db.userPoints.findUnique({
+    db.userSweetCoins.findUnique({
       where: { user_id: auth.userId },
       select: {
-        total_points: true,
+        total_sweet_coins: true,
         total_emotes: true,
       },
     }),
@@ -120,18 +120,18 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
 
   // Global/top-based achievements
   const [topUsersByPoints, monthlyPointAggs] = await Promise.all([
-    db.userPoints.findMany({
+    db.userSweetCoins.findMany({
       take: 3,
       orderBy: {
-        total_points: 'desc',
+        total_sweet_coins: 'desc',
       },
       select: { user_id: true },
     }),
     (async () => {
-      // SF Legend of the month: most points earned in current month
+      // SF Legend of the month: most Sweet Coins earned in current month
       const start = monthStart
       const end = monthEnd
-      return db.pointHistory.groupBy({
+      return db.sweetCoinHistory.groupBy({
         by: ['user_id'],
         where: {
           earned_at: {
@@ -140,7 +140,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
           },
         },
         _sum: {
-          points_earned: true,
+          sweet_coins_earned: true,
         },
       })
     })(),
@@ -150,12 +150,12 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
 
   let isMonthlyLegend = false
   if (monthlyPointAggs.length > 0) {
-    let maxPoints = 0
+    let maxSweetCoins = 0
     for (const agg of monthlyPointAggs) {
-      const pts = agg._sum.points_earned || 0
-      if (pts > maxPoints) maxPoints = pts
+      const coins = agg._sum.sweet_coins_earned || 0
+      if (coins > maxSweetCoins) maxSweetCoins = coins
     }
-    const topUsers = monthlyPointAggs.filter((agg) => (agg._sum.points_earned || 0) === maxPoints)
+    const topUsers = monthlyPointAggs.filter((agg) => (agg._sum.sweet_coins_earned || 0) === maxSweetCoins)
     isMonthlyLegend = topUsers.some((agg) => agg.user_id === auth.userId)
   }
 
@@ -172,7 +172,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
     isOgDash = earlierCount < 100
   }
 
-  const totalEmotes = userPoints?.total_emotes || 0
+  const totalEmotes = userSweetCoins?.total_emotes || 0
 
   const unlockedById: Record<string, boolean> = {}
 

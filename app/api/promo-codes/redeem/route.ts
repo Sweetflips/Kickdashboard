@@ -72,7 +72,7 @@ export async function POST(request: Request) {
                 data: {
                     promo_code_id: promoCode.id,
                     user_id: auth.userId,
-                    points_awarded: promoCode.points_value,
+                    sweet_coins_awarded: promoCode.sweet_coins_value,
                 },
             })
 
@@ -86,32 +86,32 @@ export async function POST(request: Request) {
                 },
             })
 
-            // Award points to user
-            await tx.userPoints.upsert({
+            // Award Sweet Coins to user
+            await tx.userSweetCoins.upsert({
                 where: { user_id: auth.userId },
                 update: {
-                    total_points: {
-                        increment: promoCode.points_value,
+                    total_sweet_coins: {
+                        increment: promoCode.sweet_coins_value,
                     },
                 },
                 create: {
                     user_id: auth.userId,
-                    total_points: promoCode.points_value,
+                    total_sweet_coins: promoCode.sweet_coins_value,
                     total_emotes: 0,
                 },
             })
 
             return {
-                points_awarded: promoCode.points_value,
+                sweet_coins_awarded: promoCode.sweet_coins_value,
                 code: promoCode.code,
             }
         })
 
         return NextResponse.json({
             success: true,
-            points_awarded: result.points_awarded,
+            sweet_coins_awarded: result.sweet_coins_awarded,
             code: result.code,
-            message: `Successfully redeemed! You earned ${result.points_awarded} points! 🎉`,
+            message: `Successfully redeemed! You earned ${result.sweet_coins_awarded} Sweet Coins! 🎉`,
         })
     } catch (error) {
         console.error('Error redeeming promo code:', error)

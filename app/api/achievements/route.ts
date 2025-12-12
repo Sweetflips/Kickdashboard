@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     }
 
     const claimKeys = ACHIEVEMENTS.map((a) => makeAchievementClaimKey(a.id, auth.userId))
-    const claimedRows = await db.pointHistory.findMany({
+    const claimedRows = await db.sweetCoinHistory.findMany({
       where: {
         user_id: auth.userId,
         message_id: { in: claimKeys },

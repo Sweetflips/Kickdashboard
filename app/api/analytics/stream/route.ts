@@ -194,13 +194,13 @@ export async function GET(request: Request) {
 
         const totalUsers = uniqueUsers.length
 
-        // Get total points for this stream
-        const totalPoints = await db.pointHistory.aggregate({
+        // Get total Sweet Coins for this stream
+        const totalSweetCoins = await db.sweetCoinHistory.aggregate({
             where: {
                 stream_session_id: sessionIdBigInt,
             },
             _sum: {
-                points_earned: true,
+                sweet_coins_earned: true,
             },
         })
 
@@ -232,7 +232,7 @@ export async function GET(request: Request) {
             username: string
             messages: number
             emotes: number
-            points: number
+            sweet_coins: number
             engagement_types: Record<string, number>
         }>()
 
@@ -242,7 +242,7 @@ export async function GET(request: Request) {
                 username: msg.sender_username,
                 messages: 0,
                 emotes: 0,
-                points: 0,
+                sweet_coins: 0,
                 engagement_types: {
                     command: 0,
                     question: 0,
@@ -269,28 +269,28 @@ export async function GET(request: Request) {
             userActivityMap.set(userId, userStats)
         }
 
-        // Get points for each user in this stream
-        const pointHistory = await db.pointHistory.findMany({
+        // Get Sweet Coins for each user in this stream
+        const sweetCoinHistory = await db.sweetCoinHistory.findMany({
             where: {
                 stream_session_id: sessionIdBigInt,
             },
             select: {
                 user_id: true,
-                points_earned: true,
+                sweet_coins_earned: true,
             },
         })
 
-        for (const ph of pointHistory) {
+        for (const ph of sweetCoinHistory) {
             const userId = ph.user_id.toString()
             const userStats = userActivityMap.get(userId)
             if (userStats) {
-                userStats.points += ph.points_earned
+                userStats.sweet_coins += ph.sweet_coins_earned
             }
         }
 
         // Convert to array and sort by activity score
         const userActivity = Array.from(userActivityMap.values()).map((user) => {
-            const activityScore = (user.points * 2) + (user.messages * 1) + (user.emotes * 0.5)
+            const activityScore = (user.sweet_coins * 2) + (user.messages * 1) + (user.emotes * 0.5)
             return {
                 ...user,
                 activity_score: Math.round(activityScore),
@@ -317,7 +317,7 @@ export async function GET(request: Request) {
                 total_messages: totalMessages,
                 messages_with_emotes: messagesWithEmotesCount,
                 messages_with_text_only: totalMessages - messagesWithEmotesCount,
-                total_points: totalPoints._sum.points_earned || 0,
+                total_sweet_coins: totalSweetCoins._sum.sweet_coins_earned || 0,
                 unique_users: totalUsers,
                 avg_messages_per_user: parseFloat(avgMessagesPerUser),
                 engagement_rate: parseFloat(engagementRate),

@@ -30,14 +30,14 @@ export async function GET(request: Request) {
     }
 
     // Get users with session diagnostics
-    // We'll sort by points in JavaScript since Prisma relation ordering is unreliable with optional relations
+    // We'll sort by Sweet Coins in JavaScript since Prisma relation ordering is unreliable with optional relations
     const [usersRaw, total] = await Promise.all([
       db.user.findMany({
         where,
         include: {
-          points: {
+          sweet_coins: {
             select: {
-              total_points: true,
+              total_sweet_coins: true,
               total_emotes: true,
             },
           },
@@ -62,11 +62,11 @@ export async function GET(request: Request) {
       db.user.count({ where }),
     ])
 
-    // Sort by points descending, then by created_at descending
+    // Sort by Sweet Coins descending, then by created_at descending
     const sortedUsers = usersRaw.sort((a, b) => {
-      const pointsA = a.points?.total_points || 0
-      const pointsB = b.points?.total_points || 0
-      if (pointsB !== pointsA) return pointsB - pointsA
+      const coinsA = a.sweet_coins?.total_sweet_coins || 0
+      const coinsB = b.sweet_coins?.total_sweet_coins || 0
+      if (coinsB !== coinsA) return coinsB - coinsA
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
 
@@ -195,8 +195,8 @@ export async function GET(request: Request) {
           email: u.email,
           profile_picture_url: u.custom_profile_picture_url || u.profile_picture_url,
           is_admin: u.is_admin,
-          total_points: u.points?.total_points || 0,
-          total_emotes: u.points?.total_emotes || 0,
+          total_sweet_coins: u.sweet_coins?.total_sweet_coins || 0,
+          total_emotes: u.sweet_coins?.total_emotes || 0,
           created_at: u.created_at.toISOString(),
           last_login_at: u.last_login_at?.toISOString() || null,
           // Connected accounts

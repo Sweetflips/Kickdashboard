@@ -174,9 +174,9 @@ export async function GET(request: Request) {
         const limit = parseInt(searchParams.get('limit') || '50')
         const offset = parseInt(searchParams.get('offset') || '0')
 
-        // Get top users by points
-        const topUsers = await db.userPoints.findMany({
-            orderBy: { total_points: 'desc' },
+        // Get top users by Sweet Coins
+        const topUsers = await db.userSweetCoins.findMany({
+            orderBy: { total_sweet_coins: 'desc' },
             take: limit,
             skip: offset,
             include: {
@@ -259,11 +259,11 @@ export async function GET(request: Request) {
 
                 const streamsWatched = streamsWatchedResult.length
 
-                // Get total points earned
-                const totalPoints = entry.total_points || 0
+                // Get total Sweet Coins earned
+                const totalSweetCoins = entry.total_sweet_coins || 0
 
-                // Get average points per stream
-                const avgPointsPerStream = streamsWatched > 0 ? (totalPoints / streamsWatched).toFixed(2) : '0'
+                // Get average Sweet Coins per stream
+                const avgSweetCoinsPerStream = streamsWatched > 0 ? (totalSweetCoins / streamsWatched).toFixed(2) : '0'
 
                 // Get average messages per stream
                 const avgMessagesPerStream = streamsWatched > 0 ? (totalMessages / streamsWatched).toFixed(2) : '0'
@@ -276,15 +276,15 @@ export async function GET(request: Request) {
                     messages: totalMessages,
                     emotes: totalEmotesCounted,
                     messages_with_emotes: messagesWithEmotes,
-                    points: totalPoints,
+                    sweet_coins: totalSweetCoins,
                     streams_watched: streamsWatched,
-                    avg_points_per_stream: parseFloat(avgPointsPerStream),
+                    avg_sweet_coins_per_stream: parseFloat(avgSweetCoinsPerStream),
                     avg_messages_per_stream: parseFloat(avgMessagesPerStream),
                 }
 
                 // Calculate activity score (weighted combination)
                 const activityScore =
-                    (totalPoints * 2) + // Points weighted higher
+                    (totalSweetCoins * 2) + // Sweet Coins weighted higher
                     (totalMessages * 1) +
                     (totalEmotesCounted * 0.5) +
                     (streamsWatched * 10) // Engagement indicator
@@ -295,12 +295,12 @@ export async function GET(request: Request) {
                     kick_user_id: kickUserId.toString(),
                     username: entry.user.username,
                     profile_picture_url: entry.user.custom_profile_picture_url || entry.user.profile_picture_url,
-                    total_points: totalPoints,
+                    total_sweet_coins: totalSweetCoins,
                     total_emotes: entry.total_emotes || 0,
                     activity_breakdown: activityBreakdown,
                     engagement_breakdown: engagementBreakdown,
                     activity_score: Math.round(activityScore),
-                    last_point_earned_at: entry.last_point_earned_at?.toISOString() || null,
+                    last_sweet_coin_earned_at: entry.last_sweet_coin_earned_at?.toISOString() || null,
                 }
             })
         )
@@ -312,10 +312,10 @@ export async function GET(request: Request) {
         })
 
         // Get overall stats
-        const totalUsers = await db.userPoints.count()
+        const totalUsers = await db.userSweetCoins.count()
         const totalMessages = await db.chatMessage.count()
-        const totalPoints = await db.userPoints.aggregate({
-            _sum: { total_points: true },
+        const totalSweetCoins = await db.userSweetCoins.aggregate({
+            _sum: { total_sweet_coins: true },
         })
 
         // Get messages with emotes count - check both emotes field and content
@@ -338,7 +338,7 @@ export async function GET(request: Request) {
             messages: totalMessages,
             messages_with_emotes: messagesWithEmotesCount,
             messages_with_text_only: totalMessages - messagesWithEmotesCount,
-            emotes: await db.userPoints.aggregate({
+            emotes: await db.userSweetCoins.aggregate({
                 _sum: { total_emotes: true },
             }).then(result => result._sum.total_emotes || 0),
         }
@@ -467,7 +467,7 @@ export async function GET(request: Request) {
             total_users: totalUsers,
             overall_stats: {
                 total_messages: totalMessages,
-                total_points: totalPoints._sum.total_points || 0,
+                total_sweet_coins: totalSweetCoins._sum.total_sweet_coins || 0,
                 activity_types: activityTypes,
                 engagement_types: overallEngagementTypes,
                 avg_message_length: parseFloat(avgMessageLength),

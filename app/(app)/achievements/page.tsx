@@ -127,7 +127,7 @@ export default function AchievementsPage() {
             if (payload?.alreadyClaimed) {
                 showToast('Already claimed', 'info')
             } else {
-                const pts = typeof payload?.pointsAwarded === 'number' ? payload.pointsAwarded : null
+                const pts = typeof payload?.sweetCoinsAwarded === 'number' ? payload.sweetCoinsAwarded : null
                 const achievementName = ACHIEVEMENTS.find(a => a.id === achievementId)?.name || 'Achievement'
                 showToast(
                     <div className="space-y-1">

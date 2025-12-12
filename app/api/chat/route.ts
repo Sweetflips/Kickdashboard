@@ -77,8 +77,8 @@ export async function GET(request: Request) {
                     sender_badges: true,
                     sender_is_verified: true,
                     sender_is_anonymous: true,
-                    points_earned: true,
-                    points_reason: true,
+                    sweet_coins_earned: true,
+                    sweet_coins_reason: true,
                     sent_when_offline: true,
                     sender: {
                         select: {
@@ -174,7 +174,7 @@ export async function GET(request: Request) {
                     content: offlineMsg.content,
                     emotes: (offlineMsg.emotes as any) || [],
                     timestamp: Number(offlineMsg.timestamp),
-                    points_earned: 0, // Offline messages have no points
+                    sweet_coins_earned: 0, // Offline messages have no Sweet Coins
                     sent_when_offline: true,
                 }
             } else {
@@ -209,8 +209,8 @@ export async function GET(request: Request) {
                     content: onlineMsg.content,
                     emotes: (onlineMsg.emotes as any) || [],
                     timestamp: Number(onlineMsg.timestamp),
-                    points_earned: onlineMsg.points_earned || 0,
-                    points_reason: onlineMsg.points_reason || undefined,
+                    sweet_coins_earned: onlineMsg.sweet_coins_earned || 0,
+                    sweet_coins_reason: onlineMsg.sweet_coins_reason || undefined,
                     sent_when_offline: false,
                 }
             }

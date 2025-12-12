@@ -326,7 +326,7 @@ export async function DELETE(request: Request) {
 
         console.log(`[DELETE] Deleting ${deletedCount} session(s) (primary: ${sessionIdBigInt}, duplicates: ${allSessionIds.filter(id => id !== sessionIdBigInt).map(id => id.toString()).join(', ') || 'none'})`)
 
-        // Delete related records first (chat messages, point history, jobs)
+        // Delete related records first (chat messages, Sweet Coins history, jobs)
         // This prevents foreign key constraint errors
         try {
             for (const sid of allSessionIds) {
@@ -335,13 +335,13 @@ export async function DELETE(request: Request) {
                     where: { stream_session_id: sid },
                 })
 
-                // Delete point history associated with this session
-                await db.pointHistory.deleteMany({
+                // Delete Sweet Coins history associated with this session
+                await db.sweetCoinHistory.deleteMany({
                     where: { stream_session_id: sid },
                 })
 
-                // Delete point award jobs associated with this session
-                await db.pointAwardJob.deleteMany({
+                // Delete Sweet Coins award jobs associated with this session
+                await db.sweetCoinAwardJob.deleteMany({
                     where: { stream_session_id: sid },
                 })
 
@@ -370,7 +370,7 @@ export async function DELETE(request: Request) {
                 return NextResponse.json(
                     {
                         error: 'Cannot delete stream session - it has related records that prevent deletion',
-                        details: 'This session has related records (chat messages, point history, or jobs) that need to be deleted first',
+                        details: 'This session has related records (chat messages, Sweet Coins history, or jobs) that need to be deleted first',
                     },
                     { status: 409 }
                 )

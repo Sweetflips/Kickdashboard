@@ -284,7 +284,7 @@ async function buildLeaderboardRowsV2(sortBy: SortBy, dateFilter: DateRangeFilte
 
 async function buildOverallRowsV2(): Promise<RowV2[]> {
     const [userPoints, messageCounts, streamPairs] = await Promise.all([
-        db.userPoints.findMany({
+        db.userSweetCoins.findMany({
             include: {
                 user: {
                     select: {
@@ -328,20 +328,20 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
         const user = up.user as unknown as UserSummaryV2
         return {
             user,
-            total_points: up.total_points,
+            total_points: up.total_sweet_coins,
             total_emotes: up.total_emotes,
             total_messages: messagesMap.get(user.kick_user_id) || 0,
             streams_watched: streamsMap.get(user.kick_user_id) || 0,
-            last_point_earned_at: up.last_point_earned_at || null,
+            last_point_earned_at: up.last_sweet_coin_earned_at || null,
         }
     })
 }
 
 async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<RowV2[]> {
-    const pointAgg = await db.pointHistory.groupBy({
+    const pointAgg = await db.sweetCoinHistory.groupBy({
         by: ['user_id'],
         where: { earned_at: dateFilter },
-        _sum: { points_earned: true },
+        _sum: { sweet_coins_earned: true },
         _max: { earned_at: true },
     })
 
@@ -416,7 +416,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
             const kickId = user.kick_user_id
             return {
                 user,
-                total_points: agg._sum.points_earned || 0,
+                total_points: agg._sum.sweet_coins_earned || 0,
                 total_emotes: emotesMap.get(kickId) || 0,
                 total_messages: messagesMap.get(kickId) || 0,
                 streams_watched: streamsMap.get(kickId) || 0,
@@ -431,13 +431,13 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
  */
 async function fetchOverallLeaderboard(limit: number, offset: number) {
     // Get total count
-    const total = await db.userPoints.count()
+    const total = await db.userSweetCoins.count()
 
     // Get paginated users ordered by total_points DESC
     // Join with User table to get user details
-    const userPoints = await db.userPoints.findMany({
+    const userPoints = await db.userSweetCoins.findMany({
         orderBy: {
-            total_points: 'desc',
+            total_sweet_coins: 'desc',
         },
         skip: offset,
         take: limit,
@@ -521,11 +521,11 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
             kick_user_id: kickUserId.toString(),
             username: user.username,
             profile_picture_url: user.custom_profile_picture_url || user.profile_picture_url,
-            total_points: up.total_points,
+            total_points: up.total_sweet_coins,
             total_emotes: up.total_emotes,
             total_messages: messagesMap.get(kickUserId) || 0,
             streams_watched: streamsMap.get(kickUserId) || 0,
-            last_point_earned_at: up.last_point_earned_at?.toISOString() || null,
+            last_point_earned_at: up.last_sweet_coin_earned_at?.toISOString() || null,
             is_verified: hasKickLogin || hasDiscord || hasTelegram,
             last_login_at: user.last_login_at?.toISOString() || null,
             verification_methods: {
@@ -548,7 +548,7 @@ async function fetchDateFilteredLeaderboard(
     dateFilter: { gte: Date; lte: Date }
 ) {
     // Get total users who earned points in this period
-    const totalAggregates = await db.pointHistory.groupBy({
+    const totalAggregates = await db.sweetCoinHistory.groupBy({
         by: ['user_id'],
         where: {
             earned_at: dateFilter,
@@ -560,13 +560,13 @@ async function fetchDateFilteredLeaderboard(
     // Note: Prisma groupBy doesn't support orderBy on aggregated fields directly
     // So we need to fetch more and sort in memory, or use raw SQL
     // For now, fetch all aggregates, sort, then paginate
-    const pointAggregates = await db.pointHistory.groupBy({
+    const pointAggregates = await db.sweetCoinHistory.groupBy({
         by: ['user_id'],
         where: {
             earned_at: dateFilter,
         },
         _sum: {
-            points_earned: true,
+            sweet_coins_earned: true,
         },
         _max: {
             earned_at: true,
@@ -575,8 +575,8 @@ async function fetchDateFilteredLeaderboard(
 
     // Sort by points descending
     pointAggregates.sort((a, b) => {
-        const aPoints = a._sum.points_earned || 0
-        const bPoints = b._sum.points_earned || 0
+        const aPoints = a._sum.sweet_coins_earned || 0
+        const bPoints = b._sum.sweet_coins_earned || 0
         return bPoints - aPoints
     })
 
@@ -644,7 +644,7 @@ async function fetchDateFilteredLeaderboard(
     const lastPointEarnedMap = new Map<number, Date | null>()
     paginatedAggregates.forEach((agg) => {
         const userId = Number(agg.user_id)
-        pointsMap.set(userId, agg._sum.points_earned || 0)
+        pointsMap.set(userId, agg._sum.sweet_coins_earned || 0)
         lastPointEarnedMap.set(userId, agg._max.earned_at || null)
     })
 

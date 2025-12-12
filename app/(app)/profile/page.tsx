@@ -132,7 +132,7 @@ export default function ProfilePage() {
             if (payload?.alreadyClaimed) {
                 showToast('Already claimed', 'info')
             } else {
-                const pts = typeof payload?.pointsAwarded === 'number' ? payload.pointsAwarded : null
+                const pts = typeof payload?.sweetCoinsAwarded === 'number' ? payload.sweetCoinsAwarded : null
                 showToast(
                     <span className="text-base font-semibold text-gray-900 dark:text-kick-text">
                         Achievement claimed{pts != null ? ` (+${pts.toLocaleString()} Sweet Coins)` : ''}!

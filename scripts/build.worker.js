@@ -7,9 +7,9 @@ const WORKER_PATHS = [
     'scripts/point-worker',
     'scripts/chat-worker',
     'scripts/start-worker',
-    'lib/point-queue',
+    'lib/sweet-coin-queue',
     'lib/chat-queue',
-    'lib/points',
+    'lib/sweet-coins',
     'prisma',
     'package.json',
     'tsconfig.json'
