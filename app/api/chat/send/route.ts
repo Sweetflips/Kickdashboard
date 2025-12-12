@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { refreshBroadcasterToken, clearTokenCache } from '@/lib/kick-api'
+import { cookies } from 'next/headers'
 
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
 const SLOW_MODE_RETRY_DELAY = 3000 // 3 seconds delay for slow mode
@@ -14,9 +14,8 @@ async function sendMessageWithRetry(
     broadcasterUserId: string,
     content: string,
     type: string,
-    retries = MAX_SLOW_MODE_RETRIES,
-    authRetries = 1
-): Promise<{ response: Response; newToken?: string }> {
+    retries = MAX_SLOW_MODE_RETRIES
+): Promise<Response> {
     const clientId = process.env.KICK_CLIENT_ID
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -38,17 +37,6 @@ async function sendMessageWithRetry(
         }),
     })
 
-    // Handle 401 - token expired, try to refresh
-    if (response.status === 401 && authRetries > 0) {
-        clearTokenCache()
-        const refreshedToken = await refreshBroadcasterToken()
-        if (refreshedToken) {
-            // Retry with refreshed token
-            const result = await sendMessageWithRetry(refreshedToken, broadcasterUserId, content, type, retries, authRetries - 1)
-            return { ...result, newToken: result.newToken ?? refreshedToken }
-        }
-    }
-
     // Check for slow mode error
     if (!response.ok && response.status === 500) {
         const errorText = await response.text()
@@ -60,7 +48,7 @@ async function sendMessageWithRetry(
             if (typeof errorData === 'string' && errorData.includes('SLOW_MODE_ERROR')) {
                 if (retries > 0) {
                     await sleep(SLOW_MODE_RETRY_DELAY)
-                    return sendMessageWithRetry(accessToken, broadcasterUserId, content, type, retries - 1, authRetries)
+                    return sendMessageWithRetry(accessToken, broadcasterUserId, content, type, retries - 1)
                 }
             }
         } catch {
@@ -68,17 +56,46 @@ async function sendMessageWithRetry(
         }
     }
 
-    return { response }
+    return response
+}
+
+/**
+ * Extract access token from request
+ * Checks Authorization header first, then cookies, then body (deprecated)
+ */
+async function getAccessTokenFromRequest(request: Request, body?: any): Promise<string | null> {
+    // Check Authorization header first
+    const authHeader = request.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+        return authHeader.substring(7)
+    }
+
+    // Check cookies
+    const cookieStore = cookies()
+    const tokenFromCookie = cookieStore.get('kick_access_token')?.value
+    if (tokenFromCookie) {
+        return tokenFromCookie
+    }
+
+    // Fallback to body (deprecated, for backward compatibility)
+    if (body?.accessToken) {
+        return body.accessToken
+    }
+
+    return null
 }
 
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { accessToken, broadcasterUserId, content, type = 'user' } = body
+        const { broadcasterUserId, content, type = 'user' } = body
+
+        // Get access token from Authorization header, cookie, or body (deprecated)
+        const accessToken = await getAccessTokenFromRequest(request, body)
 
         if (!accessToken) {
             return NextResponse.json(
-                { error: 'Access token is required' },
+                { error: 'Access token is required. Please authenticate with Kick.' },
                 { status: 401 }
             )
         }
@@ -113,16 +130,15 @@ export async function POST(request: Request) {
             )
         }
 
-        // Send message to Kick API with slow mode retry logic and token refresh on 401
-        const { response, newToken } = await sendMessageWithRetry(accessToken, broadcasterUserId, content, type)
+        // Send message to Kick API with slow mode retry logic
+        // Note: We no longer refresh broadcaster tokens on 401 - client must handle token refresh
+        const response = await sendMessageWithRetry(accessToken, broadcasterUserId, content, type)
 
         if (!response.ok) {
             const errorText = await response.text()
 
-            // Only log non-401 errors (401s are handled silently with token refresh)
-            if (response.status !== 401) {
-                console.error(`❌ Failed to send message: ${response.status} - ${errorText.substring(0, 200)}`)
-            }
+            // Log all errors (including 401s - client will handle refresh)
+            console.error(`❌ Failed to send message: ${response.status} - ${errorText.substring(0, 200)}`)
 
             // Try to parse error response
             let errorDetails = errorText
@@ -157,7 +173,6 @@ export async function POST(request: Request) {
             success: true,
             data: data,
             message: 'Message sent successfully',
-            ...(newToken && { token_refreshed: true }),
         })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'

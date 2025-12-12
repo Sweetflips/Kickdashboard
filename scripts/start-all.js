@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 console.log('🚀 Starting all services...');
 console.log(`📂 Working directory: ${process.cwd()}`);
@@ -66,11 +67,42 @@ try {
 console.log(`🌐 Starting Next.js web server on port ${process.env.PORT || 3000}...`);
 try {
   const port = process.env.PORT || '3000';
-  webProcess = spawn('sh', ['-c', `next start -p ${port}`], {
-    stdio: 'inherit',
-    env: envWithPath,
-    cwd: process.cwd()
-  });
+  const hostname = process.env.HOSTNAME || '0.0.0.0';
+
+  const rootStandaloneServer = path.join(process.cwd(), 'server.js');
+  const nextStandaloneServer = path.join(process.cwd(), '.next', 'standalone', 'server.js');
+
+  if (fs.existsSync(rootStandaloneServer)) {
+    console.log('🚀 Using standalone server (server.js)');
+    webProcess = spawn(process.execPath, ['server.js'], {
+      stdio: 'inherit',
+      env: { ...envWithPath, PORT: port, HOSTNAME: hostname },
+      cwd: process.cwd()
+    });
+  } else if (fs.existsSync(nextStandaloneServer)) {
+    console.log('🚀 Using standalone server (.next/standalone/server.js)');
+    webProcess = spawn(process.execPath, [path.join('.next', 'standalone', 'server.js')], {
+      stdio: 'inherit',
+      env: { ...envWithPath, PORT: port, HOSTNAME: hostname },
+      cwd: process.cwd()
+    });
+  } else {
+    const isWindows = process.platform === 'win32';
+    if (isWindows) {
+      const nextBin = path.join(process.cwd(), 'node_modules', '.bin', 'next.cmd');
+      webProcess = spawn(nextBin, ['start', '-H', hostname, '-p', port], {
+        stdio: 'inherit',
+        env: { ...envWithPath, HOSTNAME: hostname },
+        cwd: process.cwd()
+      });
+    } else {
+      webProcess = spawn('sh', ['-c', `next start -H ${hostname} -p ${port}`], {
+        stdio: 'inherit',
+        env: { ...envWithPath, HOSTNAME: hostname },
+        cwd: process.cwd()
+      });
+    }
+  }
 
   webProcess.on('error', (err) => {
     console.error(`❌ Failed to start web server: ${err.message}`);

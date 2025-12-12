@@ -73,30 +73,20 @@ export default function AppLayout({ children }: LayoutProps) {
             const token = getAccessToken()
             const params = new URLSearchParams(window.location.search)
 
-            // Handle auth callback
+            // Handle auth callback - tokens are now only in cookies, not URL
             if (params.get('auth_success') === 'true') {
-                const accessToken = params.get('access_token')
-                const refreshToken = params.get('refresh_token')
-
-                // Debug token
-                if (accessToken) {
-                    console.log('🔑 [AUTH CALLBACK] Token received from URL')
-                    console.log('🔑 [AUTH CALLBACK] Token length:', accessToken.length)
-                    console.log('🔑 [AUTH CALLBACK] Token preview:', accessToken.substring(0, 50))
-
-                    // Kick uses opaque tokens, not JWTs - just validate it's not empty
-                    if (accessToken.trim().length > 0) {
-                        // Set tokens in cookies (with 3-month expiration) and localStorage (backward compatibility)
-                        setAuthTokens(accessToken, refreshToken || undefined)
-                        setIsAuthenticated(true)
-                        // Clean URL
-                        const newUrl = window.location.pathname
-                        window.history.replaceState({}, '', newUrl)
-                    } else {
-                        console.error('❌ [AUTH CALLBACK] Empty token received')
-                        router.push('/login?error=invalid_token')
-                        return
-                    }
+                // Tokens are already set in cookies by the callback route
+                // Just check if we have a token and mark as authenticated
+                const tokenFromCookie = getAccessToken()
+                if (tokenFromCookie && tokenFromCookie.trim().length > 0) {
+                    setIsAuthenticated(true)
+                    // Clean URL (remove auth_success param)
+                    const newUrl = window.location.pathname + (window.location.search.replace(/[?&]auth_success=[^&]*/, '') || '')
+                    window.history.replaceState({}, '', newUrl)
+                } else {
+                    console.error('❌ [AUTH CALLBACK] No token found in cookies after auth success')
+                    router.push('/login?error=invalid_token')
+                    return
                 }
             } else if (token) {
                 // Validate stored token is not empty

@@ -29,8 +29,10 @@ function startWebServer() {
   try {
     const { spawn, exec } = require('child_process');
     const path = require('path');
+    const fs = require('fs');
 
     const port = process.env.PORT || '3000';
+    const hostname = process.env.HOSTNAME || '0.0.0.0';
 
     // Add node_modules/.bin to PATH so 'next' command is found
     const binPath = path.join(process.cwd(), 'node_modules', '.bin');
@@ -42,15 +44,54 @@ function startWebServer() {
     process.stdout.write('🚀 Starting Next.js on port ' + port + '...\n');
     process.stdout.write('📂 PATH includes: ' + binPath + '\n');
 
-    // Use sh -c which works reliably in the container
-    // Explicitly set hostname to 0.0.0.0 to listen on all interfaces (required for Railway)
-    const nextProcess = spawn('sh', ['-c', `next start -H 0.0.0.0 -p ${port}`], {
-      stdio: 'inherit',
-      env: {
-        ...envWithPath,
-        HOSTNAME: '0.0.0.0',
+    // Prefer standalone server output when present.
+    // This avoids "Failed to find Server Action" issues that happen when deploying only standalone artifacts
+    // but starting with `next start` (which expects .next/server/server-reference-manifest.json in the root build).
+    const rootStandaloneServer = path.join(process.cwd(), 'server.js');
+    const nextStandaloneServer = path.join(process.cwd(), '.next', 'standalone', 'server.js');
+
+    const spawnNode = (args, extraEnv = {}) =>
+      spawn(process.execPath, args, {
+        stdio: 'inherit',
+        env: { ...envWithPath, ...extraEnv },
+        cwd: process.cwd(),
+      });
+
+    let nextProcess = null;
+
+    if (fs.existsSync(rootStandaloneServer)) {
+      process.stdout.write('🚀 Using standalone server (server.js)\n');
+      nextProcess = spawnNode(['server.js'], { PORT: port, HOSTNAME: hostname });
+    } else if (fs.existsSync(nextStandaloneServer)) {
+      process.stdout.write('🚀 Using standalone server (.next/standalone/server.js)\n');
+      nextProcess = spawnNode([path.join('.next', 'standalone', 'server.js')], { PORT: port, HOSTNAME: hostname });
+    } else {
+      // Fallback to `next start` (works when the full `.next` directory is present).
+      // Use sh -c which works reliably in Linux containers.
+      const isWindows = process.platform === 'win32';
+      if (isWindows) {
+        // Windows fallback: run the local next binary directly.
+        const nextBin = path.join(process.cwd(), 'node_modules', '.bin', 'next.cmd');
+        nextProcess = spawn(nextBin, ['start', '-H', hostname, '-p', port], {
+          stdio: 'inherit',
+          env: { ...envWithPath, HOSTNAME: hostname },
+          cwd: process.cwd(),
+        });
+      } else {
+        nextProcess = spawn('sh', ['-c', `next start -H ${hostname} -p ${port}`], {
+          stdio: 'inherit',
+          env: {
+            ...envWithPath,
+            HOSTNAME: hostname,
+          },
+          cwd: process.cwd(),
+        });
       }
-    });
+    }
+
+    if (!nextProcess) {
+      throw new Error('Failed to start Next.js (no start command selected)');
+    }
 
     nextProcess.on('exit', (code) => {
       process.stdout.write('⚠️ Next.js exited with code: ' + code + '\n');

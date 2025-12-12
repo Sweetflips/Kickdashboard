@@ -171,7 +171,7 @@ export async function GET(request: Request) {
                     const ipAddress = extractIpAddress(request)
                     const userAgent = request.headers.get('user-agent') || null
                     const referrer = request.headers.get('referer') || request.headers.get('referrer') || null
-                    
+
                     // Extract referral code from cookie (set during auth flow)
                     const finalReferralCode = referralCode?.toUpperCase().trim() || null
 
@@ -402,7 +402,8 @@ export async function GET(request: Request) {
         }
 
         // Clear PKCE and referral code cookies and set auth tokens in cookies with 3-month expiration
-        const response = NextResponse.redirect(`${baseUrl}/?auth_success=true&access_token=${encodeURIComponent(tokenData.access_token)}&refresh_token=${encodeURIComponent(tokenData.refresh_token || '')}`)
+        // Note: Tokens are no longer passed in URL query params for security - only in cookies
+        const response = NextResponse.redirect(`${baseUrl}/?auth_success=true`)
         response.cookies.delete('pkce_code_verifier')
         response.cookies.delete('referral_code')
 

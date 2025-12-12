@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import EmotePicker from './EmotePicker'
 import ChatSettings from './ChatSettings'
 import { toastManager } from './Toast'
+import { getAccessToken, getRefreshToken, setAuthTokens, clearAuthTokens } from '@/lib/cookies'
 
 interface ChatMessage {
     message_id: string
@@ -532,55 +533,31 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
         return () => container.removeEventListener('scroll', handleScroll)
     }, [])
 
-    // Load access token from URL params or localStorage
+    // Load access token from cookies/localStorage (no longer from URL params)
     useEffect(() => {
         if (typeof window === 'undefined') return
 
-        // Check URL params first (from auth callback)
-        const params = new URLSearchParams(window.location.search)
-        const tokenFromUrl = params.get('access_token')
-        const refreshTokenFromUrl = params.get('refresh_token')
-
-        if (tokenFromUrl) {
-            // Validate token is not empty (Kick uses opaque tokens, not JWTs)
-            if (tokenFromUrl.trim().length > 0) {
-                console.log('✅ [TOKEN] Valid token received from URL')
-                setAccessToken(tokenFromUrl)
-                localStorage.setItem('kick_access_token', tokenFromUrl)
-                if (refreshTokenFromUrl) {
-                    localStorage.setItem('kick_refresh_token', refreshTokenFromUrl)
-                }
-                // Clean up URL
-                const newUrl = window.location.pathname + window.location.search.replace(/[?&]access_token=[^&]*/, '').replace(/[?&]refresh_token=[^&]*/, '').replace(/[?&]auth_success=[^&]*/, '')
-                window.history.replaceState({}, '', newUrl)
-            } else {
-                console.error('❌ [TOKEN] Empty token from URL')
-            }
+        // Get token from cookies or localStorage (backward compatibility)
+        const token = getAccessToken()
+        if (token && token.trim().length > 0) {
+            setAccessToken(token)
         } else {
-            // Check localStorage
-            const storedToken = localStorage.getItem('kick_access_token')
-            if (storedToken && storedToken.trim().length > 0) {
-                setAccessToken(storedToken)
-            } else if (storedToken) {
-                console.error('❌ [TOKEN] Empty token in localStorage - clearing')
-                localStorage.removeItem('kick_access_token')
-                localStorage.removeItem('kick_refresh_token')
-            }
+            console.error('❌ [TOKEN] No valid token found')
         }
 
         // Fetch current user data
         const fetchUserData = async () => {
-            const token = tokenFromUrl || localStorage.getItem('kick_access_token')
-            if (token) {
+            const currentToken = getAccessToken()
+            if (currentToken) {
                 try {
-                    const response = await fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
+                    const response = await fetch(`/api/user?access_token=${encodeURIComponent(currentToken)}`)
                     if (response.ok) {
                         const data = await response.json()
                         setCurrentUserId(data.id)
                         setUserData(data)
                     } else if (response.status === 401) {
                         // Token expired, try to refresh
-                        const refreshToken = localStorage.getItem('kick_refresh_token')
+                        const refreshToken = getRefreshToken()
                         if (refreshToken) {
                             try {
                                 const refreshResponse = await fetch('/api/auth/refresh', {
@@ -592,10 +569,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                 })
                                 if (refreshResponse.ok) {
                                     const refreshData = await refreshResponse.json()
-                                    localStorage.setItem('kick_access_token', refreshData.access_token)
-                                    if (refreshData.refresh_token) {
-                                        localStorage.setItem('kick_refresh_token', refreshData.refresh_token)
-                                    }
+                                    // Update tokens in both cookies and localStorage
+                                    setAuthTokens(refreshData.access_token, refreshData.refresh_token)
                                     setAccessToken(refreshData.access_token)
                                     // Retry user fetch
                                     const retryResponse = await fetch(`/api/user?access_token=${encodeURIComponent(refreshData.access_token)}`)
@@ -1313,8 +1288,9 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
         if (!messageContent || isSending) return
 
-        // Check if we have access token and broadcaster_user_id
-        if (!accessToken) {
+        // Get access token from cookies/localStorage (preferred method)
+        const currentToken = getAccessToken()
+        if (!currentToken) {
             toastManager.show('Please authenticate with Kick first', 'error', 4000)
             return
         }
@@ -1327,14 +1303,14 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
         setIsSending(true)
 
         try {
-            // Send message to Kick API
+            // Send message to Kick API using Authorization header
             const response = await fetch('/api/chat/send', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentToken}`,
                 },
                 body: JSON.stringify({
-                    accessToken,
                     broadcasterUserId,
                     content: messageContent,
                     type: 'user',
@@ -1360,7 +1336,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
                 // If 401, try to refresh token first
                 if (response.status === 401) {
-                    const refreshToken = localStorage.getItem('kick_refresh_token')
+                    const refreshToken = getRefreshToken()
                     if (refreshToken) {
                         try {
                             const refreshResponse = await fetch('/api/auth/refresh', {
@@ -1374,20 +1350,18 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
                             if (refreshResponse.ok) {
                                 const refreshData = await refreshResponse.json()
-                                localStorage.setItem('kick_access_token', refreshData.access_token)
-                                if (refreshData.refresh_token) {
-                                    localStorage.setItem('kick_refresh_token', refreshData.refresh_token)
-                                }
+                                // Update tokens in both cookies and localStorage
+                                setAuthTokens(refreshData.access_token, refreshData.refresh_token)
                                 setAccessToken(refreshData.access_token)
 
-                                // Retry sending message with new token
+                                // Retry sending message with new token using Authorization header
                                 const retryResponse = await fetch('/api/chat/send', {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${refreshData.access_token}`,
                                     },
                                     body: JSON.stringify({
-                                        accessToken: refreshData.access_token,
                                         broadcasterUserId,
                                         content: messageContent,
                                         type: 'user',
@@ -1411,8 +1385,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                 } else {
                                     // Retry failed, clear tokens
                                     console.error('❌ Failed to send message after token refresh')
-                                    localStorage.removeItem('kick_access_token')
-                                    localStorage.removeItem('kick_refresh_token')
+                                    clearAuthTokens()
                                     setAccessToken(null)
                                     alert('Authentication failed. Please log in again.')
                                     window.location.href = '/login?error=token_refresh_failed'
@@ -1422,14 +1395,12 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                             } else {
                                 // Refresh failed, clear tokens
                                 console.error('❌ Token refresh failed:', refreshResponse.status)
-                                localStorage.removeItem('kick_access_token')
-                                localStorage.removeItem('kick_refresh_token')
+                                clearAuthTokens()
                                 setAccessToken(null)
                             }
                         } catch (refreshError) {
                             console.error('❌ Token refresh error:', refreshError)
-                            localStorage.removeItem('kick_access_token')
-                            localStorage.removeItem('kick_refresh_token')
+                            clearAuthTokens()
                             setAccessToken(null)
                         }
                     }
@@ -1442,8 +1413,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                         'Would you like to re-authenticate now?'
                     )
                     if (shouldReauth) {
-                        localStorage.removeItem('kick_access_token')
-                        localStorage.removeItem('kick_refresh_token')
+                        clearAuthTokens()
                         setAccessToken(null)
                         window.location.href = '/api/auth?action=authorize'
                         return
