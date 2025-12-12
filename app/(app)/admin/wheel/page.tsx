@@ -250,7 +250,8 @@ export default function AdminWheelPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <>
+      <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-h1 font-semibold text-gray-900 dark:text-kick-text">Wheel Overlay</h1>
@@ -453,6 +454,6 @@ export default function AdminWheelPage() {
       </div>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-    </div>
+    </>
   )
 }

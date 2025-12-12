@@ -381,7 +381,8 @@ export default function AdminRafflesPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <>
+            <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-h1 font-semibold text-gray-900 dark:text-kick-text">
@@ -651,6 +652,6 @@ export default function AdminRafflesPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     )
 }
