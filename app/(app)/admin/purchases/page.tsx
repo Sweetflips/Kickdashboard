@@ -146,8 +146,8 @@ export default function AdminPurchasesPage() {
     }
 
     const exportToCSV = () => {
-        const data = viewMode === 'users' 
-            ? users.flatMap(user => 
+        const data = viewMode === 'users'
+            ? users.flatMap(user =>
                 user.purchases.map(purchase => {
                     const item = ADVENT_ITEMS.find(i => i.id === purchase.itemId)
                     const pointsSpent = item ? item.pointsCost * purchase.tickets : 0
@@ -173,7 +173,7 @@ export default function AdminPurchasesPage() {
             )
 
         // Filter by itemFilter if set
-        const filteredData = itemFilter 
+        const filteredData = itemFilter
             ? data.filter(row => {
                 const match = itemFilter.match(/day-(\d+)([a-z])?/)
                 if (match) {

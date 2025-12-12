@@ -27,7 +27,7 @@ export default function AdminPromoCodesPage() {
     const [promoCodes, setPromoCodes] = useState<PromoCode[]>([])
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-    
+
     // Form state
     const [formData, setFormData] = useState({
         code: '',
@@ -351,7 +351,7 @@ export default function AdminPromoCodesPage() {
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
                         <div className="bg-white dark:bg-kick-surface rounded-xl max-w-md w-full p-6 shadow-xl">
                             <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">Create Promo Code</h2>
-                            
+
                             <form onSubmit={handleCreateCode} className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-1">

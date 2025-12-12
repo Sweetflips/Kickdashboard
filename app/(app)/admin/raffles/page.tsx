@@ -374,14 +374,13 @@ export default function AdminRafflesPage() {
 
     if (loading || !userData || !userData.is_admin) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-            </div>
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+                </div>
         )
     }
 
     return (
-        <>
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
@@ -652,6 +651,6 @@ export default function AdminRafflesPage() {
                     </div>
                 </div>
             )}
-        </>
+        </div>
     )
 }
