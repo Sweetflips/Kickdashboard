@@ -134,7 +134,12 @@ export default function ProfilePage() {
                 showToast('Already claimed', 'info')
             } else {
                 const pts = typeof payload?.pointsAwarded === 'number' ? payload.pointsAwarded : null
-                showToast(`Achievement claimed${pts != null ? ` (+${pts} pts)` : ''}!`, 'success')
+                showToast(
+                    <span className="text-base font-semibold text-gray-900 dark:text-kick-text">
+                        Achievement claimed{pts != null ? ` (+${pts.toLocaleString()} Sweet Coins)` : ''}!
+                    </span>,
+                    'success'
+                )
             }
 
             await fetchAchievements()
@@ -252,10 +257,10 @@ export default function ProfilePage() {
                 setActiveTab('connected')
             }
             if (success === 'discord_connected') {
-                setConnectAchievementBanner({ visible: true, label: 'Discord Connected (+25 pts) achievement unlocked' })
+                setConnectAchievementBanner({ visible: true, label: 'Discord Connected (+25 Sweet Coins) achievement unlocked' })
             } else if (success === 'true') {
                 // Telegram widget currently redirects with success=true
-                setConnectAchievementBanner({ visible: true, label: 'Telegram Connected (+25 pts) achievement unlocked' })
+                setConnectAchievementBanner({ visible: true, label: 'Telegram Connected (+25 Sweet Coins) achievement unlocked' })
             }
             // Clear Telegram widget state immediately
             setTelegramAuthUrl(null)
@@ -522,7 +527,7 @@ export default function ProfilePage() {
                                                 {connectAchievementBanner.label}
                                             </p>
                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary mt-1">
-                                                Go claim it to add the points to your balance.
+                                                Go claim it to add the Sweet Coins to your balance.
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -1061,7 +1066,7 @@ export default function ProfilePage() {
                                             <div>
                                                 <h2 className="text-xl font-bold text-gray-900 dark:text-kick-text">Achievements</h2>
                                                 <p className="text-sm text-gray-600 dark:text-kick-text-secondary mt-1">
-                                                    Your unlocked achievements show up here. Claim any that are ready to add points.
+                                                    Your unlocked achievements show up here. Claim any that are ready to add Sweet Coins.
                                                 </p>
                                             </div>
                                             <button
@@ -1093,7 +1098,7 @@ export default function ProfilePage() {
                                                                 {claimableCount} achievement{claimableCount === 1 ? '' : 's'} ready to claim
                                                             </p>
                                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary mt-1">
-                                                                Claim them to add points to your balance.
+                                                                Claim them to add Sweet Coins to your balance.
                                                             </p>
                                                         </div>
                                                     )}
@@ -1139,7 +1144,7 @@ export default function ProfilePage() {
                                                                                 )}
                                                                                 <div className="flex items-center justify-between mt-3 gap-3">
                                                                                     <p className="text-xs font-semibold text-kick-purple">
-                                                                                        +{a.reward.toLocaleString()} pts
+                                                                                        +{a.reward.toLocaleString()} Sweet Coins
                                                                                     </p>
                                                                                     {!isClaimed && (
                                                                                         <button

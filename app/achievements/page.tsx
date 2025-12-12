@@ -3,6 +3,7 @@
 import AppLayout from '@/components/AppLayout'
 import { useToast } from '@/components/Toast'
 import { ACHIEVEMENTS } from '@/lib/achievements'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -128,7 +129,26 @@ export default function AchievementsPage() {
                 showToast('Already claimed', 'info')
             } else {
                 const pts = typeof payload?.pointsAwarded === 'number' ? payload.pointsAwarded : null
-                showToast(pts != null ? `+${pts} SP added to your balance.` : 'Claimed!', 'success')
+                const achievementName = ACHIEVEMENTS.find(a => a.id === achievementId)?.name || 'Achievement'
+                showToast(
+                    <div className="space-y-1">
+                        <div className="text-base font-extrabold text-gray-900 dark:text-kick-text">
+                            {achievementName}
+                        </div>
+                        {pts != null ? (
+                            <div className="inline-flex items-center gap-2 text-base font-extrabold text-gray-900 dark:text-kick-text">
+                                <span>{`+${pts.toLocaleString()}`}</span>
+                                <Image src="/icons/Sweetflipscoin.png" alt="" width={18} height={18} className="w-[18px] h-[18px]" />
+                                <span>Sweet Coins</span>
+                            </div>
+                        ) : (
+                            <div className="text-base font-semibold text-gray-700 dark:text-kick-text-secondary">
+                                Claimed
+                            </div>
+                        )}
+                    </div>,
+                    'success'
+                )
             }
 
             await Promise.all([fetchAchievements(), fetchUserBalance()])
@@ -178,7 +198,7 @@ export default function AchievementsPage() {
                         Connect your Kick account to view achievements
                     </h2>
                     <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
-                        Achievements track your progress and reward you with bonus points. Connect your account to get started!
+                        Achievements track your progress and reward you with bonus Sweet Coins. Connect your account to get started!
                     </p>
                     <button
                         onClick={() => router.push('/login')}
@@ -202,7 +222,7 @@ export default function AchievementsPage() {
                             🏆 Achievements
                         </h1>
                         <p className="text-lg text-white/90 max-w-2xl mx-auto">
-                            Complete challenges, unlock achievements, and earn bonus points! Track your progress and become the ultimate SweetFlips viewer.
+                            Complete challenges, unlock achievements, and earn bonus Sweet Coins! Track your progress and become the ultimate SweetFlips viewer.
                         </p>
                     </div>
                     <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
@@ -236,10 +256,16 @@ export default function AchievementsPage() {
                     <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                                <span className="text-xl">⭐</span>
+                                <Image
+                                    src="/icons/Sweetflipscoin.png"
+                                    alt=""
+                                    width={20}
+                                    height={20}
+                                    className="w-5 h-5"
+                                />
                             </div>
                             <div>
-                                <p className="text-small text-gray-600 dark:text-kick-text-secondary">Points Earned</p>
+                                <p className="text-small text-gray-600 dark:text-kick-text-secondary">Sweet Coins Earned</p>
                                 <p className="text-h4 font-bold text-kick-purple">{totalEarnedPoints.toLocaleString()}</p>
                             </div>
                         </div>
@@ -250,7 +276,7 @@ export default function AchievementsPage() {
                                 <span className="text-xl">💎</span>
                             </div>
                             <div>
-                                <p className="text-small text-gray-600 dark:text-kick-text-secondary">Total Available</p>
+                                <p className="text-small text-gray-600 dark:text-kick-text-secondary">Total Sweet Coins</p>
                                 <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{totalPossiblePoints.toLocaleString()}</p>
                             </div>
                         </div>
@@ -265,7 +291,7 @@ export default function AchievementsPage() {
                                 You have {claimableCount} achievement{claimableCount === 1 ? '' : 's'} ready to claim
                             </p>
                             <p className="text-small text-gray-600 dark:text-kick-text-secondary">
-                                Claim them to add the points to your balance.
+                                Claim them to add the Sweet Coins to your balance.
                             </p>
                         </div>
                         <button
@@ -362,7 +388,7 @@ export default function AchievementsPage() {
                                                     <div
                                                         key={idx}
                                                         className="flex-1 text-center"
-                                                        title={`Tier ${tier.level}: ${tier.requirement} - ${tier.reward} pts`}
+                                                        title={`Tier ${tier.level}: ${tier.requirement} - ${tier.reward} Sweet Coins`}
                                                     >
                                                         <div className={`h-1 rounded-full ${tier.unlocked ? 'bg-kick-green' : 'bg-gray-300 dark:bg-kick-border'}`}></div>
                                                         <span className="text-xs text-gray-400 dark:text-kick-text-muted">T{tier.level}</span>
@@ -375,11 +401,15 @@ export default function AchievementsPage() {
                                     {/* Reward */}
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-1 text-kick-purple">
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M9.049 2.927c.765-1.36 2.722-1.36 3.486 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                            </svg>
+                                            <Image
+                                                src="/icons/Sweetflipscoin.png"
+                                                alt=""
+                                                width={16}
+                                                height={16}
+                                                className="w-4 h-4"
+                                            />
                                             <span className="font-semibold">
-                                                {achievement.reward.toLocaleString()} pts
+                                                {achievement.reward.toLocaleString()}
                                             </span>
                                         </div>
                                         <span className={
@@ -398,9 +428,16 @@ export default function AchievementsPage() {
                                     {isUnlocked && !isClaimed && (
                                         <button
                                             onClick={() => claimAchievement(achievement.id)}
-                                            className="mt-3 w-full px-3 py-1.5 rounded-md bg-kick-green text-white text-sm font-semibold hover:bg-kick-green/90 transition-colors"
+                                            className="mt-3 inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-kick-green text-white text-xs font-semibold hover:bg-kick-green/90 transition-colors"
                                         >
-                                            Claim +{achievement.reward.toLocaleString()} SP
+                                            <span className="mr-1">Claim +{achievement.reward.toLocaleString()}</span>
+                                            <Image
+                                                src="/icons/Sweetflipscoin.png"
+                                                alt=""
+                                                width={14}
+                                                height={14}
+                                                className="w-3.5 h-3.5"
+                                            />
                                         </button>
                                     )}
                                 </div>
@@ -415,7 +452,7 @@ export default function AchievementsPage() {
                         How achievements work
                     </h3>
                     <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-4">
-                        Earn points by watching streams, chatting, joining raffles and being active in the community. More achievements will be added over time.
+                        Earn Sweet Coins by watching streams, chatting, joining raffles and being active in the community. More achievements will be added over time.
                     </p>
                     <a
                         href="https://kick.com/sweetflips"

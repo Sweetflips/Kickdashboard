@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AppLayout from '../../../components/AppLayout'
@@ -238,7 +239,7 @@ export default function StreamDetailPage() {
         try {
             const date = new Date(dateString)
             // Format in UTC to match Kick's timezone (or use 'en-US' with UTC)
-            return date.toLocaleString('en-US', { 
+            return date.toLocaleString('en-US', {
                 timeZone: 'UTC',
                 year: 'numeric',
                 month: '2-digit',
@@ -446,8 +447,9 @@ export default function StreamDetailPage() {
                                                     </span>
                                                     {msg.points_earned !== null && msg.points_earned !== undefined ? (
                                                         msg.points_earned > 0 ? (
-                                                            <span className="text-xs text-kick-purple font-medium">
-                                                                +{msg.points_earned}pts
+                                                            <span className="inline-flex items-center gap-1 text-xs text-kick-purple font-medium">
+                                                                <span>+{msg.points_earned.toLocaleString()}</span>
+                                                                <Image src="/icons/Sweetflipscoin.png" alt="" width={12} height={12} className="w-3 h-3 opacity-90" />
                                                             </span>
                                                         ) : (
                                                             <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-kick-text-secondary" title="Message sent too quickly (rate limited)">
@@ -456,7 +458,10 @@ export default function StreamDetailPage() {
                                                                     alt="Timeout - Message sent too quickly"
                                                                     className="w-3.5 h-3.5"
                                                                 />
-                                                                <span>0 pts</span>
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    <span>0</span>
+                                                                    <Image src="/icons/Sweetflipscoin.png" alt="" width={12} height={12} className="w-3 h-3 opacity-80" />
+                                                                </span>
                                                             </span>
                                                         )
                                                     ) : null}

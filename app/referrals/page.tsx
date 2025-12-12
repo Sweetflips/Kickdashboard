@@ -1,6 +1,7 @@
 'use client'
 
 import AppLayout from '@/components/AppLayout'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -174,7 +175,7 @@ export default function ReferralsPage() {
                         Connect your Kick account to access referrals
                     </h2>
                     <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
-                        Invite friends and earn bonus points when they become active members of the community!
+                        Invite friends and earn bonus Sweet Coins when they become active members of the community!
                     </p>
                     <button
                         onClick={() => router.push('/login')}
@@ -260,10 +261,16 @@ export default function ReferralsPage() {
                     <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-kick-purple/20 flex items-center justify-center">
-                                <span className="text-xl">⭐</span>
+                                <Image
+                                    src="/icons/Sweetflipscoin.png"
+                                    alt=""
+                                    width={20}
+                                    height={20}
+                                    className="w-5 h-5"
+                                />
                             </div>
                             <div>
-                                <p className="text-small text-gray-600 dark:text-kick-text-secondary">Points Earned</p>
+                                <p className="text-small text-gray-600 dark:text-kick-text-secondary">Sweet Coins Earned</p>
                                 <p className="text-h4 font-bold text-kick-purple">{displayStats.totalEarned}</p>
                             </div>
                         </div>
@@ -314,10 +321,10 @@ export default function ReferralsPage() {
                                 3
                             </div>
                             <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-2">
-                                They Earn Points
+                                They Earn Sweet Coins
                             </h3>
                             <p className="text-small text-gray-600 dark:text-kick-text-secondary">
-                                As they chat and participate in streams, they earn points
+                                As they chat and participate in streams, they earn Sweet Coins
                             </p>
                         </div>
                         <div className="text-center">
@@ -328,7 +335,7 @@ export default function ReferralsPage() {
                                 You Both Get Rewards
                             </h3>
                             <p className="text-small text-gray-600 dark:text-kick-text-secondary">
-                                Hit milestones and you both earn bonus points!
+                                Hit milestones and you both earn bonus Sweet Coins!
                             </p>
                         </div>
                     </div>
@@ -340,7 +347,7 @@ export default function ReferralsPage() {
                         Reward Milestones
                     </h2>
                     <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
-                        Earn rewards as your referrals reach these point milestones. You can earn up to <span className="font-semibold text-kick-purple">{totalPossibleReward} points</span> per referral!
+                        Earn rewards as your referrals reach these Sweet Coin milestones. You can earn up to <span className="font-semibold text-kick-purple">{totalPossibleReward} Sweet Coins</span> per referral!
                     </p>
                     <div className="space-y-4">
                         {REFERRAL_TIERS.map((tier, index) => (
@@ -365,7 +372,7 @@ export default function ReferralsPage() {
                                             </span>
                                         </div>
                                         <p className="text-small text-gray-600 dark:text-kick-text-secondary">
-                                            When your referral earns <span className="font-semibold">{tier.requiredPoints.toLocaleString()} points</span>
+                                            When your referral earns <span className="font-semibold">{tier.requiredPoints.toLocaleString()} Sweet Coins</span>
                                         </p>
                                     </div>
 
@@ -403,7 +410,7 @@ export default function ReferralsPage() {
                                         <div className="h-full bg-gray-400 rounded-full" style={{ width: '0%' }}></div>
                                     </div>
                                     <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1 text-right">
-                                        0 / {tier.requiredPoints.toLocaleString()} points
+                                        0 / {tier.requiredPoints.toLocaleString()} Sweet Coins
                                     </p>
                                 </div>
                             </div>
@@ -432,7 +439,7 @@ export default function ReferralsPage() {
                                 <thead className="border-b border-gray-200 dark:border-kick-border">
                                     <tr>
                                         <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Friend</th>
-                                        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Points</th>
+                                        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Sweet Coins</th>
                                         <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Tiers Reached</th>
                                         <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Earned</th>
                                         <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-kick-text">Referred</th>
@@ -513,7 +520,7 @@ export default function ReferralsPage() {
                                 Do rewards stack for each milestone?
                             </h3>
                             <p className="text-small text-gray-600 dark:text-kick-text-secondary">
-                                Yes! You earn rewards at each tier, so a referral reaching 5,000 points earns you all 5 milestone rewards.
+                                Yes! You earn rewards at each tier, so a referral reaching 5,000 Sweet Coins earns you all 5 milestone rewards.
                             </p>
                         </div>
                     </div>
@@ -525,7 +532,7 @@ export default function ReferralsPage() {
                         🚀 Referral Program is Live!
                     </h3>
                     <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-4">
-                        Start sharing your code and earning rewards as your friends earn points!
+                        Start sharing your code and earning rewards as your friends earn Sweet Coins!
                     </p>
                     <a
                         href="https://kick.com/sweetflips"

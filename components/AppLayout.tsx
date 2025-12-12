@@ -651,13 +651,18 @@ export default function AppLayout({ children }: LayoutProps) {
                             {isAuthenticated && userData?.id && (
                                 <div
                                     className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border"
-                                    title="Sweet Points (SP)"
+                                    title="Sweet Coins"
                                 >
-                                    <span className="text-sm leading-none" aria-hidden="true">⭐</span>
+                                    <Image
+                                        src="/icons/Sweetflipscoin.png"
+                                        alt=""
+                                        width={18}
+                                        height={18}
+                                        className="w-[18px] h-[18px]"
+                                    />
                                     <span className="text-sm font-semibold tabular-nums">
                                         {pointsLoading && userPoints === null ? '…' : (userPoints ?? 0).toLocaleString()}
                                     </span>
-                                    <span className="text-xs font-semibold text-gray-600 dark:text-kick-text-secondary">SP</span>
                                 </div>
                             )}
                             <ThemeToggle variant="button" />

@@ -125,7 +125,7 @@ export default function StreamsPage() {
                 return 'Invalid date'
             }
             // Format in UTC to be consistent with session detail page
-            return date.toLocaleString('en-US', { 
+            return date.toLocaleString('en-US', {
                 timeZone: 'UTC',
                 year: 'numeric',
                 month: '2-digit',
@@ -413,7 +413,7 @@ export default function StreamsPage() {
                                                                                 <span className="text-sm font-bold text-kick-purple">
                                                                                     {points.toLocaleString()}
                                                                                 </span>
-                                                                                <span className="text-xs text-gray-500 dark:text-kick-text-muted">pts</span>
+                                                                                <Image src="/icons/Sweetflipscoin.png" alt="" width={14} height={14} className="w-3.5 h-3.5 opacity-90" />
                                                                             </div>
                                                                         </div>
                                                                     )
