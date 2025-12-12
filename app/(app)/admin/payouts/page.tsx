@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import AppLayout from '@/components/AppLayout'
 
 interface StreamSession {
     id: string
@@ -288,17 +287,14 @@ export default function PayoutsPage() {
 
     if (loading || !isAdmin) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-kick-text">Payout Calculator</h1>
@@ -633,6 +629,5 @@ export default function PayoutsPage() {
                     </div>
                 )}
             </div>
-        </AppLayout>
     )
 }

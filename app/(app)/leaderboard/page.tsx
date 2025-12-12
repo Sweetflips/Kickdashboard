@@ -45,9 +45,11 @@ export default function LeaderboardPage() {
     const [startDate, setStartDate] = useState<string>('')
     const [endDate, setEndDate] = useState<string>('')
     const [sortBy, setSortBy] = useState<SortBy>('points')
+    const [searchQuery, setSearchQuery] = useState('')
     const [viewerKickUserId, setViewerKickUserId] = useState<string | null>(null)
     const [viewer, setViewer] = useState<ViewerSummary | null>(null)
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+    const searchDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
     const limit = 50
 
     const getDateRange = useCallback((mode: DateFilterMode): { start: string; end: string } | null => {
@@ -135,6 +137,10 @@ export default function LeaderboardPage() {
                 url += `&viewer_kick_user_id=${encodeURIComponent(viewerKickUserId)}`
             }
 
+            if (searchQuery.trim()) {
+                url += `&q=${encodeURIComponent(searchQuery.trim())}`
+            }
+
             const response = await fetch(url)
             if (!response.ok) {
                 throw new Error('Failed to fetch leaderboard')
@@ -148,7 +154,7 @@ export default function LeaderboardPage() {
         } finally {
             setLoading(false)
         }
-    }, [dateFilterMode, getDateRange, sortBy, viewerKickUserId])
+    }, [dateFilterMode, getDateRange, sortBy, viewerKickUserId, searchQuery])
 
     useEffect(() => {
         setOffset(0)
@@ -180,6 +186,24 @@ export default function LeaderboardPage() {
             }
         }
     }, [startDate, endDate, dateFilterMode, fetchLeaderboard])
+
+    // Debounced search
+    useEffect(() => {
+        if (searchDebounceTimerRef.current) {
+            clearTimeout(searchDebounceTimerRef.current)
+        }
+
+        searchDebounceTimerRef.current = setTimeout(() => {
+            setOffset(0)
+            fetchLeaderboard(0)
+        }, 250)
+
+        return () => {
+            if (searchDebounceTimerRef.current) {
+                clearTimeout(searchDebounceTimerRef.current)
+            }
+        }
+    }, [searchQuery, fetchLeaderboard])
 
     const handleDateFilterChange = (mode: DateFilterMode) => {
         setDateFilterMode(mode)
@@ -259,6 +283,36 @@ export default function LeaderboardPage() {
 
                         {/* Date Filter */}
                         <div className="flex flex-col gap-3">
+                            {/* Search */}
+                            <div className="flex items-center gap-2 justify-end">
+                                <div className="relative w-full sm:w-[320px]">
+                                    <input
+                                        value={searchQuery}
+                                        onChange={(e) => {
+                                            setSearchQuery(e.target.value)
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                setOffset(0)
+                                                fetchLeaderboard(0)
+                                            }
+                                        }}
+                                        placeholder="Search users…"
+                                        className="w-full pl-3 pr-10 py-2 text-sm border border-gray-300 dark:border-kick-border rounded-md bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
+                                    />
+                                    {searchQuery.trim() && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSearchQuery('')}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800 dark:text-kick-text-secondary dark:hover:text-kick-text text-sm"
+                                            aria-label="Clear search"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     onClick={() => handleDateFilterChange('overall')}

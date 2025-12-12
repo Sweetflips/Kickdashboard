@@ -1,6 +1,5 @@
 'use client'
 
-import AppLayout from '@/components/AppLayout'
 import { Toast } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -221,17 +220,14 @@ export default function AdminPurchasesPage() {
 
     if (loading || !userData || !userData.is_admin) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-h1 font-semibold text-gray-900 dark:text-kick-text">
@@ -608,6 +604,6 @@ export default function AdminPurchasesPage() {
                     onClose={() => setToast(null)}
                 />
             )}
-        </AppLayout>
+        </div>
     )
 }

@@ -61,12 +61,21 @@ function parseViewerKickUserId(value: string | null): string | null {
     }
 }
 
+function normalizeQuery(value: string | null): string | null {
+    if (!value) return null
+    const q = value.trim()
+    if (!q) return null
+    // Keep it sane to avoid accidental huge queries / cache-bust loops
+    return q.slice(0, 64)
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '50', 10) || 50))
         const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0)
         const sortBy = parseSortBy(searchParams.get('sortBy'))
+        const q = normalizeQuery(searchParams.get('q'))
         const viewerKickUserIdStr = parseViewerKickUserId(searchParams.get('viewer_kick_user_id'))
 
         // Date filtering
@@ -89,7 +98,17 @@ export async function GET(request: Request) {
         const cached = memoryCache.get<CachedLeaderboard>(cacheKey)
 
         if (cached) {
-            const paged = cached.rows.slice(offset, offset + limit)
+            const qLower = q ? q.toLowerCase() : null
+            const qIsNumeric = q ? /^\d+$/.test(q) : false
+            const filtered = qLower
+                ? cached.rows.filter(r => {
+                    const username = (r.username || '').toLowerCase()
+                    if (username.includes(qLower)) return true
+                    if (qIsNumeric && String(r.kick_user_id).includes(qLower)) return true
+                    return false
+                })
+                : cached.rows
+            const paged = filtered.slice(offset, offset + limit)
 
             const viewerEntry = viewerKickUserIdStr
                 ? cached.rows.find(r => r.kick_user_id === viewerKickUserIdStr) || null
@@ -108,7 +127,7 @@ export async function GET(request: Request) {
 
             return NextResponse.json({
                 leaderboard: paged,
-                total: cached.rows.length,
+                total: filtered.length,
                 limit,
                 offset,
                 sortBy,
@@ -127,7 +146,17 @@ export async function GET(request: Request) {
             cacheTTL
         )
 
-        const paged = result.rows.slice(offset, offset + limit)
+        const qLower = q ? q.toLowerCase() : null
+        const qIsNumeric = q ? /^\d+$/.test(q) : false
+        const filtered = qLower
+            ? result.rows.filter(r => {
+                const username = (r.username || '').toLowerCase()
+                if (username.includes(qLower)) return true
+                if (qIsNumeric && String(r.kick_user_id).includes(qLower)) return true
+                return false
+            })
+            : result.rows
+        const paged = filtered.slice(offset, offset + limit)
 
         const viewerEntry = viewerKickUserIdStr
             ? result.rows.find(r => r.kick_user_id === viewerKickUserIdStr) || null
@@ -146,7 +175,7 @@ export async function GET(request: Request) {
 
         return NextResponse.json({
             leaderboard: paged,
-            total: result.rows.length,
+            total: filtered.length,
             limit,
             offset,
             sortBy,

@@ -1,6 +1,5 @@
 'use client'
 
-import AppLayout from '@/components/AppLayout'
 import { Toast } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -219,17 +218,14 @@ export default function AdminPromoCodesPage() {
 
     if (loading || !isAdmin) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
@@ -466,6 +462,6 @@ export default function AdminPromoCodesPage() {
                     onClose={() => setToast(null)}
                 />
             )}
-        </AppLayout>
+        </div>
     )
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import AppLayout from '@/components/AppLayout'
 import { Toast } from '@/components/Toast'
 
 export default function CreateRafflePage() {
@@ -106,17 +105,14 @@ export default function CreateRafflePage() {
 
     if (loading || !isAdmin) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     return (
-        <AppLayout>
-            <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
                 <div>
                     <h1 className="text-h1 font-semibold text-gray-900 dark:text-kick-text">
                         Create New Raffle
@@ -389,6 +385,6 @@ export default function CreateRafflePage() {
                     onClose={() => setToast(null)}
                 />
             )}
-        </AppLayout>
+        </div>
     )
 }

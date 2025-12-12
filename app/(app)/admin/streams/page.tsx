@@ -1,6 +1,5 @@
 'use client'
 
-import AppLayout from '@/components/AppLayout'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -457,19 +456,16 @@ export default function AdminStreamsPage() {
 
     if (!userData || !userData.is_admin) {
         return (
-            <AppLayout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-                </div>
-            </AppLayout>
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+            </div>
         )
     }
 
     const kickApiUrl = `https://kick.com/api/v2/channels/sweetflips/videos`
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-kick-text">Stream Management</h1>
@@ -847,6 +843,5 @@ export default function AdminStreamsPage() {
                     </button>
                 </div>
             </div>
-        </AppLayout>
     )
 }

@@ -1,6 +1,5 @@
 'use client'
 
-import AppLayout from '@/components/AppLayout'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -354,17 +353,14 @@ export default function UsersPage() {
 
   if (!userData || !userData.is_admin) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
+      </div>
     )
   }
 
   return (
-    <AppLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-kick-text">User Management</h1>
@@ -935,6 +931,6 @@ export default function UsersPage() {
           </div>
         </div>
       )}
-    </AppLayout>
+    </div>
   )
 }
