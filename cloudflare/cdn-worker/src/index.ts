@@ -57,7 +57,8 @@ export default {
         return new Response('Worker misconfigured: MEDIA_BUCKET binding missing', { status: 500 })
       }
       if (!env.SIGNING_SECRET) {
-        return new Response('Worker misconfigured: SIGNING_SECRET missing', { status: 500 })
+        const keys = Object.keys(env || {}).sort().join(', ')
+        return new Response(`Worker misconfigured: SIGNING_SECRET missing (env keys: ${keys || 'none'})`, { status: 500 })
       }
 
       const key = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
@@ -96,8 +97,20 @@ export default {
         if (cached) return cached
       }
 
-      const obj = await env.MEDIA_BUCKET.get(key)
+      let obj
+      try {
+        obj = await env.MEDIA_BUCKET.get(key)
+      } catch (r2Error: any) {
+        console.error('[R2 Fetch Error]', {
+          key,
+          error: r2Error?.message,
+          stack: r2Error?.stack,
+        })
+        return new Response(`R2 fetch failed: ${r2Error?.message || 'Unknown error'}`, { status: 500 })
+      }
+
       if (!obj) {
+        console.warn('[R2 Object Not Found]', { key })
         return new Response('Not Found', { status: 404 })
       }
 
@@ -116,11 +129,16 @@ export default {
       if (cache) ctx.waitUntil(cache.put(cacheKey, resp.clone()))
       return resp
     } catch (err: any) {
+      // Log full error for debugging (only visible in Cloudflare dashboard)
+      console.error('[CDN Worker Error]', {
+        message: err?.message,
+        stack: err?.stack,
+        name: err?.name,
+      })
+
       // Avoid leaking secrets; return minimal debug info.
       const msg = err?.message ? String(err.message) : 'Unknown error'
       return new Response(`Worker error: ${msg}`, { status: 500 })
     }
   },
 }
-
-
