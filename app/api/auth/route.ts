@@ -3,7 +3,16 @@ import { NextResponse } from 'next/server'
 
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
 const KICK_OAUTH_BASE = 'https://id.kick.com'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://kickdashboard.com'
+// Keep a single canonical host for auth flows (use www by default)
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.kickdashboard.com').replace(/\/$/, '')
+const APP_HOST = (() => {
+    try {
+        return new URL(APP_URL).host
+    } catch {
+        return 'www.kickdashboard.com'
+    }
+})()
+const COOKIE_DOMAIN = APP_HOST.includes('localhost') ? undefined : `.${APP_HOST.replace(/:\d+$/, '')}`
 
 // Get credentials at runtime to avoid startup crashes
 function getKickCredentials() {
@@ -33,6 +42,11 @@ function buildRedirectUri(request: Request): string {
     const host = headers.get('host') || ''
 
     const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+
+    // In production, force the canonical APP_URL to keep cookies/redirects aligned
+    if (!isLocalhost) {
+        return `${APP_URL}/api/auth/callback`
+    }
 
     // Prefer forwarded headers if present (proxy/reverse proxy)
     if (forwardedHost) {
@@ -96,6 +110,7 @@ export async function GET(request: Request) {
                 sameSite: 'lax',
                 maxAge: 7776000, // 3 months (90 days)
                 path: '/',
+                domain: isLocalhost ? undefined : COOKIE_DOMAIN,
             })
 
             // Store referral code in a cookie if provided
@@ -106,6 +121,7 @@ export async function GET(request: Request) {
                     sameSite: 'lax',
                     maxAge: 7776000, // 3 months (90 days)
                     path: '/',
+                    domain: isLocalhost ? undefined : COOKIE_DOMAIN,
                 })
             }
 

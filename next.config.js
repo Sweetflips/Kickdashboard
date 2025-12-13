@@ -29,6 +29,16 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'kickdashboard.com' }],
+        destination: 'https://www.kickdashboard.com/:path*',
+        permanent: true,
+      },
+    ]
+  },
   // Enable standalone output for Docker
   output: 'standalone',
 }

@@ -8,7 +8,16 @@ export const dynamic = 'force-dynamic'
 
 const KICK_OAUTH_BASE = 'https://id.kick.com'
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://kickdashboard.com'
+// Use canonical host with www to keep cookies consistent across apex/www
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.kickdashboard.com').replace(/\/$/, '')
+const APP_HOST = (() => {
+    try {
+        return new URL(APP_URL).host
+    } catch {
+        return 'www.kickdashboard.com'
+    }
+})()
+const COOKIE_DOMAIN = APP_HOST.includes('localhost') ? undefined : `.${APP_HOST.replace(/:\d+$/, '')}`
 
 // Get credentials at runtime to avoid startup crashes
 function getKickCredentials() {
@@ -404,8 +413,8 @@ export async function GET(request: Request) {
         // Clear PKCE and referral code cookies and set auth tokens in cookies with 3-month expiration
         // Note: Tokens are no longer passed in URL query params for security - only in cookies
         const response = NextResponse.redirect(`${baseUrl}/?auth_success=true`)
-        response.cookies.delete('pkce_code_verifier')
-        response.cookies.delete('referral_code')
+        response.cookies.delete('pkce_code_verifier', { path: '/', domain: isLocalhost ? undefined : COOKIE_DOMAIN })
+        response.cookies.delete('referral_code', { path: '/', domain: isLocalhost ? undefined : COOKIE_DOMAIN })
 
         // Set authentication tokens in cookies with 3-month expiration (90 days)
         const threeMonthsInSeconds = 90 * 24 * 60 * 60 // 7,776,000 seconds
@@ -415,6 +424,7 @@ export async function GET(request: Request) {
             sameSite: 'lax',
             maxAge: threeMonthsInSeconds,
             path: '/',
+            domain: isLocalhost ? undefined : COOKIE_DOMAIN,
         })
 
         if (tokenData.refresh_token) {
@@ -424,6 +434,7 @@ export async function GET(request: Request) {
                 sameSite: 'lax',
                 maxAge: threeMonthsInSeconds,
                 path: '/',
+                domain: isLocalhost ? undefined : COOKIE_DOMAIN,
             })
         }
 
