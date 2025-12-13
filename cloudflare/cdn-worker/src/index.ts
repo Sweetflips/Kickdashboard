@@ -108,11 +108,22 @@ export default {
       }
 
       // Cache key includes signature so shared cache is safe.
+      // Note: We check cache but always ensure CORS headers are present
       const cacheKey = new Request(url.toString(), request)
       const cache = (typeof caches !== 'undefined' ? (caches as any).default : undefined) as Cache | undefined
       if (cache) {
         const cached = await cache.match(cacheKey)
-        if (cached) return cached
+        if (cached) {
+          // Ensure cached response has CORS headers (in case it was cached before CORS fix)
+          const cachedHeaders = new Headers(cached.headers)
+          if (!cachedHeaders.get('Access-Control-Allow-Origin')) {
+            cachedHeaders.set('Access-Control-Allow-Origin', '*')
+            cachedHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+            cachedHeaders.set('Access-Control-Expose-Headers', 'Content-Length, Content-Type, ETag')
+            return new Response(cached.body, { headers: cachedHeaders, status: cached.status })
+          }
+          return cached
+        }
       }
 
       let obj
