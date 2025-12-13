@@ -77,6 +77,9 @@ export async function GET(
         headers: {
           // Cache redirect briefly (the signed URL itself is short-lived)
           'Cache-Control': isVersioned ? 'public, max-age=300' : 'public, max-age=60',
+          // Add CORS headers to redirect response (some browsers check CORS on redirects)
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
         },
       })
     }
