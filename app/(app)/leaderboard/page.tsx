@@ -389,7 +389,7 @@ export default function LeaderboardPage() {
                                     }}
                                     className="px-3 py-1.5 text-sm border border-gray-300 dark:border-kick-border rounded-md bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
                                 >
-                                    <option value="points">Points</option>
+                                    <option value="points">Sweet Coins</option>
                                     <option value="messages">Messages sent</option>
                                     <option value="streams">Streams watched</option>
                                     <option value="emotes">Emotes used</option>
@@ -448,7 +448,7 @@ export default function LeaderboardPage() {
                                         <tr className="border-b border-gray-200 dark:border-kick-border">
                                             <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Rank</th>
                                             <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">User</th>
-                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Points</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Sweet Coins</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Emotes</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Streams Watched</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Messages Sent</th>

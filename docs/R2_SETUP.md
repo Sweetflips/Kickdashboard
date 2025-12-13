@@ -163,9 +163,124 @@ Cloudflare R2 pricing (as of 2024):
 
 For most applications, the free tier is sufficient.
 
+## Step 8: Deploy CDN Worker (Optional but Recommended)
+
+The CDN worker serves media directly from R2 with signed URLs for better performance and caching.
+
+### Prerequisites
+
+- R2 bucket created (Step 1)
+- Custom domain configured for R2 (e.g., `cdn.kickdashboard.com`)
+
+### Deploy the Worker
+
+1. **Install Wrangler CLI** (if not already installed):
+   ```bash
+   npm install -g wrangler
+   ```
+
+2. **Login to Cloudflare**:
+   ```bash
+   wrangler login
+   ```
+
+3. **Generate a signing secret** (for URL signing):
+   ```bash
+   # Generate a random 32-byte secret (base64)
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   ```
+   Save this secret - you'll need it in the next steps.
+
+4. **Set the signing secret in Cloudflare**:
+   ```bash
+   cd cloudflare/cdn-worker
+   wrangler secret put SIGNING_SECRET
+   ```
+   When prompted, paste the secret you generated in step 3.
+
+5. **Deploy the worker**:
+   ```bash
+   wrangler deploy
+   ```
+
+6. **Configure custom domain** (if not already done):
+   - Go to Cloudflare Dashboard → Workers & Pages → kickdashboard
+   - Go to **Triggers** → **Custom Domains**
+   - Add custom domain: `cdn.kickdashboard.com`
+   - Ensure DNS CNAME record points to the worker
+
+### Configure Environment Variables
+
+Add these to your Next.js app (Railway/production):
+
+```bash
+# CDN Configuration (optional - enables CDN serving)
+MEDIA_CDN_BASE_URL=https://cdn.kickdashboard.com
+MEDIA_CDN_SIGNING_SECRET=<same secret you set in step 4>
+```
+
+**Important**: The `MEDIA_CDN_SIGNING_SECRET` must match the `SIGNING_SECRET` you set in the Cloudflare Worker.
+
+### Verify CDN Setup
+
+1. Upload an avatar image
+2. Check the image URL - it should redirect to `cdn.kickdashboard.com` with signed query params
+3. The CDN URL should work and serve the image
+4. Check Cloudflare Worker logs for any errors
+
+### Troubleshooting CDN Worker
+
+#### HTTP 500 Errors
+
+**First, check the actual error message:**
+
+1. **View Worker Logs**:
+   - Go to Cloudflare Dashboard → Workers & Pages → kickdashboard
+   - Click on **Logs** tab (or use the Observability section)
+   - Look for recent invocations with errors
+   - The error message will tell you exactly what's wrong
+
+2. **Common Causes & Fixes**:
+
+   **"Worker misconfigured: SIGNING_SECRET missing"**
+   - Fix: Set the secret: `cd cloudflare/cdn-worker && wrangler secret put SIGNING_SECRET`
+   
+   **"Worker misconfigured: MEDIA_BUCKET binding missing"**
+   - Fix: Check `wrangler.toml` has `[[r2_buckets]]` section with correct bucket name
+   - Redeploy: `wrangler deploy`
+   
+   **"R2 fetch failed: ..."**
+   - Check bucket name matches exactly (case-sensitive)
+   - Verify bucket exists in your Cloudflare account
+   - Check R2 bucket permissions
+   
+   **"Worker error: Unknown error"**
+   - Check full error in Cloudflare dashboard logs
+   - Verify all environment variables are set correctly
+
+3. **Verify Configuration**:
+   - Go to Workers & Pages → kickdashboard → Settings → Variables
+   - Check that `SIGNING_SECRET` is set (it won't show the value, just that it exists)
+   - Check that R2 bucket binding `MEDIA_BUCKET` exists
+
+4. **Test Worker Directly**:
+   ```bash
+   # Test locally (requires wrangler dev setup)
+   cd cloudflare/cdn-worker
+   wrangler dev
+   ```
+   Then test a URL: `http://localhost:8787/avatars/123/1234567890_abc.webp?exp=9999999999&sig=...`
+
+#### Common Issues
+
+- **"Worker misconfigured: SIGNING_SECRET missing"**: Set the secret using `wrangler secret put SIGNING_SECRET`
+- **"Worker misconfigured: MEDIA_BUCKET binding missing"**: Check `wrangler.toml` has the R2 bucket binding configured
+- **"Not Found" errors**: The object doesn't exist in R2 - check the key path matches what was uploaded
+- **"Forbidden" errors**: Signature verification failed - ensure `MEDIA_CDN_SIGNING_SECRET` matches the worker's `SIGNING_SECRET`
+
 ## Next Steps
 
 - Monitor R2 usage in Cloudflare dashboard
 - Set up R2 lifecycle rules if needed (auto-delete old avatars)
 - Consider adding image optimization/compression
-- Add CDN caching if needed (Cloudflare CDN can cache R2 objects)
+- Monitor CDN Worker performance and errors
