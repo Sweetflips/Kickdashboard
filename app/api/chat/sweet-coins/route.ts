@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 /**
  * Get updated sweet coins for specific messages
  * POST /api/chat/sweet-coins
@@ -8,8 +11,17 @@ import { db } from '@/lib/db'
  */
 export async function POST(request: Request) {
     try {
-        const body = await request.json()
-        const { messageIds } = body
+        let body
+        try {
+            body = await request.json()
+        } catch (parseError) {
+            return NextResponse.json(
+                { error: 'Invalid JSON in request body' },
+                { status: 400 }
+            )
+        }
+
+        const { messageIds } = body || {}
 
         if (!Array.isArray(messageIds) || messageIds.length === 0) {
             return NextResponse.json(
@@ -66,9 +78,13 @@ export async function POST(request: Request) {
             (('code' in error && (error as any).code === 'ECONNRESET') || error.message.includes('aborted'))
 
         if (!isConnectionReset) {
-            console.error('Error fetching message sweet coins:', error)
+            console.error('[sweet-coins] Error fetching message sweet coins:', error)
+            if (error instanceof Error) {
+                console.error('[sweet-coins] Error stack:', error.stack)
+            }
         }
 
+        // Return 500 instead of 502 to avoid gateway issues
         return NextResponse.json(
             {
                 error: 'Failed to fetch message sweet coins',
