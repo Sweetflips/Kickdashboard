@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -165,7 +166,7 @@ export async function GET(request: Request) {
                         id: userData.user_id,
                         username: userData.name, // Kick uses "name" not "username"
                         email: userData.email,
-                        profile_picture: profilePictureUrl,
+                        profile_picture: rewriteApiMediaUrlToCdn(profilePictureUrl),
                         // NOTE: is_admin intentionally NOT included - prevents client-side spoofing
                         ...userData // Include all other fields from Kick API
                     }

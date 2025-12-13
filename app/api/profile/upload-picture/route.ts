@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { uploadToR2 } from '@/lib/r2'
 import { buildMediaUrlFromKey } from '@/lib/media-url'
+import { getAuthenticatedUser } from '@/lib/auth'
 import sharp from 'sharp'
 import { randomBytes } from 'crypto'
 
@@ -16,6 +17,16 @@ export async function POST(request: Request) {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
 
     try {
+        // SECURITY: Require authentication - derive user from session, not client input
+        const auth = await getAuthenticatedUser(request)
+        if (!auth) {
+            console.error('❌ [AUTH] Unauthenticated request')
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            )
+        }
+
         const formData = await request.formData()
         const file = formData.get('image') as File
 
@@ -56,19 +67,11 @@ export async function POST(request: Request) {
         }
         console.log('   └─ ✅ File size validated\n')
 
-        // Get user ID from query params or form data
-        const userId = formData.get('userId') as string || new URL(request.url).searchParams.get('userId')
-
-        if (!userId) {
-            console.error('❌ [VALIDATION] User ID not provided')
-            return NextResponse.json(
-                { error: 'User ID is required' },
-                { status: 400 }
-            )
-        }
+        // Use authenticated user's ID (ignore any client-supplied userId)
+        const userId = auth.kickUserId.toString()
 
         console.log('👤 [USER INFO]')
-        console.log(`   └─ Kick User ID: ${userId}\n`)
+        console.log(`   └─ Kick User ID: ${userId} (from authenticated session)\n`)
 
         // Process image with sharp: resize, crop to square, convert to WebP
         console.log('💾 [IMAGE PROCESSING]')
@@ -118,7 +121,8 @@ export async function POST(request: Request) {
         // Save to database
         console.log('🗄️  [DATABASE] Saving profile picture to database...')
         try {
-            const kickUserId = BigInt(userId)
+            // Use authenticated user's ID (already validated above)
+            const kickUserId = auth.kickUserId
 
             // Check if user exists first
             console.log(`   ├─ Checking if user exists (kick_user_id: ${userId})...`)

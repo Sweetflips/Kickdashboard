@@ -339,10 +339,14 @@ export default function ProfilePage() {
         try {
             const formData = new FormData()
             formData.append('image', file)
-            formData.append('userId', userData.id.toString())
+            // Note: userId is no longer sent - server derives it from authenticated session
 
+            const token = localStorage.getItem('kick_access_token')
             const response = await fetch('/api/profile/upload-picture', {
                 method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
                 body: formData,
             })
 

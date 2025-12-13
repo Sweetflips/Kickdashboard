@@ -323,14 +323,22 @@ export async function GET(request: Request) {
         const imageBuffer = await imageResponse.arrayBuffer()
         const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
 
-        // Return the image with proper headers
-        return new NextResponse(imageBuffer, {
-            headers: {
-                'Content-Type': contentType,
-                'Cache-Control': 'public, max-age=86400', // Cache for 24 hours
-                'Access-Control-Allow-Origin': '*',
-            },
-        })
+        // Prefer upstream validators (helps CDN/browser revalidate efficiently)
+        const etag = imageResponse.headers.get('etag')
+        const lastModified = imageResponse.headers.get('last-modified')
+
+        // Return the image with proper headers.
+        // Use s-maxage so shared caches (Cloudflare) keep it; browser max-age can stay 0.
+        // stale-while-revalidate avoids stampedes and keeps it snappy.
+        const headers: Record<string, string> = {
+            'Content-Type': contentType,
+            'Cache-Control': 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800',
+            'Access-Control-Allow-Origin': '*',
+        }
+        if (etag) headers['ETag'] = etag
+        if (lastModified) headers['Last-Modified'] = lastModified
+
+        return new NextResponse(imageBuffer, { headers })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         console.error(`❌ Image proxy error:`, error)
