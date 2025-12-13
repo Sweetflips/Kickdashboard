@@ -3,6 +3,8 @@ import { getChannelWithLivestream } from '@/lib/kick-api'
 import { getActiveSession, updateSessionMetadata, findSessionByStartTime } from '@/lib/stream-session-manager'
 import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
+import { fetchKickV2ChannelVideos } from '@/lib/kick-videos'
+import { isAdmin } from '@/lib/auth'
 
 /**
  * POST /api/admin/sync-streams
@@ -17,6 +19,15 @@ import { NextResponse } from 'next/server'
  */
 export async function POST(request: Request) {
     try {
+        // Check admin access
+        const adminCheck = await isAdmin(request)
+        if (!adminCheck) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Admin access required' },
+                { status: 403 }
+            )
+        }
+
         const { searchParams } = new URL(request.url)
         const slug = searchParams.get('slug') || 'sweetflips'
         const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '30', 10) || 30))
@@ -161,6 +172,34 @@ export async function POST(request: Request) {
             }
 
             console.log(`[Sync] Skipping legacy API - endpoint is blocked by Kick`)
+        }
+
+        // If still no videos provided, fetch from Kick v2 /videos endpoint server-side (best-effort).
+        // This is what the admin UI suggests pasting manually; when it works server-side, we can auto-sync.
+        if (videos.length === 0) {
+            try {
+                const v2Videos = await fetchKickV2ChannelVideos(slug, 2 * 60 * 1000)
+                // Convert normalized shape back to a "video-like" object for the existing matcher below.
+                // We keep the fields it reads: start_time, created_at, duration, thumbnail, session_title/title, video.id
+                videos = v2Videos
+                    .filter(v => v.startTime)
+                    .map(v => ({
+                        id: v.id,
+                        start_time: v.startTime ? v.startTime.toISOString() : null,
+                        created_at: v.startTime ? v.startTime.toISOString() : null,
+                        duration: v.durationMs || 0,
+                        thumbnail: v.thumbnailUrl ? { src: v.thumbnailUrl } : null,
+                        session_title: v.title,
+                        title: v.title,
+                        video: v.vodId ? { id: v.vodId, title: v.title } : undefined,
+                    }))
+
+                if (videos.length > 0) {
+                    console.log(`[Sync] Fetched ${videos.length} video(s) from Kick v2 /videos for ${slug}`)
+                }
+            } catch (e) {
+                // ignore - will fall through to no-op sync result
+            }
         }
 
         const stats = {
