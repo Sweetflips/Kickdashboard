@@ -76,18 +76,27 @@ export default function AppLayout({ children }: LayoutProps) {
             // Handle auth callback - tokens are now only in cookies, not URL
             if (params.get('auth_success') === 'true') {
                 // Tokens are already set in cookies by the callback route
-                // Just check if we have a token and mark as authenticated
-                const tokenFromCookie = getAccessToken()
-                if (tokenFromCookie && tokenFromCookie.trim().length > 0) {
-                    setIsAuthenticated(true)
-                    // Clean URL (remove auth_success param)
-                    const newUrl = window.location.pathname + (window.location.search.replace(/[?&]auth_success=[^&]*/, '') || '')
-                    window.history.replaceState({}, '', newUrl)
-                } else {
-                    console.error('❌ [AUTH CALLBACK] No token found in cookies after auth success')
-                    router.push('/login?error=invalid_token')
-                    return
+                // Retry reading cookies a few times as they may not be immediately available after redirect
+                let retries = 0
+                const maxRetries = 5
+                const checkToken = () => {
+                    const tokenFromCookie = getAccessToken()
+                    if (tokenFromCookie && tokenFromCookie.trim().length > 0) {
+                        setIsAuthenticated(true)
+                        // Clean URL (remove auth_success param)
+                        const newUrl = window.location.pathname + (window.location.search.replace(/[?&]auth_success=[^&]*/, '') || '')
+                        window.history.replaceState({}, '', newUrl)
+                    } else if (retries < maxRetries) {
+                        retries++
+                        // Retry after a short delay (cookies may not be immediately available)
+                        setTimeout(checkToken, 100 * retries) // Exponential backoff: 100ms, 200ms, 300ms, etc.
+                    } else {
+                        console.error('❌ [AUTH CALLBACK] No token found in cookies after auth success (tried ' + maxRetries + ' times)')
+                        router.push('/login?error=invalid_token')
+                    }
                 }
+                checkToken()
+                return
             } else if (token) {
                 // Validate stored token is not empty
                 if (token.trim().length > 0) {
