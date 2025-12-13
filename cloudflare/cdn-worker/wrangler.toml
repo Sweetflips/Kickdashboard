@@ -2,6 +2,11 @@ name = "kickdashboard"
 main = "src/index.ts"
 compatibility_date = "2025-12-01"
 
+# Route all cdn.kickdashboard.com traffic through this Worker
+[[routes]]
+pattern = "cdn.kickdashboard.com/*"
+zone_name = "kickdashboard.com"
+
 [vars]
 # Must match the custom domain you mapped in R2 Custom Domains
 PUBLIC_HOST = "cdn.kickdashboard.com"
