@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
+import { fetchKickV2ChannelVideos } from '@/lib/kick-videos'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,6 +86,106 @@ export async function GET(request: Request) {
         // Paginate after deduplication
         const total = deduplicatedSessions.length
         const paginatedSessions = deduplicatedSessions.slice(offset, offset + limit)
+
+        // Auto-refresh VOD thumbnails for recent ended sessions (keeps "green placeholder" thumbnails from sticking).
+        // This uses Kick's v2 /videos endpoint and updates thumbnail_url/kick_stream_id/title when it finds a better match.
+        try {
+            const now = Date.now()
+            const refreshWindowMs = 7 * 24 * 60 * 60 * 1000 // last 7 days only
+            const refreshIntervalMs = 2 * 60 * 60 * 1000 // refresh at most every 2 hours
+
+            const needsRefresh = (s: any) => {
+                if (!s?.ended_at) return false
+                const endedAt = s.ended_at instanceof Date ? s.ended_at : new Date(s.ended_at)
+                if (isNaN(endedAt.getTime())) return false
+                if (now - endedAt.getTime() > refreshWindowMs) return false
+
+                const last = s.thumbnail_last_refreshed_at instanceof Date
+                    ? s.thumbnail_last_refreshed_at
+                    : (s.thumbnail_last_refreshed_at ? new Date(s.thumbnail_last_refreshed_at) : null)
+
+                if (!last || isNaN(last.getTime())) return true
+                return now - last.getTime() > refreshIntervalMs
+            }
+
+            const sessionsToRefresh = paginatedSessions.filter(needsRefresh)
+            if (sessionsToRefresh.length > 0) {
+                const bySlug = new Map<string, any[]>()
+                for (const s of sessionsToRefresh) {
+                    const slug = (s.channel_slug || '').toString().trim().toLowerCase()
+                    if (!slug) continue
+                    if (!bySlug.has(slug)) bySlug.set(slug, [])
+                    bySlug.get(slug)!.push(s)
+                }
+
+                for (const [slug, sessions] of bySlug.entries()) {
+                    const videos = await fetchKickV2ChannelVideos(slug)
+                    if (!videos || videos.length === 0) continue
+
+                    // Only consider videos with a valid start time
+                    const usable = videos.filter(v => v.startTime && !isNaN(v.startTime.getTime()))
+                    if (usable.length === 0) continue
+
+                    for (const session of sessions) {
+                        const startedAt = session.started_at instanceof Date ? session.started_at : new Date(session.started_at)
+                        if (isNaN(startedAt.getTime())) continue
+
+                        // Find closest video by start time within 45 minutes (Kick timestamps can drift a bit)
+                        const maxDiffMs = 45 * 60 * 1000
+                        let best: (typeof usable)[number] | null = null
+                        let bestDiff = Infinity
+                        for (const v of usable) {
+                            const diff = Math.abs(v.startTime!.getTime() - startedAt.getTime())
+                            if (diff < bestDiff) {
+                                bestDiff = diff
+                                best = v
+                            }
+                        }
+                        if (!best || bestDiff > maxDiffMs) continue
+
+                        const updateData: Prisma.StreamSessionUpdateInput = {
+                            thumbnail_last_refreshed_at: new Date(),
+                            thumbnail_source: 'kick_vod_auto',
+                        }
+                        let changed = false
+
+                        if (best.thumbnailUrl && best.thumbnailUrl !== session.thumbnail_url) {
+                            updateData.thumbnail_url = best.thumbnailUrl
+                            updateData.thumbnail_captured_at = session.thumbnail_captured_at || new Date()
+                            changed = true
+                        }
+
+                        if (best.vodId && best.vodId !== session.kick_stream_id) {
+                            updateData.kick_stream_id = best.vodId
+                            changed = true
+                        }
+
+                        if (best.title) {
+                            const currentTitle = (session.session_title || '').trim()
+                            if (!currentTitle || currentTitle === 'Untitled Stream') {
+                                updateData.session_title = best.title
+                                changed = true
+                            }
+                        }
+
+                        if (changed) {
+                            const updated = await db.streamSession.update({
+                                where: { id: session.id },
+                                data: updateData,
+                            })
+                            // Keep response in sync without a re-query
+                            session.thumbnail_url = updated.thumbnail_url
+                            session.kick_stream_id = updated.kick_stream_id
+                            session.session_title = updated.session_title
+                            session.thumbnail_last_refreshed_at = updated.thumbnail_last_refreshed_at
+                            session.thumbnail_source = updated.thumbnail_source
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // Non-fatal: Past Streams should still render even if Kick blocks /videos temporarily.
+        }
 
         // Calculate duration for completed streams with null safety
         const sessionsWithDuration = paginatedSessions.map(session => {
