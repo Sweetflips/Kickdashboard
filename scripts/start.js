@@ -124,14 +124,24 @@ function startWebServer() {
     }
 
     nextProcess.on('exit', (code) => {
+      // IMPORTANT:
+      // - When a child is terminated by signal (SIGTERM/SIGINT), Node reports `code === null`.
+      // - Our Railway config uses restartPolicyType=ON_FAILURE, so exiting 0 can leave the service at 0 instances.
+      //   Use a non-zero exit code in that case so Railway restarts the container.
       if (code === null) {
-        process.stdout.write('ℹ️  Next.js exited gracefully (code: null - likely SIGTERM/SIGINT)\n');
-      } else if (code === 0) {
+        process.stdout.write('ℹ️  Next.js stopped by signal (code: null - likely SIGTERM/SIGINT)\n');
+        // 128 + SIGTERM(15) = 143 (common convention)
+        process.exit(143);
+        return;
+      }
+
+      if (code === 0) {
         process.stdout.write('✅ Next.js exited successfully (code: 0)\n');
       } else {
         process.stdout.write('⚠️  Next.js exited with code: ' + code + '\n');
       }
-      process.exit(code || 0);
+
+      process.exit(code);
     });
 
     nextProcess.on('error', (err) => {
