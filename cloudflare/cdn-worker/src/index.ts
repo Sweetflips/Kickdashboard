@@ -53,6 +53,19 @@ export default {
         return new Response('Not Found', { status: 404 })
       }
 
+      // Handle CORS preflight early (before expensive operations)
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range',
+            'Access-Control-Max-Age': '86400',
+          },
+        })
+      }
+
       if (!env.MEDIA_BUCKET || typeof env.MEDIA_BUCKET.get !== 'function') {
         return new Response('Worker misconfigured: MEDIA_BUCKET binding missing', { status: 500 })
       }
@@ -117,19 +130,6 @@ export default {
       if (!obj) {
         console.warn('[R2 Object Not Found]', { key })
         return new Response('Not Found', { status: 404 })
-      }
-
-      // Handle CORS preflight
-      if (request.method === 'OPTIONS') {
-        return new Response(null, {
-          status: 204,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-            'Access-Control-Allow-Headers': 'Range',
-            'Access-Control-Max-Age': '86400',
-          },
-        })
       }
 
       const headers = new Headers()
