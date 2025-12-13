@@ -196,6 +196,10 @@ export async function GET(request: Request) {
           email: u.email,
           profile_picture_url: rewriteApiMediaUrlToCdn(u.custom_profile_picture_url || u.profile_picture_url),
           is_admin: u.is_admin,
+          // Keep both names for backwards/forwards compatibility:
+          // - admin UI expects `total_points`
+          // - other parts may use `total_sweet_coins`
+          total_points: u.sweet_coins?.total_sweet_coins || 0,
           total_sweet_coins: u.sweet_coins?.total_sweet_coins || 0,
           total_emotes: u.sweet_coins?.total_emotes || 0,
           created_at: u.created_at.toISOString(),

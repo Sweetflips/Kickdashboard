@@ -550,6 +550,7 @@ export default function Dashboard() {
                                     broadcasterUserId={channelData?.broadcaster_user_id}
                                     slug={channelData?.slug}
                                     username={channelName}
+                                    isStreamLive={isLive}
                                 />
                             </div>
                         </div>

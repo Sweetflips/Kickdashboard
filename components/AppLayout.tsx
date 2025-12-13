@@ -571,6 +571,18 @@ export default function AppLayout({ children }: LayoutProps) {
                                     </Link>
                                 </li>
                                 <li>
+                                    <Link href="/admin/tasks" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/tasks' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                            setSidebarOpen(false)
+                                        }
+                                    }}>
+                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M6 2a1 1 0 000 2h8a1 1 0 100-2H6zM4 6a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm5 4a1 1 0 000 2h.01a1 1 0 100-2H9zm3 0a1 1 0 000 2h2a1 1 0 100-2h-2zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H9zm3 0a1 1 0 100 2h2a1 1 0 100-2h-2z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="ml-3 text-body font-medium">Task Manager</span>
+                                    </Link>
+                                </li>
+                                <li>
                                     <Link href="/admin/payouts" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/payouts' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                         if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                             setSidebarOpen(false)

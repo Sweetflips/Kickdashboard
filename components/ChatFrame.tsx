@@ -58,6 +58,8 @@ interface ChatFrameProps {
     broadcasterUserId?: number
     slug?: string
     username?: string
+    // Optional: real stream live status (from /api/channel). If omitted, keep legacy behavior.
+    isStreamLive?: boolean
 }
 
 // Helper function to check if a user should be verified
@@ -426,7 +428,7 @@ function renderEmote(emoteId: string, emoteText: string, emoteMap?: Map<string, 
     )
 }
 
-export default function ChatFrame({ chatroomId, broadcasterUserId, slug, username }: ChatFrameProps) {
+export default function ChatFrame({ chatroomId, broadcasterUserId, slug, username, isStreamLive }: ChatFrameProps) {
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
     const [chatLoading, setChatLoading] = useState(false)
     const [chatInput, setChatInput] = useState('')
@@ -453,6 +455,9 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
     const [currentUserId, setCurrentUserId] = useState<number | undefined>(undefined)
     const [userData, setUserData] = useState<{ id?: number; username?: string; email?: string; profile_picture?: string; [key: string]: any } | null>(null)
     const processedMessageIdsRef = useRef<Set<string>>(new Set())
+
+    const streamLive = isStreamLive ?? true
+    const canChat = !!accessToken && streamLive
 
     // Load recent emotes from localStorage
     useEffect(() => {
@@ -1287,6 +1292,10 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
         const messageContent = input ? extractTextFromContentEditable(input).trim() : chatInput.trim()
 
         if (!messageContent || isSending) return
+        if (!streamLive) {
+            toastManager.show('Stream is offline — chat is read-only right now.', 'info', 3500)
+            return
+        }
 
         // Get access token from cookies/localStorage (preferred method)
         const currentToken = getAccessToken()
@@ -1452,12 +1461,43 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             {/* Chat Header */}
             <div className="flex h-11 flex-row items-center justify-between border-b border-gray-200 dark:border-kick-border px-3.5 bg-white dark:bg-kick-surface">
                 <span className="text-body font-semibold text-gray-900 dark:text-kick-text">Chat</span>
-                {pusherConnected && (
-                    <div className="flex items-center gap-1.5 bg-kick-green/20 px-2 py-1 rounded-md border border-kick-green/50">
-                        <div className="w-2 h-2 bg-kick-green rounded-full"></div>
-                        <span className="text-kick-green text-xs font-medium">Live</span>
-                    </div>
-                )}
+                <div
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md border ${
+                        !streamLive
+                            ? 'bg-gray-100 dark:bg-kick-surface-hover border-gray-300 dark:border-kick-border'
+                            : pusherConnected
+                                ? 'bg-kick-green/20 border-kick-green/50'
+                                : 'bg-blue-100/60 dark:bg-blue-900/20 border-blue-300/50 dark:border-blue-800/50'
+                    }`}
+                    title={
+                        !streamLive
+                            ? 'Stream is offline'
+                            : pusherConnected
+                                ? 'Connected to live chat'
+                                : 'Connecting to live chat…'
+                    }
+                >
+                    <div
+                        className={`w-2 h-2 rounded-full ${
+                            !streamLive
+                                ? 'bg-gray-400'
+                                : pusherConnected
+                                    ? 'bg-kick-green animate-pulse'
+                                    : 'bg-blue-500 animate-pulse'
+                        }`}
+                    ></div>
+                    <span
+                        className={`text-xs font-medium ${
+                            !streamLive
+                                ? 'text-gray-700 dark:text-kick-text-secondary'
+                                : pusherConnected
+                                    ? 'text-kick-green'
+                                    : 'text-blue-700 dark:text-blue-300'
+                        }`}
+                    >
+                        {!streamLive ? 'Offline' : pusherConnected ? 'Live' : 'Connecting'}
+                    </span>
+                </div>
             </div>
 
             {/* Messages Area */}
@@ -2032,9 +2072,15 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                 <div
                                     ref={inputRef as any}
                                     id="message-input"
-                                    contentEditable={accessToken ? true : false}
+                                    contentEditable={canChat}
                                     suppressContentEditableWarning
-                                    data-placeholder={accessToken ? "Send message..." : "Login to send messages"}
+                                    data-placeholder={
+                                        !accessToken
+                                            ? 'Login to send messages'
+                                            : !streamLive
+                                                ? 'Stream is offline (read-only)'
+                                                : 'Send message...'
+                                    }
                                     spellCheck={false}
                                     onInput={(e) => {
                                         // Extract text including emote codes from contenteditable
@@ -2093,6 +2139,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                     setEmotePickerOpen(!emotePickerOpen)
                                     setSettingsOpen(false)
                                 }}
+                                disabled={!canChat}
                                 className={`hover:bg-gray-100 dark:hover:bg-kick-surface-hover hover:focus:bg-gray-100 dark:hover:focus:bg-kick-surface-hover disabled:text-gray-500 dark:disabled:text-kick-text-secondary disabled:bg-gray-50 dark:disabled:bg-kick-surface relative box-border inline-flex h-8 w-8 items-center justify-center rounded bg-transparent fill-gray-900 dark:fill-kick-text p-2 font-semibold text-gray-900 dark:text-kick-text transition-colors focus:bg-transparent disabled:pointer-events-none ${
                                     emotePickerOpen
                                         ? 'bg-kick-purple'
@@ -2137,7 +2184,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                         <button
                             id="send-message-button"
                             onClick={handleSendMessage}
-                            disabled={!chatInput.trim() || isSending || !accessToken}
+                            disabled={!chatInput.trim() || isSending || !canChat}
                             className="group inline-flex gap-1.5 items-center justify-center rounded font-semibold box-border relative transition-all disabled:pointer-events-none select-none whitespace-nowrap [&_svg]:size-[1em] outline-transparent outline-2 outline-offset-2 bg-kick-green focus-visible:outline-kick-green text-[#081902] [&_svg]:fill-current hover:bg-kick-green-dark focus-visible:bg-kick-green disabled:bg-kick-green-dark disabled:opacity-50 px-3 py-1.5 text-sm"
                             style={{
                                 WebkitTextSizeAdjust: '100%',
@@ -2182,7 +2229,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                 transitionDuration: '0.15s'
                             }}
                         >
-                            {isSending ? 'Sending...' : 'Chat'}
+                            {isSending ? 'Sending...' : streamLive ? 'Chat' : 'Offline'}
                         </button>
                         {!accessToken && (
                             <a
