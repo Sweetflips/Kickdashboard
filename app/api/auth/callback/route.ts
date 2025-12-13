@@ -413,8 +413,8 @@ export async function GET(request: Request) {
         // Clear PKCE and referral code cookies and set auth tokens in cookies with 3-month expiration
         // Note: Tokens are no longer passed in URL query params for security - only in cookies
         const response = NextResponse.redirect(`${baseUrl}/?auth_success=true`)
-        response.cookies.delete('pkce_code_verifier', { path: '/', domain: isLocalhost ? undefined : COOKIE_DOMAIN })
-        response.cookies.delete('referral_code', { path: '/', domain: isLocalhost ? undefined : COOKIE_DOMAIN })
+        response.cookies.delete('pkce_code_verifier')
+        response.cookies.delete('referral_code')
 
         // Set authentication tokens in cookies with 3-month expiration (90 days)
         const threeMonthsInSeconds = 90 * 24 * 60 * 60 // 7,776,000 seconds
