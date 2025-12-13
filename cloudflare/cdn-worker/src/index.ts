@@ -58,7 +58,12 @@ export default {
       }
       if (!env.SIGNING_SECRET) {
         const keys = Object.keys(env || {}).sort().join(', ')
-        return new Response(`Worker misconfigured: SIGNING_SECRET missing (env keys: ${keys || 'none'})`, { status: 500 })
+        const t = typeof (env as any).SIGNING_SECRET
+        const len = ((env as any).SIGNING_SECRET ? String((env as any).SIGNING_SECRET).length : 0)
+        return new Response(
+          `Worker misconfigured: SIGNING_SECRET missing (type=${t}, len=${len}, env keys: ${keys || 'none'})`,
+          { status: 500 }
+        )
       }
 
       const key = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
