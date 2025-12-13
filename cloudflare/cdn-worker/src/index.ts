@@ -10,6 +10,28 @@ type ExecutionContextLike = {
   waitUntil(promise: Promise<any>): void
 }
 
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+  'Access-Control-Allow-Headers': 'Range',
+  'Access-Control-Expose-Headers': 'Content-Length, Content-Type, ETag, Accept-Ranges, Content-Range',
+  'Access-Control-Max-Age': '86400',
+  // Debug marker to confirm traffic is hitting the Worker (safe to keep in prod)
+  'X-KD-CDN': 'worker',
+}
+
+function withCors(resp: Response): Response {
+  const headers = new Headers(resp.headers)
+  for (const [k, v] of Object.entries(CORS_HEADERS)) {
+    if (!headers.has(k)) headers.set(k, v)
+  }
+  return new Response(resp.body, {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers,
+  })
+}
+
 function base64UrlFromBytes(bytes: ArrayBuffer): string {
   const bin = String.fromCharCode(...new Uint8Array(bytes))
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
@@ -50,61 +72,63 @@ export default {
 
       // Only serve through the expected host (helps avoid origin confusion)
       if (env.PUBLIC_HOST && url.host !== env.PUBLIC_HOST) {
-        return new Response('Not Found', { status: 404 })
+        return withCors(new Response('Not Found', { status: 404 }))
       }
 
       // Handle CORS preflight early (before expensive operations)
       if (request.method === 'OPTIONS') {
-        return new Response(null, {
+        return withCors(
+          new Response(null, {
           status: 204,
           headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-            'Access-Control-Allow-Headers': 'Range',
-            'Access-Control-Max-Age': '86400',
+            // Keep explicit here to be friendly to edge caches / tooling
+            ...CORS_HEADERS,
           },
-        })
+          })
+        )
       }
 
       if (!env.MEDIA_BUCKET || typeof env.MEDIA_BUCKET.get !== 'function') {
-        return new Response('Worker misconfigured: MEDIA_BUCKET binding missing', { status: 500 })
+        return withCors(new Response('Worker misconfigured: MEDIA_BUCKET binding missing', { status: 500 }))
       }
       if (!env.SIGNING_SECRET) {
         const keys = Object.keys(env || {}).sort().join(', ')
         const t = typeof (env as any).SIGNING_SECRET
         const len = ((env as any).SIGNING_SECRET ? String((env as any).SIGNING_SECRET).length : 0)
-        return new Response(
-          `Worker misconfigured: SIGNING_SECRET missing (type=${t}, len=${len}, env keys: ${keys || 'none'})`,
-          { status: 500 }
+        return withCors(
+          new Response(
+            `Worker misconfigured: SIGNING_SECRET missing (type=${t}, len=${len}, env keys: ${keys || 'none'})`,
+            { status: 500 }
+          )
         )
       }
 
       const key = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
       if (!isProbablySafeKey(key)) {
-        return new Response('Bad Request', { status: 400 })
+        return withCors(new Response('Bad Request', { status: 400 }))
       }
 
       const exp = url.searchParams.get('exp')
       const sig = url.searchParams.get('sig')
 
       if (!exp || !sig) {
-        return new Response('Forbidden', { status: 403 })
+        return withCors(new Response('Forbidden', { status: 403 }))
       }
 
       const expNum = Number(exp)
       if (!Number.isFinite(expNum)) {
-        return new Response('Forbidden', { status: 403 })
+        return withCors(new Response('Forbidden', { status: 403 }))
       }
 
       const now = Math.floor(Date.now() / 1000)
       if (expNum < now) {
-        return new Response('Forbidden', { status: 403 })
+        return withCors(new Response('Forbidden', { status: 403 }))
       }
 
       const canonical = `${key}|${expNum}`
       const expected = await hmacSha256Base64Url(env.SIGNING_SECRET, canonical)
       if (!timingSafeEqual(expected, sig)) {
-        return new Response('Forbidden', { status: 403 })
+        return withCors(new Response('Forbidden', { status: 403 }))
       }
 
       // Cache key includes signature so shared cache is safe.
@@ -114,15 +138,8 @@ export default {
       if (cache) {
         const cached = await cache.match(cacheKey)
         if (cached) {
-          // Ensure cached response has CORS headers (in case it was cached before CORS fix)
-          const cachedHeaders = new Headers(cached.headers)
-          if (!cachedHeaders.get('Access-Control-Allow-Origin')) {
-            cachedHeaders.set('Access-Control-Allow-Origin', '*')
-            cachedHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
-            cachedHeaders.set('Access-Control-Expose-Headers', 'Content-Length, Content-Type, ETag')
-            return new Response(cached.body, { headers: cachedHeaders, status: cached.status })
-          }
-          return cached
+          // Always normalize cached responses to include CORS + debug headers
+          return withCors(cached)
         }
       }
 
@@ -135,12 +152,12 @@ export default {
           error: r2Error?.message,
           stack: r2Error?.stack,
         })
-        return new Response(`R2 fetch failed: ${r2Error?.message || 'Unknown error'}`, { status: 500 })
+        return withCors(new Response(`R2 fetch failed: ${r2Error?.message || 'Unknown error'}`, { status: 500 }))
       }
 
       if (!obj) {
         console.warn('[R2 Object Not Found]', { key })
-        return new Response('Not Found', { status: 404 })
+        return withCors(new Response('Not Found', { status: 404 }))
       }
 
       const headers = new Headers()
@@ -150,7 +167,10 @@ export default {
       // Always add CORS headers for cross-origin requests (browser always sends origin header)
       headers.set('Access-Control-Allow-Origin', '*')
       headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
-      headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Type, ETag')
+      headers.set('Access-Control-Allow-Headers', 'Range')
+      headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Type, ETag, Accept-Ranges, Content-Range')
+      headers.set('Access-Control-Max-Age', '86400')
+      headers.set('X-KD-CDN', 'worker')
 
       // Let Cloudflare cache; versioned keys can be long-lived.
       const isVersioned = /\/\d+_[a-zA-Z0-9]+\./.test(key)
@@ -172,7 +192,7 @@ export default {
 
       // Avoid leaking secrets; return minimal debug info.
       const msg = err?.message ? String(err.message) : 'Unknown error'
-      return new Response(`Worker error: ${msg}`, { status: 500 })
+      return withCors(new Response(`Worker error: ${msg}`, { status: 500 }))
     }
   },
 }
