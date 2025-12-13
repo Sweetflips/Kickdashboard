@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
+import { hydrateLocalStorageFromCookies } from '@/lib/auth-client'
 
 // Note: Since this is a client component, metadata must be set via head tags
 // The page title will be handled by the parent layout
@@ -44,6 +45,15 @@ function LoginContent() {
                     } else {
                         console.error('❌ [LOGIN] Empty token received')
                         setError('Invalid token received. Please try logging in again.')
+                    }
+                } else {
+                    // New flow: tokens are set in cookies by `/api/auth/callback` (no URL tokens).
+                    // Hydrate localStorage for backward compatibility, then redirect.
+                    hydrateLocalStorageFromCookies()
+                    const hydrated = localStorage.getItem('kick_access_token')
+                    if (hydrated && hydrated.trim().length > 0) {
+                        router.push('/')
+                        return
                     }
                 }
             }

@@ -214,7 +214,14 @@ export async function POST(request: Request) {
             expires_in: tokenData.expires_in,
         })
     } catch (error) {
-        console.error('Error refreshing token:', error)
+        // Filter out ECONNRESET errors (client disconnects) - not real errors
+        const isConnectionReset = error instanceof Error &&
+            (('code' in error && (error as any).code === 'ECONNRESET') || error.message.includes('aborted'))
+
+        if (!isConnectionReset) {
+            console.error('Error refreshing token:', error)
+        }
+
         return NextResponse.json(
             { error: 'Failed to refresh token', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }

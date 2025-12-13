@@ -5,6 +5,7 @@ import SweetCoinsBar from '@/components/SweetCoinsBar'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { getClientAccessToken } from '@/lib/auth-client'
 
 interface AdventItem {
   id: string
@@ -56,7 +57,7 @@ export default function ShopPage() {
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('kick_access_token')
+      const token = getClientAccessToken()
       if (!token) {
         setIsConnected(false)
         setLoading(false)
@@ -79,7 +80,7 @@ export default function ShopPage() {
 
   const fetchUserBalance = async () => {
     try {
-      const token = localStorage.getItem('kick_access_token')
+      const token = getClientAccessToken()
       if (!token) return
 
       const response = await fetch(`/api/user?access_token=${encodeURIComponent(token)}`)

@@ -94,7 +94,8 @@ export default function Dashboard() {
     useEffect(() => {
         const checkAdminStatus = async () => {
             try {
-                const token = localStorage.getItem('kick_access_token')
+                const { getAccessToken } = await import('@/lib/cookies')
+                const token = getAccessToken()
                 if (!token) {
                     setIsAdmin(false)
                     setAdminCheckLoading(false)

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { getClientAccessToken } from '@/lib/auth-client'
 
 interface PromoCodeModalProps {
     isOpen: boolean
@@ -21,7 +22,7 @@ export default function PromoCodeModal({ isOpen, onClose, onSuccess }: PromoCode
         setLoading(true)
 
         try {
-            const token = localStorage.getItem('kick_access_token')
+            const token = getClientAccessToken()
             const response = await fetch('/api/promo-codes/redeem', {
                 method: 'POST',
                 headers: {
@@ -49,7 +50,7 @@ export default function PromoCodeModal({ isOpen, onClose, onSuccess }: PromoCode
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div 
+            <div
                 className="bg-white dark:bg-kick-surface rounded-xl max-w-md w-full p-6 shadow-xl"
                 onClick={(e) => e.stopPropagation()}
             >

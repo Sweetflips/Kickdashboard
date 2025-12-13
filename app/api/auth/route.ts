@@ -13,8 +13,8 @@ const APP_HOST = (() => {
     }
 })()
 // Strip www. prefix and port to get root domain for cookies (works for both www and apex)
-const COOKIE_DOMAIN = APP_HOST.includes('localhost') 
-    ? undefined 
+const COOKIE_DOMAIN = APP_HOST.includes('localhost')
+    ? undefined
     : `.${APP_HOST.replace(/:\d+$/, '').replace(/^www\./, '')}`
 
 // Get credentials at runtime to avoid startup crashes

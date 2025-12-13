@@ -11,7 +11,8 @@
     "start:all-workers": "node scripts/start-worker.js",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "diagnose:cloudflare": "node scripts/diagnose-cloudflare-502.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.948.0",

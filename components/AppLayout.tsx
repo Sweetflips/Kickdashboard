@@ -1,6 +1,7 @@
 'use client'
 
 import { getAccessToken, getRefreshToken, setAuthTokens } from '@/lib/cookies'
+import { getClientAccessToken } from '@/lib/auth-client'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -258,7 +259,7 @@ export default function AppLayout({ children }: LayoutProps) {
 
     const fetchUserData = async () => {
         try {
-            const token = localStorage.getItem('kick_access_token')
+            const token = getClientAccessToken()
             if (!token) {
                 return
             }

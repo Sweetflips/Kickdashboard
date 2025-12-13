@@ -119,9 +119,30 @@ export default {
         return new Response('Not Found', { status: 404 })
       }
 
+      // Handle CORS preflight
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range',
+            'Access-Control-Max-Age': '86400',
+          },
+        })
+      }
+
       const headers = new Headers()
       if (typeof obj.writeHttpMetadata === 'function') obj.writeHttpMetadata(headers)
       if (obj.httpEtag) headers.set('etag', obj.httpEtag)
+
+      // Add CORS headers for cross-origin requests
+      const origin = request.headers.get('origin')
+      if (origin) {
+        headers.set('Access-Control-Allow-Origin', '*')
+        headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+        headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Type, ETag')
+      }
 
       // Let Cloudflare cache; versioned keys can be long-lived.
       const isVersioned = /\/\d+_[a-zA-Z0-9]+\./.test(key)

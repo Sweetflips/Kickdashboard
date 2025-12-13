@@ -2,6 +2,7 @@
 
 import { useToast } from '@/components/Toast'
 import { ACHIEVEMENTS } from '@/lib/achievements'
+import { getClientAccessToken } from '@/lib/auth-client'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -39,7 +40,7 @@ export default function AchievementsPage() {
 
     const checkAuth = async () => {
         try {
-            const token = localStorage.getItem('kick_access_token')
+            const token = getClientAccessToken()
             if (!token) {
                 setIsConnected(false)
                 setLoading(false)
@@ -62,7 +63,7 @@ export default function AchievementsPage() {
 
     const fetchUserBalance = async () => {
         try {
-            const token = localStorage.getItem('kick_access_token')
+            const token = getClientAccessToken()
             if (!token) return
 
             const response = await fetch(`/api/user?access_token=${encodeURIComponent(token)}`)
@@ -83,7 +84,7 @@ export default function AchievementsPage() {
 
     const fetchAchievements = async () => {
         try {
-            const token = localStorage.getItem('kick_access_token')
+            const token = getClientAccessToken()
             if (!token) return
 
             const response = await fetch(`/api/achievements?access_token=${encodeURIComponent(token)}`)
@@ -106,7 +107,7 @@ export default function AchievementsPage() {
 
     const claimAchievement = async (achievementId: string) => {
         try {
-            const token = localStorage.getItem('kick_access_token')
+            const token = getClientAccessToken()
             if (!token) {
                 showToast('Not authenticated', 'error')
                 return

@@ -124,7 +124,13 @@ function startWebServer() {
     }
 
     nextProcess.on('exit', (code) => {
-      process.stdout.write('⚠️ Next.js exited with code: ' + code + '\n');
+      if (code === null) {
+        process.stdout.write('ℹ️  Next.js exited gracefully (code: null - likely SIGTERM/SIGINT)\n');
+      } else if (code === 0) {
+        process.stdout.write('✅ Next.js exited successfully (code: 0)\n');
+      } else {
+        process.stdout.write('⚠️  Next.js exited with code: ' + code + '\n');
+      }
       process.exit(code || 0);
     });
 
