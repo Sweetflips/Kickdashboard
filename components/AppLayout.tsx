@@ -76,6 +76,22 @@ export default function AppLayout({ children }: LayoutProps) {
 
             // Handle auth callback - tokens are now only in cookies, not URL
             if (params.get('auth_success') === 'true') {
+                // Fallback: tokens may be provided in the URL fragment (#...) if cookies were refused/dropped.
+                // Fragments are not sent to the server; we should consume and then remove them immediately.
+                try {
+                    const hash = window.location.hash || ''
+                    if (hash.startsWith('#')) {
+                        const hashParams = new URLSearchParams(hash.slice(1))
+                        const accessFromHash = hashParams.get('access_token')
+                        const refreshFromHash = hashParams.get('refresh_token')
+                        if (accessFromHash && accessFromHash.trim().length > 0) {
+                            setAuthTokens(accessFromHash, refreshFromHash || undefined)
+                        }
+                    }
+                } catch {
+                    // ignore
+                }
+
                 // Tokens are already set in cookies by the callback route
                 // Retry reading cookies a few times as they may not be immediately available after redirect
                 let retries = 0
@@ -85,7 +101,8 @@ export default function AppLayout({ children }: LayoutProps) {
                     if (tokenFromCookie && tokenFromCookie.trim().length > 0) {
                         setIsAuthenticated(true)
                         // Clean URL (remove auth_success param)
-                        const newUrl = window.location.pathname + (window.location.search.replace(/[?&]auth_success=[^&]*/, '') || '')
+                        const newSearch = (window.location.search.replace(/[?&]auth_success=[^&]*/, '') || '').replace(/^&/, '?')
+                        const newUrl = window.location.pathname + newSearch
                         window.history.replaceState({}, '', newUrl)
                     } else if (retries < maxRetries) {
                         retries++

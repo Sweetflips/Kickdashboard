@@ -29,8 +29,21 @@ function LoginContent() {
 
             // Handle auth callback
             if (params.get('auth_success') === 'true') {
-                const accessToken = params.get('access_token')
-                const refreshToken = params.get('refresh_token')
+                // Tokens may arrive via query params (legacy) or URL fragment (preferred fallback).
+                let accessToken = params.get('access_token')
+                let refreshToken = params.get('refresh_token')
+                if ((!accessToken || !accessToken.trim()) && typeof window !== 'undefined') {
+                    try {
+                        const hash = window.location.hash || ''
+                        if (hash.startsWith('#')) {
+                            const hashParams = new URLSearchParams(hash.slice(1))
+                            accessToken = accessToken || hashParams.get('access_token')
+                            refreshToken = refreshToken || hashParams.get('refresh_token')
+                        }
+                    } catch {
+                        // ignore
+                    }
+                }
 
                 if (accessToken) {
                     // Validate token is not empty (Kick uses opaque tokens, not JWTs)
@@ -39,7 +52,12 @@ function LoginContent() {
                         if (refreshToken) {
                             localStorage.setItem('kick_refresh_token', refreshToken)
                         }
-                        // Clean URL and redirect
+                        // Clean URL (remove auth_success + tokens, clear fragment) and redirect
+                        try {
+                            window.history.replaceState({}, '', '/login')
+                        } catch {
+                            // ignore
+                        }
                         router.push('/')
                         return
                     } else {
@@ -52,6 +70,11 @@ function LoginContent() {
                     hydrateLocalStorageFromCookies()
                     const hydrated = localStorage.getItem('kick_access_token')
                     if (hydrated && hydrated.trim().length > 0) {
+                        try {
+                            window.history.replaceState({}, '', '/login')
+                        } catch {
+                            // ignore
+                        }
                         router.push('/')
                         return
                     }

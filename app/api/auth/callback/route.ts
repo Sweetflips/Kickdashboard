@@ -413,9 +413,21 @@ export async function GET(request: Request) {
             // Continue with redirect even if user save fails
         }
 
-        // Clear PKCE and referral code cookies and set auth tokens in cookies with 3-month expiration
-        // Note: Tokens are no longer passed in URL query params for security - only in cookies
-        const response = NextResponse.redirect(`${baseUrl}/?auth_success=true`)
+        // Clear PKCE and referral code cookies and set auth tokens in cookies with 3-month expiration.
+        //
+        // IMPORTANT: Some browsers/environments can refuse large cookies or drop Set-Cookie unexpectedly.
+        // To make auth resilient, also include tokens in the URL *fragment* as a fallback.
+        // Fragments are not sent to the server and can be cleaned immediately client-side.
+        const fragmentParts: string[] = []
+        if (tokenData?.access_token) {
+            fragmentParts.push(`access_token=${encodeURIComponent(String(tokenData.access_token))}`)
+        }
+        if (tokenData?.refresh_token) {
+            fragmentParts.push(`refresh_token=${encodeURIComponent(String(tokenData.refresh_token))}`)
+        }
+        const fragment = fragmentParts.length ? `#${fragmentParts.join('&')}` : ''
+
+        const response = NextResponse.redirect(`${baseUrl}/?auth_success=true${fragment}`)
         response.cookies.delete('pkce_code_verifier')
         response.cookies.delete('referral_code')
 
