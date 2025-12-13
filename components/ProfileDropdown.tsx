@@ -122,7 +122,7 @@ function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-kick-surface-hover transition-colors"
+                className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-kick-surface-hover transition-colors flex-shrink-0"
             >
                 {profilePicture ? (
                     <>
@@ -131,7 +131,7 @@ function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
                             alt={username}
                             width={40}
                             height={40}
-                            className={`w-10 h-10 rounded-full object-cover ${imageError ? 'hidden' : ''}`}
+                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover flex-shrink-0 ${imageError ? 'hidden' : ''}`}
                             onError={(e) => {
                                 console.error('❌ Image failed to load')
                                 console.error('❌ Image src:', profilePicture)
@@ -144,26 +144,26 @@ function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
                             crossOrigin="anonymous"
                         />
                         {imageError && (
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
-                                <span className="text-white text-sm font-semibold">{initials}</span>
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0">
+                                <span className="text-white text-xs sm:text-sm font-semibold">{initials}</span>
                             </div>
                         )}
                     </>
                 ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
-                        <span className="text-white text-sm font-semibold">{initials}</span>
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0">
+                        <span className="text-white text-xs sm:text-sm font-semibold">{initials}</span>
                     </div>
                 )}
-                <div className="flex flex-col items-start">
-                    <span className="text-sm font-medium text-gray-900 dark:text-kick-text">
+                <div className="hidden sm:flex flex-col items-start min-w-0 max-w-[140px] md:max-w-[180px]">
+                    <span className="text-sm font-medium text-gray-900 dark:text-kick-text truncate w-full">
                         {username}
                     </span>
-                    <span className="text-xs text-gray-600 dark:text-kick-text-secondary">
+                    <span className="text-xs text-gray-600 dark:text-kick-text-secondary truncate w-full">
                         {user?.email || 'Kick User'}
                     </span>
                 </div>
                 <svg
-                    className={`w-4 h-4 text-gray-600 dark:text-kick-text-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                    className={`w-4 h-4 text-gray-600 dark:text-kick-text-secondary transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"

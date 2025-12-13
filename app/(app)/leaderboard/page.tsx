@@ -442,17 +442,122 @@ export default function LeaderboardPage() {
                         </div>
                     ) : (
                         <>
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
+                            {/* Mobile Card Layout */}
+                            <div className="block md:hidden space-y-3">
+                                {leaderboard.map((entry) => (
+                                    <div
+                                        key={entry.user_id}
+                                        className="bg-gray-50 dark:bg-kick-surface-hover rounded-lg p-4 border border-gray-200 dark:border-kick-border"
+                                    >
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <span className="text-lg font-semibold text-gray-900 dark:text-kick-text flex-shrink-0">
+                                                    {getRankIcon(entry.rank)}
+                                                </span>
+                                                {entry.profile_picture_url && !imageErrors.has(entry.user_id) ? (
+                                                    <img
+                                                        src={entry.profile_picture_url}
+                                                        alt={entry.username}
+                                                        width={40}
+                                                        height={40}
+                                                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                                                        onError={() => {
+                                                            setImageErrors(prev => new Set(prev).add(entry.user_id))
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center flex-shrink-0">
+                                                        <span className="text-gray-600 dark:text-kick-text-secondary text-small font-medium">
+                                                            {entry.username.charAt(0).toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <span className="font-medium text-body text-gray-900 dark:text-kick-text truncate">
+                                                        {entry.username}
+                                                    </span>
+                                                    {entry.verification_methods && (
+                                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                                            {entry.verification_methods.kick && (
+                                                                <img
+                                                                    src="/logos/kick-icon.svg"
+                                                                    alt="Kick verified"
+                                                                    width={16}
+                                                                    height={16}
+                                                                    className="object-contain w-4 h-4"
+                                                                    style={{ width: '16px', height: '16px' }}
+                                                                    title="Verified via Kick login"
+                                                                />
+                                                            )}
+                                                            {entry.verification_methods.discord && (
+                                                                <img
+                                                                    src="/icons/discord.png"
+                                                                    alt="Discord connected"
+                                                                    width="16"
+                                                                    height="16"
+                                                                    className="object-contain w-4 h-4"
+                                                                    title="Connected via Discord"
+                                                                    style={{ width: '21px', height: '21px' }}
+                                                                />
+                                                            )}
+                                                            {entry.verification_methods.telegram && (
+                                                                <img
+                                                                    src="/logos/telegram-logo.png"
+                                                                    alt="Telegram connected"
+                                                                    width="18"
+                                                                    height="18"
+                                                                    className="object-contain"
+                                                                    title="Connected via Telegram"
+                                                                    style={{ width: '32px', height: '32px' }}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            <div>
+                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Sweet Coins</span>
+                                                <span className="font-semibold text-kick-purple text-body">
+                                                    {(entry.total_points || 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Emotes</span>
+                                                <span className="font-semibold text-kick-green text-body">
+                                                    {(entry.total_emotes || 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Streams</span>
+                                                <span className="text-gray-900 dark:text-kick-text text-body">
+                                                    {(entry.streams_watched || 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Messages</span>
+                                                <span className="text-gray-900 dark:text-kick-text text-body">
+                                                    {(entry.total_messages || 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Desktop Table Layout */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full min-w-[640px]">
                                     <thead>
                                         <tr className="border-b border-gray-200 dark:border-kick-border">
-                                            <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Rank</th>
-                                            <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">User</th>
-                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Sweet Coins</th>
-                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Emotes</th>
-                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Streams Watched</th>
-                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Messages Sent</th>
-                                            <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary">Last Login</th>
+                                            <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Rank</th>
+                                            <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">User</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Sweet Coins</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Emotes</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Streams Watched</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Messages Sent</th>
+                                            <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Last Login</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -462,36 +567,36 @@ export default function LeaderboardPage() {
                                                 className="border-b border-gray-200 dark:border-kick-border hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors"
                                             >
                                                 <td className="py-4 px-4">
-                                                    <span className="text-body font-semibold text-gray-900 dark:text-kick-text">
+                                                    <span className="text-body font-semibold text-gray-900 dark:text-kick-text whitespace-nowrap">
                                                         {getRankIcon(entry.rank)}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-3 min-w-0">
                                                         {entry.profile_picture_url && !imageErrors.has(entry.user_id) ? (
                                                             <img
                                                                 src={entry.profile_picture_url}
                                                                 alt={entry.username}
                                                                 width={40}
                                                                 height={40}
-                                                                className="w-10 h-10 rounded-full object-cover"
+                                                                className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                                                                 onError={() => {
                                                                     setImageErrors(prev => new Set(prev).add(entry.user_id))
                                                                 }}
                                                             />
                                                         ) : (
-                                                            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
+                                                            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center flex-shrink-0">
                                                                 <span className="text-gray-600 dark:text-kick-text-secondary text-small font-medium">
                                                                     {entry.username.charAt(0).toUpperCase()}
                                                                 </span>
                                                             </div>
                                                         )}
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-medium text-body text-gray-900 dark:text-kick-text">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <span className="font-medium text-body text-gray-900 dark:text-kick-text truncate">
                                                                 {entry.username}
                                                             </span>
                                                             {entry.verification_methods && (
-                                                                <div className="flex items-center gap-1">
+                                                                <div className="flex items-center gap-1 flex-shrink-0">
                                                                     {entry.verification_methods.kick && (
                                                                         <img
                                                                             src="/logos/kick-icon.svg"
@@ -531,26 +636,26 @@ export default function LeaderboardPage() {
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
-                                                    <span className="font-semibold text-body text-kick-purple">
+                                                    <span className="font-semibold text-body text-kick-purple whitespace-nowrap">
                                                         {(entry.total_points || 0).toLocaleString()}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
-                                                    <span className="font-semibold text-body text-kick-green">
+                                                    <span className="font-semibold text-body text-kick-green whitespace-nowrap">
                                                         {(entry.total_emotes || 0).toLocaleString()}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
-                                                    <span className="text-body text-gray-900 dark:text-kick-text">
+                                                    <span className="text-body text-gray-900 dark:text-kick-text whitespace-nowrap">
                                                         {(entry.streams_watched || 0).toLocaleString()}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
-                                                    <span className="text-body text-gray-900 dark:text-kick-text">
+                                                    <span className="text-body text-gray-900 dark:text-kick-text whitespace-nowrap">
                                                         {(entry.total_messages || 0).toLocaleString()}
                                                     </span>
                                                 </td>
-                                                <td className="py-4 px-4 text-small text-gray-600 dark:text-kick-text-secondary">
+                                                <td className="py-4 px-4 text-small text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">
                                                     {entry.last_login_at
                                                         ? new Date(entry.last_login_at).toLocaleString()
                                                         : 'Never'}

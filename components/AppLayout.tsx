@@ -652,12 +652,12 @@ export default function AppLayout({ children }: LayoutProps) {
             {/* Main Content */}
             <div className="lg:ml-64 flex-1 flex flex-col">
                 {/* Top Navigation */}
-                <nav className="bg-white dark:bg-kick-surface border-b border-gray-200 dark:border-kick-border px-4 py-3 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                <nav className="bg-white dark:bg-kick-surface border-b border-gray-200 dark:border-kick-border px-3 sm:px-4 py-2 sm:py-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
                             <button
                                 onClick={() => setSidebarOpen(true)}
-                                className="lg:hidden text-gray-600 dark:text-kick-text-secondary hover:text-gray-900 dark:hover:text-kick-text"
+                                className="lg:hidden text-gray-600 dark:text-kick-text-secondary hover:text-gray-900 dark:hover:text-kick-text flex-shrink-0"
                             >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -668,19 +668,20 @@ export default function AppLayout({ children }: LayoutProps) {
                                 alt="SweetFlips Logo"
                                 width={360}
                                 height={120}
-                                className="h-24 w-auto object-contain"
+                                className="h-12 sm:h-16 md:h-20 lg:h-24 w-auto object-contain flex-shrink-0"
+                                sizes="(max-width: 640px) 120px, (max-width: 768px) 180px, (max-width: 1024px) 240px, 360px"
                                 priority
                             />
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0 flex-shrink-0">
                             {isAuthenticated && utcTime && (
-                                <div className="hidden md:block text-sm text-gray-600 dark:text-kick-text-secondary font-mono">
+                                <div className="hidden md:block text-sm text-gray-600 dark:text-kick-text-secondary font-mono flex-shrink-0">
                                     {utcTime}
                                 </div>
                             )}
                             {isAuthenticated && userData?.id && (
                                 <div
-                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border"
+                                    className="flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border flex-shrink-0"
                                     title="Sweet Coins"
                                 >
                                     <Image
@@ -688,12 +689,12 @@ export default function AppLayout({ children }: LayoutProps) {
                                         alt=""
                                         width={18}
                                         height={18}
-                                        className="w-[18px] h-[18px]"
+                                        className="w-[18px] h-[18px] flex-shrink-0"
                                     />
-                                    <span className="text-sm font-semibold tabular-nums">
+                                    <span className="text-xs sm:text-sm font-semibold tabular-nums whitespace-nowrap">
                                         {pointsLoading && userPoints === null ? '…' : (userPoints ?? 0).toLocaleString()}
                                     </span>
-                                    <span className="hidden md:inline text-sm font-medium text-gray-600 dark:text-kick-text-secondary">
+                                    <span className="hidden md:inline text-sm font-medium text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">
                                         Sweet Coins
                                     </span>
                                 </div>
@@ -713,7 +714,7 @@ export default function AppLayout({ children }: LayoutProps) {
                 </nav>
 
                 {/* Page Content */}
-                <main className="p-6 flex-1">
+                <main className="p-4 sm:p-6 flex-1">
                     {children}
                 </main>
 
