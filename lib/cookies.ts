@@ -17,17 +17,19 @@ export function getCookie(name: string): string | null {
 }
 
 /**
- * Set a cookie with 3-month expiration
+ * Set a cookie with 3-month expiration (default) or custom maxAge in days
  */
 export function setCookie(name: string, value: string, options?: {
     httpOnly?: boolean
     secure?: boolean
     sameSite?: 'strict' | 'lax' | 'none'
     path?: string
+    maxAgeDays?: number
 }) {
     if (typeof document === 'undefined') return
 
-    const expiresDate = new Date(Date.now() + THREE_MONTHS_IN_SECONDS * 1000)
+    const maxAgeDays = options?.maxAgeDays ?? 90 // Default to 3 months
+    const expiresDate = new Date(Date.now() + maxAgeDays * 24 * 60 * 60 * 1000)
     const secure = options?.secure ?? (window.location.protocol === 'https:')
     const sameSite = options?.sameSite ?? 'lax'
     const path = options?.path ?? '/'

@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { ToastContainer } from '@/components/Toast'
+import CookieConsent from '@/components/CookieConsent'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -84,6 +85,7 @@ export default function RootLayout({
         >
           {children}
           <ToastContainer />
+          <CookieConsent />
         </ThemeProvider>
       </body>
     </html>
