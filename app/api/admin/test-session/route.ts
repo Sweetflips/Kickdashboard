@@ -44,8 +44,14 @@ export async function GET(request: Request) {
             },
         })
 
+        const isTestSession = !!activeSession?.session_title?.startsWith('[TEST]')
+
         return NextResponse.json({
+            // NOTE: historically the UI treated "hasActiveSession" as "test mode active".
+            // That was incorrect once real live sessions started using streamSession rows too.
+            // Keep both signals so the UI can distinguish between LIVE vs TEST.
             hasActiveSession: !!activeSession,
+            isTestSession,
             session: activeSession ? {
                 id: activeSession.id.toString(),
                 started_at: activeSession.started_at.toISOString(),

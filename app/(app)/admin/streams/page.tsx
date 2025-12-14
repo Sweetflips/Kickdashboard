@@ -89,7 +89,9 @@ export default function AdminStreamsPage() {
             })
             if (response.ok) {
                 const data = await response.json()
-                setTestSessionActive(data.hasActiveSession)
+                // Only show "TEST MODE ACTIVE" when the active session is explicitly a test session.
+                // Real live sessions also create an active streamSession row, which should NOT trigger test mode UI.
+                setTestSessionActive(data.isTestSession === true)
                 setTestSessionId(data.session?.id || null)
             }
         } catch (error) {
