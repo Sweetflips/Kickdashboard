@@ -697,56 +697,102 @@ export default function UsersPage() {
                               </div>
 
                               {/* Permissions */}
-                              <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text mt-4 mb-3">Permissions</h4>
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleAdmin(user.kick_user_id, user.is_admin)
-                                  }}
-                                  className={`px-3 py-2 rounded text-xs font-medium transition-colors ${
-                                    user.is_admin
-                                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
-                                      : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
-                                  }`}
-                                >
-                                  {user.is_admin ? 'Remove Admin' : 'Make Admin'}
-                                </button>
+                              <div className="mt-4">
+                                <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text mb-3 flex items-center gap-2">
+                                  <span>🔐</span>
+                                  <span>Permissions</span>
+                                </h4>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    toggleExclude(user.kick_user_id, user.is_excluded)
-                                  }}
-                                  className={`px-3 py-2 rounded text-xs font-medium transition-colors ${
-                                    user.is_excluded
-                                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
-                                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                                  }`}
-                                >
-                                  {user.is_excluded ? 'Include' : 'Exclude'}
-                                </button>
+                                {/* Info Chat Box */}
+                                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                  <div className="flex items-start gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                      <span className="text-white text-xs">💬</span>
+                                    </div>
+                                    <div className="flex-1 text-xs text-blue-800 dark:text-blue-200 leading-relaxed">
+                                      <p className="font-medium mb-1">Permission Controls:</p>
+                                      <ul className="space-y-1 text-blue-700 dark:text-blue-300">
+                                        <li><strong>Admin:</strong> Full access to admin dashboard and all management features</li>
+                                        <li><strong>Moderator:</strong> Can view payouts and has elevated permissions (must be explicitly enabled)</li>
+                                        <li><strong>Exclude:</strong> Prevents user from participating in raffles, earning points, and accessing certain features</li>
+                                      </ul>
+                                    </div>
+                                  </div>
+                                </div>
 
-                                <div className="relative">
-                                  <select
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => {
-                                      const value = e.target.value === 'true'
-                                      setModeratorOverride(user.kick_user_id, value)
-                                    }}
-                                    value={user.moderator_override === true ? 'true' : 'false'}
-                                    className={`px-3 py-2 rounded text-xs font-medium transition-colors ${
-                                      user.moderator_override === true
-                                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                                    }`}
-                                    title="Moderator permission"
-                                  >
-                                    <option value="false">Mod: Off</option>
-                                    <option value="true">Mod: On</option>
-                                  </select>
+                                {/* Permission Buttons */}
+                                <div className="space-y-3">
+                                  {/* Admin Permission */}
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        toggleAdmin(user.kick_user_id, user.is_admin)
+                                      }}
+                                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm ${
+                                        user.is_admin
+                                          ? 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 shadow-red-500/30'
+                                          : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-green-500/30'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-center gap-2">
+                                        <span>{user.is_admin ? '👑' : '➕'}</span>
+                                        <span>{user.is_admin ? 'Remove Admin' : 'Make Admin'}</span>
+                                      </div>
+                                    </button>
+                                    <div className={`w-3 h-3 rounded-full ${user.is_admin ? 'bg-red-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-600'}`} title={user.is_admin ? 'Admin Active' : 'Not Admin'} />
+                                  </div>
+
+                                  {/* Moderator Permission */}
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-1 relative">
+                                      <select
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => {
+                                          const value = e.target.value === 'true'
+                                          setModeratorOverride(user.kick_user_id, value)
+                                        }}
+                                        value={user.moderator_override === true ? 'true' : 'false'}
+                                        className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm appearance-none cursor-pointer ${
+                                          user.moderator_override === true
+                                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-blue-500/30'
+                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                        }`}
+                                      >
+                                        <option value="false">Mod: Off</option>
+                                        <option value="true">Mod: On</option>
+                                      </select>
+                                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                        <svg className="w-5 h-5 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                      </div>
+                                    </div>
+                                    <div className={`w-3 h-3 rounded-full ${user.moderator_override === true ? 'bg-blue-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-600'}`} title={user.moderator_override === true ? 'Moderator Active' : 'Not Moderator'} />
+                                  </div>
+
+                                  {/* Exclude Permission */}
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        toggleExclude(user.kick_user_id, user.is_excluded)
+                                      }}
+                                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm ${
+                                        user.is_excluded
+                                          ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-green-500/30'
+                                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-center gap-2">
+                                        <span>{user.is_excluded ? '✅' : '🚫'}</span>
+                                        <span>{user.is_excluded ? 'Include User' : 'Exclude User'}</span>
+                                      </div>
+                                    </button>
+                                    <div className={`w-3 h-3 rounded-full ${user.is_excluded ? 'bg-orange-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-600'}`} title={user.is_excluded ? 'User Excluded' : 'User Active'} />
+                                  </div>
                                 </div>
                               </div>
 
