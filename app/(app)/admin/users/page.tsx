@@ -645,21 +645,6 @@ export default function UsersPage() {
                           <div className="font-semibold text-amber-600 dark:text-amber-500">{(user.achievements_unlocked ?? 0).toLocaleString()}</div>
                           <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Achievements</div>
                         </div>
-
-                        {/* Actions: wrap nicely on mobile */}
-                        <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:ml-auto">
-                          {/* Award Points Button (permissions live in fold-out) */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              openAwardModal(user)
-                            }}
-                            className="px-3 py-2 rounded text-xs font-medium transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 w-full sm:w-auto"
-                            title="Award or deduct points"
-                          >
-                            ± Points
-                          </button>
-                        </div>
                       </div>
 
                       {/* Expanded Details */}
@@ -715,6 +700,7 @@ export default function UsersPage() {
                                         <li><strong>Admin:</strong> Full access to admin dashboard and all management features</li>
                                         <li><strong>Moderator:</strong> Can view payouts and has elevated permissions (must be explicitly enabled)</li>
                                         <li><strong>Exclude:</strong> Prevents user from participating in raffles, earning points, and accessing certain features</li>
+                                        <li><strong>Adjust SweetCoins:</strong> Manually award or deduct SweetCoins with an optional reason (logged in point history)</li>
                                       </ul>
                                     </div>
                                   </div>
@@ -792,6 +778,25 @@ export default function UsersPage() {
                                       </div>
                                     </button>
                                     <div className={`w-3 h-3 rounded-full ${user.is_excluded ? 'bg-orange-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-600'}`} title={user.is_excluded ? 'User Excluded' : 'User Active'} />
+                                  </div>
+
+                                  {/* Award Points */}
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openAwardModal(user)
+                                      }}
+                                      className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-amber-500/30"
+                                      title="Award or deduct SweetCoins"
+                                    >
+                                      <div className="flex items-center justify-center gap-2">
+                                        <span>💰</span>
+                                        <span>Adjust SweetCoins</span>
+                                      </div>
+                                    </button>
+                                    <div className="w-3 h-3 rounded-full bg-amber-500" title="SweetCoins Management" />
                                   </div>
                                 </div>
                               </div>
