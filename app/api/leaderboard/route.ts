@@ -1,7 +1,6 @@
 import { db } from '@/lib/db'
 import { memoryCache } from '@/lib/memory-cache'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
-import { getAchievementCount } from '@/lib/achievements-engine'
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 
@@ -40,6 +39,21 @@ type ViewerSummary = {
 }
 
 type CachedLeaderboard = { rows: LeaderboardEntry[] }
+
+async function getClaimedAchievementCounts(userIds: bigint[]): Promise<Map<string, number>> {
+    if (userIds.length === 0) return new Map()
+
+    const rows = await db.sweetCoinHistory.groupBy({
+        by: ['user_id'],
+        where: {
+            user_id: { in: userIds },
+            message_id: { startsWith: 'achievement:' },
+        },
+        _count: { _all: true },
+    })
+
+    return new Map(rows.map((r) => [r.user_id.toString(), r._count._all]))
+}
 
 function parseSortBy(value: string | null): SortBy {
     switch (value) {
@@ -113,6 +127,13 @@ export async function GET(request: Request) {
                 })
                 : cached.rows
             const paged = filtered.slice(offset, offset + limit)
+            const claimedCounts = await getClaimedAchievementCounts(
+                paged.map((r) => BigInt(r.user_id))
+            )
+            const pagedWithAchievements = paged.map((r) => ({
+                ...r,
+                achievements_unlocked: claimedCounts.get(r.user_id) || 0,
+            }))
 
             const viewerEntry = viewerKickUserIdStr
                 ? cached.rows.find(r => r.kick_user_id === viewerKickUserIdStr) || null
@@ -130,7 +151,7 @@ export async function GET(request: Request) {
                 : null
 
             return NextResponse.json({
-                leaderboard: paged,
+                leaderboard: pagedWithAchievements,
                 total: filtered.length,
                 limit,
                 offset,
@@ -161,6 +182,13 @@ export async function GET(request: Request) {
             })
             : result.rows
         const paged = filtered.slice(offset, offset + limit)
+        const claimedCounts = await getClaimedAchievementCounts(
+            paged.map((r) => BigInt(r.user_id))
+        )
+        const pagedWithAchievements = paged.map((r) => ({
+            ...r,
+            achievements_unlocked: claimedCounts.get(r.user_id) || 0,
+        }))
 
         const viewerEntry = viewerKickUserIdStr
             ? result.rows.find(r => r.kick_user_id === viewerKickUserIdStr) || null
@@ -178,7 +206,7 @@ export async function GET(request: Request) {
             : null
 
         return NextResponse.json({
-            leaderboard: paged,
+            leaderboard: pagedWithAchievements,
             total: filtered.length,
             limit,
             offset,
@@ -285,7 +313,7 @@ async function withRetry<T>(
     throw new Error(`Max retries exceeded for ${operation}`)
 }
 
-function formatEntryV2(row: RowV2, rank: number, achievementsUnlocked?: number): LeaderboardEntry {
+function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
     const user = row.user
     const hasKickLogin = !!user.last_login_at
     const hasDiscord = user.discord_connected || false
@@ -301,7 +329,6 @@ function formatEntryV2(row: RowV2, rank: number, achievementsUnlocked?: number):
         total_emotes: row.total_emotes,
         total_messages: row.total_messages,
         streams_watched: row.streams_watched,
-        achievements_unlocked: achievementsUnlocked,
         last_point_earned_at: row.last_point_earned_at?.toISOString() || null,
         is_verified: hasKickLogin || hasDiscord || hasTelegram,
         last_login_at: user.last_login_at?.toISOString() || null,
@@ -319,13 +346,7 @@ async function buildLeaderboardRowsV2(sortBy: SortBy, dateFilter: DateRangeFilte
         : await buildOverallRowsV2()
 
     rows.sort(makeRowComparatorV2(sortBy))
-    
-    // Compute achievement counts for all users in parallel
-    const achievementCounts = await Promise.all(
-      rows.map(row => getAchievementCount(row.user.id, row.user.kick_user_id))
-    )
-    
-    return rows.map((row, idx) => formatEntryV2(row, idx + 1, achievementCounts[idx]))
+    return rows.map((row, idx) => formatEntryV2(row, idx + 1))
 }
 
 async function buildOverallRowsV2(): Promise<RowV2[]> {
@@ -643,11 +664,6 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
         streamsMap.set(kickUserId, sessionSet.size)
     })
 
-    // Compute achievement counts for all users in parallel
-    const achievementCounts = await Promise.all(
-      userPoints.map(up => getAchievementCount(BigInt(up.user.id), BigInt(up.user.kick_user_id)))
-    )
-
     // Build leaderboard entries
     const leaderboard = userPoints.map((up, index) => {
         const user = up.user
@@ -668,7 +684,6 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
             total_emotes: up.total_emotes,
             total_messages: messagesMap.get(kickUserId) || 0,
             streams_watched: streamsMap.get(kickUserId) || 0,
-            achievements_unlocked: achievementCounts[index] || 0,
             last_point_earned_at: up.last_sweet_coin_earned_at?.toISOString() || null,
             is_verified: hasKickLogin || hasDiscord || hasTelegram,
             last_login_at: user.last_login_at?.toISOString() || null,
@@ -822,16 +837,6 @@ async function fetchDateFilteredLeaderboard(
         streamsMap.set(kickUserId, sessionSet.size)
     })
 
-    // Compute achievement counts for all users in parallel
-    const achievementCounts = await Promise.all(
-      paginatedAggregates.map(agg => {
-        const userId = Number(agg.user_id)
-        const user = userMap.get(userId)
-        if (!user) return Promise.resolve(0)
-        return getAchievementCount(BigInt(userId), BigInt(user.kick_user_id))
-      })
-    )
-
     // Build leaderboard entries maintaining sort order
     const leaderboard = paginatedAggregates.map((agg, index) => {
         const userId = Number(agg.user_id)
@@ -856,7 +861,6 @@ async function fetchDateFilteredLeaderboard(
             total_emotes: emotesMap.get(kickUserId) || 0,
             total_messages: messagesMap.get(kickUserId) || 0,
             streams_watched: streamsMap.get(kickUserId) || 0,
-            achievements_unlocked: achievementCounts[index] || 0,
             last_point_earned_at: lastPointEarnedMap.get(userId)?.toISOString() || null,
             is_verified: hasKickLogin || hasDiscord || hasTelegram,
             last_login_at: user.last_login_at?.toISOString() || null,
