@@ -30,6 +30,7 @@ interface User {
   profile_picture_url: string | null
   is_admin: boolean
   is_excluded: boolean
+  moderator_override: boolean | null
   total_points: number
   total_emotes: number
   achievements_unlocked: number
@@ -326,6 +327,32 @@ export default function UsersPage() {
     }
   }
 
+  const setModeratorOverride = async (kickUserId: string, value: boolean | null) => {
+    try {
+      const token = localStorage.getItem('kick_access_token')
+      if (!token) return
+
+      const response = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ kick_user_id: kickUserId, moderator_override: value }),
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        await fetchUsers()
+      } else {
+        const error = await response.json()
+        alert(`Failed: ${error.error}`)
+      }
+    } catch (error) {
+      alert('Failed to update user')
+    }
+  }
+
   const toggleExpanded = (userId: string) => {
     const newExpanded = new Set(expandedUsers)
     if (newExpanded.has(userId)) {
@@ -536,6 +563,16 @@ export default function UsersPage() {
                                     Admin
                                   </span>
                                 )}
+                                {user.moderator_override === true && (
+                                  <span className="px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium" title="Moderator (forced on)">
+                                    Mod
+                                  </span>
+                                )}
+                                {user.moderator_override === null && (
+                                  <span className="px-1.5 py-0.5 rounded text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium opacity-60" title="Moderator (auto-detect)">
+                                    Mod?
+                                  </span>
+                                )}
                                 {user.is_excluded && (
                                   <span className="px-1.5 py-0.5 rounded text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium">
                                     Excluded
@@ -645,6 +682,30 @@ export default function UsersPage() {
                           >
                             {user.is_excluded ? 'Include' : 'Exclude'}
                           </button>
+
+                          {/* Moderator Override Dropdown */}
+                          <div className="relative w-full sm:w-auto">
+                            <select
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const value = e.target.value === 'null' ? null : e.target.value === 'true'
+                                setModeratorOverride(user.kick_user_id, value)
+                              }}
+                              value={user.moderator_override === null ? 'null' : String(user.moderator_override)}
+                              className={`px-3 py-2 rounded text-xs font-medium transition-colors w-full ${
+                                user.moderator_override === true
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                  : user.moderator_override === false
+                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                                  : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                              }`}
+                              title="Moderator Override: Auto (detect from Kick), Force On, or Force Off"
+                            >
+                              <option value="null">Mod: Auto</option>
+                              <option value="true">Mod: Force On</option>
+                              <option value="false">Mod: Force Off</option>
+                            </select>
+                          </div>
 
                           {/* Award Points Button */}
                           <button

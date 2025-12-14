@@ -108,3 +108,4 @@ All configuration files are consistent:
 - **Minimum permissions**: Use only required token scopes
 - **Regular rotation**: Rotate tokens every 90 days
 
+

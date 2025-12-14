@@ -197,13 +197,24 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                 if (livestreamsResponse.ok) {
                     const livestreamsData = await livestreamsResponse.json()
 
-                    // If data array has items, stream is LIVE
-                    if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
-                        // Find the matching livestream for this broadcaster
-                        const livestream = livestreamsData.data.find(
-                            (ls: any) => ls.broadcaster_user_id === broadcasterUserId ||
-                                ls.slug?.toLowerCase() === slug.toLowerCase()
-                        ) as any | undefined
+                    if (!Array.isArray(livestreamsData.data)) {
+                        console.warn('[Channel API] Unexpected /livestreams response shape, falling back to /channels:', {
+                            hasData: 'data' in livestreamsData,
+                            dataType: typeof livestreamsData.data,
+                        })
+                    } else if (livestreamsData.data.length === 0) {
+                        // Empty data array means stream is OFFLINE
+                        return { isLive: false }
+                    } else {
+                        // Non-empty array means *something* is live, but the API filter is known to be unreliable.
+                        // We must only treat the channel as live if we can find a matching livestream entry.
+                        const slugLower = slug.toLowerCase()
+                        const broadcasterIdStr = String(broadcasterUserId)
+                        const livestream = livestreamsData.data.find((ls: any) => {
+                            const lsBroadcaster = ls?.broadcaster_user_id
+                            const lsSlug = typeof ls?.slug === 'string' ? ls.slug.toLowerCase() : null
+                            return String(lsBroadcaster) === broadcasterIdStr || lsSlug === slugLower
+                        }) as any | undefined
 
                         if (livestream) {
                             // Extract started_at and thumbnail from authoritative source
@@ -216,10 +227,16 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                             }
                             return { isLive: true, startedAt, thumbnailUrl }
                         }
-                        return { isLive: true }
-                    } else {
-                        // Empty data array means stream is OFFLINE
-                        return { isLive: false }
+
+                        // Filter mismatch: don't assume live. Fall back to /channels to avoid false-positive LIVE state.
+                        console.warn('[Channel API] /livestreams returned items but none match requested broadcaster/slug; falling back to /channels.', {
+                            requested: { slug, broadcasterUserId },
+                            sample: livestreamsData.data.slice(0, 3).map((ls: any) => ({
+                                broadcaster_user_id: ls?.broadcaster_user_id,
+                                slug: ls?.slug,
+                            })),
+                            totalReturned: livestreamsData.data.length,
+                        })
                     }
                 } else {
                     console.warn(`[Channel API] /livestreams endpoint returned ${livestreamsResponse.status}`)

@@ -143,3 +143,4 @@ This will test:
 - `cloudflare/cdn-worker/SET_SECRET.md` - Worker secret setup
 - `c:\Users\Amor\.cursor\MCP_ENV_SETUP.md` - MCP environment variables
 
+

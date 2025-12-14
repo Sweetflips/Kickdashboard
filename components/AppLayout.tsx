@@ -36,6 +36,7 @@ export default function AppLayout({ children }: LayoutProps) {
         }
         return false
     })
+    const [canViewPayouts, setCanViewPayouts] = useState<boolean>(false)
     const [utcTime, setUtcTime] = useState('')
     const [userPoints, setUserPoints] = useState<number | null>(null)
     const [pointsLoading, setPointsLoading] = useState(false)
@@ -149,6 +150,7 @@ export default function AppLayout({ children }: LayoutProps) {
             const token = getAccessToken()
             if (!token) {
                 setIsAdmin(false)
+                setCanViewPayouts(false)
                 return
             }
 
@@ -161,15 +163,19 @@ export default function AppLayout({ children }: LayoutProps) {
             if (response.ok) {
                 const data = await response.json()
                 const adminStatus = data.is_admin === true
+                const payoutsAccess = data.can_view_payouts === true
                 setIsAdmin(adminStatus)
+                setCanViewPayouts(payoutsAccess)
                 localStorage.setItem('is_admin', String(adminStatus))
             } else {
                 setIsAdmin(false)
+                setCanViewPayouts(false)
                 localStorage.setItem('is_admin', 'false')
             }
         } catch (error) {
             console.error('Error checking admin status:', error)
             setIsAdmin(false)
+            setCanViewPayouts(false)
             localStorage.setItem('is_admin', 'false')
         }
     }
@@ -487,114 +493,124 @@ export default function AppLayout({ children }: LayoutProps) {
                                 <span className="ml-3 text-body font-medium">Referrals</span>
                             </Link>
                         </li>
-                        {isAdmin && (
+                        {(isAdmin || canViewPayouts) && (
                             <>
                                 <li className="mt-4 mb-2">
                                     <div className="px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
                                         Admin
                                     </div>
                                 </li>
-                                <li>
-                                    <Link href="/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                            setSidebarOpen(false)
-                                        }
-                                    }}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Past Streams</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/analytics" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/analytics' || pathname === '/analytics' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                            setSidebarOpen(false)
-                                        }
-                                    }}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Analytics</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                            setSidebarOpen(false)
-                                        }
-                                    }}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Raffles</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/streams' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                            setSidebarOpen(false)
-                                        }
-                                    }}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Stream Management</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/users" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/users' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                            setSidebarOpen(false)
-                                        }
-                                    }}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">User Management</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/payouts" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/payouts' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                            setSidebarOpen(false)
-                                        }
-                                    }}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4z" />
-                                            <path fillRule="evenodd" d="M8 8a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2h-6a2 2 0 01-2-2V8zm7 2a1 1 0 11-2 0 1 1 0 012 0zm-3 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" clipRule="evenodd" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Payouts</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/purchases" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/purchases' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                            setSidebarOpen(false)
-                                        }
-                                    }}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1z" clipRule="evenodd" />
-                                            <path d="M11 4a1 1 0 10-2 0v1a1 1 0 002 0V4zM10 7a1 1 0 011 1v1h2a1 1 0 110 2h-3a1 1 0 01-1-1V8a1 1 0 011-1zM16 9a1 1 0 100 2 1 1 0 000-2zM9 13a1 1 0 011-1h1a1 1 0 110 2v2a1 1 0 11-2 0v-3zM7 11a1 1 0 100-2H4a1 1 0 100 2h3zM17 13a1 1 0 01-1 1h-2a1 1 0 110-2h2a1 1 0 011 1zM16 17a1 1 0 100-2h-3a1 1 0 100 2h3z" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Purchases</span>
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/admin/promo-codes" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/promo-codes' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                            setSidebarOpen(false)
-                                        }
-                                    }}>
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
-                                            <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
-                                        </svg>
-                                        <span className="ml-3 text-body font-medium">Promo Codes</span>
-                                    </Link>
-                                </li>
+                                {isAdmin && (
+                                    <>
+                                        <li>
+                                            <Link href="/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                    setSidebarOpen(false)
+                                                }
+                                            }}>
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                                </svg>
+                                                <span className="ml-3 text-body font-medium">Past Streams</span>
+                                            </Link>
+                                        </li>
+                                        <li>
+                                            <Link href="/admin/analytics" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/analytics' || pathname === '/analytics' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                    setSidebarOpen(false)
+                                                }
+                                            }}>
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                                                </svg>
+                                                <span className="ml-3 text-body font-medium">Analytics</span>
+                                            </Link>
+                                        </li>
+                                        <li>
+                                            <Link href="/admin/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                    setSidebarOpen(false)
+                                                }
+                                            }}>
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                </svg>
+                                                <span className="ml-3 text-body font-medium">Raffles</span>
+                                            </Link>
+                                        </li>
+                                        <li>
+                                            <Link href="/admin/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/streams' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                    setSidebarOpen(false)
+                                                }
+                                            }}>
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                                </svg>
+                                                <span className="ml-3 text-body font-medium">Stream Management</span>
+                                            </Link>
+                                        </li>
+                                        <li>
+                                            <Link href="/admin/users" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/users' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                    setSidebarOpen(false)
+                                                }
+                                            }}>
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                                                </svg>
+                                                <span className="ml-3 text-body font-medium">User Management</span>
+                                            </Link>
+                                        </li>
+                                    </>
+                                )}
+                                {canViewPayouts && (
+                                    <li>
+                                        <Link href="/admin/payouts" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/payouts' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                            if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                setSidebarOpen(false)
+                                            }
+                                        }}>
+                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4z" />
+                                                <path fillRule="evenodd" d="M8 8a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2h-6a2 2 0 01-2-2V8zm7 2a1 1 0 11-2 0 1 1 0 012 0zm-3 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" clipRule="evenodd" />
+                                            </svg>
+                                            <span className="ml-3 text-body font-medium">Payouts</span>
+                                        </Link>
+                                    </li>
+                                )}
+                                {isAdmin && (
+                                    <>
+                                        <li>
+                                            <Link href="/admin/purchases" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/purchases' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                    setSidebarOpen(false)
+                                                }
+                                            }}>
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1z" clipRule="evenodd" />
+                                                    <path d="M11 4a1 1 0 10-2 0v1a1 1 0 002 0V4zM10 7a1 1 0 011 1v1h2a1 1 0 110 2h-3a1 1 0 01-1-1V8a1 1 0 011-1zM16 9a1 1 0 100 2 1 1 0 000-2zM9 13a1 1 0 011-1h1a1 1 0 110 2v2a1 1 0 11-2 0v-3zM7 11a1 1 0 100-2H4a1 1 0 100 2h3zM17 13a1 1 0 01-1 1h-2a1 1 0 110-2h2a1 1 0 011 1zM16 17a1 1 0 100-2h-3a1 1 0 100 2h3z" />
+                                                </svg>
+                                                <span className="ml-3 text-body font-medium">Purchases</span>
+                                            </Link>
+                                        </li>
+                                        <li>
+                                            <Link href="/admin/promo-codes" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/promo-codes' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                    setSidebarOpen(false)
+                                                }
+                                            }}>
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                                                    <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+                                                </svg>
+                                                <span className="ml-3 text-body font-medium">Promo Codes</span>
+                                            </Link>
+                                        </li>
+                                    </>
+                                )}
                             </>
                         )}
                         <li className="mt-4 mb-2">

@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { getChannelWithLivestream } from '@/lib/kick-api'
-import { getActiveSession, updateSessionMetadata, findSessionByStartTime, mergeLikelyDuplicateSessions } from '@/lib/stream-session-manager'
+import { getActiveSession, updateSessionMetadata, mergeLikelyDuplicateSessions } from '@/lib/stream-session-manager'
 import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { fetchKickV2ChannelVideos } from '@/lib/kick-videos'

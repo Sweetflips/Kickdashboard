@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { isAdmin, getAuthenticatedUser } from '@/lib/auth'
+import { isAdmin } from '@/lib/auth'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
@@ -215,6 +215,7 @@ export async function GET(request: Request) {
           profile_picture_url: rewriteApiMediaUrlToCdn(u.custom_profile_picture_url || u.profile_picture_url),
           is_admin: u.is_admin,
           is_excluded: u.is_excluded,
+          moderator_override: u.moderator_override,
           // Keep both names for backwards/forwards compatibility:
           // - admin UI expects `total_points`
           // - other parts may use `total_sweet_coins`
@@ -281,7 +282,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { kick_user_id, is_admin, is_excluded } = body
+    const { kick_user_id, is_admin, is_excluded, moderator_override } = body
 
     if (!kick_user_id) {
       return NextResponse.json(
@@ -298,10 +299,14 @@ export async function PUT(request: Request) {
     if (typeof is_excluded === 'boolean') {
       updateData.is_excluded = is_excluded
     }
+    if (moderator_override !== undefined) {
+      // Accept null, true, or false
+      updateData.moderator_override = moderator_override === null ? null : moderator_override === true
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        { error: 'At least one field (is_admin or is_excluded) must be provided' },
+        { error: 'At least one field (is_admin, is_excluded, or moderator_override) must be provided' },
         { status: 400 }
       )
     }
@@ -316,6 +321,7 @@ export async function PUT(request: Request) {
         username: true,
         is_admin: true,
         is_excluded: true,
+        moderator_override: true,
       },
     })
 
@@ -326,6 +332,7 @@ export async function PUT(request: Request) {
         username: user.username,
         is_admin: user.is_admin,
         is_excluded: user.is_excluded,
+        moderator_override: user.moderator_override,
       },
     })
   } catch (error) {
