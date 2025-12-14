@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { isAdmin } from '@/lib/auth'
+import { canViewPayouts } from '@/lib/auth'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     try {
-        // Check admin access
-        const adminCheck = await isAdmin(request)
-        if (!adminCheck) {
+        // Check access (admin or moderator)
+        const accessCheck = await canViewPayouts(request)
+        if (!accessCheck) {
             return NextResponse.json(
-                { error: 'Unauthorized - Admin access required' },
+                { error: 'Unauthorized - Admin or Moderator access required' },
                 { status: 403 }
             )
         }
@@ -104,6 +104,7 @@ export async function GET(request: Request) {
                 username: true,
                 profile_picture_url: true,
                 custom_profile_picture_url: true,
+                telegram_username: true,
             },
         })
 
@@ -201,9 +202,13 @@ export async function GET(request: Request) {
                 user_id: p.user_id.toString(),
                 kick_user_id: user?.kick_user_id.toString() || '',
                 username: user?.username || 'Unknown',
+                telegram_username: user?.telegram_username || null,
                 profile_picture_url: rewriteApiMediaUrlToCdn(user?.custom_profile_picture_url || user?.profile_picture_url || null),
+                // Return both field names for compatibility (UI expects 'points', 'weighted_points')
+                points: p.sweet_coins,
                 sweet_coins: p.sweet_coins,
                 multiplier: p.multiplier,
+                weighted_points: Number(p.weightedSweetCoins.toFixed(2)),
                 weighted_sweet_coins: Number(p.weightedSweetCoins.toFixed(2)),
                 payout,
                 percentage: Number(percentage.toFixed(2)),

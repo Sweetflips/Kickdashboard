@@ -23,6 +23,7 @@ interface PayoutEntry {
     user_id: string
     kick_user_id: string
     username: string
+    telegram_username: string | null
     profile_picture_url: string | null
     points: number
     multiplier: number
@@ -65,7 +66,7 @@ interface PayoutData {
 
 export default function PayoutsPage() {
     const router = useRouter()
-    const [isAdmin, setIsAdmin] = useState(false)
+    const [canViewPayouts, setCanViewPayouts] = useState(false)
     const [loading, setLoading] = useState(true)
     const [sessions, setSessions] = useState<StreamSession[]>([])
     const [sessionsLoading, setSessionsLoading] = useState(true)
@@ -79,7 +80,7 @@ export default function PayoutsPage() {
     const [error, setError] = useState<string | null>(null)
     const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
 
-    // Verify admin access
+    // Verify access (admin or moderator)
     useEffect(() => {
         const token = localStorage.getItem('kick_access_token')
         if (!token) {
@@ -94,11 +95,11 @@ export default function PayoutsPage() {
         })
             .then(res => res.json())
             .then(data => {
-                if (!data.is_admin) {
+                if (!data.can_view_payouts) {
                     router.push('/')
                     return
                 }
-                setIsAdmin(true)
+                setCanViewPayouts(true)
                 setLoading(false)
             })
             .catch(() => router.push('/'))
@@ -106,7 +107,7 @@ export default function PayoutsPage() {
 
     // Fetch stream sessions
     useEffect(() => {
-        if (!isAdmin) return
+        if (!canViewPayouts) return
 
         const fetchSessions = async () => {
             try {
@@ -132,7 +133,7 @@ export default function PayoutsPage() {
         }
 
         fetchSessions()
-    }, [isAdmin])
+    }, [canViewPayouts])
 
     // Calculate payouts when session or parameters change
     const calculatePayouts = useCallback(async () => {
@@ -203,14 +204,16 @@ export default function PayoutsPage() {
         if (!payoutData || payoutData.payouts.length === 0) return
 
         const headers = payoutData.summary.rank_bonus
-            ? ['Rank', 'Username', 'Points', 'Bonus', 'Weighted Points', 'Payout ($)', 'Percentage (%)']
-            : ['Rank', 'Username', 'Points', 'Payout ($)', 'Percentage (%)']
+            ? ['Rank', 'Username', 'Telegram', 'Points', 'Bonus', 'Weighted Points', 'Payout ($)', 'Percentage (%)']
+            : ['Rank', 'Username', 'Telegram', 'Points', 'Payout ($)', 'Percentage (%)']
 
         const rows = payoutData.payouts.map(p => {
+            const telegramDisplay = p.telegram_username ? `@${p.telegram_username}` : ''
             if (payoutData.summary.rank_bonus) {
                 return [
                     p.rank.toString(),
                     p.username,
+                    telegramDisplay,
                     (p.points ?? 0).toString(),
                     (p.multiplier ?? 1) > 1 ? `+${(((p.multiplier ?? 1) - 1) * 100).toFixed(0)}%` : '-',
                     (p.weighted_points ?? 0).toFixed(2),
@@ -221,6 +224,7 @@ export default function PayoutsPage() {
             return [
                 p.rank.toString(),
                 p.username,
+                telegramDisplay,
                 (p.points ?? 0).toString(),
                 (p.payout ?? 0).toFixed(roundTo),
                 (p.percentage ?? 0).toFixed(2),
@@ -285,7 +289,7 @@ export default function PayoutsPage() {
         })
     }
 
-    if (loading || !isAdmin) {
+    if (loading || !canViewPayouts) {
         return (
             <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
@@ -558,7 +562,9 @@ export default function PayoutsPage() {
                                                                 </div>
                                                             )}
                                                             <span className="font-medium text-gray-900 dark:text-kick-text">
-                                                                {entry.username}
+                                                                {entry.telegram_username
+                                                                    ? `${entry.username} — @${entry.telegram_username}`
+                                                                    : entry.username}
                                                             </span>
                                                         </div>
                                                     </td>
