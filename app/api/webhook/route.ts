@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue'
 import type { ChatMessage } from '@/lib/chat-store'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
+import { resolveSessionForChat } from '@/lib/stream-session-manager'
 
 export const dynamic = 'force-dynamic'
 
@@ -109,21 +109,21 @@ export async function POST(request: Request) {
         })
 
         // ═══════════════════════════════════════════════════════════════
-        // CHECK FOR ACTIVE STREAM SESSION (READ-ONLY)
+        // RESOLVE STREAM SESSION FOR MESSAGE (READ-ONLY)
         // ═══════════════════════════════════════════════════════════════
+        // Resolves to active session or recently ended session (within 2m window)
 
         const broadcasterUserId = BigInt(message.broadcaster.user_id)
-        let activeSession: { id: bigint; ended_at: Date | null } | null = null
+        const messageTimestampMs = typeof message.timestamp === 'number'
+            ? message.timestamp
+            : typeof message.timestamp === 'string'
+                ? parseInt(message.timestamp, 10)
+                : Date.now()
+
+        let resolvedSession: { sessionId: bigint; isActive: boolean } | null = null
 
         try {
-            activeSession = await db.streamSession.findFirst({
-                where: {
-                    broadcaster_user_id: broadcasterUserId,
-                    ended_at: null,
-                },
-                orderBy: { started_at: 'desc' },
-                select: { id: true, ended_at: true },
-            })
+            resolvedSession = await resolveSessionForChat(broadcasterUserId, messageTimestampMs)
         } catch (error: any) {
             // Non-critical - continue without session info
             const isConnectionError = error?.code === 'P1001' ||
@@ -132,11 +132,11 @@ export async function POST(request: Request) {
             if (isConnectionError) {
                 console.warn('[webhook] Database connection error - continuing without session info')
             } else {
-                console.warn('[webhook] Failed to fetch stream session:', error)
+                console.warn('[webhook] Failed to resolve stream session:', error)
             }
         }
 
-        const sessionIsActive = activeSession !== null && activeSession.ended_at === null
+        const sessionIsActive = resolvedSession?.isActive ?? false
 
         // ═══════════════════════════════════════════════════════════════
         // PREPARE JOB PAYLOAD
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
                 profile_picture: message.broadcaster.profile_picture,
             },
             emotes: emotesToSave.length > 0 ? emotesToSave : null,
-            stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
+            stream_session_id: resolvedSession?.sessionId ?? null,
             is_stream_active: sessionIsActive,
         }
 

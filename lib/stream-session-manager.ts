@@ -20,6 +20,9 @@ const SESSION_END_GRACE_PERIOD_MS = 2 * 60 * 1000 // 2 minutes
 // How close start times need to be to match sessions
 const START_TIME_MATCH_WINDOW_MS = 5 * 60 * 1000 // 5 minutes
 
+// Post-end window for attaching chats to just-ended sessions
+const POST_END_ATTACH_WINDOW_MS = 2 * 60 * 1000 // 2 minutes
+
 export interface SessionMetadata {
     sessionTitle?: string | null
     thumbnailUrl?: string | null
@@ -232,23 +235,101 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
             }
         }
 
+        // Get broadcaster_user_id for backfill
+        const sessionWithBroadcaster = await db.streamSession.findUnique({
+            where: { id: sessionId },
+            select: { broadcaster_user_id: true },
+        })
+
+        if (!sessionWithBroadcaster) {
+            console.warn(`[SessionManager] Could not find broadcaster_user_id for session ${sessionId}`)
+            return false
+        }
+
         // Count messages for this session
         const messageCount = await db.chatMessage.count({
             where: { stream_session_id: sessionId },
         })
 
         // Calculate duration
-        const durationSeconds = Math.floor((Date.now() - session.started_at.getTime()) / 1000)
+        const endedAt = new Date()
+        const durationSeconds = Math.floor((endedAt.getTime() - session.started_at.getTime()) / 1000)
 
+        // Update session with ended_at
         await db.streamSession.update({
             where: { id: sessionId },
             data: {
-                ended_at: new Date(),
+                ended_at: endedAt,
                 total_messages: messageCount,
                 duration_seconds: durationSeconds,
                 updated_at: new Date(),
             },
         })
+
+        // Backfill offline messages into this session
+        // Find offline messages that occurred during the stream window (started_at to ended_at + 2m)
+        const backfillWindowEnd = new Date(endedAt.getTime() + POST_END_ATTACH_WINDOW_MS)
+        const backfillStartTimestamp = BigInt(session.started_at.getTime())
+        const backfillEndTimestamp = BigInt(backfillWindowEnd.getTime())
+
+        try {
+            const offlineMessages = await db.offlineChatMessage.findMany({
+                where: {
+                    broadcaster_user_id: sessionWithBroadcaster.broadcaster_user_id,
+                    timestamp: {
+                        gte: backfillStartTimestamp,
+                        lte: backfillEndTimestamp,
+                    },
+                },
+            })
+
+            if (offlineMessages.length > 0) {
+                console.log(`[SessionManager] Backfilling ${offlineMessages.length} offline message(s) into session ${sessionId}`)
+
+                // Convert offline messages to chat messages
+                const chatMessagesToCreate = offlineMessages.map(offlineMsg => ({
+                    message_id: offlineMsg.message_id,
+                    stream_session_id: sessionId,
+                    sender_user_id: offlineMsg.sender_user_id,
+                    sender_username: offlineMsg.sender_username,
+                    broadcaster_user_id: offlineMsg.broadcaster_user_id,
+                    content: offlineMsg.content,
+                    emotes: offlineMsg.emotes,
+                    has_emotes: offlineMsg.has_emotes,
+                    engagement_type: offlineMsg.engagement_type,
+                    message_length: offlineMsg.message_length,
+                    exclamation_count: offlineMsg.exclamation_count,
+                    sentence_count: offlineMsg.sentence_count,
+                    timestamp: offlineMsg.timestamp,
+                    sender_username_color: offlineMsg.sender_username_color,
+                    sender_badges: offlineMsg.sender_badges,
+                    sender_is_verified: offlineMsg.sender_is_verified,
+                    sender_is_anonymous: offlineMsg.sender_is_anonymous,
+                    sweet_coins_earned: 0,
+                    sent_when_offline: true, // Mark as sent when offline
+                }))
+
+                // Insert chat messages (skip duplicates)
+                await db.chatMessage.createMany({
+                    data: chatMessagesToCreate,
+                    skipDuplicates: true,
+                })
+
+                // Delete the moved offline messages
+                await db.offlineChatMessage.deleteMany({
+                    where: {
+                        message_id: {
+                            in: offlineMessages.map(m => m.message_id),
+                        },
+                    },
+                })
+
+                console.log(`[SessionManager] Successfully backfilled ${offlineMessages.length} message(s) into session ${sessionId}`)
+            }
+        } catch (backfillError) {
+            // Non-critical - log but don't fail session ending
+            console.error(`[SessionManager] Error backfilling offline messages for session ${sessionId}:`, backfillError)
+        }
 
         const hours = Math.floor(durationSeconds / 3600)
         const minutes = Math.floor((durationSeconds % 3600) / 60)
@@ -360,5 +441,55 @@ export async function touchSession(sessionId: bigint): Promise<void> {
     } catch (error) {
         // Non-critical, log and continue
         console.warn('[SessionManager] Error touching session:', error)
+    }
+}
+
+/**
+ * Resolve the appropriate stream session for a chat message.
+ *
+ * Returns:
+ * - Active session (ended_at=null) if one exists
+ * - Most recent session that ended within POST_END_ATTACH_WINDOW_MS of message timestamp
+ * - null if no suitable session found
+ *
+ * @param broadcasterUserId - The broadcaster's kick_user_id
+ * @param messageTimestampMs - Message timestamp in milliseconds
+ * @returns Session ID and whether it's active, or null
+ */
+export async function resolveSessionForChat(
+    broadcasterUserId: bigint,
+    messageTimestampMs: number
+): Promise<{ sessionId: bigint; isActive: boolean } | null> {
+    try {
+        // First, check for active session
+        const activeSession = await getActiveSession(broadcasterUserId)
+        if (activeSession) {
+            return { sessionId: activeSession.id, isActive: true }
+        }
+
+        // No active session - check for recently ended session
+        const messageTime = new Date(messageTimestampMs)
+        const windowStart = new Date(messageTimestampMs - POST_END_ATTACH_WINDOW_MS)
+
+        const recentSession = await db.streamSession.findFirst({
+            where: {
+                broadcaster_user_id: broadcasterUserId,
+                ended_at: {
+                    gte: windowStart,
+                    lte: messageTime,
+                },
+            },
+            orderBy: { ended_at: 'desc' },
+            select: { id: true },
+        })
+
+        if (recentSession) {
+            return { sessionId: recentSession.id, isActive: false }
+        }
+
+        return null
+    } catch (error) {
+        console.error('[SessionManager] Error resolving session for chat:', error)
+        return null
     }
 }

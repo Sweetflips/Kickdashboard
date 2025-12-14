@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { getBroadcasterToken, refreshBroadcasterToken, clearTokenCache, getAppAccessToken, acquireRateLimitSlot } from '@/lib/kick-api';
-import { getOrCreateActiveSession, endActiveSession, getActiveSession, touchSession } from '@/lib/stream-session-manager';
+import { getOrCreateActiveSession, endActiveSession, getActiveSession, touchSession, updateSessionMetadata } from '@/lib/stream-session-manager';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
@@ -103,7 +103,7 @@ function parseV2ChannelData(data: any): {
             viewer_count: livestream?.viewer_count || 0,
             stream_title: livestream?.session_title || livestream?.stream_title || '',
             category,
-            is_live: !!livestream?.is_live,
+            is_live: normalizeIsLiveFlag(livestream?.is_live),
             started_at: livestream?.started_at || null,
             thumbnail,
             broadcaster_user_id: data.broadcaster_user_id || data.user?.id || data.id,
@@ -144,10 +144,12 @@ function normalizeIsLiveFlag(raw: unknown): boolean {
  * - If endpoint returns empty array, stream is OFFLINE
  * This is more reliable than checking is_live flag which may be missing or undefined
  *
- * Returns only isLive status - metadata comes from v2 API which is more complete
+ * Returns isLive status, started_at, and thumbnail from authoritative /livestreams endpoint
  */
 async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number): Promise<{
     isLive: boolean
+    startedAt?: string | null
+    thumbnailUrl?: string | null
 }> {
 
     try {
@@ -197,6 +199,23 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
 
                     // If data array has items, stream is LIVE
                     if (Array.isArray(livestreamsData.data) && livestreamsData.data.length > 0) {
+                        // Find the matching livestream for this broadcaster
+                        const livestream = livestreamsData.data.find(
+                            (ls: any) => ls.broadcaster_user_id === broadcasterUserId ||
+                                ls.slug?.toLowerCase() === slug.toLowerCase()
+                        ) as any | undefined
+
+                        if (livestream) {
+                            // Extract started_at and thumbnail from authoritative source
+                            const startedAt = livestream.started_at || null
+                            let thumbnailUrl: string | null = null
+                            if (livestream.thumbnail) {
+                                thumbnailUrl = typeof livestream.thumbnail === 'string'
+                                    ? livestream.thumbnail
+                                    : livestream.thumbnail.url || null
+                            }
+                            return { isLive: true, startedAt, thumbnailUrl }
+                        }
                         return { isLive: true }
                     } else {
                         // Empty data array means stream is OFFLINE
@@ -260,7 +279,17 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                     return { isLive: false }
                 }
 
-                return { isLive: true }
+                // Extract started_at and thumbnail if available from channel data
+                const livestream = channel.livestream
+                const startedAt = livestream?.started_at || null
+                let thumbnailUrl: string | null = null
+                if (livestream?.thumbnail) {
+                    thumbnailUrl = typeof livestream.thumbnail === 'string'
+                        ? livestream.thumbnail
+                        : livestream.thumbnail.url || null
+                }
+
+                return { isLive: true, startedAt, thumbnailUrl }
             } finally {
                 releaseSlot()
             }
@@ -501,24 +530,42 @@ async function trackStreamSession(
         const broadcasterIdBigInt = BigInt(broadcasterUserId)
 
         if (isLive) {
-            // Stream is live - get or create session using the session manager
-            // This handles race conditions and enforces the unique constraint
-            const session = await getOrCreateActiveSession(
-                broadcasterIdBigInt,
-                slug,
-                {
-                    sessionTitle: streamTitle || null,
-                    thumbnailUrl: thumbnailUrl,
-                    kickStreamId: kickStreamId || null,
-                    viewerCount: viewerCount,
-                    startedAt: apiStartedAt,
-                },
-                apiStartedAt
-            )
+            // Stream is live - only create new session if we have authoritative started_at
+            // This prevents creating phantom 0s sessions when API data is incomplete
+            if (apiStartedAt) {
+                // We have authoritative started_at - safe to create/update session
+                const session = await getOrCreateActiveSession(
+                    broadcasterIdBigInt,
+                    slug,
+                    {
+                        sessionTitle: streamTitle || null,
+                        thumbnailUrl: thumbnailUrl,
+                        kickStreamId: kickStreamId || null,
+                        viewerCount: viewerCount,
+                        startedAt: apiStartedAt,
+                    },
+                    apiStartedAt
+                )
 
-            if (session) {
-                // Mark that we've verified the stream is live (for grace period)
-                await touchSession(session.id)
+                if (session) {
+                    // Mark that we've verified the stream is live (for grace period)
+                    await touchSession(session.id)
+                }
+            } else {
+                // No authoritative started_at - only update existing session, don't create new one
+                const existingSession = await getActiveSession(broadcasterIdBigInt)
+                if (existingSession) {
+                    // Update metadata and touch existing session
+                    await updateSessionMetadata(existingSession.id, {
+                        sessionTitle: streamTitle || null,
+                        thumbnailUrl: thumbnailUrl,
+                        kickStreamId: kickStreamId || null,
+                        viewerCount: viewerCount,
+                    })
+                    await touchSession(existingSession.id)
+                }
+                // If no existing session and no started_at, wait for next poll cycle
+                // This prevents creating sessions with incorrect start times
             }
         } else {
             // Stream is offline - end the active session (with grace period)
@@ -640,23 +687,38 @@ export async function GET(request: Request) {
             broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
         }
 
-        // Get live status - prefer v2 data if available, otherwise check official API
+        // Get live status - use /livestreams endpoint as authoritative source when we have broadcasterUserId
+        // This is more reliable than v2 API's is_live flag which can be inconsistent
         let isLive = false
-        if (v2Data && v2Data.is_live !== undefined) {
-            // Trust v2 API for live status (it's reliable and we already have it)
-            isLive = v2Data.is_live
-        } else {
-            // Only check official API if v2 didn't provide live status
+        let authoritativeStartedAt: string | null = null
+        let authoritativeThumbnail: string | null = null
+
+        if (broadcasterUserId) {
+            // Use authoritative /livestreams endpoint
             const apiStatus = await checkLiveStatusFromAPI(slug, broadcasterUserId)
             isLive = apiStatus.isLive
+            if (apiStatus.startedAt) authoritativeStartedAt = apiStatus.startedAt
+            if (apiStatus.thumbnailUrl) authoritativeThumbnail = apiStatus.thumbnailUrl
+        } else if (v2Data && v2Data.is_live !== undefined) {
+            // Fallback to v2 API if we don't have broadcasterUserId yet
+            isLive = v2Data.is_live
         }
 
         // v2 API is PRIMARY source for metadata (most complete and accurate)
+        // But /livestreams is authoritative for isLive and started_at
         let viewerCount = 0
         let streamTitle = ''
         let streamStartedAt: string | null = null
         let category: { id: number; name: string } | null = null
         let followerCount = 0
+
+        // Prefer authoritative started_at and thumbnail from /livestreams if available
+        if (authoritativeStartedAt) {
+            streamStartedAt = authoritativeStartedAt
+        }
+        if (authoritativeThumbnail) {
+            thumbnailUrl = authoritativeThumbnail
+        }
 
         // Use v2 data if available (more complete metadata)
         if (v2Data) {
@@ -664,13 +726,9 @@ export async function GET(request: Request) {
             streamTitle = v2Data.stream_title
             category = v2Data.category
             followerCount = v2Data.followers_count
-            if (v2Data.thumbnail) thumbnailUrl = v2Data.thumbnail
-            if (v2Data.started_at) streamStartedAt = v2Data.started_at
-
-            // Also trust v2 for live status if official API failed
-            if (!isLive && v2Data.is_live) {
-                isLive = true
-            }
+            // Only use v2 thumbnail/started_at if authoritative source didn't provide them
+            if (!thumbnailUrl && v2Data.thumbnail) thumbnailUrl = v2Data.thumbnail
+            if (!streamStartedAt && v2Data.started_at) streamStartedAt = v2Data.started_at
         } else if (channelData && !v2Data) {
             // If we didn't fetch v2 data separately, use what we have from channelData
             viewerCount = livestream?.viewer_count || 0

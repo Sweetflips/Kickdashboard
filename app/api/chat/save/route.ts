@@ -1,6 +1,7 @@
 import type { ChatMessage } from '@/lib/chat-store';
 import { db } from '@/lib/db';
-import { logErrorRateLimited, logWarnRateLimited } from '@/lib/rate-limited-logger';
+import { logErrorRateLimited } from '@/lib/rate-limited-logger';
+import { resolveSessionForChat } from '@/lib/stream-session-manager';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic'
@@ -39,36 +40,32 @@ function isRetryableDbError(error: any) {
 }
 
 // Small cache for stream-session lookups to avoid querying on every chat message
-type ActiveSession = { id: bigint; ended_at: Date | null } | null
-const activeSessionCache = new Map<string, { value: ActiveSession; expiresAt: number }>()
+type ResolvedSession = { sessionId: bigint; isActive: boolean } | null
+const sessionCache = new Map<string, { value: ResolvedSession; expiresAt: number }>()
 
-async function getCachedActiveSession(broadcasterUserId: bigint): Promise<ActiveSession> {
+async function getCachedResolvedSession(broadcasterUserId: bigint, messageTimestampMs: number): Promise<ResolvedSession> {
     const key = broadcasterUserId.toString()
-    const cached = activeSessionCache.get(key)
+    const cached = sessionCache.get(key)
     const now = Date.now()
-    if (cached && cached.expiresAt > now) return cached.value
+    // Cache for 5 seconds, but invalidate if message is older than cache
+    if (cached && cached.expiresAt > now && messageTimestampMs <= cached.expiresAt) {
+        return cached.value
+    }
 
     if (isDbCircuitOpen()) {
-        activeSessionCache.set(key, { value: null, expiresAt: now + 2000 })
+        sessionCache.set(key, { value: null, expiresAt: now + 2000 })
         return null
     }
 
     try {
-        const value = await db.streamSession.findFirst({
-            where: {
-                broadcaster_user_id: broadcasterUserId,
-                ended_at: null,
-            },
-            orderBy: { started_at: 'desc' },
-            select: { id: true, ended_at: true },
-        })
-        activeSessionCache.set(key, { value, expiresAt: now + 5000 })
+        const value = await resolveSessionForChat(broadcasterUserId, messageTimestampMs)
+        sessionCache.set(key, { value, expiresAt: now + 5000 })
         return value
     } catch (error: any) {
         if (isRetryableDbError(error)) {
             openDbCircuit()
         }
-        activeSessionCache.set(key, { value: null, expiresAt: now + 2000 })
+        sessionCache.set(key, { value: null, expiresAt: now + 2000 })
         return null
     }
 }
@@ -193,35 +190,28 @@ export async function POST(request: Request) {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // STEP 2: CHECK FOR ACTIVE STREAM SESSION (READ-ONLY, CACHED)
+        // STEP 2: RESOLVE STREAM SESSION FOR EACH MESSAGE (READ-ONLY, CACHED)
         // ═══════════════════════════════════════════════════════════════
-        // Resolve active sessions once per broadcaster per few seconds.
-        // For a batch, this is still cheap due to caching.
-        const activeSessionByBroadcaster = new Map<string, ActiveSession>()
-        for (const msg of validMessages) {
-            const bId = BigInt(toFiniteInt((msg as any).broadcaster?.user_id) || 0)
-            const key = bId.toString()
-            if (!activeSessionByBroadcaster.has(key)) {
-                const activeSession = await getCachedActiveSession(bId)
-                activeSessionByBroadcaster.set(key, activeSession)
-
-                if (!activeSession) {
-                    logWarnRateLimited(`[chat/save] ⚠️ No active session found for broadcaster_user_id=${key}`)
-                } else {
-                    logWarnRateLimited(`[chat/save] ✅ Found active session ${activeSession.id} for broadcaster ${key}`)
-                }
-            }
-        }
+        // Resolve sessions per message (includes active or recently ended within 2m window)
+        // Caching prevents excessive DB queries for same broadcaster within short time window
 
         // ═══════════════════════════════════════════════════════════════
         // STEP 3: PREPARE JOB PAYLOAD
         // ═══════════════════════════════════════════════════════════════
-        const jobsToCreate = validMessages.map((message) => {
+        const jobsToCreate = await Promise.all(validMessages.map(async (message) => {
             const senderUserId = toFiniteInt((message as any).sender?.user_id) || 0
             const broadcasterUserIdNum = toFiniteInt((message as any).broadcaster?.user_id) || 0
             const broadcasterUserId = BigInt(broadcasterUserIdNum)
-            const activeSession = activeSessionByBroadcaster.get(broadcasterUserId.toString()) ?? null
-            const sessionIsActive = activeSession !== null && activeSession.ended_at === null
+
+            // Resolve session for this specific message (using message timestamp)
+            const messageTimestampMs = typeof message.timestamp === 'number'
+                ? message.timestamp
+                : typeof message.timestamp === 'string'
+                    ? parseInt(message.timestamp, 10)
+                    : Date.now()
+
+            const resolvedSession = await getCachedResolvedSession(broadcasterUserId, messageTimestampMs)
+            const sessionIsActive = resolvedSession?.isActive ?? false
 
             // Extract emotes from content if not provided
             let emotesToSave = (message as any).emotes || []
@@ -251,7 +241,7 @@ export async function POST(request: Request) {
                     profile_picture: message.broadcaster.profile_picture,
                 },
                 emotes: emotesToSave.length > 0 ? emotesToSave : null,
-                stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
+                stream_session_id: resolvedSession?.sessionId ?? null,
                 is_stream_active: sessionIsActive,
             }
 
@@ -260,10 +250,10 @@ export async function POST(request: Request) {
                 payload: payload as any,
                 sender_user_id: BigInt(senderUserId),
                 broadcaster_user_id: BigInt(broadcasterUserIdNum),
-                stream_session_id: sessionIsActive && activeSession ? activeSession.id : null,
+                stream_session_id: resolvedSession?.sessionId ?? null,
                 status: 'pending',
             }
-        })
+        }))
 
         // ═══════════════════════════════════════════════════════════════
         // STEP 4: ENQUEUE JOBS (BATCHED WRITE)

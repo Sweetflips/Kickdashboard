@@ -24,6 +24,7 @@ import { awardSweetCoins, awardEmotes, isBot } from '../lib/sweet-coins'
 import { detectBotMessage } from '../lib/bot-detection'
 import { queueUserEnrichment } from '../lib/user-enrichment'
 import { analyzeEngagementType, countExclamations, countSentences, hasEmotes, messageLength } from '../lib/analytics-classifier'
+import { resolveSessionForChat } from '../lib/stream-session-manager'
 
 const BATCH_SIZE = parseInt(process.env.CHAT_WORKER_BATCH_SIZE || '50', 10)
 const POLL_INTERVAL_MS = parseInt(process.env.CHAT_WORKER_POLL_INTERVAL_MS || '500', 10)
@@ -160,36 +161,39 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // STEP 2: CHECK FOR ACTIVE STREAM SESSION (READ-ONLY)
+        // STEP 2: RESOLVE STREAM SESSION (READ-ONLY)
         // ═══════════════════════════════════════════════════════════════
         // NOTE: We do NOT create sessions here. Sessions are created only by
         // the channel API when it detects a stream going live. This prevents
         // duplicate sessions from being created by race conditions.
+        //
+        // If payload already has stream_session_id (from resolver in chat/save or webhook),
+        // use it. Otherwise, resolve using message timestamp (includes active or recently ended).
 
         let streamSessionId = payload.stream_session_id
+        let sessionIsActive = payload.is_stream_active ?? false
 
-        // If no session ID provided in payload, check for existing active session
+        // If no session ID provided in payload, resolve using message timestamp
         if (!streamSessionId) {
             try {
-                const activeSession = await db.streamSession.findFirst({
-                    where: {
-                        broadcaster_user_id: broadcasterUserId,
-                        ended_at: null,
-                    },
-                    orderBy: { started_at: 'desc' },
-                    select: { id: true },
-                })
+                const messageTimestampMs = typeof payload.timestamp === 'number'
+                    ? payload.timestamp
+                    : typeof payload.timestamp === 'string'
+                        ? parseInt(payload.timestamp, 10)
+                        : Date.now()
 
-                if (activeSession) {
-                    streamSessionId = activeSession.id
+                const resolvedSession = await resolveSessionForChat(broadcasterUserId, messageTimestampMs)
+
+                if (resolvedSession) {
+                    streamSessionId = resolvedSession.sessionId
+                    sessionIsActive = resolvedSession.isActive
                     if (VERBOSE_LOGS) {
-                        console.log(`[chat-worker] Found active session ${streamSessionId} for broadcaster ${payload.broadcaster.username}`)
+                        console.log(`[chat-worker] Resolved session ${streamSessionId} (active: ${sessionIsActive}) for broadcaster ${payload.broadcaster.username}`)
                     }
                 } else {
-                    // No active session exists - message will be saved to offline messages
-                    // The channel API polling will create a session when stream goes live
+                    // No session found - message will be saved to offline messages
                     if (VERBOSE_LOGS) {
-                        console.log(`[chat-worker] No active session for broadcaster ${payload.broadcaster.username} - treating as offline message`)
+                        console.log(`[chat-worker] No session found for broadcaster ${payload.broadcaster.username} - treating as offline message`)
                     }
                 }
             } catch (error: any) {
@@ -202,16 +206,18 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                         console.warn(`[chat-worker] Database connection error - treating as offline message`)
                     }
                 } else {
-                    console.warn(`[chat-worker] Failed to check stream session:`, error)
+                    console.warn(`[chat-worker] Failed to resolve stream session:`, error)
                 }
             }
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // STEP 3: DETERMINE IF STREAM IS OFFLINE
+        // STEP 3: DETERMINE IF MESSAGE WAS SENT WHEN OFFLINE
         // ═══════════════════════════════════════════════════════════════
+        // If we have a session but it's not active (ended), mark as sent_when_offline=true
+        // This allows analytics to distinguish post-end messages
 
-        const sentWhenOffline = !streamSessionId || (!payload.is_stream_active && !streamSessionId)
+        const sentWhenOffline = !streamSessionId || !sessionIsActive
 
         // ═══════════════════════════════════════════════════════════════
         // STEP 4: SAVE MESSAGE
@@ -289,7 +295,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     sender_badges: payload.sender.badges || undefined,
                     sender_is_verified: payload.sender.is_verified || false,
                     sender_is_anonymous: payload.sender.is_anonymous || false,
-                    sent_when_offline: false,
+                    sent_when_offline: sentWhenOffline,
                 } as any,
                 create: {
                     message_id: payload.message_id,
@@ -310,7 +316,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                     sender_is_verified: payload.sender.is_verified || false,
                     sender_is_anonymous: payload.sender.is_anonymous || false,
                     sweet_coins_earned: 0,
-                    sent_when_offline: false,
+                    sent_when_offline: sentWhenOffline,
                 } as any,
             })
 
