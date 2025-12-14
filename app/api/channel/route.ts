@@ -273,9 +273,9 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                     return { isLive: false }
                 }
 
-                // Check stream.is_live from /channels endpoint
+                // Check stream.is_live from /channels endpoint (normalize to avoid truthy "0"/"false")
                 const stream = channel.stream
-                if (!stream || !stream.is_live) {
+                if (!stream || !normalizeIsLiveFlag(stream.is_live)) {
                     return { isLive: false }
                 }
 
