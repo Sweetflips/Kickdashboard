@@ -563,7 +563,7 @@ export default function UsersPage() {
                                     Admin
                                   </span>
                                 )}
-                                {user.moderator_override !== false && (
+                                {user.moderator_override === true && (
                                   <span className="px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium" title="Moderator">
                                     Mod
                                   </span>
@@ -648,58 +648,7 @@ export default function UsersPage() {
 
                         {/* Actions: wrap nicely on mobile */}
                         <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:ml-auto">
-                          {/* Admin Toggle */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              toggleAdmin(user.kick_user_id, user.is_admin)
-                            }}
-                            className={`px-3 py-2 rounded text-xs font-medium transition-colors w-full sm:w-auto ${
-                              user.is_admin
-                                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
-                                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
-                            }`}
-                          >
-                            {user.is_admin ? 'Remove Admin' : 'Make Admin'}
-                          </button>
-
-                          {/* Exclude Toggle */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              toggleExclude(user.kick_user_id, user.is_excluded)
-                            }}
-                            className={`px-3 py-2 rounded text-xs font-medium transition-colors w-full sm:w-auto ${
-                              user.is_excluded
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
-                                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            {user.is_excluded ? 'Include' : 'Exclude'}
-                          </button>
-
-                          {/* Moderator Toggle */}
-                          <div className="relative w-full sm:w-auto">
-                            <select
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => {
-                                const value = e.target.value === 'true'
-                                setModeratorOverride(user.kick_user_id, value)
-                              }}
-                              value={user.moderator_override === false ? 'false' : 'true'}
-                              className={`px-3 py-2 rounded text-xs font-medium transition-colors w-full ${
-                                user.moderator_override === false
-                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                                  : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                              }`}
-                              title="Moderator: On or Off"
-                            >
-                              <option value="true">Mod: On</option>
-                              <option value="false">Mod: Off</option>
-                            </select>
-                          </div>
-
-                          {/* Award Points Button */}
+                          {/* Award Points Button (permissions live in fold-out) */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -744,6 +693,60 @@ export default function UsersPage() {
                                 <div className="flex justify-between">
                                   <span className="text-gray-500 dark:text-kick-text-secondary">Achievements:</span>
                                   <span className="text-amber-600 dark:text-amber-500 font-semibold">{(user.achievements_unlocked ?? 0).toLocaleString()}</span>
+                                </div>
+                              </div>
+
+                              {/* Permissions */}
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-kick-text mt-4 mb-3">Permissions</h4>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleAdmin(user.kick_user_id, user.is_admin)
+                                  }}
+                                  className={`px-3 py-2 rounded text-xs font-medium transition-colors ${
+                                    user.is_admin
+                                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
+                                      : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                                  }`}
+                                >
+                                  {user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleExclude(user.kick_user_id, user.is_excluded)
+                                  }}
+                                  className={`px-3 py-2 rounded text-xs font-medium transition-colors ${
+                                    user.is_excluded
+                                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                  }`}
+                                >
+                                  {user.is_excluded ? 'Include' : 'Exclude'}
+                                </button>
+
+                                <div className="relative">
+                                  <select
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      const value = e.target.value === 'true'
+                                      setModeratorOverride(user.kick_user_id, value)
+                                    }}
+                                    value={user.moderator_override === true ? 'true' : 'false'}
+                                    className={`px-3 py-2 rounded text-xs font-medium transition-colors ${
+                                      user.moderator_override === true
+                                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                    title="Moderator permission"
+                                  >
+                                    <option value="false">Mod: Off</option>
+                                    <option value="true">Mod: On</option>
+                                  </select>
                                 </div>
                               </div>
 

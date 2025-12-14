@@ -99,7 +99,7 @@ export async function isAdmin(request: Request): Promise<boolean> {
  * Check if user is a moderator.
  *
  * Mod auto-detection is intentionally disabled.
- * Default behavior: everyone is treated as a moderator unless explicitly forced off.
+ * Default behavior: NOT a moderator unless explicitly enabled.
  */
 export async function isModerator(request: Request): Promise<boolean> {
   try {
@@ -117,8 +117,8 @@ export async function isModerator(request: Request): Promise<boolean> {
       return false
     }
 
-    // Default: everyone is a moderator unless explicitly forced off.
-    return user.moderator_override !== false
+    // Default: NOT a moderator unless explicitly enabled.
+    return user.moderator_override === true
   } catch (error) {
     console.error('Error checking moderator status:', error)
     return false
