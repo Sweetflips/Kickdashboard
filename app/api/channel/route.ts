@@ -213,7 +213,12 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                         const livestream = livestreamsData.data.find((ls: any) => {
                             const lsBroadcaster = ls?.broadcaster_user_id
                             const lsSlug = typeof ls?.slug === 'string' ? ls.slug.toLowerCase() : null
-                            return String(lsBroadcaster) === broadcasterIdStr || lsSlug === slugLower
+                            const lsChannelSlug = typeof ls?.channel_slug === 'string' ? ls.channel_slug.toLowerCase() : null
+                            const lsChannelSlugAlt = typeof ls?.channel?.slug === 'string' ? ls.channel.slug.toLowerCase() : null
+                            return String(lsBroadcaster) === broadcasterIdStr ||
+                                   lsSlug === slugLower ||
+                                   lsChannelSlug === slugLower ||
+                                   lsChannelSlugAlt === slugLower
                         }) as any | undefined
 
                         if (livestream) {
@@ -547,8 +552,8 @@ async function trackStreamSession(
         const broadcasterIdBigInt = BigInt(broadcasterUserId)
 
         if (isLive) {
-            // Stream is live - only create new session if we have authoritative started_at
-            // This prevents creating phantom 0s sessions when API data is incomplete
+            // Stream is live - prefer authoritative started_at, but allow fallback to current time
+            // This ensures sessions are created even when API data is incomplete
             if (apiStartedAt) {
                 // We have authoritative started_at - safe to create/update session
                 const session = await getOrCreateActiveSession(
@@ -569,7 +574,7 @@ async function trackStreamSession(
                     await touchSession(session.id)
                 }
             } else {
-                // No authoritative started_at - only update existing session, don't create new one
+                // No authoritative started_at - check for existing session first
                 const existingSession = await getActiveSession(broadcasterIdBigInt)
                 if (existingSession) {
                     // Update metadata and touch existing session
@@ -580,9 +585,28 @@ async function trackStreamSession(
                         viewerCount: viewerCount,
                     })
                     await touchSession(existingSession.id)
+                } else {
+                    // No existing session and no started_at - create session with current time as fallback
+                    // This ensures points can be awarded even when API doesn't provide started_at
+                    const fallbackStartTime = new Date().toISOString()
+                    const session = await getOrCreateActiveSession(
+                        broadcasterIdBigInt,
+                        slug,
+                        {
+                            sessionTitle: streamTitle || null,
+                            thumbnailUrl: thumbnailUrl,
+                            kickStreamId: kickStreamId || null,
+                            viewerCount: viewerCount,
+                            startedAt: fallbackStartTime,
+                        },
+                        fallbackStartTime
+                    )
+
+                    if (session) {
+                        await touchSession(session.id)
+                        console.log(`[Session] Created session with fallback start time (no API started_at available)`)
+                    }
                 }
-                // If no existing session and no started_at, wait for next poll cycle
-                // This prevents creating sessions with incorrect start times
             }
         } else {
             // Stream is offline - end the active session (with grace period)
