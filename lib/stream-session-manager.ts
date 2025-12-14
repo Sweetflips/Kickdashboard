@@ -333,6 +333,10 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
             console.error(`[SessionManager] Error backfilling offline messages for session ${sessionId}:`, backfillError)
         }
 
+        // Attempt to merge any accidental duplicate sessions for this stream
+        // (e.g., a phantom 0s session created around the same broadcast)
+        await mergeLikelyDuplicateSessions(sessionId).catch(() => {})
+
         const hours = Math.floor(durationSeconds / 3600)
         const minutes = Math.floor((durationSeconds % 3600) / 60)
         console.log(`[SessionManager] Ended session ${sessionId} (duration: ${hours}h ${minutes}m, messages: ${messageCount})`)
@@ -492,6 +496,224 @@ export async function resolveSessionForChat(
         return null
     } catch (error) {
         console.error('[SessionManager] Error resolving session for chat:', error)
+        return null
+    }
+}
+
+function normalizeSessionTitle(title: string | null | undefined): string {
+    const t = (title || '').trim().toLowerCase()
+    if (!t) return ''
+    if (t === 'untitled stream') return ''
+    return t
+}
+
+function scoreSessionForPrimary(s: {
+    id: bigint
+    kick_stream_id: string | null
+    thumbnail_url: string | null
+    duration_seconds: number | null
+    total_messages: number
+}): number {
+    let score = 0
+    if (s.kick_stream_id) score += 100
+    if (s.thumbnail_url) score += 50
+    if ((s.duration_seconds || 0) > 30) score += 10
+    if ((s.total_messages || 0) > 0) score += 5
+    return score
+}
+
+/**
+ * Merge duplicate stream sessions for the same broadcaster that likely represent the same stream.
+ *
+ * This fixes cases where the backend accidentally created a second "phantom" session
+ * (often 0s / missing kick_stream_id / missing thumbnail) for the same broadcast.
+ *
+ * Heuristics (conservative):
+ * - Same broadcaster
+ * - Ended sessions
+ * - Similar title (or one is empty/untitled)
+ * - Within a time window (by started_at OR ended_at)
+ * - At least one session looks "phantom" (very short duration / zero messages / missing key metadata)
+ *
+ * Moves related records to the chosen primary session and deletes the duplicates.
+ */
+export async function mergeLikelyDuplicateSessions(anchorSessionId: bigint): Promise<{
+    primarySessionId: bigint
+    mergedSessionIds: bigint[]
+    deletedSessionIds: bigint[]
+} | null> {
+    const TIME_WINDOW_MS = 6 * 60 * 60 * 1000 // 6 hours
+    const PHANTOM_DURATION_SECONDS = 30
+
+    try {
+        const anchor = await db.streamSession.findUnique({
+            where: { id: anchorSessionId },
+            select: {
+                id: true,
+                broadcaster_user_id: true,
+                channel_slug: true,
+                session_title: true,
+                thumbnail_url: true,
+                kick_stream_id: true,
+                started_at: true,
+                ended_at: true,
+                peak_viewer_count: true,
+                total_messages: true,
+                duration_seconds: true,
+            },
+        })
+
+        if (!anchor) return null
+        if (!anchor.ended_at) return null // only merge ended sessions
+
+        const anchorTitle = normalizeSessionTitle(anchor.session_title)
+        const startedMin = new Date(anchor.started_at.getTime() - TIME_WINDOW_MS)
+        const startedMax = new Date(anchor.started_at.getTime() + TIME_WINDOW_MS)
+        const endedMin = new Date(anchor.ended_at.getTime() - TIME_WINDOW_MS)
+        const endedMax = new Date(anchor.ended_at.getTime() + TIME_WINDOW_MS)
+
+        // Find nearby ended sessions for this broadcaster by either start or end time
+        const candidates = await db.streamSession.findMany({
+            where: {
+                broadcaster_user_id: anchor.broadcaster_user_id,
+                ended_at: { not: null },
+                id: { not: anchor.id },
+                OR: [
+                    { started_at: { gte: startedMin, lte: startedMax } },
+                    { ended_at: { gte: endedMin, lte: endedMax } },
+                ],
+            },
+            select: {
+                id: true,
+                channel_slug: true,
+                session_title: true,
+                thumbnail_url: true,
+                kick_stream_id: true,
+                started_at: true,
+                ended_at: true,
+                peak_viewer_count: true,
+                total_messages: true,
+                duration_seconds: true,
+            },
+        })
+
+        if (candidates.length === 0) return null
+
+        const sameTitleOrEmpty = (otherTitle: string | null) => {
+            const t = normalizeSessionTitle(otherTitle)
+            if (!anchorTitle || !t) return true
+            return t === anchorTitle
+        }
+
+        const looksPhantom = (s: { duration_seconds: number | null; total_messages: number; kick_stream_id: string | null; thumbnail_url: string | null }) => {
+            const dur = s.duration_seconds ?? 0
+            const msgs = s.total_messages ?? 0
+            return (
+                dur <= PHANTOM_DURATION_SECONDS ||
+                msgs === 0 ||
+                (!s.kick_stream_id && !s.thumbnail_url)
+            )
+        }
+
+        const group = [anchor, ...candidates].filter(s => sameTitleOrEmpty(s.session_title))
+        if (group.length < 2) return null
+
+        // Ensure we only merge if at least one looks phantom (prevents merging two real streams)
+        if (!group.some(s => looksPhantom(s))) return null
+
+        // Pick primary session (best metadata)
+        const sortedByScore = [...group].sort((a, b) => {
+            const scoreA = scoreSessionForPrimary(a)
+            const scoreB = scoreSessionForPrimary(b)
+            if (scoreA !== scoreB) return scoreB - scoreA
+            // tie-breaker: keep lowest id (oldest) for stability
+            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+        })
+        const primary = sortedByScore[0]
+        const toMerge = group.filter(s => s.id !== primary.id)
+        if (toMerge.length === 0) return null
+
+        const mergedIds = group.map(s => s.id)
+        const deletedIds: bigint[] = []
+
+        await db.$transaction(async (tx) => {
+            // Move related records
+            for (const dup of toMerge) {
+                await tx.chatMessage.updateMany({
+                    where: { stream_session_id: dup.id },
+                    data: { stream_session_id: primary.id },
+                })
+                await tx.sweetCoinHistory.updateMany({
+                    where: { stream_session_id: dup.id },
+                    data: { stream_session_id: primary.id },
+                })
+                await tx.sweetCoinAwardJob.updateMany({
+                    where: { stream_session_id: dup.id },
+                    data: { stream_session_id: primary.id },
+                })
+                await tx.chatJob.updateMany({
+                    where: { stream_session_id: dup.id },
+                    data: { stream_session_id: primary.id },
+                })
+            }
+
+            // Merge session metadata (best-of)
+            const earliestStart = new Date(Math.min(...group.map(s => s.started_at.getTime())))
+            const latestEnd = new Date(Math.max(...group.map(s => (s.ended_at as Date).getTime())))
+            const durationSeconds = Math.max(0, Math.floor((latestEnd.getTime() - earliestStart.getTime()) / 1000))
+
+            const bestTitle =
+                group.find(s => normalizeSessionTitle(s.session_title))?.session_title ??
+                primary.session_title ??
+                null
+
+            const bestThumbnail =
+                primary.thumbnail_url ||
+                group.find(s => s.thumbnail_url)?.thumbnail_url ||
+                null
+
+            const bestKickId =
+                primary.kick_stream_id ||
+                group.find(s => s.kick_stream_id)?.kick_stream_id ||
+                null
+
+            const peak = Math.max(...group.map(s => s.peak_viewer_count || 0))
+
+            const newTotalMessages = await tx.chatMessage.count({
+                where: { stream_session_id: primary.id },
+            })
+
+            await tx.streamSession.update({
+                where: { id: primary.id },
+                data: {
+                    session_title: bestTitle,
+                    thumbnail_url: bestThumbnail,
+                    kick_stream_id: bestKickId,
+                    peak_viewer_count: peak,
+                    started_at: earliestStart,
+                    ended_at: latestEnd,
+                    duration_seconds: durationSeconds,
+                    total_messages: newTotalMessages,
+                    updated_at: new Date(),
+                },
+            })
+
+            // Delete duplicates
+            for (const dup of toMerge) {
+                await tx.streamSession.delete({ where: { id: dup.id } })
+                deletedIds.push(dup.id)
+            }
+        })
+
+        console.log(`[SessionManager] Merged duplicate sessions into ${primary.id}: deleted ${deletedIds.map(String).join(', ')}`)
+
+        return {
+            primarySessionId: primary.id,
+            mergedSessionIds: mergedIds,
+            deletedSessionIds: deletedIds,
+        }
+    } catch (error) {
+        console.error('[SessionManager] Error merging duplicate sessions:', error)
         return null
     }
 }
