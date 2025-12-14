@@ -155,8 +155,10 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
     try {
         // First, try the official /livestreams endpoint if we have broadcaster_user_id
         // This is the authoritative source for live status
+        // Note: The API filter is unreliable, so we fetch all livestreams and filter client-side
         if (broadcasterUserId) {
-            const livestreamsUrl = `${KICK_API_BASE}/livestreams?broadcaster_user_id[]=${broadcasterUserId}`
+            // Don't rely on API filter - fetch recent livestreams and filter ourselves
+            const livestreamsUrl = `${KICK_API_BASE}/livestreams?limit=100`
 
             // Acquire rate limit slot before making request
             const releaseSlot = await acquireRateLimitSlot()
@@ -763,13 +765,24 @@ export async function GET(request: Request) {
             broadcasterUserId = channelData.broadcaster_user_id || channelData.user?.id || channelData.user_id || channelData.id
         }
 
-        // Get live status - use /livestreams endpoint as authoritative source when we have broadcasterUserId
-        // This is more reliable than v2 API's is_live flag which can be inconsistent
+        // Get live status.
+        // For SweetFlips we intentionally bypass the official Kick API (/livestreams, /channels) because
+        // the /livestreams filter is unreliable and creates noisy fallbacks. We rely on kick.com v2.
+        const forceKickV2ForSlug = slug.toLowerCase() === 'sweetflips'
+
         let isLive = false
         let authoritativeStartedAt: string | null = null
         let authoritativeThumbnail: string | null = null
 
-        if (broadcasterUserId) {
+        if (forceKickV2ForSlug) {
+            if (v2Data && v2Data.is_live !== undefined) {
+                isLive = v2Data.is_live
+                if (v2Data.started_at) authoritativeStartedAt = v2Data.started_at
+                if (v2Data.thumbnail) authoritativeThumbnail = v2Data.thumbnail
+            } else {
+                isLive = false
+            }
+        } else if (broadcasterUserId) {
             // Use authoritative /livestreams endpoint
             const apiStatus = await checkLiveStatusFromAPI(slug, broadcasterUserId)
             isLive = apiStatus.isLive
