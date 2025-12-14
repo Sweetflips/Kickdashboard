@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin, getAuthenticatedUser } from '@/lib/auth'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
+import { getAchievementCount } from '@/lib/achievements-engine'
 
 export const dynamic = 'force-dynamic'
 
@@ -178,8 +179,13 @@ export async function GET(request: Request) {
       }
     })
 
+    // Compute achievement counts for all users in parallel
+    const achievementCounts = await Promise.all(
+      users.map(u => getAchievementCount(u.id, u.kick_user_id))
+    )
+
     return NextResponse.json({
-      users: users.map(u => {
+      users: users.map((u, index) => {
         const recentSessions = u.user_sessions || []
         const latestSession = recentSessions[0] || null
         const totalSessions = sessionStatsMap.get(u.id.toString()) || 0
@@ -203,6 +209,7 @@ export async function GET(request: Request) {
           total_points: u.sweet_coins?.total_sweet_coins || 0,
           total_sweet_coins: u.sweet_coins?.total_sweet_coins || 0,
           total_emotes: u.sweet_coins?.total_emotes || 0,
+          achievements_unlocked: achievementCounts[index] || 0,
           created_at: u.created_at.toISOString(),
           last_login_at: u.last_login_at?.toISOString() || null,
           // Connected accounts

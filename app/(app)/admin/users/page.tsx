@@ -32,6 +32,7 @@ interface User {
   is_excluded: boolean
   total_points: number
   total_emotes: number
+  achievements_unlocked: number
   created_at: string
   last_login_at: string | null
   // Connected accounts
@@ -598,7 +599,13 @@ export default function UsersPage() {
                         {/* Points */}
                         <div className="text-right">
                           <div className="font-semibold text-kick-purple">{(user.total_points ?? 0).toLocaleString()}</div>
-                          <div className="text-xs text-gray-500 dark:text-kick-text-secondary">points</div>
+                          <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Sweet Coins</div>
+                        </div>
+
+                        {/* Achievements */}
+                        <div className="text-right hidden md:block">
+                          <div className="font-semibold text-amber-600 dark:text-amber-500">{(user.achievements_unlocked ?? 0).toLocaleString()}</div>
+                          <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Achievements</div>
                         </div>
 
                         {/* Admin Toggle */}
@@ -665,12 +672,16 @@ export default function UsersPage() {
                                   <span className="text-gray-900 dark:text-kick-text">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : 'Never'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500 dark:text-kick-text-secondary">Points:</span>
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Sweet Coins:</span>
                                   <span className="text-kick-purple font-semibold">{(user.total_points ?? 0).toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-gray-500 dark:text-kick-text-secondary">Emotes:</span>
                                   <span className="text-kick-green font-semibold">{(user.total_emotes ?? 0).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500 dark:text-kick-text-secondary">Achievements:</span>
+                                  <span className="text-amber-600 dark:text-amber-500 font-semibold">{(user.achievements_unlocked ?? 0).toLocaleString()}</span>
                                 </div>
                               </div>
 

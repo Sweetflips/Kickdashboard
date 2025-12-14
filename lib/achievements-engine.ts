@@ -216,3 +216,17 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
 
   return { user, unlockedById }
 }
+
+/**
+ * Get the count of unlocked achievements for a user
+ * This is a simplified version that computes achievements and returns the count
+ */
+export async function getAchievementCount(userId: bigint, kickUserId: bigint): Promise<number> {
+  try {
+    const { unlockedById } = await computeAchievementUnlocks({ userId, kickUserId })
+    return Object.values(unlockedById).filter(Boolean).length
+  } catch (error) {
+    console.error(`[getAchievementCount] Error computing achievements for user ${userId}:`, error)
+    return 0
+  }
+}

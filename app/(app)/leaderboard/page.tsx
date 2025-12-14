@@ -12,6 +12,7 @@ interface LeaderboardEntry {
     total_emotes: number
     total_messages: number
     streams_watched: number
+    achievements_unlocked: number
     last_point_earned_at: string | null
     is_verified?: boolean
     last_login_at?: string | null
@@ -541,6 +542,12 @@ export default function LeaderboardPage() {
                                                     {(entry.total_messages || 0).toLocaleString()}
                                                 </span>
                                             </div>
+                                            <div>
+                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Achievements</span>
+                                                <span className="font-semibold text-amber-600 dark:text-amber-500 text-body">
+                                                    {(entry.achievements_unlocked || 0).toLocaleString()}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -557,6 +564,7 @@ export default function LeaderboardPage() {
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Emotes</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Streams Watched</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Messages Sent</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Achievements</th>
                                             <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Last Login</th>
                                         </tr>
                                     </thead>
@@ -653,6 +661,11 @@ export default function LeaderboardPage() {
                                                 <td className="py-4 px-4 text-right">
                                                     <span className="text-body text-gray-900 dark:text-kick-text whitespace-nowrap">
                                                         {(entry.total_messages || 0).toLocaleString()}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <span className="font-semibold text-body text-amber-600 dark:text-amber-500 whitespace-nowrap">
+                                                        {(entry.achievements_unlocked || 0).toLocaleString()}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-small text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">

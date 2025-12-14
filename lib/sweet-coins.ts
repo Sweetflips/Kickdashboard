@@ -9,7 +9,7 @@ const logDebug = (...args: Parameters<typeof console.debug>) => {
     }
 }
 
-const BOT_USERNAMES = ['botrix', 'kickbot']
+const BOT_USERNAMES = ['botrix', 'kickbot', 'sweetflipsbot']
 const SWEET_COINS_PER_MESSAGE_NORMAL = 1
 const SWEET_COINS_PER_MESSAGE_SUBSCRIBER = 1
 const RATE_LIMIT_SECONDS = 300 // 5 minutes
@@ -61,7 +61,7 @@ export async function awardSweetCoins(
         // First, find the user by kick_user_id to get the internal id, kick_connected status, last_login_at, and username
         const user = await dbQueryWithRetry(() => db.user.findUnique({
             where: { kick_user_id: kickUserId },
-            select: { id: true, kick_connected: true, last_login_at: true, username: true },
+            select: { id: true, kick_connected: true, last_login_at: true, username: true, is_excluded: true },
         }))
 
         if (!user) {
@@ -69,6 +69,17 @@ export async function awardSweetCoins(
             return {
                 awarded: false,
                 reason: 'User not found',
+            }
+        }
+
+        // Exclude bots and excluded users
+        const usernameLower = user.username.toLowerCase()
+        if (usernameLower === 'sweetflipsbot' || user.is_excluded) {
+            logDebug(`⏸️ Sweet Coins not awarded to ${user.username}: Bot or excluded user`)
+            return {
+                awarded: false,
+                sweetCoinsEarned: 0,
+                reason: usernameLower === 'sweetflipsbot' ? 'Bot account' : 'Excluded user',
             }
         }
 
