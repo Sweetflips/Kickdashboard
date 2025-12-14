@@ -545,7 +545,7 @@ export default function LeaderboardPage() {
                                             <div>
                                                 <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Achievements</span>
                                                 <span className="font-semibold text-amber-600 dark:text-amber-500 text-body">
-                                                    {(entry.achievements_unlocked || 0).toLocaleString()}
+                                                    {(entry.achievements_unlocked ?? 0).toLocaleString()}
                                                 </span>
                                             </div>
                                         </div>
@@ -665,7 +665,7 @@ export default function LeaderboardPage() {
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
                                                     <span className="font-semibold text-body text-amber-600 dark:text-amber-500 whitespace-nowrap">
-                                                        {(entry.achievements_unlocked || 0).toLocaleString()}
+                                                        {(entry.achievements_unlocked ?? 0).toLocaleString()}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-small text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">

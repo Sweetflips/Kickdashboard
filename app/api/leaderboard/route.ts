@@ -24,7 +24,7 @@ export type LeaderboardEntry = {
     total_emotes: number
     total_messages: number
     streams_watched: number
-    achievements_unlocked: number
+    achievements_unlocked?: number
     last_point_earned_at: string | null
     is_verified: boolean
     last_login_at: string | null
@@ -285,7 +285,7 @@ async function withRetry<T>(
     throw new Error(`Max retries exceeded for ${operation}`)
 }
 
-function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
+function formatEntryV2(row: RowV2, rank: number, achievementsUnlocked?: number): LeaderboardEntry {
     const user = row.user
     const hasKickLogin = !!user.last_login_at
     const hasDiscord = user.discord_connected || false
@@ -301,6 +301,7 @@ function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
         total_emotes: row.total_emotes,
         total_messages: row.total_messages,
         streams_watched: row.streams_watched,
+        achievements_unlocked: achievementsUnlocked,
         last_point_earned_at: row.last_point_earned_at?.toISOString() || null,
         is_verified: hasKickLogin || hasDiscord || hasTelegram,
         last_login_at: user.last_login_at?.toISOString() || null,
@@ -318,7 +319,13 @@ async function buildLeaderboardRowsV2(sortBy: SortBy, dateFilter: DateRangeFilte
         : await buildOverallRowsV2()
 
     rows.sort(makeRowComparatorV2(sortBy))
-    return rows.map((row, idx) => formatEntryV2(row, idx + 1))
+    
+    // Compute achievement counts for all users in parallel
+    const achievementCounts = await Promise.all(
+      rows.map(row => getAchievementCount(row.user.id, row.user.kick_user_id))
+    )
+    
+    return rows.map((row, idx) => formatEntryV2(row, idx + 1, achievementCounts[idx]))
 }
 
 async function buildOverallRowsV2(): Promise<RowV2[]> {
