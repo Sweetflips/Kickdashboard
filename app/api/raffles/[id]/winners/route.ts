@@ -2,6 +2,7 @@ import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
+import { getOverlayAccessKey } from '@/lib/overlay-access-key'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,12 +11,29 @@ export async function GET(
     { params }: { params: { id: string } }
 ) {
     try {
-        const auth = await getAuthenticatedUser(request)
-        if (!auth) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            )
+        // Check for overlay key first (allows OBS browser source without login)
+        const { searchParams } = new URL(request.url)
+        const providedKey = searchParams.get('key')
+
+        if (providedKey) {
+            const validKey = await getOverlayAccessKey()
+            if (providedKey === validKey) {
+                // Valid overlay key, proceed without auth
+            } else {
+                return NextResponse.json(
+                    { error: 'Invalid overlay key' },
+                    { status: 403 }
+                )
+            }
+        } else {
+            // No overlay key provided, require authentication
+            const auth = await getAuthenticatedUser(request)
+            if (!auth) {
+                return NextResponse.json(
+                    { error: 'Unauthorized' },
+                    { status: 401 }
+                )
+            }
         }
 
         const raffleId = BigInt(params.id)

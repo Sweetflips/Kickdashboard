@@ -80,6 +80,9 @@ export default function Dashboard() {
     const [streamDuration, setStreamDuration] = useState<string>('0:00:00')
     const [showPromoCodeModal, setShowPromoCodeModal] = useState(false)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+    const [overlayKey, setOverlayKey] = useState<string | null>(null)
+    const [overlayKeyLoading, setOverlayKeyLoading] = useState(false)
+    const [showOverlayKey, setShowOverlayKey] = useState(false)
 
     useEffect(() => {
         fetchChannelData()
@@ -124,6 +127,35 @@ export default function Dashboard() {
 
         checkAdminStatus()
     }, [])
+
+    // Fetch overlay key when admin status is confirmed
+    useEffect(() => {
+        const fetchOverlayKey = async () => {
+            if (!isAdmin || adminCheckLoading) return
+            try {
+                setOverlayKeyLoading(true)
+                const { getAccessToken } = await import('@/lib/cookies')
+                const token = getAccessToken()
+                if (!token) return
+
+                const response = await fetch('/api/admin/overlay-key', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                })
+                if (response.ok) {
+                    const data = await response.json()
+                    setOverlayKey(data.key || null)
+                }
+            } catch (error) {
+                console.error('Error fetching overlay key:', error)
+            } finally {
+                setOverlayKeyLoading(false)
+            }
+        }
+
+        fetchOverlayKey()
+    }, [isAdmin, adminCheckLoading])
 
     const fetchChannelData = async () => {
         try {
@@ -536,6 +568,69 @@ export default function Dashboard() {
                             )}
                         </div>
                     </div>
+
+                    {/* Admin Overlay Key Card */}
+                    {isAdmin && (
+                        <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 shadow-sm">
+                            <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-4">OBS Overlay Access Key</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary mb-2">Overlay Key</p>
+                                    <div className="flex items-center gap-2">
+                                        <code className="flex-1 px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-body font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border">
+                                            {overlayKeyLoading ? (
+                                                <span className="text-gray-500 dark:text-kick-text-muted">Loading...</span>
+                                            ) : showOverlayKey && overlayKey ? (
+                                                overlayKey
+                                            ) : overlayKey ? (
+                                                '•'.repeat(64)
+                                            ) : (
+                                                <span className="text-gray-500 dark:text-kick-text-muted">Not available</span>
+                                            )}
+                                        </code>
+                                        {overlayKey && (
+                                            <>
+                                                <button
+                                                    onClick={() => setShowOverlayKey(!showOverlayKey)}
+                                                    className="px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-border transition-colors text-small font-medium"
+                                                >
+                                                    {showOverlayKey ? 'Hide' : 'Show'}
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(overlayKey)
+                                                        setToast({ message: 'Overlay key copied to clipboard', type: 'success' })
+                                                    }}
+                                                    className="px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-purple-700 transition-colors text-small font-medium"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                {overlayKey && (
+                                    <div>
+                                        <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary mb-2">Example OBS Browser Source URLs</p>
+                                        <div className="space-y-2">
+                                            <div>
+                                                <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-1">Per-raffle overlay:</p>
+                                                <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
+                                                    {typeof window !== 'undefined' ? `${window.location.origin}/raffles/&lt;raffleId&gt;/wheel?overlay=1&key=${overlayKey}` : '...'}
+                                                </code>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-1">Global wheel overlay:</p>
+                                                <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
+                                                    {typeof window !== 'undefined' ? `${window.location.origin}/wheel?key=${overlayKey}` : '...'}
+                                                </code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Chat Frame and Leaderboard Side by Side */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

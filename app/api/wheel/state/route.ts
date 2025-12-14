@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
 import {
-  buildCustomSnapshot,
-  buildRaffleSnapshot,
-  getOrCreateOverlayState,
-  requireOverlayKeyFromSearchParams,
-  WHEEL_OVERLAY_KEY,
+    buildCustomSnapshot,
+    buildRaffleSnapshot,
+    getOrCreateOverlayState,
+    requireOverlayKeyFromSearchParams,
+    WHEEL_OVERLAY_KEY,
 } from '@/lib/wheel-overlay'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     try {
-      requireOverlayKeyFromSearchParams(searchParams)
+      await requireOverlayKeyFromSearchParams(searchParams)
     } catch (e) {
       // Allow admins to fetch state without the overlay key (so control panel works).
       const adminCheck = await isAdmin(request)

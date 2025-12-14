@@ -42,9 +42,15 @@ export default function PublicWheelPage({ params, searchParams }: PublicWheelPag
     useEffect(() => {
         if (!isOverlay) return
 
+        // Extract key from URL if present
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+        const overlayKey = urlParams?.get('key') || ''
+
         const interval = setInterval(async () => {
             try {
-                const wResp = await fetch(`/api/raffles/${params.id}/winners`)
+                // Include key in winners fetch if provided
+                const winnersUrl = `/api/raffles/${params.id}/winners${overlayKey ? `?key=${encodeURIComponent(overlayKey)}` : ''}`
+                const wResp = await fetch(winnersUrl)
                 if (!wResp.ok) return
                 const wd = await wResp.json()
                 if (wd.winners && wd.winners.length > 0) {
@@ -63,7 +69,7 @@ export default function PublicWheelPage({ params, searchParams }: PublicWheelPag
             } catch (err) {
                 console.error('Error polling winners for overlay:', err)
             }
-        }, 2000)
+        }, 1000) // Poll every 1 second for live feel
 
         return () => clearInterval(interval)
     }, [isOverlay, params.id, lastWinnerId])

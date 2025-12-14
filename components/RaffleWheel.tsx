@@ -36,8 +36,10 @@ export default function RaffleWheel({
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
     const winwheelRef = useRef<any>(null)
 
+    const lastTargetIndexRef = useRef<number | null>(null)
+
     useEffect(() => {
-        // Load Winwheel script and TweenLite via CDN if not already loaded
+        // Load TweenMax (GSAP v2) and Winwheel via CDN if not already loaded
         const loadScript = (src: string) => new Promise((resolve, reject) => {
             if (document.querySelector(`script[src=\"${src}\"]`)) return resolve(true)
             const s = document.createElement('script')
@@ -50,92 +52,73 @@ export default function RaffleWheel({
 
         const bootstrap = async () => {
             try {
-                // TweenLite (GSAP) and Winwheel CDN
-                await loadScript('https://cdn.jsdelivr.net/npm/gsap@3.12.2/dist/gsap.min.js')
+                // TweenMax (GSAP v2) - required by Winwheel.js
+                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.3/TweenMax.min.js')
                 await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Winwheel.js/2.7.0/Winwheel.min.js')
                 const Winwheel = (window as any).Winwheel
 
-                // Build segments: if too many tickets, aggregate per user, otherwise one segment per ticket
-                let segmentArray: any[] = []
-                if (totalTickets <= 2000) {
-                    // Build a separate segment per ticket
-                    for (const e of entries) {
-                        const color = rgbaFromString(e.username || e.user_id || e.entry_id, sliceOpacity)
-                        for (let i = e.range_start; i < e.range_end; i++) {
-                            segmentArray.push({ fillStyle: color, text: formatName(e.username, maskNames) })
-                        }
-                    }
-                } else {
-                    // Fall back: one segment per user, sized proportional to tickets
-                    for (const e of entries) {
-                        const color = rgbaFromString(e.username || e.user_id || e.entry_id, sliceOpacity)
-                        segmentArray.push({
-                            fillStyle: color,
-                            text: `${formatName(e.username, maskNames)} (${e.tickets})`,
-                            size: (e.tickets / totalTickets) * 360
-                        })
-                    }
+                if (!Winwheel) {
+                    console.error('Winwheel not loaded')
+                    return
                 }
 
-                // instantiate Winwheel
+                // Build weighted segments: one segment per entry, sized by ticket count
+                const segmentArray: any[] = []
+                for (const e of entries) {
+                    const color = rgbaFromString(e.username || e.user_id || e.entry_id, sliceOpacity)
+                    const segmentSize = (e.tickets / totalTickets) * 360
+                    segmentArray.push({
+                        fillStyle: color,
+                        text: formatName(e.username, maskNames),
+                        size: segmentSize,
+                    })
+                }
+
+                // Create Winwheel instance
                 winwheelRef.current = new Winwheel({
                     canvasId: 'raffleWheelCanvas',
                     numSegments: segmentArray.length,
                     outerRadius: 260,
                     innerRadius: 60,
+                    textFontSize: 16,
+                    textOrientation: 'curved',
+                    textAlignment: 'outer',
+                    textMargin: 5,
                     segments: segmentArray,
+                    pointerAngle: 0, // Pointer at top (0 degrees)
                     animation: {
                         type: 'spinToStop',
                         duration: 5,
                         spins: 6,
                         callbackFinished: (w: any) => {
-                            // Find winner segment index
                             const seg = w.getIndicatedSegment()
-                            // seg.text contains the masked name; we need to map to original
-                            const idx = w.getIndicatedSegmentNumber() - 1
-                            let winnerEntry: any = null
-                            if (totalTickets <= 2000) {
-                                // map index to ticket index
-                                const ticketIndex = idx
-                                // find which entry ranges include ticketIndex
-                                for (const e of entries) {
-                                    if (ticketIndex >= e.range_start && ticketIndex < e.range_end) {
-                                        winnerEntry = e
-                                        break
-                                    }
-                                }
-                            } else {
-                                // aggregated mode: find the user segment by idx
-                                winnerEntry = entries[idx]
+                            const segNum = w.getIndicatedSegmentNumber() - 1
+                            const winnerEntry = entries[segNum]
+                            if (onSpinComplete && winnerEntry) {
+                                onSpinComplete(winnerEntry)
                             }
-
-                            if (onSpinComplete && winnerEntry) onSpinComplete(winnerEntry)
                         }
                     }
                 })
 
-                // If a target index provided, compute stopAngle and start animation
-                if (typeof targetIndex === 'number' && targetIndex >= 0) {
-                    // compute angle based on ticket index (works for both per-ticket and aggregated modes)
-                    let midAngle = 0
-                    const anglePerTicket = 360 / totalTickets
-                    if (totalTickets <= 2000) {
-                        midAngle = (targetIndex + 0.5) * anglePerTicket
-                    } else {
-                        // Find entry that contains the target ticket index and land in the middle of its arc
-                        const found = entries.find(e => targetIndex >= e.range_start && targetIndex < e.range_end)
-                        if (found) {
-                            const start = (found.range_start / totalTickets) * 360
-                            const end = (found.range_end / totalTickets) * 360
-                            midAngle = (start + end) / 2
-                        } else {
-                            midAngle = (targetIndex + 0.5) * anglePerTicket
-                        }
+                // If targetIndex changed and is provided, animate to that winner
+                if (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex !== lastTargetIndexRef.current) {
+                    lastTargetIndexRef.current = targetIndex
+
+                    // Find which entry contains this ticket index
+                    const targetEntry = entries.find(e => targetIndex >= e.range_start && targetIndex < e.range_end)
+                    if (targetEntry) {
+                        const entryIndex = entries.indexOf(targetEntry)
+                        const segmentNumber = entryIndex + 1 // Winwheel uses 1-based segment numbers
+
+                        // Use Winwheel's getRandomForSegment to get a random angle within that segment
+                        // This ensures we land somewhere in the segment, not just at the edge
+                        const stopAt = winwheelRef.current.getRandomForSegment(segmentNumber)
+
+                        // Set stopAngle and start animation
+                        winwheelRef.current.animation.stopAngle = stopAt
+                        winwheelRef.current.startAnimation()
                     }
-                    const stopAngle = 360 - midAngle
-                    // set stopAngle and start
-                    winwheelRef.current.animation.stopAngle = stopAngle
-                    winwheelRef.current.startAnimation()
                 }
             } catch (err) {
                 console.error('Failed to load winwheel:', err)
@@ -158,9 +141,25 @@ export default function RaffleWheel({
 
     return (
         <div className="relative" style={{ width: 600, height: 600, backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+            {/* Pointer indicator at top (wheel_of_fortune style) */}
+            <div
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 0,
+                    height: 0,
+                    borderLeft: '15px solid transparent',
+                    borderRight: '15px solid transparent',
+                    borderTop: '30px solid #fff',
+                    zIndex: 10,
+                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
+                }}
+            />
             <canvas id="raffleWheelCanvas" ref={canvasRef} width={600} height={600} style={{ background: 'transparent' }} />
             {centerLogoUrl && (
-                <img src={centerLogoUrl} alt="center-logo" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 120, height: 120, pointerEvents: 'none' }} />
+                <img src={centerLogoUrl} alt="center-logo" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 120, height: 120, pointerEvents: 'none', zIndex: 5 }} />
             )}
         </div>
     )

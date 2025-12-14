@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { buildEntryRanges, findEntryForIndex } from '@/lib/raffle-utils'
+import { getOverlayAccessKey } from '@/lib/overlay-access-key'
 import crypto from 'crypto'
 
 export const WHEEL_OVERLAY_KEY = 'default'
@@ -28,9 +29,8 @@ export function assertValidMode(mode: any): WheelMode {
   throw new Error('Invalid mode')
 }
 
-export function requireOverlayKeyFromSearchParams(searchParams: URLSearchParams) {
-  const required = process.env.WHEEL_OVERLAY_KEY
-  if (!required) return
+export async function requireOverlayKeyFromSearchParams(searchParams: URLSearchParams) {
+  const required = await getOverlayAccessKey()
   const key = searchParams.get('key') || ''
   if (key !== required) {
     const err = new Error('Invalid overlay key')
@@ -143,8 +143,3 @@ export function computeWinnerFromRanges(entries: WheelRangeEntry[], targetIndex:
     rangeEnd: r.rangeEnd as number,
   }
 }
-
-
-
-
-
