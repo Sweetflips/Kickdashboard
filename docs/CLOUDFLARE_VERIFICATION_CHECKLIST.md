@@ -142,3 +142,4 @@ This will test:
 - `docs/CLOUDFLARE_MCP_TOKEN_SCOPES.md` - API token scopes
 - `cloudflare/cdn-worker/SET_SECRET.md` - Worker secret setup
 - `c:\Users\Amor\.cursor\MCP_ENV_SETUP.md` - MCP environment variables
+

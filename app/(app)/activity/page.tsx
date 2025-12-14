@@ -161,8 +161,8 @@ export default function MyActivityPage() {
           {/* Your Sweet Coins */}
           <div className="rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface p-5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
-                <Image src="/icons/Sweetflipscoin.png" alt="" width={20} height={20} />
+              <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
+                <Image src="/icons/Sweetflipscoin.png" alt="" width={48} height={48} className="w-12 h-12" />
               </div>
               <div>
                 <div className="text-sm font-medium text-gray-900 dark:text-kick-text">Your Sweet Coins</div>

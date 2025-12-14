@@ -107,3 +107,4 @@ All configuration files are consistent:
 - **Never commit secrets**: Use environment variables
 - **Minimum permissions**: Use only required token scopes
 - **Regular rotation**: Rotate tokens every 90 days
+

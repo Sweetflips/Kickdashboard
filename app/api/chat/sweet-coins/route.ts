@@ -4,6 +4,37 @@ import { db } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+// In-memory DB circuit breaker to avoid hammering Postgres when it's unhealthy.
+let dbCircuitOpenUntil = 0
+let dbCircuitBackoffMs = 1000
+
+function isDbCircuitOpen() {
+    return Date.now() < dbCircuitOpenUntil
+}
+
+function openDbCircuit() {
+    const now = Date.now()
+    dbCircuitOpenUntil = now + dbCircuitBackoffMs
+    dbCircuitBackoffMs = Math.min(dbCircuitBackoffMs * 2, 30_000)
+}
+
+function closeDbCircuit() {
+    dbCircuitOpenUntil = 0
+    dbCircuitBackoffMs = 1000
+}
+
+function isRetryableDbError(error: any) {
+    return (
+        error?.code === 'P1001' ||
+        error?.code === 'P2024' ||
+        error?.code === 'P2028' ||
+        error?.message?.includes("Can't reach database server") ||
+        error?.message?.includes('PrismaClientInitializationError') ||
+        error?.message?.includes('connection pool') ||
+        error?.message?.includes('Unable to start a transaction')
+    )
+}
+
 /**
  * Get updated sweet coins for specific messages
  * POST /api/chat/sweet-coins
@@ -11,6 +42,15 @@ export const maxDuration = 30
  */
 export async function POST(request: Request) {
     try {
+        // If DB is unhealthy, fail soft to avoid flooding the origin.
+        if (isDbCircuitOpen()) {
+            return NextResponse.json({
+                success: true,
+                sweet_coins: {},
+                degraded: true,
+            })
+        }
+
         let body
         try {
             body = await request.json()
@@ -47,6 +87,7 @@ export async function POST(request: Request) {
                         sweet_coins_reason: true,
                     },
                 })
+                closeDbCircuit()
                 break
             } catch (error: any) {
                 if ((error?.code === 'P2024' || error?.message?.includes('connection pool')) && attempt < 2) {
@@ -84,13 +125,15 @@ export async function POST(request: Request) {
             }
         }
 
-        // Return 500 instead of 502 to avoid gateway issues
-        return NextResponse.json(
-            {
-                error: 'Failed to fetch message sweet coins',
-                details: error instanceof Error ? error.message : 'Unknown error',
-            },
-            { status: 500 }
-        )
+        if (isRetryableDbError(error)) {
+            openDbCircuit()
+        }
+
+        // Fail soft: keep chat UI stable during outages.
+        return NextResponse.json({
+            success: true,
+            sweet_coins: {},
+            degraded: true,
+        })
     }
 }

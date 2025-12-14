@@ -456,8 +456,115 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
     const [userData, setUserData] = useState<{ id?: number; username?: string; email?: string; profile_picture?: string; [key: string]: any } | null>(null)
     const processedMessageIdsRef = useRef<Set<string>>(new Set())
 
+    // Batch chat-save requests to avoid hammering the origin (and spamming 502s when it’s unhealthy)
+    const chatSaveQueueRef = useRef<ChatMessage[]>([])
+    const chatSaveFlushTimerRef = useRef<number | null>(null)
+    const chatSaveInFlightRef = useRef(false)
+    const chatSaveBackoffUntilRef = useRef(0)
+    const chatSaveBackoffMsRef = useRef(1000)
+
+    // Backoff for sweet-coins polling when the API is unhealthy
+    const sweetCoinsBackoffUntilRef = useRef(0)
+    const sweetCoinsBackoffMsRef = useRef(2000)
+
     const streamLive = isStreamLive ?? true
     const canChat = !!accessToken && streamLive
+
+    const bumpChatSaveBackoff = () => {
+        const now = Date.now()
+        const delay = chatSaveBackoffMsRef.current
+        chatSaveBackoffUntilRef.current = now + delay
+        chatSaveBackoffMsRef.current = Math.min(delay * 2, 30_000)
+    }
+
+    const resetChatSaveBackoff = () => {
+        chatSaveBackoffUntilRef.current = 0
+        chatSaveBackoffMsRef.current = 1000
+    }
+
+    const scheduleChatSaveFlush = () => {
+        if (typeof window === 'undefined') return
+        if (chatSaveFlushTimerRef.current !== null) return
+        chatSaveFlushTimerRef.current = window.setTimeout(() => {
+            chatSaveFlushTimerRef.current = null
+            void flushChatSaveQueue()
+        }, 500)
+    }
+
+    const flushChatSaveQueue = async () => {
+        if (typeof window === 'undefined') return
+        if (chatSaveInFlightRef.current) return
+        if (Date.now() < chatSaveBackoffUntilRef.current) return
+
+        const batch = chatSaveQueueRef.current.splice(0, 50)
+        if (batch.length === 0) return
+
+        chatSaveInFlightRef.current = true
+        try {
+            const res = await fetch('/api/chat/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ messages: batch }),
+            })
+
+            if (!res.ok) {
+                throw new Error(`chat save failed (${res.status})`)
+            }
+
+            resetChatSaveBackoff()
+        } catch (e) {
+            // Drop batch (non-critical) and back off to avoid flooding the origin during outages.
+            bumpChatSaveBackoff()
+        } finally {
+            chatSaveInFlightRef.current = false
+            // Keep flushing if more messages are queued (but allow the browser to breathe)
+            if (chatSaveQueueRef.current.length > 0) {
+                scheduleChatSaveFlush()
+            }
+        }
+    }
+
+    const enqueueChatSave = (message: ChatMessage) => {
+        if (typeof window === 'undefined') return
+        if (Date.now() < chatSaveBackoffUntilRef.current) return
+
+        chatSaveQueueRef.current.push(message)
+        // Cap memory in case something goes wild
+        if (chatSaveQueueRef.current.length > 300) {
+            chatSaveQueueRef.current.splice(0, chatSaveQueueRef.current.length - 300)
+        }
+
+        if (chatSaveQueueRef.current.length >= 25) {
+            void flushChatSaveQueue()
+            return
+        }
+
+        scheduleChatSaveFlush()
+    }
+
+    const bumpSweetCoinsBackoff = () => {
+        const now = Date.now()
+        const delay = sweetCoinsBackoffMsRef.current
+        sweetCoinsBackoffUntilRef.current = now + delay
+        sweetCoinsBackoffMsRef.current = Math.min(delay * 2, 60_000)
+    }
+
+    const resetSweetCoinsBackoff = () => {
+        sweetCoinsBackoffUntilRef.current = 0
+        sweetCoinsBackoffMsRef.current = 2000
+    }
+
+    // Cleanup any pending flush timers on unmount
+    useEffect(() => {
+        return () => {
+            if (chatSaveFlushTimerRef.current !== null) {
+                clearTimeout(chatSaveFlushTimerRef.current)
+                chatSaveFlushTimerRef.current = null
+            }
+        }
+    }, [])
 
     // Load recent emotes from localStorage
     useEffect(() => {
@@ -998,60 +1105,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             })
 
             // Fallback: Save message to database (webhook may not receive all messages)
-            // Fire-and-forget pattern - don't block UI updates
-            fetch('/api/chat/save', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(message),
-            })
-            .then(async (response) => {
-                if (response.ok) {
-                    const data = await response.json()
-                    // Update message with points earned from server
-                    if (data.pointsEarned !== undefined) {
-                        const pointsValue = data.pointsEarned || 0
-                        const pointsReasonValue = data.pointsReason || undefined
-
-                        // Update in main chat messages
-                        setChatMessages((prev) => {
-                            return prev.map((msg) => {
-                                if (msg.message_id === message.message_id) {
-                                    return {
-                                        ...msg,
-                                        sweet_coins_earned: pointsValue,
-                                        sweet_coins_reason: pointsReasonValue,
-                                    }
-                                }
-                                return msg
-                            })
-                        })
-
-                        // Also update in pinned messages if it exists there
-                        setPinnedMessages((prev) => {
-                            return prev.map((msg) => {
-                                if (msg.message_id === message.message_id) {
-                                    return {
-                                        ...msg,
-                                        sweet_coins_earned: pointsValue,
-                                        sweet_coins_reason: pointsReasonValue,
-                                    }
-                                }
-                                return msg
-                            })
-                        })
-
-                        if (pointsValue > 0) {
-                            console.log(`✅ Updated message ${message.message_id} with ${pointsValue} points`)
-                        }
-                    }
-                }
-            })
-            .catch((error) => {
-                // Silently handle errors - upsert in save route handles duplicates gracefully
-                console.warn('Failed to save message to database (non-critical):', error)
-            })
+            // Batched + backoff to avoid hammering the origin when it’s unhealthy
+            enqueueChatSave(message)
         }
 
         const bindEvents = (ch: any) => {
@@ -1102,6 +1157,11 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                     return currentMessages // No change
                 }
 
+                // If the endpoint is unhealthy, back off to avoid spamming 5xx/502s
+                if (Date.now() < sweetCoinsBackoffUntilRef.current) {
+                    return currentMessages
+                }
+
                 // Fetch updated sweet coins (async, don't await)
                 fetch('/api/chat/sweet-coins', {
                     method: 'POST',
@@ -1112,8 +1172,10 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                 })
                     .then((response) => {
                         if (!response.ok) {
+                            bumpSweetCoinsBackoff()
                             return null
                         }
+                        resetSweetCoinsBackoff()
                         return response.json()
                     })
                     .then((data) => {
@@ -1164,6 +1226,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                     })
                     .catch((error) => {
                         // Silently handle errors - polling failures shouldn't break chat
+                        bumpSweetCoinsBackoff()
                         console.debug('Failed to poll for updated points:', error)
                     })
 

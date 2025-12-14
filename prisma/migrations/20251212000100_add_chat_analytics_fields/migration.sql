@@ -23,3 +23,4 @@ CREATE INDEX IF NOT EXISTS "idx_chat_messages_sender_user_id" ON "chat_messages"
 
 
 
+

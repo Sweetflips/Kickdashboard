@@ -60,3 +60,4 @@ This is already configured in `mcp.json` and matches your `R2_ACCOUNT_ID` in the
 - **Never commit tokens to git**
 - **Use minimum required permissions** (the scopes above)
 - If a token is exposed, revoke it immediately and create a new one
+
