@@ -212,10 +212,154 @@ async function main() {
         }
 
         console.log()
-        console.log(`   Found ${duplicatesFound} duplicate session(s)`)
+        console.log(`   Found ${duplicatesFound} duplicate session(s) by started_at window`)
         if (!DRY_RUN) {
             console.log(`   Merged ${sessionsMerged} primary session(s)`)
             console.log(`   Deleted ${sessionsDeleted} duplicate session(s)`)
+        }
+
+        console.log()
+
+        // Step 2b: Find duplicates by kick_stream_id (covers cases where started_at drifted beyond 60s)
+        console.log('📋 Step 2b: Finding duplicate sessions by kick_stream_id...')
+
+        // Re-fetch sessions after first merge pass
+        const sessionsAfterFirstPass = await prisma.streamSession.findMany({
+            orderBy: [
+                { broadcaster_user_id: 'asc' },
+                { started_at: 'asc' }
+            ],
+            select: {
+                id: true,
+                broadcaster_user_id: true,
+                channel_slug: true,
+                session_title: true,
+                thumbnail_url: true,
+                kick_stream_id: true,
+                started_at: true,
+                ended_at: true,
+                peak_viewer_count: true,
+                total_messages: true,
+                _count: {
+                    select: { chat_messages: true }
+                }
+            }
+        })
+
+        // Group by broadcaster and kick_stream_id
+        const sessionsByKickId = new Map()
+        for (const session of sessionsAfterFirstPass) {
+            if (!session.kick_stream_id) continue // Skip sessions without kick_stream_id
+
+            const key = `${session.broadcaster_user_id.toString()}:${session.kick_stream_id}`
+            if (!sessionsByKickId.has(key)) {
+                sessionsByKickId.set(key, [])
+            }
+            sessionsByKickId.get(key).push(session)
+        }
+
+        let duplicatesByKickIdFound = 0
+        let sessionsDeletedByKickId = 0
+        let sessionsMergedByKickId = 0
+
+        for (const [key, sessions] of sessionsByKickId) {
+            if (sessions.length < 2) continue
+
+            // Sort by ID to keep lowest (most stable)
+            sessions.sort((a, b) => Number(a.id - b.id))
+            const primary = sessions[0]
+            const toMerge = sessions.slice(1)
+
+            duplicatesByKickIdFound += toMerge.length
+
+            console.log(`   🔄 Duplicate set found by kick_stream_id ${primary.kick_stream_id} for broadcaster ${primary.broadcaster_user_id.toString()}:`)
+            console.log(`      Primary: ID ${primary.id} (${primary.channel_slug}) - ${primary._count.chat_messages} messages`)
+
+            for (const dup of toMerge) {
+                console.log(`      Duplicate: ID ${dup.id} - ${dup._count.chat_messages} messages`)
+            }
+
+            if (!DRY_RUN) {
+                // Merge metadata into primary (take best values)
+                const mergedData = {
+                    thumbnail_url: primary.thumbnail_url || toMerge.find(d => d.thumbnail_url)?.thumbnail_url,
+                    kick_stream_id: primary.kick_stream_id, // Already the same
+                    session_title: primary.session_title || toMerge.find(d => d.session_title)?.session_title,
+                    peak_viewer_count: Math.max(primary.peak_viewer_count, ...toMerge.map(d => d.peak_viewer_count)),
+                    total_messages: primary.total_messages + toMerge.reduce((sum, d) => sum + d.total_messages, 0),
+                    // Use earliest start and latest end
+                    started_at: new Date(Math.min(primary.started_at.getTime(), ...toMerge.map(d => d.started_at.getTime()))),
+                    ended_at: primary.ended_at || toMerge.find(d => d.ended_at)?.ended_at,
+                }
+
+                // Update primary with merged data
+                await prisma.streamSession.update({
+                    where: { id: primary.id },
+                    data: mergedData
+                })
+                sessionsMergedByKickId++
+
+                // Move messages from duplicates to primary
+                for (const dup of toMerge) {
+                    await prisma.chatMessage.updateMany({
+                        where: { stream_session_id: dup.id },
+                        data: { stream_session_id: primary.id }
+                    })
+
+                    // Move point history (if table exists)
+                    try {
+                        await prisma.pointHistory.updateMany({
+                            where: { stream_session_id: dup.id },
+                            data: { stream_session_id: primary.id }
+                        })
+                    } catch (e) {
+                        // pointHistory table might not exist, ignore
+                    }
+
+                    // Move Sweet Coins history (if table exists)
+                    try {
+                        await prisma.sweetCoinHistory.updateMany({
+                            where: { stream_session_id: dup.id },
+                            data: { stream_session_id: primary.id }
+                        })
+                    } catch (e) {
+                        // sweetCoinHistory table might not exist, ignore
+                    }
+
+                    // Delete associated jobs
+                    try {
+                        await prisma.pointAwardJob.deleteMany({
+                            where: { stream_session_id: dup.id }
+                        })
+                    } catch (e) {
+                        // Table might not exist
+                    }
+                    try {
+                        await prisma.sweetCoinAwardJob.deleteMany({
+                            where: { stream_session_id: dup.id }
+                        })
+                    } catch (e) {
+                        // Table might not exist
+                    }
+                    await prisma.chatJob.deleteMany({
+                        where: { stream_session_id: dup.id }
+                    })
+
+                    // Delete the duplicate session
+                    await prisma.streamSession.delete({
+                        where: { id: dup.id }
+                    })
+                    sessionsDeletedByKickId++
+                    console.log(`      ✅ Merged and deleted duplicate ${dup.id}`)
+                }
+            }
+        }
+
+        console.log()
+        console.log(`   Found ${duplicatesByKickIdFound} duplicate session(s) by kick_stream_id`)
+        if (!DRY_RUN) {
+            console.log(`   Merged ${sessionsMergedByKickId} primary session(s)`)
+            console.log(`   Deleted ${sessionsDeletedByKickId} duplicate session(s)`)
         }
 
         console.log()
@@ -261,6 +405,12 @@ async function main() {
         console.log()
         console.log('='.repeat(60))
         console.log('CLEANUP COMPLETE')
+        console.log('='.repeat(60))
+        console.log(`Total duplicates found: ${duplicatesFound + duplicatesByKickIdFound}`)
+        if (!DRY_RUN) {
+            console.log(`Total sessions merged: ${sessionsMerged + sessionsMergedByKickId}`)
+            console.log(`Total sessions deleted: ${sessionsDeleted + sessionsDeletedByKickId}`)
+        }
         console.log('='.repeat(60))
 
     } catch (error) {

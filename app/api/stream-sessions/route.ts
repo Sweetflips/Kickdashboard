@@ -1,4 +1,4 @@
-import { isAdmin } from '@/lib/auth'
+import { isAdmin, canViewPayouts } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
@@ -9,11 +9,11 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     try {
-        // Check admin access - Past Streams are admin-only
-        const adminCheck = await isAdmin(request)
-        if (!adminCheck) {
+        // Check access - Past Streams accessible to admins and moderators (for payouts)
+        const accessCheck = await canViewPayouts(request)
+        if (!accessCheck) {
             return NextResponse.json(
-                { error: 'Unauthorized - Admin access required' },
+                { error: 'Unauthorized - Admin or Moderator access required' },
                 { status: 403 }
             )
         }
@@ -56,17 +56,33 @@ export async function GET(request: Request) {
             },
         })
 
-        // Deduplicate sessions: same broadcaster, same started_at (within 1 minute), keep the one with LOWEST ID (most stable)
-        // This ensures that when you delete a session, you don't see a different "duplicate" appear
+        // Deduplicate sessions with improved logic:
+        // 1. If kick_stream_id exists: group by (broadcaster_user_id, kick_stream_id) - most reliable
+        // 2. Else: group by (broadcaster_user_id, started_at within 60s) - fallback
+        // Always keep the session with LOWEST ID (most stable) within each group
         // Admin can skip deduplication to see all sessions
         let deduplicatedSessions = allSessions
 
         if (!skipDeduplication) {
             deduplicatedSessions = allSessions.reduce((acc, session) => {
-                const existingIndex = acc.findIndex(s =>
-                    s.broadcaster_user_id === session.broadcaster_user_id &&
-                    Math.abs(s.started_at.getTime() - session.started_at.getTime()) < 60000 // Within 1 minute
-                )
+                // First, try to find duplicate by kick_stream_id (most reliable)
+                let existingIndex = -1
+
+                if (session.kick_stream_id) {
+                    existingIndex = acc.findIndex(s =>
+                        s.broadcaster_user_id === session.broadcaster_user_id &&
+                        s.kick_stream_id === session.kick_stream_id &&
+                        s.kick_stream_id !== null
+                    )
+                }
+
+                // If no match by kick_stream_id, fallback to started_at window
+                if (existingIndex === -1) {
+                    existingIndex = acc.findIndex(s =>
+                        s.broadcaster_user_id === session.broadcaster_user_id &&
+                        Math.abs(s.started_at.getTime() - session.started_at.getTime()) < 60000 // Within 1 minute
+                    )
+                }
 
                 if (existingIndex === -1) {
                     acc.push(session)
@@ -242,128 +258,33 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    try {
-        const body = await request.json()
-        const {
-            broadcaster_user_id,
-            channel_slug,
-            session_title,
-            started_at,
-        } = body
+    // Legacy endpoint disabled - sessions are created automatically by /api/channel live tracking
+    // Test sessions should use /api/admin/test-session instead
+    console.warn('[stream-sessions] ⚠️ Legacy POST endpoint called - sessions are created automatically via /api/channel')
 
-        if (!broadcaster_user_id || !channel_slug) {
-            return NextResponse.json(
-                { error: 'broadcaster_user_id and channel_slug are required' },
-                { status: 400 }
-            )
-        }
-
-        // Check if there's an active session for this broadcaster
-        const activeSession = await db.streamSession.findFirst({
-            where: {
-                broadcaster_user_id: BigInt(broadcaster_user_id),
-                ended_at: null,
-            },
-            orderBy: { started_at: 'desc' },
-        })
-
-        if (activeSession) {
-            // Update existing active session
-            const updated = await db.streamSession.update({
-                where: { id: activeSession.id },
-                data: {
-                    session_title: session_title || activeSession.session_title,
-                    updated_at: new Date(),
-                },
-            })
-
-            return NextResponse.json({
-                success: true,
-                session: {
-                    ...updated,
-                    id: updated.id.toString(),
-                    broadcaster_user_id: updated.broadcaster_user_id.toString(),
-                },
-                message: 'Updated existing active session',
-            })
-        }
-
-        // Create new session
-        const session = await db.streamSession.create({
-            data: {
-                broadcaster_user_id: BigInt(broadcaster_user_id),
-                channel_slug,
-                session_title: session_title || null,
-                started_at: started_at ? new Date(started_at) : new Date(),
-            },
-        })
-
-        return NextResponse.json({
-            success: true,
-            session: {
-                ...session,
-                id: session.id.toString(),
-                broadcaster_user_id: session.broadcaster_user_id.toString(),
-            },
-            message: 'Created new stream session',
-        })
-    } catch (error) {
-        console.error('Error creating stream session:', error)
-        return NextResponse.json(
-            { error: 'Failed to create stream session', details: error instanceof Error ? error.message : 'Unknown error' },
-            { status: 500 }
-        )
-    }
+    return NextResponse.json(
+        {
+            error: 'Method Not Allowed',
+            message: 'Stream sessions are created automatically when streams go live via /api/channel polling. For test sessions, use /api/admin/test-session instead.',
+            deprecated: true,
+        },
+        { status: 405 }
+    )
 }
 
 export async function PATCH(request: Request) {
-    try {
-        const body = await request.json()
-        const {
-            session_id,
-            session_title,
-            peak_viewer_count,
-            total_messages,
-            ended_at,
-        } = body
+    // Legacy endpoint disabled - sessions are managed automatically by /api/channel live tracking
+    // Session metadata updates happen via stream-session-manager.ts
+    console.warn('[stream-sessions] ⚠️ Legacy PATCH endpoint called - sessions are managed automatically via /api/channel')
 
-        if (!session_id) {
-            return NextResponse.json(
-                { error: 'session_id is required' },
-                { status: 400 }
-            )
-        }
-
-        const updateData: any = {
-            updated_at: new Date(),
-        }
-
-        if (session_title !== undefined) updateData.session_title = session_title
-        if (peak_viewer_count !== undefined) updateData.peak_viewer_count = peak_viewer_count
-        if (total_messages !== undefined) updateData.total_messages = total_messages
-        if (ended_at !== undefined) updateData.ended_at = ended_at ? new Date(ended_at) : null
-
-        const session = await db.streamSession.update({
-            where: { id: BigInt(session_id) },
-            data: updateData,
-        })
-
-        return NextResponse.json({
-            success: true,
-            session: {
-                ...session,
-                id: session.id.toString(),
-                broadcaster_user_id: session.broadcaster_user_id.toString(),
-            },
-            message: 'Updated stream session',
-        })
-    } catch (error) {
-        console.error('Error updating stream session:', error)
-        return NextResponse.json(
-            { error: 'Failed to update stream session', details: error instanceof Error ? error.message : 'Unknown error' },
-            { status: 500 }
-        )
-    }
+    return NextResponse.json(
+        {
+            error: 'Method Not Allowed',
+            message: 'Stream sessions are managed automatically when streams go live/offline via /api/channel polling. Session updates happen through the centralized stream-session-manager.',
+            deprecated: true,
+        },
+        { status: 405 }
+    )
 }
 
 export async function DELETE(request: Request) {
