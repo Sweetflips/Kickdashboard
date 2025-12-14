@@ -294,7 +294,8 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
                     sender_username: offlineMsg.sender_username,
                     broadcaster_user_id: offlineMsg.broadcaster_user_id,
                     content: offlineMsg.content,
-                    emotes: offlineMsg.emotes,
+                    // Prisma createMany doesn't accept raw null for Json? fields
+                    emotes: offlineMsg.emotes ?? undefined,
                     has_emotes: offlineMsg.has_emotes,
                     engagement_type: offlineMsg.engagement_type,
                     message_length: offlineMsg.message_length,
@@ -302,7 +303,8 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
                     sentence_count: offlineMsg.sentence_count,
                     timestamp: offlineMsg.timestamp,
                     sender_username_color: offlineMsg.sender_username_color,
-                    sender_badges: offlineMsg.sender_badges,
+                    // Prisma createMany doesn't accept raw null for Json? fields
+                    sender_badges: offlineMsg.sender_badges ?? undefined,
                     sender_is_verified: offlineMsg.sender_is_verified,
                     sender_is_anonymous: offlineMsg.sender_is_anonymous,
                     sweet_coins_earned: 0,
