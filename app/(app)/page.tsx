@@ -466,9 +466,7 @@ export default function Dashboard() {
                                         <p className="text-small font-medium text-gray-600 dark:text-kick-text-secondary">Sweet Coins Earned</p>
                                         <p className="text-h3 font-semibold mt-2 text-kick-purple">{streamStats.total_points.toLocaleString()}</p>
                                     </div>
-                                    <div className="w-12 h-12 rounded-full bg-kick-purple/20 flex items-center justify-center">
-                                        <Image src="/icons/Sweetflipscoin.png" alt="" width={24} height={24} className="w-6 h-6" />
-                                    </div>
+                                    <Image src="/icons/Sweetflipscoin.png" alt="" width={48} height={48} className="w-12 h-12" />
                                 </div>
                             </div>
 
@@ -604,7 +602,7 @@ export default function Dashboard() {
                                                         <span className="font-semibold text-body text-kick-purple transition-all duration-300">
                                                             {entry.points_earned.toLocaleString()}
                                                         </span>
-                                                        <Image src="/icons/Sweetflipscoin.png" alt="" width={14} height={14} className="w-3.5 h-3.5 opacity-90" />
+                                                        <Image src="/icons/Sweetflipscoin.png" alt="" width={24} height={24} className="w-6 h-6 opacity-90" />
                                                     </div>
                                                     {(entry.messages_sent !== undefined || entry.emotes_used !== undefined) && (
                                                         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-kick-text-muted">

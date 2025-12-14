@@ -196,6 +196,7 @@ export async function GET(request: Request) {
           email: u.email,
           profile_picture_url: rewriteApiMediaUrlToCdn(u.custom_profile_picture_url || u.profile_picture_url),
           is_admin: u.is_admin,
+          is_excluded: u.is_excluded,
           // Keep both names for backwards/forwards compatibility:
           // - admin UI expects `total_points`
           // - other parts may use `total_sweet_coins`
@@ -261,7 +262,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { kick_user_id, is_admin } = body
+    const { kick_user_id, is_admin, is_excluded } = body
 
     if (!kick_user_id) {
       return NextResponse.json(
@@ -270,22 +271,32 @@ export async function PUT(request: Request) {
       )
     }
 
-    if (typeof is_admin !== 'boolean') {
+    // Build update data object
+    const updateData: any = {}
+    if (typeof is_admin === 'boolean') {
+      updateData.is_admin = is_admin
+    }
+    if (typeof is_excluded === 'boolean') {
+      updateData.is_excluded = is_excluded
+    }
+
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        { error: 'is_admin must be a boolean' },
+        { error: 'At least one field (is_admin or is_excluded) must be provided' },
         { status: 400 }
       )
     }
 
-    // Update user admin status
+    // Update user
     const user = await db.user.update({
       where: { kick_user_id: BigInt(kick_user_id) },
-      data: { is_admin },
+      data: updateData,
       select: {
         id: true,
         kick_user_id: true,
         username: true,
         is_admin: true,
+        is_excluded: true,
       },
     })
 
@@ -295,6 +306,7 @@ export async function PUT(request: Request) {
         kick_user_id: user.kick_user_id.toString(),
         username: user.username,
         is_admin: user.is_admin,
+        is_excluded: user.is_excluded,
       },
     })
   } catch (error) {

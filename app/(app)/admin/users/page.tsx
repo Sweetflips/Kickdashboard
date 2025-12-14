@@ -29,6 +29,7 @@ interface User {
   email: string | null
   profile_picture_url: string | null
   is_admin: boolean
+  is_excluded: boolean
   total_points: number
   total_emotes: number
   created_at: string
@@ -296,6 +297,34 @@ export default function UsersPage() {
     }
   }
 
+  const toggleExclude = async (kickUserId: string, currentStatus: boolean) => {
+    if (!confirm(`Are you sure you want to ${currentStatus ? 'include' : 'exclude'} this player?`)) return
+
+    try {
+      const token = localStorage.getItem('kick_access_token')
+      if (!token) return
+
+      const response = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ kick_user_id: kickUserId, is_excluded: !currentStatus }),
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        await fetchUsers()
+      } else {
+        const error = await response.json()
+        alert(`Failed: ${error.error}`)
+      }
+    } catch (error) {
+      alert('Failed to update user')
+    }
+  }
+
   const toggleExpanded = (userId: string) => {
     const newExpanded = new Set(expandedUsers)
     if (newExpanded.has(userId)) {
@@ -502,6 +531,11 @@ export default function UsersPage() {
                                 Admin
                               </span>
                             )}
+                            {user.is_excluded && (
+                              <span className="px-1.5 py-0.5 rounded text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium">
+                                Excluded
+                              </span>
+                            )}
                           </div>
                           <div className="text-sm text-gray-500 dark:text-kick-text-secondary">
                             {user.email || 'No email'}
@@ -580,6 +614,21 @@ export default function UsersPage() {
                           }`}
                         >
                           {user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                        </button>
+
+                        {/* Exclude Toggle */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleExclude(user.kick_user_id, user.is_excluded)
+                          }}
+                          className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                            user.is_excluded
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {user.is_excluded ? 'Include' : 'Exclude'}
                         </button>
 
                         {/* Award Points Button */}

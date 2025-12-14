@@ -681,15 +681,15 @@ export default function AppLayout({ children }: LayoutProps) {
                             )}
                             {isAuthenticated && userData?.id && (
                                 <div
-                                    className="flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border flex-shrink-0"
+                                    className="flex items-center gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full bg-gray-100 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border flex-shrink-0"
                                     title="Sweet Coins"
                                 >
                                     <Image
                                         src="/icons/Sweetflipscoin.png"
                                         alt=""
-                                        width={18}
-                                        height={18}
-                                        className="w-[18px] h-[18px] flex-shrink-0"
+                                        width={32}
+                                        height={32}
+                                        className="w-8 h-8 flex-shrink-0"
                                     />
                                     <span className="text-xs sm:text-sm font-semibold tabular-nums whitespace-nowrap">
                                         {pointsLoading && userPoints === null ? '…' : (userPoints ?? 0).toLocaleString()}

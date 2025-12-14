@@ -20,3 +20,6 @@ CREATE INDEX IF NOT EXISTS "idx_chat_messages_engagement_type" ON "chat_messages
 CREATE INDEX IF NOT EXISTS "idx_chat_messages_created_at" ON "chat_messages" ("created_at");
 CREATE INDEX IF NOT EXISTS "idx_chat_messages_sender_user_id" ON "chat_messages" ("sender_user_id");
 
+
+
+
