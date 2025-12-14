@@ -563,14 +563,9 @@ export default function UsersPage() {
                                     Admin
                                   </span>
                                 )}
-                                {user.moderator_override === true && (
-                                  <span className="px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium" title="Moderator (forced on)">
+                                {user.moderator_override !== false && (
+                                  <span className="px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium" title="Moderator">
                                     Mod
-                                  </span>
-                                )}
-                                {user.moderator_override === null && (
-                                  <span className="px-1.5 py-0.5 rounded text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium opacity-60" title="Moderator (auto-detect)">
-                                    Mod?
                                   </span>
                                 )}
                                 {user.is_excluded && (
@@ -683,27 +678,24 @@ export default function UsersPage() {
                             {user.is_excluded ? 'Include' : 'Exclude'}
                           </button>
 
-                          {/* Moderator Override Dropdown */}
+                          {/* Moderator Toggle */}
                           <div className="relative w-full sm:w-auto">
                             <select
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) => {
-                                const value = e.target.value === 'null' ? null : e.target.value === 'true'
+                                const value = e.target.value === 'true'
                                 setModeratorOverride(user.kick_user_id, value)
                               }}
-                              value={user.moderator_override === null ? 'null' : String(user.moderator_override)}
+                              value={user.moderator_override === false ? 'false' : 'true'}
                               className={`px-3 py-2 rounded text-xs font-medium transition-colors w-full ${
-                                user.moderator_override === true
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                  : user.moderator_override === false
+                                user.moderator_override === false
                                   ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                                  : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                                  : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                               }`}
-                              title="Moderator Override: Auto (detect from Kick), Force On, or Force Off"
+                              title="Moderator: On or Off"
                             >
-                              <option value="null">Mod: Auto</option>
-                              <option value="true">Mod: Force On</option>
-                              <option value="false">Mod: Force Off</option>
+                              <option value="true">Mod: On</option>
+                              <option value="false">Mod: Off</option>
                             </select>
                           </div>
 
@@ -1022,7 +1014,7 @@ export default function UsersPage() {
 
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                 <p className="text-xs text-blue-800 dark:text-blue-300">
-                  ⚠️ This will immediately adjust the user's point balance. This action is logged in their point history.
+                  ⚠️ This will immediately adjust the user&apos;s point balance. This action is logged in their point history.
                 </p>
               </div>
 

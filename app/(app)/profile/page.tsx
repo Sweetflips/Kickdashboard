@@ -15,7 +15,7 @@ interface UserData {
     [key: string]: any
 }
 
-type TabType = 'general' | 'preferences' | 'connected' | 'achievements' | 'security'
+type TabType = 'general' | 'preferences' | 'connected' | 'achievements' | 'security' | 'admin_tools'
 
 interface ConnectedAccount {
     provider: 'kick' | 'discord' | 'telegram'
@@ -44,6 +44,15 @@ export default function ProfilePage() {
     const [loadingAchievements, setLoadingAchievements] = useState(false)
     const [connectAchievementBanner, setConnectAchievementBanner] = useState<{ visible: boolean; label: string } | null>(null)
     const { showToast } = useToast()
+    const [isAdminUser, setIsAdminUser] = useState(false)
+
+    const [adminSearch, setAdminSearch] = useState('')
+    const [adminResults, setAdminResults] = useState<any[]>([])
+    const [adminSelectedKickUserId, setAdminSelectedKickUserId] = useState<string>('')
+    const [adminSelectedUsername, setAdminSelectedUsername] = useState<string>('')
+    const [adminLoading, setAdminLoading] = useState(false)
+    const [adminAwardAmount, setAdminAwardAmount] = useState('')
+    const [adminAwardReason, setAdminAwardReason] = useState('')
 
     const fetchUserData = async () => {
         try {
@@ -215,6 +224,17 @@ export default function ProfilePage() {
 
     useEffect(() => {
         fetchUserData()
+        ;(async () => {
+            try {
+                const token = localStorage.getItem('kick_access_token')
+                if (!token) return
+                const resp = await fetch('/api/admin/verify', { headers: { Authorization: `Bearer ${token}` } })
+                const data = await resp.json().catch(() => ({}))
+                setIsAdminUser(data?.is_admin === true)
+            } catch {
+                setIsAdminUser(false)
+            }
+        })()
         // Check URL params on mount to set active tab
         const params = new URLSearchParams(window.location.search)
         const tab = params.get('tab')
@@ -504,6 +524,71 @@ export default function ProfilePage() {
         )},
     ]
 
+    const effectiveTabs = isAdminUser
+        ? [
+              ...tabs,
+              {
+                  id: 'admin_tools' as TabType,
+                  label: 'Admin Tools',
+                  icon: (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                  ),
+              },
+          ]
+        : tabs
+
+    const adminFetchUsers = async () => {
+        const token = localStorage.getItem('kick_access_token')
+        if (!token) return
+        setAdminLoading(true)
+        try {
+            const resp = await fetch(`/api/admin/users?limit=25&offset=0&search=${encodeURIComponent(adminSearch)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            const data = await resp.json().catch(() => ({}))
+            if (!resp.ok) throw new Error(data?.error || 'Failed to search users')
+            setAdminResults(Array.isArray(data?.users) ? data.users : [])
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Failed to search users', 'error')
+            setAdminResults([])
+        } finally {
+            setAdminLoading(false)
+        }
+    }
+
+    const adminUpdateUser = async (kickUserId: string, patch: any) => {
+        const token = localStorage.getItem('kick_access_token')
+        if (!token) return
+        const resp = await fetch('/api/admin/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ kick_user_id: kickUserId, ...patch }),
+        })
+        const data = await resp.json().catch(() => ({}))
+        if (!resp.ok) throw new Error(data?.error || 'Update failed')
+        return data
+    }
+
+    const adminAwardSweetCoins = async () => {
+        if (!adminSelectedKickUserId) return
+        const token = localStorage.getItem('kick_access_token')
+        if (!token) return
+        const resp = await fetch('/api/admin/users/award-sweet-coins', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+                kick_user_id: adminSelectedKickUserId,
+                sweet_coins: Number(adminAwardAmount),
+                reason: adminAwardReason || null,
+            }),
+        })
+        const data = await resp.json().catch(() => ({}))
+        if (!resp.ok) throw new Error(data?.error || 'Award failed')
+        showToast(data?.message || 'Updated', 'success')
+    }
+
     const username = userData?.username || userData?.name || userData?.slug || userData?.display_name || 'User'
     const profilePictureRaw = userData?.profile_picture || userData?.avatar_url || userData?.avatar
     // Use custom profile picture if available, otherwise use Kick's profile picture
@@ -528,7 +613,7 @@ export default function ProfilePage() {
                         <div className="lg:col-span-1">
                             <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-4">
                                 <nav className="space-y-2">
-                                    {tabs.map((tab) => (
+                                    {effectiveTabs.map((tab) => (
                                         <button
                                             key={tab.id}
                                             onClick={() => setActiveTab(tab.id)}
@@ -1270,6 +1355,182 @@ export default function ProfilePage() {
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* Admin Tools Tab */}
+                                {isAdminUser && activeTab === 'admin_tools' && (
+                                    <div className="space-y-6">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-gray-900 dark:text-kick-text mb-2">Admin Tools</h2>
+                                            <p className="text-sm text-gray-600 dark:text-kick-text-secondary">
+                                                Search a user and run admin actions.
+                                            </p>
+                                        </div>
+
+                                        <div className="p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border space-y-3">
+                                            <div className="flex flex-col sm:flex-row gap-2">
+                                                <input
+                                                    value={adminSearch}
+                                                    onChange={(e) => setAdminSearch(e.target.value)}
+                                                    placeholder="Search username or email…"
+                                                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                                />
+                                                <button
+                                                    onClick={adminFetchUsers}
+                                                    disabled={adminLoading || adminSearch.trim().length < 2}
+                                                    className="px-4 py-2 bg-kick-purple text-white rounded-lg disabled:opacity-50"
+                                                >
+                                                    {adminLoading ? 'Searching…' : 'Search'}
+                                                </button>
+                                            </div>
+
+                                            <select
+                                                value={adminSelectedKickUserId}
+                                                onChange={(e) => {
+                                                    const id = e.target.value
+                                                    setAdminSelectedKickUserId(id)
+                                                    const match = adminResults.find((u) => String(u.kick_user_id) === id)
+                                                    setAdminSelectedUsername(match?.username || '')
+                                                }}
+                                                className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                            >
+                                                <option value="">-- Select user --</option>
+                                                {adminResults.map((u) => (
+                                                    <option key={u.kick_user_id} value={String(u.kick_user_id)}>
+                                                        {u.username} — {String(u.kick_user_id)}
+                                                    </option>
+                                                ))}
+                                            </select>
+
+                                            {adminSelectedKickUserId && (
+                                                <div className="text-sm text-gray-700 dark:text-kick-text-secondary">
+                                                    Selected: <span className="font-semibold text-gray-900 dark:text-kick-text">{adminSelectedUsername}</span> (<span className="font-mono">{adminSelectedKickUserId}</span>)
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {adminSelectedKickUserId && (
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                <div className="p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border space-y-3">
+                                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-kick-text">Role / Flags</h3>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await adminUpdateUser(adminSelectedKickUserId, { is_admin: true })
+                                                                    showToast('Admin granted', 'success')
+                                                                } catch (e) {
+                                                                    showToast(e instanceof Error ? e.message : 'Failed', 'error')
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+                                                        >
+                                                            Make Admin
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await adminUpdateUser(adminSelectedKickUserId, { is_admin: false })
+                                                                    showToast('Admin removed', 'success')
+                                                                } catch (e) {
+                                                                    showToast(e instanceof Error ? e.message : 'Failed', 'error')
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
+                                                        >
+                                                            Remove Admin
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await adminUpdateUser(adminSelectedKickUserId, { moderator_override: true })
+                                                                    showToast('Mod enabled', 'success')
+                                                                } catch (e) {
+                                                                    showToast(e instanceof Error ? e.message : 'Failed', 'error')
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300"
+                                                        >
+                                                            Make Mod
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await adminUpdateUser(adminSelectedKickUserId, { moderator_override: false })
+                                                                    showToast('Mod disabled', 'success')
+                                                                } catch (e) {
+                                                                    showToast(e instanceof Error ? e.message : 'Failed', 'error')
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 rounded text-xs font-medium bg-gray-200 dark:bg-kick-dark text-gray-800 dark:text-kick-text"
+                                                        >
+                                                            Remove Mod
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await adminUpdateUser(adminSelectedKickUserId, { is_excluded: true })
+                                                                    showToast('Excluded', 'success')
+                                                                } catch (e) {
+                                                                    showToast(e instanceof Error ? e.message : 'Failed', 'error')
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 rounded text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-300"
+                                                        >
+                                                            Exclude
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await adminUpdateUser(adminSelectedKickUserId, { is_excluded: false })
+                                                                    showToast('Included', 'success')
+                                                                } catch (e) {
+                                                                    showToast(e instanceof Error ? e.message : 'Failed', 'error')
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+                                                        >
+                                                            Include
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border space-y-3">
+                                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-kick-text">SweetCoins</h3>
+                                                    <div className="flex flex-col gap-2">
+                                                        <input
+                                                            value={adminAwardAmount}
+                                                            onChange={(e) => setAdminAwardAmount(e.target.value)}
+                                                            placeholder="Amount (e.g. 100 or -100)"
+                                                            type="number"
+                                                            className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                                        />
+                                                        <input
+                                                            value={adminAwardReason}
+                                                            onChange={(e) => setAdminAwardReason(e.target.value)}
+                                                            placeholder="Reason (optional)"
+                                                            className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                                        />
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await adminAwardSweetCoins()
+                                                                    setAdminAwardAmount('')
+                                                                    setAdminAwardReason('')
+                                                                } catch (e) {
+                                                                    showToast(e instanceof Error ? e.message : 'Failed', 'error')
+                                                                }
+                                                            }}
+                                                            disabled={!adminAwardAmount}
+                                                            className="px-4 py-2 bg-kick-green text-white rounded-lg disabled:opacity-50"
+                                                        >
+                                                            Apply
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
