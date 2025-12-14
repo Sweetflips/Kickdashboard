@@ -175,7 +175,23 @@ export async function POST(request: Request) {
             message: 'Message sent successfully',
         })
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const err = error as any
+        const errorMessage = err instanceof Error ? err.message : String(err ?? 'Unknown error')
+        const errorName = err instanceof Error ? err.name : ''
+
+        // Common when the browser navigates away / closes the request.
+        if (
+            errorName === 'AbortError' ||
+            errorMessage.toLowerCase().includes('aborted') ||
+            errorMessage.toLowerCase().includes('econnreset')
+        ) {
+            console.warn('Chat send API aborted by client:', errorMessage)
+            return NextResponse.json(
+                { error: 'Request aborted by client' },
+                { status: 499 }
+            )
+        }
+
         console.error('Chat send API error:', errorMessage)
         return NextResponse.json(
             { error: 'Failed to send message', details: errorMessage },

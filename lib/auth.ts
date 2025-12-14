@@ -104,11 +104,18 @@ export async function isAdmin(request: Request): Promise<boolean> {
  */
 async function fetchKickModerators(): Promise<Set<string>> {
   const cacheKey = `kick_moderators:${KICK_CHANNEL_SLUG}`
+  const forbiddenKey = `kick_moderators_forbidden:${KICK_CHANNEL_SLUG}`
 
   return memoryCache.getOrSet(
     cacheKey,
     async () => {
       try {
+        // If Kick returns 403 for this endpoint, don't keep retrying every cache refresh.
+        const forbiddenUntil = memoryCache.get<number>(forbiddenKey)
+        if (forbiddenUntil && Date.now() < forbiddenUntil) {
+          return new Set<string>()
+        }
+
         const token = await getBroadcasterToken()
         const url = `https://kick.com/api/v2/channels/${KICK_CHANNEL_SLUG.toLowerCase()}/moderators`
 
@@ -120,7 +127,13 @@ async function fetchKickModerators(): Promise<Set<string>> {
         })
 
         if (!response.ok) {
-          console.warn(`[Auth] Failed to fetch moderators: ${response.status}`)
+          if (response.status === 403) {
+            // Cache the forbidden state for 6 hours to avoid log spam + wasted calls.
+            memoryCache.set(forbiddenKey, Date.now() + 6 * 60 * 60 * 1000, 6 * 60 * 60 * 1000)
+            console.warn(`[Auth] Failed to fetch moderators: 403 (forbidden). Disabling auto-moderator detection temporarily.`)
+          } else {
+            console.warn(`[Auth] Failed to fetch moderators: ${response.status}`)
+          }
           return new Set<string>()
         }
 
