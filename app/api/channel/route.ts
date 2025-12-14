@@ -210,15 +210,26 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                         // We must only treat the channel as live if we can find a matching livestream entry.
                         const slugLower = slug.toLowerCase()
                         const broadcasterIdStr = String(broadcasterUserId)
+                        
+                        // Try to find matching livestream - check multiple field variations
                         const livestream = livestreamsData.data.find((ls: any) => {
                             const lsBroadcaster = ls?.broadcaster_user_id
                             const lsSlug = typeof ls?.slug === 'string' ? ls.slug.toLowerCase() : null
                             const lsChannelSlug = typeof ls?.channel_slug === 'string' ? ls.channel_slug.toLowerCase() : null
                             const lsChannelSlugAlt = typeof ls?.channel?.slug === 'string' ? ls.channel.slug.toLowerCase() : null
-                            return String(lsBroadcaster) === broadcasterIdStr ||
-                                   lsSlug === slugLower ||
-                                   lsChannelSlug === slugLower ||
-                                   lsChannelSlugAlt === slugLower
+                            const lsChannelId = ls?.channel_id
+                            
+                            // Match by broadcaster ID (most reliable)
+                            if (String(lsBroadcaster) === broadcasterIdStr) {
+                                return true
+                            }
+                            
+                            // Match by slug variations
+                            if (lsSlug === slugLower || lsChannelSlug === slugLower || lsChannelSlugAlt === slugLower) {
+                                return true
+                            }
+                            
+                            return false
                         }) as any | undefined
 
                         if (livestream) {
@@ -230,17 +241,41 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                                     ? livestream.thumbnail
                                     : livestream.thumbnail.url || null
                             }
+                            console.log(`[Channel API] Found matching livestream for ${slug} (broadcaster: ${broadcasterUserId})`)
                             return { isLive: true, startedAt, thumbnailUrl }
                         }
 
                         // Filter mismatch: don't assume live. Fall back to /channels to avoid false-positive LIVE state.
+                        // Log detailed info for debugging
+                        const sampleFields = livestreamsData.data.slice(0, 3).map((ls: any) => ({
+                            broadcaster_user_id: ls?.broadcaster_user_id,
+                            slug: ls?.slug,
+                            channel_slug: ls?.channel_slug,
+                            channel_id: ls?.channel_id,
+                            channel: ls?.channel ? { slug: ls.channel.slug, id: ls.channel.id } : null,
+                            allKeys: Object.keys(ls || {}).slice(0, 10), // First 10 keys for debugging
+                        }))
+                        
+                        // Check if sweetflips might be in the full list with different field structure
+                        const allSlugs = livestreamsData.data.map((ls: any) => ({
+                            broadcaster: ls?.broadcaster_user_id,
+                            slug: ls?.slug,
+                            channel_slug: ls?.channel_slug,
+                            channel_slug_alt: ls?.channel?.slug,
+                        }))
+                        const potentialMatch = allSlugs.find(s => 
+                            String(s.broadcaster) === broadcasterIdStr ||
+                            s.slug?.toLowerCase() === slugLower ||
+                            s.channel_slug?.toLowerCase() === slugLower ||
+                            s.channel_slug_alt?.toLowerCase() === slugLower
+                        )
+                        
                         console.warn('[Channel API] /livestreams returned items but none match requested broadcaster/slug; falling back to /channels.', {
                             requested: { slug, broadcasterUserId },
-                            sample: livestreamsData.data.slice(0, 3).map((ls: any) => ({
-                                broadcaster_user_id: ls?.broadcaster_user_id,
-                                slug: ls?.slug,
-                            })),
+                            sample: sampleFields,
                             totalReturned: livestreamsData.data.length,
+                            potentialMatch: potentialMatch || 'none found',
+                            allBroadcasterIds: [...new Set(livestreamsData.data.map((ls: any) => ls?.broadcaster_user_id))].slice(0, 10),
                         })
                     }
                 } else {
