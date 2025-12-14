@@ -21,6 +21,8 @@ function ensureStandaloneAssets(standaloneDir) {
 
     linkOrCopyDir(path.join(rootDir, 'public'), path.join(standaloneDir, 'public'));
     linkOrCopyDir(path.join(rootDir, '.next', 'static'), path.join(standaloneDir, '.next', 'static'));
+    // Ensure `.next/server` exists for standalone runtime (server actions manifest, app router files, etc.)
+    linkOrCopyDir(path.join(rootDir, '.next', 'server'), path.join(standaloneDir, '.next', 'server'));
   } catch (e) {
     console.warn('⚠️ Failed to prepare standalone assets:', e && e.message ? e.message : String(e));
   }

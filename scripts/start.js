@@ -68,6 +68,12 @@ function startWebServer() {
         const staticSrc = path.join(rootDir, '.next', 'static');
         const staticDest = path.join(standaloneDir, '.next', 'static');
         linkOrCopyDir(staticSrc, staticDest);
+
+        // Standalone also expects `.next/server` relative to the standalone dir.
+        // If it's missing, Next can fail with "Failed to find Server Action" / missing manifest errors.
+        const serverSrc = path.join(rootDir, '.next', 'server');
+        const serverDest = path.join(standaloneDir, '.next', 'server');
+        linkOrCopyDir(serverSrc, serverDest);
       } catch (e) {
         process.stdout.write('⚠️ Failed to prepare standalone assets: ' + (e && e.message ? e.message : String(e)) + '\n');
       }
