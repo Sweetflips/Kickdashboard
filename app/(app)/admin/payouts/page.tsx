@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { getAccessToken } from '@/lib/cookies'
 
 interface StreamSession {
     id: string
@@ -86,7 +87,7 @@ export default function PayoutsPage() {
 
     // Verify access (admin or moderator)
     useEffect(() => {
-        const token = localStorage.getItem('kick_access_token')
+        const token = getAccessToken()
         if (!token) {
             router.push('/')
             return
@@ -117,7 +118,7 @@ export default function PayoutsPage() {
         const fetchOverlayKey = async () => {
             try {
                 setOverlayKeyLoading(true)
-                const token = localStorage.getItem('kick_access_token')
+                const token = getAccessToken()
                 if (!token) return
 
                 const response = await fetch('/api/admin/overlay-key', {
@@ -146,7 +147,7 @@ export default function PayoutsPage() {
         const fetchSessions = async () => {
             try {
                 setSessionsLoading(true)
-                const token = localStorage.getItem('kick_access_token')
+                const token = getAccessToken()
                 if (!token) return
 
                 const response = await fetch('/api/stream-sessions?limit=100', {
@@ -186,7 +187,7 @@ export default function PayoutsPage() {
             setPayoutLoading(true)
             setError(null)
 
-            const token = localStorage.getItem('kick_access_token')
+            const token = getAccessToken()
             if (!token) return
 
             let url = `/api/admin/payouts?stream_session_id=${selectedSessionId}&budget=${budgetNum}&round_to=${roundTo}`
