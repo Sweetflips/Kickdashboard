@@ -26,7 +26,6 @@ interface LayoutProps {
 export default function AppLayout({ children }: LayoutProps) {
     const router = useRouter()
     const pathname = usePathname()
-    const isAdminRoute = pathname?.startsWith('/admin') ?? false
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [userData, setUserData] = useState<UserData | null>(null)
@@ -429,38 +428,23 @@ export default function AppLayout({ children }: LayoutProps) {
                                 <span className="ml-3 text-body font-medium">Leaderboard</span>
                             </Link>
                         </li>
-                        {!isAdminRoute ? (
-                            <li className="mt-4 mb-2">
-                                <div className="flex items-center gap-2 px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                        <path d="M4 2a2 2 0 00-2 2v2a2 2 0 002 2v8a2 2 0 002 2h8a2 2 0 002-2V8a2 2 0 002-2V4a2 2 0 00-2-2H4zm0 2h12v2H4V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1z" />
-                                    </svg>
-                                    <span>Rewards</span>
-                                </div>
-                            </li>
-                        ) : (
-                            <li className="mt-4 mb-2">
-                                <span className="px-2 py-2 block text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
-                                    Rewards
-                                </span>
-                            </li>
-                        )}
+                        <li className="mt-4 mb-2">
+                            <div className="flex items-center gap-2 px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <path d="M4 2a2 2 0 00-2 2v2a2 2 0 002 2v8a2 2 0 002 2h8a2 2 0 002-2V8a2 2 0 002-2V4a2 2 0 00-2-2H4zm0 2h12v2H4V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1z" />
+                                </svg>
+                                <span>Rewards</span>
+                            </div>
+                        </li>
                         <li>
                             <Link href="/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
                             }}>
-                                {!isAdminRoute ? (
-                                    <span className="w-5 h-5 flex items-center justify-center text-[18px] leading-none" aria-hidden="true">
-                                        🎟
-                                    </span>
-                                ) : (
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                    </svg>
-                                )}
+                                <span className="w-5 h-5 flex items-center justify-center text-[18px] leading-none" aria-hidden="true">
+                                    🎟
+                                </span>
                                 <span className="ml-3 text-body font-medium">Raffles</span>
                             </Link>
                         </li>
@@ -611,16 +595,14 @@ export default function AppLayout({ children }: LayoutProps) {
                                 </li>
                             </>
                         )}
-                        {!isAdminRoute && (
-                            <li className="mt-4 mb-2">
-                                <div className="flex items-center gap-2 px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                        <path fillRule="evenodd" d="M10 2a5 5 0 00-3.536 8.536A7.002 7.002 0 003 17a1 1 0 102 0 5 5 0 0110 0 1 1 0 102 0 7.002 7.002 0 00-3.464-6.464A5 5 0 0010 2zm-3 5a3 3 0 116 0 3 3 0 01-6 0z" clipRule="evenodd" />
-                                    </svg>
-                                    <span>Account</span>
-                                </div>
-                            </li>
-                        )}
+                        <li className="mt-4 mb-2">
+                            <div className="flex items-center gap-2 px-2 py-2 text-sm font-extrabold text-gray-700/80 dark:text-kick-text-secondary uppercase tracking-widest">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <path fillRule="evenodd" d="M10 2a5 5 0 00-3.536 8.536A7.002 7.002 0 003 17a1 1 0 102 0 5 5 0 0110 0 1 1 0 102 0 7.002 7.002 0 00-3.464-6.464A5 5 0 0010 2zm-3 5a3 3 0 116 0 3 3 0 01-6 0z" clipRule="evenodd" />
+                                </svg>
+                                <span>Account</span>
+                            </div>
+                        </li>
                         <li>
                             <Link href="/profile" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
