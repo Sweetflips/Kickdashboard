@@ -96,6 +96,14 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     reward: 25,
     category: 'community',
   },
+  {
+    id: 'custom-profile-picture',
+    name: 'Custom Profile Picture',
+    requirement: 'Set a custom profile picture.',
+    icon: '🖼️',
+    reward: 10,
+    category: 'community',
+  },
 
   // Raffle Achievements
   {

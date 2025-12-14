@@ -1,5 +1,5 @@
-import { ACHIEVEMENTS } from '@/lib/achievements'
-import { db } from '@/lib/db'
+import { ACHIEVEMENTS } from '@/lib/achievements';
+import { db } from '@/lib/db';
 
 export function makeAchievementClaimKey(achievementId: string, userId: bigint) {
   return `achievement:${achievementId}:${userId.toString()}`
@@ -14,6 +14,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
         created_at: true,
         discord_connected: true,
         telegram_connected: true,
+        custom_profile_picture_url: true,
       },
     }),
     db.userSweetCoins.findUnique({
@@ -197,6 +198,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
   // Social connected
   unlockedById['discord-connected'] = user.discord_connected === true
   unlockedById['telegram-connected'] = user.telegram_connected === true
+  unlockedById['custom-profile-picture'] = !!user.custom_profile_picture_url && user.custom_profile_picture_url.trim().length > 0
 
   // Raffle achievements
   unlockedById['raffle-participant'] = rafflesEntered >= 1

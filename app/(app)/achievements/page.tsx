@@ -345,7 +345,25 @@ export default function AchievementsPage() {
                         >
                             <div className="flex items-start gap-4">
                                 <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-kick-dark flex items-center justify-center text-3xl flex-shrink-0">
-                                    {achievement.icon}
+                                    {achievement.id === 'discord-connected' ? (
+                                        <Image
+                                            src="/icons/discord.png"
+                                            alt="Discord"
+                                            width={32}
+                                            height={32}
+                                            className="w-8 h-8 object-contain"
+                                        />
+                                    ) : achievement.id === 'telegram-connected' ? (
+                                        <Image
+                                            src="/logos/telegram-logo.png"
+                                            alt="Telegram"
+                                            width={32}
+                                            height={32}
+                                            className="w-8 h-8 object-contain"
+                                        />
+                                    ) : (
+                                        <span>{achievement.icon}</span>
+                                    )}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">

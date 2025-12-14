@@ -218,10 +218,17 @@ export default function ProfilePage() {
         // Check URL params on mount to set active tab
         const params = new URLSearchParams(window.location.search)
         const tab = params.get('tab')
+        const connect = params.get('connect')
+
         if (tab === 'connected') {
             setActiveTab('connected')
         } else if (tab === 'achievements') {
             setActiveTab('achievements')
+        }
+
+        // Auto-start Telegram connect flow if requested
+        if (connect === 'telegram' && tab === 'connected') {
+            // Will be handled after userData loads
         }
     }, [])
 
@@ -230,6 +237,24 @@ export default function ProfilePage() {
             fetchConnectedAccounts()
         }
     }, [userData?.id, activeTab, fetchConnectedAccounts])
+
+    useEffect(() => {
+        // Auto-start Telegram connect if requested via URL
+        if (userData?.id && activeTab === 'connected') {
+            const params = new URLSearchParams(window.location.search)
+            const connect = params.get('connect')
+            if (connect === 'telegram') {
+                // Check if Telegram is already connected
+                const telegram = connectedAccounts.find(acc => acc.provider === 'telegram')
+                if (!telegram?.connected && !telegramAuthUrl) {
+                    handleConnectAccount('telegram')
+                    // Clean URL to avoid re-triggering
+                    const newUrl = '/profile?tab=connected'
+                    window.history.replaceState({}, '', newUrl)
+                }
+            }
+        }
+    }, [userData?.id, activeTab, connectedAccounts, telegramAuthUrl])
 
     useEffect(() => {
         if (activeTab === 'achievements') {

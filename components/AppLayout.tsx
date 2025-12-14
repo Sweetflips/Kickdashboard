@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import Footer from './Footer'
 import ProfileDropdown from './ProfileDropdown'
 import ThemeToggle from './ThemeToggle'
+import ConnectAccountsNudge from './ConnectAccountsNudge'
 
 interface UserData {
     id?: number
@@ -245,7 +246,8 @@ export default function AppLayout({ children }: LayoutProps) {
         const params = new URLSearchParams(window.location.search)
         const success = params.get('success')
 
-        if (success === 'true') {
+        // Refresh on any success value (discord_connected, true, etc.)
+        if (success) {
             // Refresh user data after successful OAuth connection
             setTimeout(() => {
                 fetchUserData()
@@ -691,6 +693,11 @@ export default function AppLayout({ children }: LayoutProps) {
                 {/* Footer */}
                 <Footer />
             </div>
+
+            {/* Connect Accounts Nudge */}
+            {isAuthenticated && userData?.id && (
+                <ConnectAccountsNudge kickUserId={userData.id} />
+            )}
 
             {/* Sidebar Overlay */}
             {sidebarOpen && (
