@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { getChannelWithLivestream } from '@/lib/kick-api'
-import { getActiveSession, updateSessionMetadata, findSessionByStartTime } from '@/lib/stream-session-manager'
+import { getActiveSession, updateSessionMetadata, findSessionByStartTime, mergeLikelyDuplicateSessions } from '@/lib/stream-session-manager'
 import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { fetchKickV2ChannelVideos } from '@/lib/kick-videos'
@@ -345,6 +345,14 @@ export async function POST(request: Request) {
                         stats.updated++
                         debug.updatedPairs.push({ videoId: String(video?.id ?? ''), sessionId: String(matchingSession.id) })
                         console.log(`[Sync] Updated session ${matchingSession.id} with data from video ${video.id}`)
+
+                        // If this update ended a session (or enriched it right after end), attempt to merge accidental duplicates.
+                        // This is the main place duplicates can persist, since sync updates ended_at directly (not via endSession()).
+                        try {
+                            await mergeLikelyDuplicateSessions(matchingSession.id)
+                        } catch {
+                            // non-fatal
+                        }
                     } else {
                         debug.matchedNoChange.push({ videoId: String(video?.id ?? ''), sessionId: String(matchingSession.id) })
                     }

@@ -621,8 +621,12 @@ export async function mergeLikelyDuplicateSessions(anchorSessionId: bigint): Pro
         // Ensure we only merge if at least one looks phantom (prevents merging two real streams)
         if (!group.some(s => looksPhantom(s))) return null
 
-        // Pick primary session (best metadata)
-        const sortedByScore = [...group].sort((a, b) => {
+        // Pick primary session:
+        // If we have any non-phantom sessions, ALWAYS choose among those (prevents keeping a 0s phantom just because it has a kick id).
+        const nonPhantom = group.filter(s => !looksPhantom(s))
+        const primaryPool = nonPhantom.length > 0 ? nonPhantom : group
+
+        const sortedByScore = [...primaryPool].sort((a, b) => {
             const scoreA = scoreSessionForPrimary(a)
             const scoreB = scoreSessionForPrimary(b)
             if (scoreA !== scoreB) return scoreB - scoreA

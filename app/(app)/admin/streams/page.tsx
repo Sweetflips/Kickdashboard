@@ -30,6 +30,7 @@ export default function AdminStreamsPage() {
     const [editThumbnailUrl, setEditThumbnailUrl] = useState('')
     const [editKickVideoId, setEditKickVideoId] = useState('')
     const [updatingThumbnail, setUpdatingThumbnail] = useState(false)
+    const [mergingId, setMergingId] = useState<string | null>(null)
     const [testSessionActive, setTestSessionActive] = useState(false)
     const [testSessionLoading, setTestSessionLoading] = useState(false)
     const [testSessionId, setTestSessionId] = useState<string | null>(null)
@@ -226,6 +227,45 @@ export default function AdminStreamsPage() {
             setSyncResult({ success: false, error: 'Failed to delete stream' })
         } finally {
             setDeletingId(null)
+        }
+    }
+
+    const handleMergeStream = async (sessionId: string) => {
+        try {
+            setMergingId(sessionId)
+            const token = localStorage.getItem('kick_access_token')
+            if (!token) {
+                router.push('/')
+                return
+            }
+
+            const response = await fetch('/api/admin/merge-stream-sessions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ sessionId }),
+                credentials: 'include',
+            })
+
+            const result = await response.json()
+            if (response.ok) {
+                setSyncResult({
+                    success: true,
+                    message: result?.result
+                        ? `Merged into session ${result.result.primarySessionId}`
+                        : 'No duplicates found to merge',
+                })
+                await fetchStreams()
+            } else {
+                setSyncResult({ success: false, error: result.error || 'Failed to merge sessions' })
+            }
+        } catch (error) {
+            console.error('Merge stream error:', error)
+            setSyncResult({ success: false, error: 'Failed to merge sessions' })
+        } finally {
+            setMergingId(null)
         }
     }
 
@@ -483,6 +523,20 @@ export default function AdminStreamsPage() {
                                         </td>
                                         <td className="py-3 px-4">
                                             <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleMergeStream(session.id)}
+                                                    disabled={mergingId === session.id}
+                                                    title="Merge accidental duplicate sessions for this stream"
+                                                    className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-kick-surface-hover text-gray-600 dark:text-kick-text-secondary hover:text-purple-600 dark:hover:text-purple-400 disabled:opacity-50 transition-colors"
+                                                >
+                                                    {mergingId === session.id ? (
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                                                    ) : (
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8M8 17h8M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M9 17v2a2 2 0 002 2h2a2 2 0 002-2v-2" />
+                                                        </svg>
+                                                    )}
+                                                </button>
                                                 <button
                                                     onClick={() => handleEditThumbnail(session)}
                                                     title="Manually edit thumbnail URL or Kick Video ID"
