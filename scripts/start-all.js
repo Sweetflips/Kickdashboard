@@ -96,23 +96,12 @@ try {
 
   const rootStandaloneServer = path.join(process.cwd(), 'server.js');
   const nextStandaloneServer = path.join(process.cwd(), '.next', 'standalone', 'server.js');
+  const hasFullNextServer =
+    fs.existsSync(path.join(process.cwd(), '.next', 'server', 'server-reference-manifest.json')) ||
+    fs.existsSync(path.join(process.cwd(), '.next', 'server', 'server-reference-manifest.js'));
 
-  if (fs.existsSync(rootStandaloneServer)) {
-    console.log('🚀 Using standalone server (server.js)');
-    webProcess = spawn(process.execPath, ['server.js'], {
-      stdio: 'inherit',
-      env: { ...envWithPath, PORT: port, HOSTNAME: hostname },
-      cwd: process.cwd()
-    });
-  } else if (fs.existsSync(nextStandaloneServer)) {
-    console.log('🚀 Using standalone server (.next/standalone/server.js)');
-    ensureStandaloneAssets(path.join(process.cwd(), '.next', 'standalone'));
-    webProcess = spawn(process.execPath, [path.join('.next', 'standalone', 'server.js')], {
-      stdio: 'inherit',
-      env: { ...envWithPath, PORT: port, HOSTNAME: hostname },
-      cwd: process.cwd()
-    });
-  } else {
+  if (hasFullNextServer) {
+    console.log('🚀 Using next start (full .next build detected)');
     const isWindows = process.platform === 'win32';
     if (isWindows) {
       const nextBin = path.join(process.cwd(), 'node_modules', '.bin', 'next.cmd');
@@ -128,6 +117,23 @@ try {
         cwd: process.cwd()
       });
     }
+  } else if (fs.existsSync(rootStandaloneServer)) {
+    console.log('🚀 Using standalone server (server.js)');
+    webProcess = spawn(process.execPath, ['server.js'], {
+      stdio: 'inherit',
+      env: { ...envWithPath, PORT: port, HOSTNAME: hostname },
+      cwd: process.cwd()
+    });
+  } else if (fs.existsSync(nextStandaloneServer)) {
+    console.log('🚀 Using standalone server (.next/standalone/server.js)');
+    ensureStandaloneAssets(path.join(process.cwd(), '.next', 'standalone'));
+    webProcess = spawn(process.execPath, [path.join('.next', 'standalone', 'server.js')], {
+      stdio: 'inherit',
+      env: { ...envWithPath, PORT: port, HOSTNAME: hostname },
+      cwd: process.cwd()
+    });
+  } else {
+    throw new Error('No Next.js start target found (.next build missing)');
   }
 
   webProcess.on('error', (err) => {

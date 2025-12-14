@@ -79,11 +79,13 @@ function startWebServer() {
       }
     };
 
-    // Prefer standalone server output when present.
-    // This avoids "Failed to find Server Action" issues that happen when deploying only standalone artifacts
-    // but starting with `next start` (which expects .next/server/server-reference-manifest.json in the root build).
+    // Prefer `next start` when the full `.next` directory is present.
+    // Use standalone only as a fallback for environments that deploy ONLY standalone artifacts.
     const rootStandaloneServer = path.join(process.cwd(), 'server.js');
     const nextStandaloneServer = path.join(process.cwd(), '.next', 'standalone', 'server.js');
+    const hasFullNextServer =
+      fs.existsSync(path.join(process.cwd(), '.next', 'server', 'server-reference-manifest.json')) ||
+      fs.existsSync(path.join(process.cwd(), '.next', 'server', 'server-reference-manifest.js'));
 
     const spawnNode = (args, extraEnv = {}) =>
       spawn(process.execPath, args, {
@@ -94,19 +96,11 @@ function startWebServer() {
 
     let nextProcess = null;
 
-    if (fs.existsSync(rootStandaloneServer)) {
-      process.stdout.write('🚀 Using standalone server (server.js)\n');
-      nextProcess = spawnNode(['server.js'], { PORT: port, HOSTNAME: hostname });
-    } else if (fs.existsSync(nextStandaloneServer)) {
-      process.stdout.write('🚀 Using standalone server (.next/standalone/server.js)\n');
-      ensureStandaloneAssets(path.join(process.cwd(), '.next', 'standalone'));
-      nextProcess = spawnNode([path.join('.next', 'standalone', 'server.js')], { PORT: port, HOSTNAME: hostname });
-    } else {
-      // Fallback to `next start` (works when the full `.next` directory is present).
-      // Use sh -c which works reliably in Linux containers.
+    if (hasFullNextServer) {
+      // Normal Next.js runtime
+      process.stdout.write('🚀 Using next start (full .next build detected)\n');
       const isWindows = process.platform === 'win32';
       if (isWindows) {
-        // Windows fallback: run the local next binary directly.
         const nextBin = path.join(process.cwd(), 'node_modules', '.bin', 'next.cmd');
         nextProcess = spawn(nextBin, ['start', '-H', hostname, '-p', port], {
           stdio: 'inherit',
@@ -116,13 +110,19 @@ function startWebServer() {
       } else {
         nextProcess = spawn('sh', ['-c', `next start -H ${hostname} -p ${port}`], {
           stdio: 'inherit',
-          env: {
-            ...envWithPath,
-            HOSTNAME: hostname,
-          },
+          env: { ...envWithPath, HOSTNAME: hostname },
           cwd: process.cwd(),
         });
       }
+    } else if (fs.existsSync(rootStandaloneServer)) {
+      process.stdout.write('🚀 Using standalone server (server.js)\n');
+      nextProcess = spawnNode(['server.js'], { PORT: port, HOSTNAME: hostname });
+    } else if (fs.existsSync(nextStandaloneServer)) {
+      process.stdout.write('🚀 Using standalone server (.next/standalone/server.js)\n');
+      ensureStandaloneAssets(path.join(process.cwd(), '.next', 'standalone'));
+      nextProcess = spawnNode([path.join('.next', 'standalone', 'server.js')], { PORT: port, HOSTNAME: hostname });
+    } else {
+      throw new Error('No Next.js start target found (.next build missing)');
     }
 
     if (!nextProcess) {
