@@ -67,6 +67,7 @@ interface PayoutData {
 export default function PayoutsPage() {
     const router = useRouter()
     const [canViewPayouts, setCanViewPayouts] = useState(false)
+    const [isAdmin, setIsAdmin] = useState(false)
     const [loading, setLoading] = useState(true)
     const [sessions, setSessions] = useState<StreamSession[]>([])
     const [sessionsLoading, setSessionsLoading] = useState(true)
@@ -79,6 +80,9 @@ export default function PayoutsPage() {
     const [payoutLoading, setPayoutLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
+    const [overlayKey, setOverlayKey] = useState<string | null>(null)
+    const [overlayKeyLoading, setOverlayKeyLoading] = useState(false)
+    const [showOverlayKey, setShowOverlayKey] = useState(false)
 
     // Verify access (admin or moderator)
     useEffect(() => {
@@ -100,10 +104,40 @@ export default function PayoutsPage() {
                     return
                 }
                 setCanViewPayouts(true)
+                setIsAdmin(data.is_admin === true)
                 setLoading(false)
             })
             .catch(() => router.push('/'))
     }, [router])
+
+    // Fetch overlay key (admin only)
+    useEffect(() => {
+        if (!canViewPayouts || !isAdmin) return
+
+        const fetchOverlayKey = async () => {
+            try {
+                setOverlayKeyLoading(true)
+                const token = localStorage.getItem('kick_access_token')
+                if (!token) return
+
+                const response = await fetch('/api/admin/overlay-key', {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                })
+                if (response.ok) {
+                    const data = await response.json()
+                    setOverlayKey(data?.key || null)
+                } else {
+                    setOverlayKey(null)
+                }
+            } catch {
+                setOverlayKey(null)
+            } finally {
+                setOverlayKeyLoading(false)
+            }
+        }
+
+        fetchOverlayKey()
+    }, [canViewPayouts, isAdmin])
 
     // Fetch stream sessions
     useEffect(() => {
@@ -303,6 +337,70 @@ export default function PayoutsPage() {
                 <div className="flex items-center justify-between">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-kick-text">Payout Calculator</h1>
                 </div>
+
+                {/* OBS Overlay Access Key (Admin only) */}
+                {isAdmin && (
+                    <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-kick-text mb-4">OBS Overlay Access Key</h2>
+
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-2">Overlay Key</p>
+                                <div className="flex items-center gap-2">
+                                    <code className="flex-1 px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-sm font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border">
+                                        {overlayKeyLoading ? (
+                                            <span className="text-gray-500 dark:text-kick-text-muted">Loading...</span>
+                                        ) : showOverlayKey && overlayKey ? (
+                                            overlayKey
+                                        ) : overlayKey ? (
+                                            '•'.repeat(64)
+                                        ) : (
+                                            <span className="text-gray-500 dark:text-kick-text-muted">Not available</span>
+                                        )}
+                                    </code>
+                                    {overlayKey && (
+                                        <>
+                                            <button
+                                                onClick={() => setShowOverlayKey(!showOverlayKey)}
+                                                className="px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-border transition-colors text-sm font-medium"
+                                            >
+                                                {showOverlayKey ? 'Hide' : 'Show'}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(overlayKey)
+                                                }}
+                                                className="px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 transition-colors text-sm font-medium"
+                                            >
+                                                Copy
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {overlayKey && (
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-2">Example OBS Browser Source URLs</p>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-1">Per-raffle overlay:</p>
+                                            <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
+                                                {typeof window !== 'undefined' ? `${window.location.origin}/raffles/&lt;raffleId&gt;/wheel?overlay=1&key=${overlayKey}` : '...'}
+                                            </code>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-1">Global wheel overlay:</p>
+                                            <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
+                                                {typeof window !== 'undefined' ? `${window.location.origin}/wheel?key=${overlayKey}` : '...'}
+                                            </code>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Controls */}
                 <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
