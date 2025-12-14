@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
+import { ADVENT_ITEMS } from '@/lib/advent-calendar'
+
+type ExtraEntryDraft = { usernameOrKickId: string; tickets: number }
 
 export default function CreateRafflePage() {
     const router = useRouter()
@@ -10,6 +13,11 @@ export default function CreateRafflePage() {
     const [isAdmin, setIsAdmin] = useState(false)
     const [saving, setSaving] = useState(false)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+    const [selectedAdventItemId, setSelectedAdventItemId] = useState<string>('')
+    const [seedFromAdventPurchases, setSeedFromAdventPurchases] = useState<boolean>(true)
+    const [extraEntriesEnabled, setExtraEntriesEnabled] = useState<boolean>(false)
+    const [extraEntries, setExtraEntries] = useState<ExtraEntryDraft[]>([])
 
     const [formData, setFormData] = useState({
         title: '',
@@ -24,6 +32,10 @@ export default function CreateRafflePage() {
         end_at: '',
         sub_only: false,
         hidden_until_start: false,
+        number_of_winners: '1',
+        wheel_background_url: '',
+        center_logo_url: '/icons/Sweetflipscoin.png',
+        slice_opacity: '0.5',
     })
 
     useEffect(() => {
@@ -71,6 +83,12 @@ export default function CreateRafflePage() {
             const token = localStorage.getItem('kick_access_token')
             if (!token) return
 
+            const extra_entries = extraEntriesEnabled
+                ? extraEntries
+                      .filter(e => e.usernameOrKickId.trim().length > 0 && Number(e.tickets) > 0)
+                      .map(e => ({ usernameOrKickId: e.usernameOrKickId.trim(), tickets: Number(e.tickets) }))
+                : []
+
             const response = await fetch('/api/raffles', {
                 method: 'POST',
                 headers: {
@@ -83,6 +101,13 @@ export default function CreateRafflePage() {
                     max_tickets_per_user: formData.max_tickets_per_user ? parseInt(formData.max_tickets_per_user) : null,
                     total_tickets_cap: formData.total_tickets_cap ? parseInt(formData.total_tickets_cap) : null,
                     claim_message: formData.claim_message.trim() || null,
+                    number_of_winners: formData.number_of_winners ? parseInt(formData.number_of_winners) : 1,
+                    wheel_background_url: formData.wheel_background_url?.trim() || null,
+                    center_logo_url: formData.center_logo_url?.trim() || null,
+                    slice_opacity: formData.slice_opacity,
+                    seed_advent_item_id: selectedAdventItemId || null,
+                    seed_advent_purchases: seedFromAdventPurchases === true,
+                    extra_entries,
                 }),
             })
 
@@ -103,6 +128,23 @@ export default function CreateRafflePage() {
         }
     }
 
+    const applyAdventTemplate = (itemId: string) => {
+        const item = ADVENT_ITEMS.find(i => i.id === itemId)
+        if (!item) return
+
+        setSelectedAdventItemId(itemId)
+        setFormData(prev => ({
+            ...prev,
+            title: prev.title || `Advent Day ${item.day} Raffle`,
+            type: 'special',
+            ticket_cost: String(item.pointsCost),
+            max_tickets_per_user: String(item.maxTickets),
+            wheel_background_url: item.image,
+            center_logo_url: prev.center_logo_url || '/icons/Sweetflipscoin.png',
+            slice_opacity: prev.slice_opacity || '0.5',
+        }))
+    }
+
     if (loading || !isAdmin) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -120,6 +162,59 @@ export default function CreateRafflePage() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Quick Create (Shop / Advent) */}
+                    <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
+                        <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">
+                            Quick Create (Shop / Advent)
+                        </h2>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                                    Advent item
+                                </label>
+                                <select
+                                    value={selectedAdventItemId}
+                                    onChange={(e) => {
+                                        const nextId = e.target.value
+                                        if (!nextId) {
+                                            setSelectedAdventItemId('')
+                                            return
+                                        }
+                                        applyAdventTemplate(nextId)
+                                    }}
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                >
+                                    <option value="">-- Select an Advent item (optional) --</option>
+                                    {[...ADVENT_ITEMS]
+                                        .sort((a, b) => a.day - b.day)
+                                        .map((item) => (
+                                            <option key={item.id} value={item.id}>
+                                                Day {item.day} ({item.id}) — {item.pointsCost} SweetCoins — max {item.maxTickets}
+                                            </option>
+                                        ))}
+                                </select>
+                                <p className="mt-1 text-xs text-gray-500 dark:text-kick-text-muted">
+                                    Selecting one auto-fills ticket cost, max tickets, and wheel background.
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-3 mt-7">
+                                <input
+                                    type="checkbox"
+                                    id="seed_from_advent"
+                                    checked={seedFromAdventPurchases}
+                                    onChange={(e) => setSeedFromAdventPurchases(e.target.checked)}
+                                    className="w-4 h-4 text-kick-purple border-gray-300 rounded focus:ring-kick-purple"
+                                    disabled={!selectedAdventItemId}
+                                />
+                                <label htmlFor="seed_from_advent" className="text-body text-gray-900 dark:text-kick-text">
+                                    Seed entries from purchases
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Raffle Details */}
                     <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
                         <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">
@@ -239,10 +334,10 @@ export default function CreateRafflePage() {
                                         placeholder="50"
                                         className="flex-1 px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
                                     />
-                                    <span className="text-body text-gray-600 dark:text-kick-text-secondary">points</span>
+                                    <span className="text-body text-gray-600 dark:text-kick-text-secondary">SweetCoins</span>
                                 </div>
                                 <p className="mt-1 text-xs text-gray-500 dark:text-kick-text-muted">
-                                    How many points users spend per entry.
+                                    How many SweetCoins users spend per entry.
                                 </p>
                             </div>
 
@@ -356,6 +451,150 @@ export default function CreateRafflePage() {
                                 </label>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Wheel + Winners */}
+                    <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
+                        <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">
+                            Wheel + Winners
+                        </h2>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                                    Number of winners
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={formData.number_of_winners}
+                                    onChange={(e) => setFormData({ ...formData, number_of_winners: e.target.value })}
+                                    className="w-32 px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                                    Wheel background URL (optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.wheel_background_url}
+                                    onChange={(e) => setFormData({ ...formData, wheel_background_url: e.target.value })}
+                                    placeholder="/advent/Day 14.png"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                                    Center logo URL (optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.center_logo_url}
+                                    onChange={(e) => setFormData({ ...formData, center_logo_url: e.target.value })}
+                                    placeholder="/icons/Sweetflipscoin.png"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-small font-medium text-gray-700 dark:text-kick-text-secondary mb-2">
+                                    Slice opacity ({formData.slice_opacity})
+                                </label>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.05}
+                                    value={formData.slice_opacity}
+                                    onChange={(e) => setFormData({ ...formData, slice_opacity: e.target.value })}
+                                    className="w-full"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Extra people (seed entries) */}
+                    <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text">
+                                Extra people (seed entries)
+                            </h2>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="checkbox"
+                                    id="extra_entries_enabled"
+                                    checked={extraEntriesEnabled}
+                                    onChange={(e) => setExtraEntriesEnabled(e.target.checked)}
+                                    className="w-4 h-4 text-kick-purple border-gray-300 rounded focus:ring-kick-purple"
+                                />
+                                <label htmlFor="extra_entries_enabled" className="text-body text-gray-900 dark:text-kick-text">
+                                    Enable
+                                </label>
+                            </div>
+                        </div>
+
+                        {extraEntriesEnabled && (
+                            <div className="mt-4 space-y-3">
+                                <p className="text-small text-gray-600 dark:text-kick-text-secondary">
+                                    Add users by <span className="font-mono">username</span> or <span className="font-mono">kick_user_id</span>. These entries are added without spending SweetCoins.
+                                </p>
+
+                                <div className="space-y-2">
+                                    {extraEntries.map((entry, idx) => (
+                                        <div key={idx} className="flex flex-wrap gap-2 items-center">
+                                            <input
+                                                value={entry.usernameOrKickId}
+                                                onChange={(e) => {
+                                                    const next = [...extraEntries]
+                                                    next[idx] = { ...next[idx], usernameOrKickId: e.target.value }
+                                                    setExtraEntries(next)
+                                                }}
+                                                placeholder="username or kick_user_id"
+                                                className="flex-1 min-w-[240px] px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                            />
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={50}
+                                                value={entry.tickets}
+                                                onChange={(e) => {
+                                                    const next = [...extraEntries]
+                                                    next[idx] = { ...next[idx], tickets: Number(e.target.value) }
+                                                    setExtraEntries(next)
+                                                }}
+                                                className="w-32 px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setExtraEntries(extraEntries.filter((_, i) => i !== idx))}
+                                                className="px-3 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-dark transition-colors"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExtraEntries([...extraEntries, { usernameOrKickId: '', tickets: 1 }])}
+                                        className="px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 transition-colors"
+                                    >
+                                        + Add person
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setExtraEntries([])}
+                                        className="px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-dark transition-colors"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Actions */}

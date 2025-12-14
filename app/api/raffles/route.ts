@@ -171,6 +171,13 @@ export async function POST(request: Request) {
             end_at,
             sub_only,
             hidden_until_start,
+            number_of_winners,
+            wheel_background_url,
+            center_logo_url,
+            slice_opacity,
+            seed_advent_item_id,
+            seed_advent_purchases,
+            extra_entries,
         } = body
 
         // Validation
@@ -186,6 +193,19 @@ export async function POST(request: Request) {
                 { error: 'Ticket cost must be greater than 0' },
                 { status: 400 }
             )
+        }
+
+        const winnersCount = number_of_winners ? Number(number_of_winners) : 1
+        if (!Number.isFinite(winnersCount) || winnersCount <= 0) {
+            return NextResponse.json({ error: 'number_of_winners must be a positive number' }, { status: 400 })
+        }
+
+        const sliceOpacityNum =
+            slice_opacity === null || slice_opacity === undefined || slice_opacity === ''
+                ? null
+                : Number(slice_opacity)
+        if (sliceOpacityNum !== null && (!Number.isFinite(sliceOpacityNum) || sliceOpacityNum < 0 || sliceOpacityNum > 1)) {
+            return NextResponse.json({ error: 'slice_opacity must be between 0 and 1' }, { status: 400 })
         }
 
         const startDate = new Date(start_at)
@@ -221,24 +241,90 @@ export async function POST(request: Request) {
             status = 'completed'
         }
 
-        // Create raffle
-        const raffle = await db.raffle.create({
-            data: {
-                title,
-                description: description || null,
-                type: type || 'general',
-                prize_description,
-                claim_message: claim_message || null,
-                ticket_cost: parseInt(ticket_cost),
-                max_tickets_per_user: max_tickets_per_user ? parseInt(max_tickets_per_user) : null,
-                total_tickets_cap: total_tickets_cap ? parseInt(total_tickets_cap) : null,
-                start_at: startDate,
-                end_at: endDate,
-                status,
-                sub_only: sub_only === true,
-                hidden_until_start: hidden_until_start === true,
-                created_by: auth.userId,
-            },
+        const raffle = await db.$transaction(async (tx) => {
+            // Create raffle
+            const created = await tx.raffle.create({
+                data: {
+                    title,
+                    description: description || null,
+                    type: type || 'general',
+                    prize_description,
+                    claim_message: claim_message || null,
+                    ticket_cost: parseInt(ticket_cost),
+                    max_tickets_per_user: max_tickets_per_user ? parseInt(max_tickets_per_user) : null,
+                    total_tickets_cap: total_tickets_cap ? parseInt(total_tickets_cap) : null,
+                    start_at: startDate,
+                    end_at: endDate,
+                    status,
+                    sub_only: sub_only === true,
+                    hidden_until_start: hidden_until_start === true,
+                    number_of_winners: winnersCount,
+                    wheel_background_url: wheel_background_url || null,
+                    center_logo_url: center_logo_url || null,
+                    slice_opacity: sliceOpacityNum,
+                    created_by: auth.userId,
+                },
+            })
+
+            const raffleId = created.id
+
+            // Seed from advent purchases (optional)
+            if (seed_advent_purchases === true && seed_advent_item_id) {
+                const purchases = await tx.adventPurchase.findMany({
+                    where: { item_id: String(seed_advent_item_id) },
+                    select: { user_id: true, tickets: true },
+                })
+
+                for (const p of purchases) {
+                    await tx.raffleEntry.upsert({
+                        where: { raffle_id_user_id: { raffle_id: raffleId, user_id: p.user_id } },
+                        update: { tickets: { increment: p.tickets }, source: 'advent' },
+                        create: { raffle_id: raffleId, user_id: p.user_id, tickets: p.tickets, source: 'advent' },
+                    })
+                }
+            }
+
+            // Add extra entries (optional)
+            if (Array.isArray(extra_entries) && extra_entries.length > 0) {
+                const maxPerUser = created.max_tickets_per_user ?? 50
+                const cap = Math.min(maxPerUser, 50)
+
+                for (const row of extra_entries) {
+                    const usernameOrKickId = (row?.usernameOrKickId || '').toString().trim()
+                    const tickets = Number(row?.tickets || 0)
+                    if (!usernameOrKickId) continue
+                    if (!Number.isFinite(tickets) || tickets <= 0) {
+                        throw new Error(`Invalid tickets for "${usernameOrKickId}"`)
+                    }
+
+                    // Resolve user by kick_user_id (numeric) or username
+                    const asNumber = Number(usernameOrKickId)
+                    const user = Number.isFinite(asNumber) && usernameOrKickId.match(/^\d+$/)
+                        ? await tx.user.findUnique({ where: { kick_user_id: BigInt(usernameOrKickId) }, select: { id: true } })
+                        : await tx.user.findFirst({ where: { username: usernameOrKickId }, select: { id: true } })
+
+                    if (!user) {
+                        throw new Error(`User not found: ${usernameOrKickId}`)
+                    }
+
+                    const existing = await tx.raffleEntry.findUnique({
+                        where: { raffle_id_user_id: { raffle_id: raffleId, user_id: user.id } },
+                        select: { tickets: true },
+                    })
+                    const currentTickets = existing?.tickets || 0
+                    if (currentTickets + tickets > cap) {
+                        throw new Error(`User "${usernameOrKickId}" would exceed cap (${cap}). Current: ${currentTickets}, add: ${tickets}`)
+                    }
+
+                    await tx.raffleEntry.upsert({
+                        where: { raffle_id_user_id: { raffle_id: raffleId, user_id: user.id } },
+                        update: { tickets: { increment: tickets }, source: 'manual' },
+                        create: { raffle_id: raffleId, user_id: user.id, tickets, source: 'manual' },
+                    })
+                }
+            }
+
+            return created
         })
 
         return NextResponse.json({
@@ -256,6 +342,10 @@ export async function POST(request: Request) {
                 status: raffle.status,
                 sub_only: raffle.sub_only,
                 hidden_until_start: raffle.hidden_until_start,
+                number_of_winners: raffle.number_of_winners,
+                wheel_background_url: raffle.wheel_background_url,
+                center_logo_url: raffle.center_logo_url,
+                slice_opacity: raffle.slice_opacity,
                 created_at: raffle.created_at.toISOString(),
             },
         }, { status: 201 })
