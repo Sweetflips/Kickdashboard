@@ -455,91 +455,103 @@ export default function UsersPage() {
                     >
                       {/* Main Row */}
                       <div
-                        className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-kick-surface-hover cursor-pointer transition-colors"
+                        className="flex flex-col gap-3 p-4 hover:bg-gray-50 dark:hover:bg-kick-surface-hover cursor-pointer transition-colors sm:flex-row sm:items-center sm:gap-4"
                         onClick={() => toggleExpanded(user.id)}
                       >
-                        {/* Expand Arrow */}
-                        <div className="text-gray-400 dark:text-kick-text-secondary">
-                          {isExpanded ? '▼' : '▶'}
-                        </div>
+                        {/* Mobile/Tablet: top row (arrow + avatar + info + points) */}
+                        <div className="flex items-start gap-3 min-w-0 sm:flex-1 sm:items-center sm:gap-4">
+                          {/* Expand Arrow */}
+                          <div className="text-gray-400 dark:text-kick-text-secondary pt-1 sm:pt-0">
+                            {isExpanded ? '▼' : '▶'}
+                          </div>
 
-                        {/* Avatar */}
-                        <div className="flex-shrink-0">
-                          {user.profile_picture_url && !imageErrors.has(user.id) ? (
-                            <img
-                              src={user.profile_picture_url}
-                              alt={user.username}
-                              className="w-10 h-10 rounded-full object-cover bg-kick-dark"
-                              onError={() => {
-                                setImageErrors(prev => new Set(prev).add(user.id))
-                              }}
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
-                              <span className="text-gray-600 dark:text-kick-text-secondary text-sm font-medium">
-                                {user.username.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* User Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            {/* Kick logo - always show since all users sign up via Kick */}
-                            <img
-                              src="/logos/kick-icon.svg"
-                              alt="Kick"
-                              title={`Kick: ${user.username}`}
-                              className="w-5 h-5 flex-shrink-0"
-                            />
-                            <span className="font-medium text-gray-900 dark:text-kick-text truncate">
-                              {user.username}
-                            </span>
-                            {/* Duplicate Flag Badge */}
-                            {hasDuplicates && (
-                              <span className="px-1.5 py-0.5 rounded text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 font-medium" title={`${user.duplicate_flags.length} potential duplicate account(s)`}>
-                                ⚠️ Duplicate
-                              </span>
-                            )}
-                            {/* Connected Account Badges */}
-                            <div className="flex items-center gap-1.5">
-                              {user.discord_connected && (
-                                <img
-                                  src="/icons/discord.png"
-                                  alt="Discord connected"
-                                  width="16"
-                                  height="16"
-                                  className="object-contain w-4 h-4"
-                                  title="Connected via Discord"
-                                  style={{ width: '21px', height: '21px' }}
-                                />
-                              )}
-                              {user.telegram_connected && (
-                                <img
-                                  src="/logos/telegram-logo.png"
-                                  alt="Telegram connected"
-                                  width="18"
-                                  height="18"
-                                  className="object-contain"
-                                  title="Connected via Telegram"
-                                  style={{ width: '32px', height: '32px' }}
-                                />
-                              )}
-                            </div>
-                            {user.is_admin && (
-                              <span className="px-1.5 py-0.5 rounded text-xs bg-kick-purple/20 text-kick-purple font-medium">
-                                Admin
-                              </span>
-                            )}
-                            {user.is_excluded && (
-                              <span className="px-1.5 py-0.5 rounded text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium">
-                                Excluded
-                              </span>
+                          {/* Avatar */}
+                          <div className="flex-shrink-0">
+                            {user.profile_picture_url && !imageErrors.has(user.id) ? (
+                              <img
+                                src={user.profile_picture_url}
+                                alt={user.username}
+                                className="w-10 h-10 rounded-full object-cover bg-kick-dark"
+                                onError={() => {
+                                  setImageErrors(prev => new Set(prev).add(user.id))
+                                }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-kick-surface-hover flex items-center justify-center">
+                                <span className="text-gray-600 dark:text-kick-text-secondary text-sm font-medium">
+                                  {user.username.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
                             )}
                           </div>
-                          <div className="text-sm text-gray-500 dark:text-kick-text-secondary">
-                            {user.email || 'No email'}
+
+                          {/* User Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {/* Kick logo - always show since all users sign up via Kick */}
+                              <img
+                                src="/logos/kick-icon.svg"
+                                alt="Kick"
+                                title={`Kick: ${user.username}`}
+                                className="w-5 h-5 flex-shrink-0"
+                              />
+                              <span className="font-medium text-gray-900 dark:text-kick-text truncate">
+                                {user.username}
+                              </span>
+
+                              {/* Badges */}
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {hasDuplicates && (
+                                  <span
+                                    className="px-1.5 py-0.5 rounded text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 font-medium"
+                                    title={`${user.duplicate_flags.length} potential duplicate account(s)`}
+                                  >
+                                    ⚠️
+                                  </span>
+                                )}
+                                {user.discord_connected && (
+                                  <img
+                                    src="/icons/discord.png"
+                                    alt="Discord connected"
+                                    width="16"
+                                    height="16"
+                                    className="object-contain w-4 h-4"
+                                    title="Connected via Discord"
+                                    style={{ width: '21px', height: '21px' }}
+                                  />
+                                )}
+                                {user.telegram_connected && (
+                                  <img
+                                    src="/logos/telegram-logo.png"
+                                    alt="Telegram connected"
+                                    width="18"
+                                    height="18"
+                                    className="object-contain"
+                                    title="Connected via Telegram"
+                                    style={{ width: '32px', height: '32px' }}
+                                  />
+                                )}
+                                {user.is_admin && (
+                                  <span className="px-1.5 py-0.5 rounded text-xs bg-kick-purple/20 text-kick-purple font-medium">
+                                    Admin
+                                  </span>
+                                )}
+                                {user.is_excluded && (
+                                  <span className="px-1.5 py-0.5 rounded text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium">
+                                    Excluded
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-sm text-gray-500 dark:text-kick-text-secondary truncate">
+                              {user.email || 'No email'}
+                            </div>
+                          </div>
+
+                          {/* Points (compact on mobile) */}
+                          <div className="flex-shrink-0 text-right">
+                            <div className="font-semibold text-kick-purple leading-tight">{(user.total_points ?? 0).toLocaleString()}</div>
+                            <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Coins</div>
                           </div>
                         </div>
 
@@ -596,59 +608,56 @@ export default function UsersPage() {
                           )}
                         </div>
 
-                        {/* Points */}
-                        <div className="text-right">
-                          <div className="font-semibold text-kick-purple">{(user.total_points ?? 0).toLocaleString()}</div>
-                          <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Sweet Coins</div>
-                        </div>
-
                         {/* Achievements */}
                         <div className="text-right hidden md:block">
                           <div className="font-semibold text-amber-600 dark:text-amber-500">{(user.achievements_unlocked ?? 0).toLocaleString()}</div>
                           <div className="text-xs text-gray-500 dark:text-kick-text-secondary">Achievements</div>
                         </div>
 
-                        {/* Admin Toggle */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleAdmin(user.kick_user_id, user.is_admin)
-                          }}
-                          className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                            user.is_admin
-                              ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
-                              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
-                          }`}
-                        >
-                          {user.is_admin ? 'Remove Admin' : 'Make Admin'}
-                        </button>
+                        {/* Actions: wrap nicely on mobile */}
+                        <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:ml-auto">
+                          {/* Admin Toggle */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleAdmin(user.kick_user_id, user.is_admin)
+                            }}
+                            className={`px-3 py-2 rounded text-xs font-medium transition-colors w-full sm:w-auto ${
+                              user.is_admin
+                                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
+                                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                            }`}
+                          >
+                            {user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                          </button>
 
-                        {/* Exclude Toggle */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleExclude(user.kick_user_id, user.is_excluded)
-                          }}
-                          className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                            user.is_excluded
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {user.is_excluded ? 'Include' : 'Exclude'}
-                        </button>
+                          {/* Exclude Toggle */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleExclude(user.kick_user_id, user.is_excluded)
+                            }}
+                            className={`px-3 py-2 rounded text-xs font-medium transition-colors w-full sm:w-auto ${
+                              user.is_excluded
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            {user.is_excluded ? 'Include' : 'Exclude'}
+                          </button>
 
-                        {/* Award Points Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openAwardModal(user)
-                          }}
-                          className="px-3 py-1.5 rounded text-xs font-medium transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
-                          title="Award or deduct points"
-                        >
-                          ± Points
-                        </button>
+                          {/* Award Points Button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openAwardModal(user)
+                            }}
+                            className="px-3 py-2 rounded text-xs font-medium transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 w-full sm:w-auto"
+                            title="Award or deduct points"
+                          >
+                            ± Points
+                          </button>
+                        </div>
                       </div>
 
                       {/* Expanded Details */}
