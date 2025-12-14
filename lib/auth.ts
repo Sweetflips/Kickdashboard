@@ -130,7 +130,7 @@ async function fetchKickModerators(): Promise<Set<string>> {
           if (response.status === 403) {
             // Cache the forbidden state for 6 hours to avoid log spam + wasted calls.
             memoryCache.set(forbiddenKey, Date.now() + 6 * 60 * 60 * 1000, 6 * 60 * 60 * 1000)
-            console.warn(`[Auth] Failed to fetch moderators: 403 (forbidden). Disabling auto-moderator detection temporarily.`)
+            // Intentionally silent: this endpoint is commonly forbidden and can spam logs on deploys/restarts.
           } else {
             console.warn(`[Auth] Failed to fetch moderators: ${response.status}`)
           }
