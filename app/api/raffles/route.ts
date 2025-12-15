@@ -140,6 +140,53 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const fetchKickUserFromChannelSlug = async (slugRaw: string): Promise<{ kick_user_id: bigint; username: string; profile_picture_url: string | null } | null> => {
+            const slug = slugRaw.trim().toLowerCase()
+            if (!slug) return null
+
+            try {
+                const controller = new AbortController()
+                const timeoutId = setTimeout(() => controller.abort(), 8000)
+
+                const resp = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        // Kick v2 endpoints can be picky; use a browser-y UA
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    },
+                    cache: 'no-store',
+                    signal: controller.signal,
+                })
+
+                clearTimeout(timeoutId)
+
+                if (!resp.ok) return null
+                const data: any = await resp.json()
+
+                const id = data?.broadcaster_user_id ?? data?.user?.id ?? data?.id
+                if (!id) return null
+
+                const username =
+                    (typeof data?.user?.username === 'string' && data.user.username) ||
+                    (typeof data?.user?.name === 'string' && data.user.name) ||
+                    slugRaw.trim()
+
+                const profile_picture_url =
+                    (typeof data?.user?.profile_picture === 'string' && data.user.profile_picture) ||
+                    (typeof data?.user?.profile_picture_url === 'string' && data.user.profile_picture_url) ||
+                    (typeof data?.user?.profile_pic === 'string' && data.user.profile_pic) ||
+                    null
+
+                return {
+                    kick_user_id: BigInt(id),
+                    username,
+                    profile_picture_url,
+                }
+            } catch {
+                return null
+            }
+        }
+
         // Check admin access
         const adminCheck = await isAdmin(request)
         if (!adminCheck) {
@@ -299,12 +346,43 @@ export async function POST(request: Request) {
 
                     // Resolve user by kick_user_id (numeric) or username
                     const asNumber = Number(usernameOrKickId)
-                    const user = Number.isFinite(asNumber) && usernameOrKickId.match(/^\d+$/)
+                    let user = Number.isFinite(asNumber) && usernameOrKickId.match(/^\d+$/)
                         ? await tx.user.findUnique({ where: { kick_user_id: BigInt(usernameOrKickId) }, select: { id: true } })
                         : await tx.user.findFirst({ where: { username: usernameOrKickId }, select: { id: true } })
 
                     if (!user) {
-                        throw new Error(`User not found: ${usernameOrKickId}`)
+                        // Auto-import user from Kick when possible so admins can seed entries
+                        if (Number.isFinite(asNumber) && usernameOrKickId.match(/^\d+$/)) {
+                            // Numeric kick user id - create minimal placeholder; login flow will enrich later.
+                            const kick_user_id = BigInt(usernameOrKickId)
+                            const createdUser = await tx.user.upsert({
+                                where: { kick_user_id },
+                                update: { username: `kick_${usernameOrKickId}` },
+                                create: { kick_user_id, username: `kick_${usernameOrKickId}` },
+                                select: { id: true },
+                            })
+                            user = createdUser
+                        } else {
+                            const kickUser = await fetchKickUserFromChannelSlug(usernameOrKickId)
+                            if (!kickUser) {
+                                throw new Error(`User not found: ${usernameOrKickId}`)
+                            }
+
+                            const createdUser = await tx.user.upsert({
+                                where: { kick_user_id: kickUser.kick_user_id },
+                                update: {
+                                    username: kickUser.username,
+                                    profile_picture_url: kickUser.profile_picture_url,
+                                },
+                                create: {
+                                    kick_user_id: kickUser.kick_user_id,
+                                    username: kickUser.username,
+                                    profile_picture_url: kickUser.profile_picture_url,
+                                },
+                                select: { id: true },
+                            })
+                            user = createdUser
+                        }
                     }
 
                     const existing = await tx.raffleEntry.findUnique({
