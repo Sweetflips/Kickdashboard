@@ -30,6 +30,7 @@ function startWebServer() {
     const { spawn, exec } = require('child_process');
     const path = require('path');
     const fs = require('fs');
+    const os = require('os');
 
     const port = process.env.PORT || '3000';
     const hostname = process.env.HOSTNAME || '0.0.0.0';
@@ -95,6 +96,8 @@ function startWebServer() {
       });
 
     let nextProcess = null;
+    let shuttingDown = false;
+    let shutdownSignal = null;
 
     if (hasFullNextServer) {
       // Normal Next.js runtime
@@ -129,15 +132,20 @@ function startWebServer() {
       throw new Error('Failed to start Next.js (no start command selected)');
     }
 
-    nextProcess.on('exit', (code) => {
+    nextProcess.on('exit', (code, signal) => {
       // IMPORTANT:
-      // - When a child is terminated by signal (SIGTERM/SIGINT), Node reports `code === null`.
-      // - Our Railway config uses restartPolicyType=ON_FAILURE, so exiting 0 can leave the service at 0 instances.
-      //   Use a non-zero exit code in that case so Railway restarts the container.
-      if (code === null) {
-        process.stdout.write('ℹ️  Next.js stopped by signal (code: null - likely SIGTERM/SIGINT)\n');
-        // 128 + SIGTERM(15) = 143 (common convention)
-        process.exit(143);
+      // - When a child is terminated by a signal, Node reports `code === null` and provides `signal`.
+      // - Treat SIGTERM/SIGINT as a graceful shutdown so the platform doesn't restart-loop the service.
+      if (signal) {
+        process.stdout.write(`ℹ️  Next.js stopped by signal: ${signal}\n`);
+        if (shuttingDown && (signal === 'SIGTERM' || signal === 'SIGINT')) {
+          process.exit(0);
+          return;
+        }
+
+        // Unexpected signal: exit non-zero so restartPolicyType=ON_FAILURE can recover.
+        const sigNum = (os.constants && os.constants.signals && os.constants.signals[signal]) || 0;
+        process.exit(sigNum ? 128 + sigNum : 1);
         return;
       }
 
@@ -158,6 +166,8 @@ function startWebServer() {
     // Handle graceful shutdown
     const shutdown = (signal) => {
       process.stdout.write('\n' + signal + ' received, shutting down...\n');
+      shuttingDown = true;
+      shutdownSignal = signal;
       nextProcess.kill(signal);
     };
 
