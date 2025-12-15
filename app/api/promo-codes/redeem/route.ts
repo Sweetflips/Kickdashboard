@@ -10,9 +10,9 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: Request) {
     let body: { code?: string } | null = null
-    let auth: { userId: string } | null = null
-    let normalizedCode: string | null = null
-    let originalCode: string | null = null
+    let auth: Awaited<ReturnType<typeof getAuthenticatedUser>> = null
+    let normalizedCode: string | undefined = undefined
+    let originalCode: string | undefined = undefined
 
     try {
         body = await request.json()
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
                 { status: 401 }
             )
         }
+        const authUser = auth
 
         // Use transaction to ensure atomicity
         const result = await db.$transaction(async (tx) => {
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
                 where: { code: normalizedCode },
                 include: {
                     redemptions: {
-                        where: { user_id: auth.userId },
+                        where: { user_id: authUser.userId },
                     },
                 },
             })
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
                 console.error('Promo code not found', {
                     attemptedCode: normalizedCode,
                     originalCode: originalCode,
-                    userId: auth.userId,
+                    userId: authUser.userId,
                 })
                 throw new Error('Invalid promo code')
             }
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
                 console.error('Promo code is inactive', {
                     code: promoCode.code,
                     promoCodeId: promoCode.id,
-                    userId: auth.userId,
+                    userId: authUser.userId,
                     isActive: promoCode.is_active,
                 })
                 throw new Error('This promo code is no longer active')
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
                 console.error('Promo code expired', {
                     code: promoCode.code,
                     promoCodeId: promoCode.id,
-                    userId: auth.userId,
+                    userId: authUser.userId,
                     expiresAt: promoCode.expires_at,
                     now: new Date(),
                 })
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
                 console.error('User already redeemed this promo code', {
                     code: promoCode.code,
                     promoCodeId: promoCode.id,
-                    userId: auth.userId,
+                    userId: authUser.userId,
                     existingRedemptions: promoCode.redemptions.length,
                 })
                 throw new Error('You have already redeemed this promo code')
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
                 console.error('Promo code usage limit reached', {
                     code: promoCode.code,
                     promoCodeId: promoCode.id,
-                    userId: auth.userId,
+                    userId: authUser.userId,
                     currentUses: promoCode.current_uses,
                     maxUses: promoCode.max_uses,
                 })
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
             await tx.promoCodeRedemption.create({
                 data: {
                     promo_code_id: promoCode.id,
-                    user_id: auth.userId,
+                    user_id: authUser.userId,
                     sweet_coins_awarded: promoCode.sweet_coins_value,
                 },
             })
@@ -125,14 +126,14 @@ export async function POST(request: Request) {
 
             // Award Sweet Coins to user
             await tx.userSweetCoins.upsert({
-                where: { user_id: auth.userId },
+                where: { user_id: authUser.userId },
                 update: {
                     total_sweet_coins: {
                         increment: promoCode.sweet_coins_value,
                     },
                 },
                 create: {
-                    user_id: auth.userId,
+                    user_id: authUser.userId,
                     total_sweet_coins: promoCode.sweet_coins_value,
                     total_emotes: 0,
                 },
