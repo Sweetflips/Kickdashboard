@@ -12,10 +12,11 @@ export async function POST(request: Request) {
     let body: { code?: string } | null = null
     let auth: { userId: string } | null = null
     let normalizedCode: string | null = null
+    let originalCode: string | null = null
 
     try {
         body = await request.json()
-        const { code } = body
+        const code = body?.code
 
         if (!code || typeof code !== 'string') {
             return NextResponse.json(
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
             )
         }
 
+        originalCode = code
         // Normalize code (uppercase, trim)
         normalizedCode = code.trim().toUpperCase()
 
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
             if (!promoCode) {
                 console.error('Promo code not found', {
                     attemptedCode: normalizedCode,
-                    originalCode: code,
+                    originalCode: originalCode,
                     userId: auth.userId,
                 })
                 throw new Error('Invalid promo code')
@@ -155,7 +157,7 @@ export async function POST(request: Request) {
             error: errorMessage,
             errorStack: error instanceof Error ? error.stack : undefined,
             attemptedCode: normalizedCode || (body?.code ? body.code.trim().toUpperCase() : 'unknown'),
-            originalCode: body?.code || 'unknown',
+            originalCode: originalCode || body?.code || 'unknown',
             userId: auth?.userId || 'unknown',
             timestamp: new Date().toISOString(),
         })
