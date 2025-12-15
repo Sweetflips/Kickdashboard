@@ -6,6 +6,7 @@ const path = require('path');
 const WORKER_PATHS = [
     'scripts/point-worker',
     'scripts/chat-worker',
+    'scripts/session-tracker',
     'scripts/start-worker',
     'lib/sweet-coin-queue',
     'lib/chat-queue',

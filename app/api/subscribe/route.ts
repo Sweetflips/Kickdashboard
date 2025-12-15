@@ -74,10 +74,21 @@ export async function POST(request: Request) {
             }
         }
 
-        // Subscribe to chat.message.sent event
+        // Subscribe to event streams we rely on
+        // - chat.message.sent: ingest chat messages
+        // - livestream.status.updated: authoritative start/end (prevents duration drift)
+        // - livestream.metadata.updated: title/metadata changes (optional)
         const events: SubscribeEventRequest[] = [
             {
                 name: 'chat.message.sent',
+                version: 1,
+            },
+            {
+                name: 'livestream.status.updated',
+                version: 1,
+            },
+            {
+                name: 'livestream.metadata.updated',
                 version: 1,
             },
         ]
@@ -120,7 +131,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
             success: true,
             subscriptions: data,
-            message: 'Successfully subscribed to chat.message.sent events',
+            message: 'Successfully subscribed to webhook events',
             webhookUrl: webhookUrl, // Include the webhook URL in response for debugging
         })
     } catch (error) {

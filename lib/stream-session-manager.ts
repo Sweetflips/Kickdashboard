@@ -349,6 +349,162 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
 }
 
 /**
+ * End a session at an explicit timestamp (e.g. from Kick webhook event).
+ * This is the same as endSession(), but uses the provided endedAt for consistency.
+ */
+export async function endSessionAt(sessionId: bigint, endedAt: Date, force: boolean = false): Promise<boolean> {
+    try {
+        if (!(endedAt instanceof Date) || isNaN(endedAt.getTime())) {
+            console.warn(`[SessionManager] Invalid endedAt provided for session ${sessionId}`)
+            return false
+        }
+
+        const session = await db.streamSession.findUnique({
+            where: { id: sessionId },
+            select: {
+                id: true,
+                ended_at: true,
+                session_title: true,
+                last_live_check_at: true,
+                started_at: true,
+            },
+        })
+
+        if (!session) {
+            console.warn(`[SessionManager] Session ${sessionId} not found`)
+            return false
+        }
+
+        // If already ended, we treat it as success (idempotent).
+        if (session.ended_at) {
+            return true
+        }
+
+        // Don't auto-end test sessions unless forced
+        if (session.session_title?.startsWith('[TEST]') && !force) {
+            console.log(`[SessionManager] Skipping auto-end of test session ${sessionId}`)
+            return false
+        }
+
+        // Check grace period (unless forced)
+        if (!force && session.last_live_check_at) {
+            const timeSinceLastCheck = Date.now() - session.last_live_check_at.getTime()
+            if (timeSinceLastCheck < SESSION_END_GRACE_PERIOD_MS) {
+                console.log(`[SessionManager] Session ${sessionId} within grace period (${Math.round(timeSinceLastCheck / 1000)}s ago)`)
+                return false
+            }
+        }
+
+        // Prevent obviously-invalid end times (allow small clock drift)
+        if (endedAt.getTime() < session.started_at.getTime() - 5 * 60 * 1000) {
+            console.warn(`[SessionManager] endedAt is before started_at for session ${sessionId}; refusing to end with that timestamp`)
+            return false
+        }
+
+        // Get broadcaster_user_id for backfill
+        const sessionWithBroadcaster = await db.streamSession.findUnique({
+            where: { id: sessionId },
+            select: { broadcaster_user_id: true },
+        })
+
+        if (!sessionWithBroadcaster) {
+            console.warn(`[SessionManager] Could not find broadcaster_user_id for session ${sessionId}`)
+            return false
+        }
+
+        // Count messages for this session
+        const messageCount = await db.chatMessage.count({
+            where: { stream_session_id: sessionId },
+        })
+
+        // Calculate duration
+        const durationSeconds = Math.floor((endedAt.getTime() - session.started_at.getTime()) / 1000)
+
+        // Update session with ended_at
+        await db.streamSession.update({
+            where: { id: sessionId },
+            data: {
+                ended_at: endedAt,
+                total_messages: messageCount,
+                duration_seconds: Math.max(0, durationSeconds),
+                updated_at: new Date(),
+            },
+        })
+
+        // Backfill offline messages into this session
+        const backfillWindowEnd = new Date(endedAt.getTime() + POST_END_ATTACH_WINDOW_MS)
+        const backfillStartTimestamp = BigInt(session.started_at.getTime())
+        const backfillEndTimestamp = BigInt(backfillWindowEnd.getTime())
+
+        try {
+            const offlineMessages = await db.offlineChatMessage.findMany({
+                where: {
+                    broadcaster_user_id: sessionWithBroadcaster.broadcaster_user_id,
+                    timestamp: {
+                        gte: backfillStartTimestamp,
+                        lte: backfillEndTimestamp,
+                    },
+                },
+            })
+
+            if (offlineMessages.length > 0) {
+                console.log(`[SessionManager] Backfilling ${offlineMessages.length} offline message(s) into session ${sessionId}`)
+
+                const chatMessagesToCreate = offlineMessages.map(offlineMsg => ({
+                    message_id: offlineMsg.message_id,
+                    stream_session_id: sessionId,
+                    sender_user_id: offlineMsg.sender_user_id,
+                    sender_username: offlineMsg.sender_username,
+                    broadcaster_user_id: offlineMsg.broadcaster_user_id,
+                    content: offlineMsg.content,
+                    emotes: offlineMsg.emotes ?? undefined,
+                    has_emotes: offlineMsg.has_emotes,
+                    engagement_type: offlineMsg.engagement_type,
+                    message_length: offlineMsg.message_length,
+                    exclamation_count: offlineMsg.exclamation_count,
+                    sentence_count: offlineMsg.sentence_count,
+                    timestamp: offlineMsg.timestamp,
+                    sender_username_color: offlineMsg.sender_username_color,
+                    sender_badges: offlineMsg.sender_badges ?? undefined,
+                    sender_is_verified: offlineMsg.sender_is_verified,
+                    sender_is_anonymous: offlineMsg.sender_is_anonymous,
+                    sweet_coins_earned: 0,
+                    sent_when_offline: true,
+                }))
+
+                await db.chatMessage.createMany({
+                    data: chatMessagesToCreate,
+                    skipDuplicates: true,
+                })
+
+                await db.offlineChatMessage.deleteMany({
+                    where: {
+                        message_id: {
+                            in: offlineMessages.map(m => m.message_id),
+                        },
+                    },
+                })
+
+                console.log(`[SessionManager] Successfully backfilled ${offlineMessages.length} message(s) into session ${sessionId}`)
+            }
+        } catch (backfillError) {
+            console.error(`[SessionManager] Error backfilling offline messages for session ${sessionId}:`, backfillError)
+        }
+
+        await mergeLikelyDuplicateSessions(sessionId).catch(() => {})
+
+        const hours = Math.floor(durationSeconds / 3600)
+        const minutes = Math.floor((durationSeconds % 3600) / 60)
+        console.log(`[SessionManager] Ended session ${sessionId} at ${endedAt.toISOString()} (duration: ${hours}h ${minutes}m, messages: ${messageCount})`)
+
+        return true
+    } catch (error) {
+        console.error('[SessionManager] Error ending session at timestamp:', error)
+        return false
+    }
+}
+
+/**
  * End the active session for a broadcaster (if one exists)
  */
 export async function endActiveSession(broadcasterUserId: bigint, force: boolean = false): Promise<boolean> {
@@ -357,6 +513,17 @@ export async function endActiveSession(broadcasterUserId: bigint, force: boolean
         return true // No session to end
     }
     return endSession(session.id, force)
+}
+
+/**
+ * End the active session for a broadcaster at an explicit timestamp (e.g. from webhook).
+ */
+export async function endActiveSessionAt(broadcasterUserId: bigint, endedAt: Date, force: boolean = false): Promise<boolean> {
+    const session = await getActiveSession(broadcasterUserId)
+    if (!session) {
+        return true
+    }
+    return endSessionAt(session.id, endedAt, force)
 }
 
 /**

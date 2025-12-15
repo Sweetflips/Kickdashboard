@@ -147,6 +147,18 @@ async function ensureTables() {
     env: process.env
   });
 
+  // Session tracker (polling) is optional. For true event-driven tracking,
+  // rely on Kick webhook events (livestream.status.updated).
+  const sessionTrackerEnabled = String(process.env.SESSION_TRACKER_ENABLED || '').toLowerCase() === 'true';
+  const sessionTrackerProcess = sessionTrackerEnabled
+    ? spawn('npx', ['tsx', 'scripts/session-tracker.ts'], { stdio: 'inherit', env: process.env })
+    : null;
+  if (sessionTrackerEnabled) {
+    console.log('📝 Session Tracker: Starting (polling fallback enabled)...');
+  } else {
+    console.log('📝 Session Tracker: Disabled (webhook-driven mode)');
+  }
+
   // Start point worker (processes point_award_jobs queue)
   // NOTE: Currently idle - nothing enqueues to point_award_jobs anymore.
   // Chat-worker handles points inline. Keeping this worker for potential future use.
@@ -162,10 +174,11 @@ async function ensureTables() {
   console.log('');
 
   let chatWorkerExited = false;
+  let sessionTrackerExited = !sessionTrackerEnabled;
   let pointWorkerExited = false;
 
   const checkExit = () => {
-    if (chatWorkerExited && pointWorkerExited) {
+    if (chatWorkerExited && sessionTrackerExited && pointWorkerExited) {
       healthServer.close(() => {
         console.log('✅ Health check server closed');
         process.exit(0);
@@ -182,6 +195,17 @@ async function ensureTables() {
     checkExit();
   });
 
+  if (sessionTrackerProcess) {
+    sessionTrackerProcess.on('exit', (code) => {
+      sessionTrackerExited = true;
+      if (code !== 0 && code !== null) {
+        console.error(`⚠️ Session tracker exited with code ${code}`);
+        // Don't exit immediately - let other workers continue
+      }
+      checkExit();
+    });
+  }
+
   pointWorkerProcess.on('exit', (code) => {
     pointWorkerExited = true;
     if (code !== 0 && code !== null) {
@@ -193,14 +217,26 @@ async function ensureTables() {
 
   chatWorkerProcess.on('error', (err) => {
     console.error('❌ Failed to start chat worker:', err.message);
+    if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
     pointWorkerProcess.kill('SIGTERM');
     healthServer.close();
     process.exit(1);
   });
 
+  if (sessionTrackerProcess) {
+    sessionTrackerProcess.on('error', (err) => {
+      console.error('❌ Failed to start session tracker:', err.message);
+      chatWorkerProcess.kill('SIGTERM');
+      pointWorkerProcess.kill('SIGTERM');
+      healthServer.close();
+      process.exit(1);
+    });
+  }
+
   pointWorkerProcess.on('error', (err) => {
     console.error('❌ Failed to start point worker:', err.message);
     chatWorkerProcess.kill('SIGTERM');
+    if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
     healthServer.close();
     process.exit(1);
   });
@@ -212,6 +248,7 @@ async function ensureTables() {
       console.log('✅ Health check server closed');
     });
     chatWorkerProcess.kill(signal);
+    if (sessionTrackerProcess) sessionTrackerProcess.kill(signal);
     pointWorkerProcess.kill(signal);
   };
 

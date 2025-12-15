@@ -2,7 +2,15 @@ import { NextResponse } from 'next/server'
 import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue'
 import type { ChatMessage } from '@/lib/chat-store'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
-import { resolveSessionForChat } from '@/lib/stream-session-manager'
+import { db } from '@/lib/db'
+import { getKickPublicKeyPem, verifyKickWebhookSignature } from '@/lib/kick-webhook'
+import {
+    resolveSessionForChat,
+    getOrCreateActiveSession,
+    touchSession,
+    updateSessionMetadata,
+    endActiveSessionAt,
+} from '@/lib/stream-session-manager'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +39,7 @@ function extractEmotesFromContent(content: string): Array<{ emote_id: string; po
 }
 
 const EXTERNAL_WEBHOOK_URL = process.env.EXTERNAL_WEBHOOK_URL || 'https://kickdashboard.com/api/webhooks/kick'
+const SKIP_SIGNATURE_VERIFY = String(process.env.KICK_WEBHOOK_SKIP_SIGNATURE_VERIFY || '').toLowerCase() === 'true'
 
 // GET endpoint to verify webhook is accessible
 export async function GET(request: Request) {
@@ -46,6 +55,11 @@ export async function POST(request: Request) {
         const eventType = request.headers.get('Kick-Event-Type')
         const eventVersion = request.headers.get('Kick-Event-Version')
 
+        // Signature validation headers (per Kick docs)
+        const messageId = request.headers.get('Kick-Event-Message-Id')
+        const messageTimestamp = request.headers.get('Kick-Event-Message-Timestamp')
+        const signature = request.headers.get('Kick-Event-Signature')
+
         // Log all incoming webhook requests
         console.log('=== WEBHOOK RECEIVED ===')
         console.log('Event Type:', eventType)
@@ -55,11 +69,42 @@ export async function POST(request: Request) {
         console.log('URL:', request.url)
         console.log('Method:', request.method)
 
-        // Get the raw body to forward it
-        const payload = await request.json()
-        const payloadString = JSON.stringify(payload)
+        // Read raw body first (needed for signature verification)
+        const rawBody = await request.text()
+
+        let payload: any = null
+        try {
+            payload = rawBody ? JSON.parse(rawBody) : null
+        } catch (e) {
+            console.warn('[webhook] ⚠️ Could not parse JSON payload')
+            return NextResponse.json({ received: true, error: 'invalid_json' }, { status: 200 })
+        }
+
+        const payloadString = JSON.stringify(payload ?? {})
 
         console.log('Payload:', JSON.stringify(payload, null, 2))
+
+        // Verify signature if headers are present (recommended)
+        if (!SKIP_SIGNATURE_VERIFY) {
+            if (!messageId || !messageTimestamp || !signature) {
+                console.warn('[webhook] ⚠️ Missing signature headers; rejecting')
+                return NextResponse.json({ error: 'Missing signature headers' }, { status: 401 })
+            }
+
+            const publicKey = await getKickPublicKeyPem()
+            const ok = verifyKickWebhookSignature({
+                messageId,
+                messageTimestamp,
+                rawBody,
+                signatureBase64: signature,
+                publicKeyPem: publicKey,
+            })
+
+            if (!ok) {
+                console.warn('[webhook] ❌ Invalid signature; rejecting')
+                return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+            }
+        }
 
         // Forward to external webhook
         try {
@@ -69,6 +114,8 @@ export async function POST(request: Request) {
                     'Content-Type': 'application/json',
                     'Kick-Event-Type': eventType || '',
                     'Kick-Event-Version': eventVersion || '',
+                    'Kick-Event-Message-Id': messageId || '',
+                    'Kick-Event-Message-Timestamp': messageTimestamp || '',
                 },
                 body: payloadString,
             })
@@ -78,9 +125,207 @@ export async function POST(request: Request) {
             // Continue processing even if forward fails
         }
 
-        // Only handle chat.message.sent events locally
+        const parseKickTimestamp = (input: any): Date | null => {
+            if (!input) return null
+            if (input instanceof Date) return isNaN(input.getTime()) ? null : input
+            const raw = String(input).trim()
+            if (!raw) return null
+
+            // ISO (with timezone)
+            if (raw.includes('T') && (raw.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(raw))) {
+                const d = new Date(raw)
+                return isNaN(d.getTime()) ? null : d
+            }
+
+            // "YYYY-MM-DD HH:mm:ss" (no timezone) -> treat as UTC
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
+                const d = new Date(raw.replace(' ', 'T') + 'Z')
+                return isNaN(d.getTime()) ? null : d
+            }
+
+            const d = new Date(raw)
+            return isNaN(d.getTime()) ? null : d
+        }
+
+        const getBroadcasterUserId = (p: any): bigint | null => {
+            const raw =
+                p?.broadcaster_user_id ??
+                p?.broadcasterUserId ??
+                p?.broadcaster?.user_id ??
+                p?.broadcaster?.id ??
+                p?.livestream?.broadcaster_user_id ??
+                p?.data?.broadcaster_user_id ??
+                null
+
+            if (raw === null || raw === undefined) return null
+            try {
+                return BigInt(raw)
+            } catch {
+                return null
+            }
+        }
+
+        const getChannelSlug = async (p: any, broadcasterUserId: bigint | null): Promise<string | null> => {
+            const raw =
+                p?.channel_slug ??
+                p?.slug ??
+                p?.channel?.slug ??
+                p?.data?.channel_slug ??
+                p?.data?.slug ??
+                null
+
+            if (typeof raw === 'string' && raw.trim()) return raw.trim().toLowerCase()
+
+            if (broadcasterUserId) {
+                const user = await db.user.findFirst({
+                    where: { kick_user_id: broadcasterUserId },
+                    select: { username: true },
+                })
+                if (user?.username) return user.username.trim().toLowerCase()
+            }
+
+            return null
+        }
+
+        const normalizeLivestreamStatus = (p: any): 'started' | 'ended' | null => {
+            const statusRaw =
+                p?.status ??
+                p?.livestream_status ??
+                p?.livestream?.status ??
+                p?.data?.status ??
+                null
+
+            if (typeof statusRaw === 'string') {
+                const s = statusRaw.trim().toLowerCase()
+                if (['started', 'start', 'live', 'online', 'running'].includes(s)) return 'started'
+                if (['ended', 'end', 'offline', 'stopped', 'disconnected'].includes(s)) return 'ended'
+            }
+
+            const isLiveRaw =
+                p?.is_live ??
+                p?.isLive ??
+                p?.livestream?.is_live ??
+                p?.data?.is_live ??
+                null
+
+            if (typeof isLiveRaw === 'boolean') return isLiveRaw ? 'started' : 'ended'
+            if (typeof isLiveRaw === 'number') return isLiveRaw !== 0 ? 'started' : 'ended'
+
+            // Heuristic: ended_at presence implies ended
+            if (p?.ended_at || p?.endedAt || p?.data?.ended_at) return 'ended'
+
+            return null
+        }
+
+        // Handle livestream lifecycle events (event-driven session tracking)
+        if (eventType === 'livestream.status.updated') {
+            const broadcasterUserId = getBroadcasterUserId(payload)
+            const channelSlug = await getChannelSlug(payload, broadcasterUserId)
+            const status = normalizeLivestreamStatus(payload)
+
+            if (!broadcasterUserId || !channelSlug || !status) {
+                console.warn('[webhook] livestream.status.updated missing required fields', {
+                    broadcasterUserId: broadcasterUserId?.toString(),
+                    channelSlug,
+                    status,
+                })
+                return NextResponse.json({ received: true, eventType }, { status: 200 })
+            }
+
+            if (status === 'started') {
+                const startedAt =
+                    parseKickTimestamp(payload?.started_at) ||
+                    parseKickTimestamp(payload?.livestream?.started_at) ||
+                    parseKickTimestamp(payload?.data?.started_at) ||
+                    null
+
+                const thumbnailUrl =
+                    (typeof payload?.thumbnail === 'string' ? payload.thumbnail : payload?.thumbnail?.url) ||
+                    payload?.livestream?.thumbnail ||
+                    payload?.data?.thumbnail ||
+                    null
+
+                const sessionTitle =
+                    payload?.session_title ||
+                    payload?.stream_title ||
+                    payload?.title ||
+                    payload?.livestream?.session_title ||
+                    payload?.livestream?.stream_title ||
+                    payload?.data?.session_title ||
+                    null
+
+                const session = await getOrCreateActiveSession(
+                    broadcasterUserId,
+                    channelSlug,
+                    {
+                        sessionTitle: typeof sessionTitle === 'string' ? sessionTitle : null,
+                        thumbnailUrl: typeof thumbnailUrl === 'string' ? thumbnailUrl : null,
+                        kickStreamId: null, // schema uses this for VOD ids
+                        startedAt: startedAt ? startedAt.toISOString() : null,
+                    },
+                    startedAt ? startedAt.toISOString() : null
+                )
+
+                if (session) {
+                    await touchSession(session.id)
+                }
+
+                return NextResponse.json({ received: true, eventType }, { status: 200 })
+            }
+
+            // ended
+            const endedAt =
+                parseKickTimestamp(payload?.ended_at) ||
+                parseKickTimestamp(payload?.livestream?.ended_at) ||
+                parseKickTimestamp(payload?.data?.ended_at) ||
+                parseKickTimestamp(payload?.timestamp) ||
+                parseKickTimestamp(messageTimestamp) ||
+                new Date()
+
+            // Force end: Kick webhook is authoritative and shouldn't be blocked by grace period
+            await endActiveSessionAt(broadcasterUserId, endedAt, true)
+            return NextResponse.json({ received: true, eventType }, { status: 200 })
+        }
+
+        // Optional: metadata updates during live
+        if (eventType === 'livestream.metadata.updated') {
+            const broadcasterUserId = getBroadcasterUserId(payload)
+            const channelSlug = await getChannelSlug(payload, broadcasterUserId)
+            if (!broadcasterUserId || !channelSlug) {
+                return NextResponse.json({ received: true, eventType }, { status: 200 })
+            }
+
+            const sessionTitle =
+                payload?.session_title ||
+                payload?.stream_title ||
+                payload?.title ||
+                payload?.livestream?.session_title ||
+                payload?.livestream?.stream_title ||
+                payload?.data?.session_title ||
+                null
+
+            const thumbnailUrl =
+                (typeof payload?.thumbnail === 'string' ? payload.thumbnail : payload?.thumbnail?.url) ||
+                payload?.livestream?.thumbnail ||
+                payload?.data?.thumbnail ||
+                null
+
+            // Best-effort update for active session
+            const session = await getOrCreateActiveSession(broadcasterUserId, channelSlug)
+            if (session) {
+                await updateSessionMetadata(session.id, {
+                    sessionTitle: typeof sessionTitle === 'string' ? sessionTitle : undefined,
+                    thumbnailUrl: typeof thumbnailUrl === 'string' ? thumbnailUrl : undefined,
+                })
+                await touchSession(session.id)
+            }
+
+            return NextResponse.json({ received: true, eventType }, { status: 200 })
+        }
+
+        // Only handle chat.message.sent events locally beyond this point
         if (eventType !== 'chat.message.sent') {
-            console.log('Event type is not chat.message.sent, ignoring:', eventType)
+            console.log('Event type not handled locally, ignoring:', eventType)
             return NextResponse.json({ received: true, eventType }, { status: 200 })
         }
 

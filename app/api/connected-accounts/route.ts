@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
+const DEBUG_CONNECTED_ACCOUNTS = String(process.env.DEBUG_CONNECTED_ACCOUNTS || '').toLowerCase() === 'true'
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
@@ -15,7 +17,9 @@ export async function GET(request: Request) {
             )
         }
 
-        console.log(`\n📋 [CONNECTED ACCOUNTS] Fetching for Kick user: ${kickUserId}`)
+        if (DEBUG_CONNECTED_ACCOUNTS) {
+            console.log(`[CONNECTED ACCOUNTS] fetch kick_user_id=${kickUserId}`)
+        }
 
         const kickUserIdBigInt = BigInt(kickUserId)
 
@@ -35,16 +39,11 @@ export async function GET(request: Request) {
         })
 
         if (!user) {
-            console.log(`   └─ User not found in database`)
+            if (DEBUG_CONNECTED_ACCOUNTS) {
+                console.log(`[CONNECTED ACCOUNTS] result kick_user_id=${kickUserId} not_found`)
+            }
             return NextResponse.json({ accounts: [] })
         }
-
-        console.log(`   ├─ Username: ${user.username}`)
-        console.log(`   ├─ Kick connected: ${user.kick_connected ?? true}`)
-        console.log(`   ├─ Discord connected: ${user.discord_connected ?? false}`)
-        console.log(`   ├─ Telegram connected: ${user.telegram_connected ?? false}`)
-        console.log(`   ├─ Telegram username: ${user.telegram_username || 'N/A'}`)
-        console.log(`   └─ Telegram user ID: ${user.telegram_user_id || 'N/A'}`)
 
         const accounts = [
             {
@@ -67,11 +66,18 @@ export async function GET(request: Request) {
             },
         ]
 
-        console.log(`\n✅ [CONNECTED ACCOUNTS] Returning accounts:`)
-        accounts.forEach(acc => {
-            console.log(`   ├─ ${acc.provider}: ${acc.connected ? '✅ Connected' : '❌ Not connected'} ${acc.username ? `(${acc.username})` : ''}`)
-        })
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)
+        if (DEBUG_CONNECTED_ACCOUNTS) {
+            // Single-line summary (keeps logs readable, avoids PII spam)
+            const kick = accounts.find(a => a.provider === 'kick')
+            const discord = accounts.find(a => a.provider === 'discord')
+            const telegram = accounts.find(a => a.provider === 'telegram')
+            console.log(
+                `[CONNECTED ACCOUNTS] result kick_user_id=${kickUserId} username=${user.username}` +
+                ` kick=${kick?.connected ? '1' : '0'}` +
+                ` discord=${discord?.connected ? '1' : '0'}` +
+                ` telegram=${telegram?.connected ? '1' : '0'}`
+            )
+        }
 
         return NextResponse.json({ accounts })
     } catch (error) {

@@ -331,10 +331,30 @@ export async function POST(request: Request) {
                         needsUpdate = true
                     }
 
-                    // Update ended_at if missing
-                    if (!matchingSession.ended_at && videoEndedAt) {
-                        updateData.ended_at = videoEndedAt
-                        needsUpdate = true
+                    // Update ended_at when missing OR when a forced sync indicates our stored end time drifted.
+                    // Our polling-based end time can lag (outages, rate limits, restarts). Kick VOD end time is usually more accurate.
+                    if (videoEndedAt) {
+                        const currentEndedAt = matchingSession.ended_at
+                        const driftMs = currentEndedAt ? Math.abs(videoEndedAt.getTime() - currentEndedAt.getTime()) : null
+                        const DRIFT_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes
+
+                        const shouldUpdateEndedAt =
+                            !currentEndedAt ||
+                            force ||
+                            (driftMs !== null && driftMs > DRIFT_THRESHOLD_MS)
+
+                        // Safety: don't set ended_at before started_at (allow tiny clock drift)
+                        const startedAt = matchingSession.started_at
+                        const negativeDriftMs = startedAt ? (startedAt.getTime() - videoEndedAt.getTime()) : 0
+                        const MAX_NEGATIVE_DRIFT_MS = 5 * 60 * 1000 // 5 minutes
+
+                        if (shouldUpdateEndedAt && negativeDriftMs <= MAX_NEGATIVE_DRIFT_MS) {
+                            updateData.ended_at = videoEndedAt
+                            // Keep denormalized duration_seconds consistent with ended_at
+                            const durationSeconds = Math.floor((videoEndedAt.getTime() - startedAt.getTime()) / 1000)
+                            updateData.duration_seconds = Math.max(0, durationSeconds)
+                            needsUpdate = true
+                        }
                     }
 
                     if (needsUpdate) {
