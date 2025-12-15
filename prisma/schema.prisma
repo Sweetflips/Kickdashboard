@@ -3,6 +3,9 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Railway/Docker runs on Debian with OpenSSL 3.x (bookworm-slim). Include this
+  // target so Prisma ships the correct query engine at runtime.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
