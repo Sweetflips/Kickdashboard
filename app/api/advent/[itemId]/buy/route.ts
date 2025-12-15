@@ -7,6 +7,22 @@ import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
+class ApiError extends Error {
+  status: number
+  code?: string
+
+  constructor(message: string, status: number = 400, code?: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
+function isApiError(err: unknown): err is ApiError {
+  return err instanceof ApiError && typeof err.status === 'number'
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { itemId: string } }
@@ -90,7 +106,7 @@ export async function POST(
 
       // Check max tickets limit
       if (newTotalTickets > item.maxTickets) {
-        throw new Error(
+        throw new ApiError(
           `Maximum ${item.maxTickets} tickets per user for this item. You already have ${currentTickets} tickets.`
         )
       }
@@ -108,7 +124,7 @@ export async function POST(
       `
 
       if (!userPoints || userPoints.length === 0) {
-        throw new Error('User Sweet Coins record not found')
+        throw new ApiError('User Sweet Coins record not found', 500, 'missing_sweet_coins_record')
       }
 
       const currentBalance = userPoints[0].total_sweet_coins
@@ -116,7 +132,11 @@ export async function POST(
       const itemName = `Day ${item.day} – Advent Ticket`
 
       if (currentBalance < totalCost) {
-        throw new Error(`Not enough Sweet Coins. You have ${currentBalance} Sweet Coins, need ${totalCost} Sweet Coins.`)
+        throw new ApiError(
+          `Not enough Sweet Coins. You have ${currentBalance} Sweet Coins, need ${totalCost} Sweet Coins.`,
+          400,
+          'insufficient_sweet_coins'
+        )
       }
 
       // Deduct Sweet Coins
@@ -190,8 +210,6 @@ export async function POST(
       total_tickets: result.totalTickets,
     })
   } catch (error) {
-    console.error('Error purchasing advent item:', error)
-
     // Handle unique constraint violation (shouldn't happen with transaction, but handle gracefully)
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json(
@@ -200,9 +218,19 @@ export async function POST(
       )
     }
 
+    // Expected client errors: don't spam logs with stack traces
+    if (isApiError(error)) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.status }
+      )
+    }
+
+    console.error('Error purchasing advent item:', error)
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to purchase item' },
-      { status: 400 }
+      { error: 'Failed to purchase item' },
+      { status: 500 }
     )
   }
 }
