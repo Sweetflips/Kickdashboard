@@ -781,7 +781,16 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
 
                         if (!livestream) {
                             // No matching livestream found - the API returned data for other channels
-                            console.warn(`[Kick API] Livestream response mismatch: requested broadcaster ${broadcasterUserId} (${slug}), but response contains different channels`)
+                            const returnedBroadcasterIds = livestreamsData.data.map((ls: KickLivestream) => ({
+                                broadcaster_user_id: ls.broadcaster_user_id,
+                                slug: ls.slug,
+                            }))
+                            console.warn(`[Kick API] Livestream response mismatch: requested broadcaster ${broadcasterUserId} (${slug}), but response contains different channels`, {
+                                requestedBroadcasterId: broadcasterUserId,
+                                requestedSlug: slug,
+                                returnedChannels: returnedBroadcasterIds,
+                                totalReturned: livestreamsData.data.length,
+                            })
                             console.log(`[Kick API] Channel ${slug} has no active livestream (no matching data in response)`)
                             return null
                         }

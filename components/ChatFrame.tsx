@@ -1021,7 +1021,7 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                 message_id: messageId,
                 broadcaster: {
                     is_anonymous: false,
-                    user_id: broadcasterUserId || 42962282,
+                    user_id: broadcasterUserId || 41867251,
                     username: username || 'sweetflips',
                     is_verified: false,
                     channel_slug: slug || 'sweetflips',

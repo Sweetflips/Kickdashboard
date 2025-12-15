@@ -144,3 +144,4 @@ This will test:
 - `c:\Users\Amor\.cursor\MCP_ENV_SETUP.md` - MCP environment variables
 
 
+

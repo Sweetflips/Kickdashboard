@@ -9,8 +9,12 @@ export const dynamic = 'force-dynamic'
  * Redeem a promo code
  */
 export async function POST(request: Request) {
+    let body: { code?: string } | null = null
+    let auth: { userId: string } | null = null
+    let normalizedCode: string | null = null
+
     try {
-        const body = await request.json()
+        body = await request.json()
         const { code } = body
 
         if (!code || typeof code !== 'string') {
@@ -21,10 +25,10 @@ export async function POST(request: Request) {
         }
 
         // Normalize code (uppercase, trim)
-        const normalizedCode = code.trim().toUpperCase()
+        normalizedCode = code.trim().toUpperCase()
 
         // Get user from token
-        const auth = await getAuthenticatedUser(request)
+        auth = await getAuthenticatedUser(request)
         if (!auth) {
             return NextResponse.json(
                 { error: 'Authentication required' },
@@ -45,25 +49,56 @@ export async function POST(request: Request) {
             })
 
             if (!promoCode) {
+                console.error('Promo code not found', {
+                    attemptedCode: normalizedCode,
+                    originalCode: code,
+                    userId: auth.userId,
+                })
                 throw new Error('Invalid promo code')
             }
 
             if (!promoCode.is_active) {
+                console.error('Promo code is inactive', {
+                    code: promoCode.code,
+                    promoCodeId: promoCode.id,
+                    userId: auth.userId,
+                    isActive: promoCode.is_active,
+                })
                 throw new Error('This promo code is no longer active')
             }
 
             // Check expiration
             if (promoCode.expires_at && new Date() > promoCode.expires_at) {
+                console.error('Promo code expired', {
+                    code: promoCode.code,
+                    promoCodeId: promoCode.id,
+                    userId: auth.userId,
+                    expiresAt: promoCode.expires_at,
+                    now: new Date(),
+                })
                 throw new Error('This promo code has expired')
             }
 
             // Check if user already redeemed
             if (promoCode.redemptions.length > 0) {
+                console.error('User already redeemed this promo code', {
+                    code: promoCode.code,
+                    promoCodeId: promoCode.id,
+                    userId: auth.userId,
+                    existingRedemptions: promoCode.redemptions.length,
+                })
                 throw new Error('You have already redeemed this promo code')
             }
 
             // Check max uses
             if (promoCode.max_uses !== null && promoCode.current_uses >= promoCode.max_uses) {
+                console.error('Promo code usage limit reached', {
+                    code: promoCode.code,
+                    promoCodeId: promoCode.id,
+                    userId: auth.userId,
+                    currentUses: promoCode.current_uses,
+                    maxUses: promoCode.max_uses,
+                })
                 throw new Error('This promo code has reached its usage limit')
             }
 
@@ -114,11 +149,18 @@ export async function POST(request: Request) {
             message: `Successfully redeemed! You earned ${result.sweet_coins_awarded} Sweet Coins! 🎉`,
         })
     } catch (error) {
-        console.error('Error redeeming promo code:', error)
-
-        // Return user-friendly error messages
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
+        console.error('Error redeeming promo code', {
+            error: errorMessage,
+            errorStack: error instanceof Error ? error.stack : undefined,
+            attemptedCode: normalizedCode || (body?.code ? body.code.trim().toUpperCase() : 'unknown'),
+            originalCode: body?.code || 'unknown',
+            userId: auth?.userId || 'unknown',
+            timestamp: new Date().toISOString(),
+        })
+
+        // Return user-friendly error messages
         return NextResponse.json(
             {
                 error: errorMessage,
