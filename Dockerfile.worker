@@ -1,7 +1,7 @@
 # Worker-specific Dockerfile
 # Uses full node_modules (not standalone) because workers need tsx and prisma CLI
 
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
 
 # Install dependencies
 FROM base AS deps
@@ -20,6 +20,12 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Install runtime dependencies (ca-certificates for TLS, openssl for Prisma)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy node_modules (includes tsx, prisma CLI, etc.)
 COPY --from=deps /app/node_modules ./node_modules
 
@@ -36,4 +42,3 @@ ENV PORT=8080
 
 # Start the worker
 CMD ["node", "scripts/start-worker.js"]
-

@@ -1,5 +1,5 @@
-# Use Node.js 20 LTS
-FROM node:20-alpine AS base
+# Use Node.js 20 LTS (Debian slim for better native module compatibility)
+FROM node:20-bookworm-slim AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -29,9 +29,15 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Install runtime dependencies (ca-certificates for TLS, openssl for Prisma)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid nodejs nextjs
 
 # Copy full node_modules (needed for tsx, prisma CLI, etc.)
 COPY --from=builder /app/node_modules ./node_modules
