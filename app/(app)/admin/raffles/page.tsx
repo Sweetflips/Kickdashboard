@@ -59,6 +59,7 @@ export default function AdminRafflesPage() {
     const [overlayExamples, setOverlayExamples] = useState<OverlayExamples | null>(null)
     const [overlayKeyLoading, setOverlayKeyLoading] = useState(false)
     const [showOverlayKey, setShowOverlayKey] = useState(false)
+    const [selectedOverlayRaffleId, setSelectedOverlayRaffleId] = useState<string>('')
 
     useEffect(() => {
         checkAdmin()
@@ -69,6 +70,15 @@ export default function AdminRafflesPage() {
             fetchRaffles()
         }
     }, [selectedStatus, userData])
+
+    useEffect(() => {
+        if (!selectedOverlayRaffleId && raffles.length > 0) {
+            setSelectedOverlayRaffleId(raffles[0].id)
+        } else if (selectedOverlayRaffleId && raffles.length > 0) {
+            const stillExists = raffles.some((r) => r.id === selectedOverlayRaffleId)
+            if (!stillExists) setSelectedOverlayRaffleId(raffles[0].id)
+        }
+    }, [raffles, selectedOverlayRaffleId])
 
     useEffect(() => {
         if (userData?.is_admin) {
@@ -100,6 +110,32 @@ export default function AdminRafflesPage() {
             setOverlayExamples(null)
         } finally {
             setOverlayKeyLoading(false)
+        }
+    }
+
+    const getPublicOrigin = () => {
+        if (typeof window === 'undefined') return ''
+        return window.location.origin
+    }
+
+    const buildGlobalOverlayUrl = () => {
+        if (!overlayKey) return ''
+        const origin = getPublicOrigin()
+        return `${origin}/wheel?key=${encodeURIComponent(overlayKey)}`
+    }
+
+    const buildRaffleOverlayUrl = (raffleId: string) => {
+        if (!overlayKey) return ''
+        const origin = getPublicOrigin()
+        return `${origin}/raffles/${raffleId}/wheel?overlay=1&key=${encodeURIComponent(overlayKey)}`
+    }
+
+    const copyText = async (text: string, successMessage: string) => {
+        try {
+            await navigator.clipboard.writeText(text)
+            setToast({ message: successMessage, type: 'success' })
+        } catch {
+            setToast({ message: 'Failed to copy to clipboard', type: 'error' })
         }
     }
 
@@ -499,15 +535,50 @@ export default function AdminRafflesPage() {
                                 <div className="space-y-2">
                                     <div>
                                         <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-1">Per-raffle overlay:</p>
-                                        <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
-                                            {overlayExamples.raffleOverlayUrlTemplate}
-                                        </code>
+                                        {raffles.length > 0 ? (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <select
+                                                        value={selectedOverlayRaffleId}
+                                                        onChange={(e) => setSelectedOverlayRaffleId(e.target.value)}
+                                                        className="px-3 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border"
+                                                    >
+                                                        {raffles.map((r) => (
+                                                            <option key={r.id} value={r.id}>
+                                                                {r.title}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <button
+                                                        onClick={() => copyText(buildRaffleOverlayUrl(selectedOverlayRaffleId), 'Copied per-raffle OBS URL')}
+                                                        className="px-3 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 transition-colors text-xs font-medium"
+                                                    >
+                                                        Copy
+                                                    </button>
+                                                </div>
+                                                <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
+                                                    {buildRaffleOverlayUrl(selectedOverlayRaffleId)}
+                                                </code>
+                                            </div>
+                                        ) : (
+                                            <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
+                                                {overlayExamples.raffleOverlayUrlTemplate}
+                                            </code>
+                                        )}
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-1">Global wheel overlay:</p>
-                                        <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
-                                            {overlayExamples.globalOverlayUrlTemplate}
-                                        </code>
+                                        <div className="flex items-center gap-2">
+                                            <code className="flex-1 block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
+                                                {buildGlobalOverlayUrl() || overlayExamples.globalOverlayUrlTemplate}
+                                            </code>
+                                            <button
+                                                onClick={() => copyText(buildGlobalOverlayUrl() || overlayExamples.globalOverlayUrlTemplate, 'Copied global OBS URL')}
+                                                className="px-3 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 transition-colors text-xs font-medium"
+                                            >
+                                                Copy
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -621,6 +692,15 @@ export default function AdminRafflesPage() {
                                                 >
                                                     Edit
                                                 </button>
+                                                {overlayKey && (
+                                                    <button
+                                                        onClick={() => copyText(buildRaffleOverlayUrl(raffle.id), 'Copied per-raffle OBS URL')}
+                                                        className="px-3 py-1 text-xs bg-kick-purple text-white rounded hover:bg-kick-purple/90"
+                                                        title="Copy OBS Browser Source URL for this raffle overlay"
+                                                    >
+                                                        Copy OBS URL
+                                                    </button>
+                                                )}
                                                 {(raffle.status === 'active' || raffle.status === 'upcoming') && (
                                                     <button
                                                         onClick={() => handleEndRaffle(raffle.id)}

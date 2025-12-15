@@ -13,9 +13,15 @@ export async function GET(request: Request) {
 
     const key = await getOverlayAccessKey()
 
-    // Build example URLs (we'll need the base URL from request)
+    // Build example URLs using *public* origin (important behind proxies like Railway/Cloudflare)
+    // Prefer forwarded headers so we don't emit internal hosts (e.g. 0.0.0.0:8080).
     const url = new URL(request.url)
-    const baseUrl = `${url.protocol}//${url.host}`
+    const headers = request.headers
+    const forwardedProto = headers.get('x-forwarded-proto')
+    const forwardedHost = headers.get('x-forwarded-host')
+    const host = forwardedHost || headers.get('host') || url.host
+    const proto = forwardedProto || url.protocol.replace(':', '') || 'https'
+    const baseUrl = `${proto}://${host}`
 
     return NextResponse.json({
       success: true,
