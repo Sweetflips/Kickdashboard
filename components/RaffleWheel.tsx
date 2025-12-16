@@ -40,25 +40,95 @@ export default function RaffleWheel({
 
     useEffect(() => {
         // Load TweenMax (GSAP v2) and Winwheel via CDN if not already loaded
-        const loadScript = (src: string) => new Promise((resolve, reject) => {
-            if (document.querySelector(`script[src=\"${src}\"]`)) return resolve(true)
-            const s = document.createElement('script')
-            s.src = src
-            s.async = true
-            s.onload = () => resolve(true)
-            s.onerror = reject
-            document.head.appendChild(s)
-        })
+        const loadScript = (src: string, retries = 2): Promise<void> => {
+            return new Promise((resolve, reject) => {
+                // Check if already loaded
+                const existing = document.querySelector(`script[src="${src}"]`)
+                if (existing) {
+                    // Script tag exists, check if library is available
+                    if (src.includes('TweenMax') && (window as any).TweenMax) {
+                        return resolve()
+                    }
+                    if (src.includes('Winwheel') && (window as any).Winwheel) {
+                        return resolve()
+                    }
+                    // Script tag exists but library not ready, wait a bit
+                    setTimeout(() => {
+                        if (src.includes('TweenMax') && (window as any).TweenMax) return resolve()
+                        if (src.includes('Winwheel') && (window as any).Winwheel) return resolve()
+                        reject(new Error(`Script loaded but library not available: ${src}`))
+                    }, 100)
+                    return
+                }
+
+                const s = document.createElement('script')
+                s.src = src
+                s.async = true
+                s.onload = () => {
+                    // Wait a bit for library to attach to window
+                    setTimeout(() => {
+                        if (src.includes('TweenMax') && !(window as any).TweenMax) {
+                            if (retries > 0) {
+                                return loadScript(src, retries - 1).then(resolve).catch(reject)
+                            }
+                            return reject(new Error(`TweenMax not available after load: ${src}`))
+                        }
+                        if (src.includes('Winwheel') && !(window as any).Winwheel) {
+                            if (retries > 0) {
+                                return loadScript(src, retries - 1).then(resolve).catch(reject)
+                            }
+                            return reject(new Error(`Winwheel not available after load: ${src}`))
+                        }
+                        resolve()
+                    }, 50)
+                }
+                s.onerror = () => {
+                    if (retries > 0) {
+                        // Try alternative CDN
+                        const alternatives: Record<string, string[]> = {
+                            'https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.3/TweenMax.min.js': [
+                                'https://cdn.jsdelivr.net/npm/gsap@2.1.3/TweenMax.min.js',
+                                'https://unpkg.com/gsap@2.1.3/dist/TweenMax.min.js',
+                            ],
+                            'https://cdnjs.cloudflare.com/ajax/libs/Winwheel.js/2.7.0/Winwheel.min.js': [
+                                'https://cdn.jsdelivr.net/npm/winwheel@2.7.0/Winwheel.min.js',
+                                'https://unpkg.com/winwheel@2.7.0/Winwheel.min.js',
+                            ],
+                        }
+                        const altUrls = alternatives[src] || []
+                        if (altUrls.length > 0) {
+                            const nextAlt = altUrls[0]
+                            console.warn(`Failed to load ${src}, trying alternative: ${nextAlt}`)
+                            return loadScript(nextAlt, retries - 1).then(resolve).catch(reject)
+                        }
+                    }
+                    reject(new Error(`Failed to load script: ${src}`))
+                }
+                document.head.appendChild(s)
+            })
+        }
 
         const bootstrap = async () => {
             try {
                 // TweenMax (GSAP v2) - required by Winwheel.js
                 await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.3/TweenMax.min.js')
-                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Winwheel.js/2.7.0/Winwheel.min.js')
+                // Try multiple CDN sources for Winwheel.js
+                try {
+                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Winwheel.js/2.7.0/Winwheel.min.js')
+                } catch {
+                    // Fallback to jsdelivr
+                    try {
+                        await loadScript('https://cdn.jsdelivr.net/npm/winwheel@2.7.0/Winwheel.min.js')
+                    } catch {
+                        // Fallback to unpkg
+                        await loadScript('https://unpkg.com/winwheel@2.7.0/Winwheel.min.js')
+                    }
+                }
+                
+                // Double-check Winwheel is available
                 const Winwheel = (window as any).Winwheel
-
                 if (!Winwheel) {
-                    console.error('Winwheel not loaded')
+                    console.error('Winwheel not loaded - checking window object:', Object.keys(window).filter(k => k.toLowerCase().includes('win')))
                     return
                 }
 
