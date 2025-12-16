@@ -112,16 +112,22 @@ export default function RaffleWheel({
             try {
                 // TweenMax (GSAP v2) - required by Winwheel.js
                 await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.3/TweenMax.min.js')
-                // Try multiple CDN sources for Winwheel.js
+                // Try multiple CDN sources for Winwheel.js (official site + CDNs)
                 try {
-                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Winwheel.js/2.7.0/Winwheel.min.js')
+                    // Try official Winwheel.js CDN first
+                    await loadScript('https://dougtesting.net/winwheel/js/Winwheel.min.js')
                 } catch {
-                    // Fallback to jsdelivr
                     try {
-                        await loadScript('https://cdn.jsdelivr.net/npm/winwheel@2.7.0/Winwheel.min.js')
+                        // Fallback to cdnjs
+                        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Winwheel.js/2.7.0/Winwheel.min.js')
                     } catch {
-                        // Fallback to unpkg
-                        await loadScript('https://unpkg.com/winwheel@2.7.0/Winwheel.min.js')
+                        // Fallback to jsdelivr (if available)
+                        try {
+                            await loadScript('https://cdn.jsdelivr.net/npm/winwheel@2.7.0/Winwheel.min.js')
+                        } catch {
+                            // Last resort: unpkg
+                            await loadScript('https://unpkg.com/winwheel@2.7.0/Winwheel.min.js')
+                        }
                     }
                 }
 
