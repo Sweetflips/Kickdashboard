@@ -46,7 +46,7 @@ export async function POST(
       body = await request.json()
     } catch (err) {
       // Handle case where request body can't be read (connection closed, etc.)
-      if (err instanceof Error && (err.code === 'ECONNRESET' || err.message === 'aborted')) {
+      if (err instanceof Error && (('code' in err && (err as any).code === 'ECONNRESET') || err.message === 'aborted')) {
         return new NextResponse(null, { status: 499 })
       }
       throw err
@@ -228,7 +228,7 @@ export async function POST(
     // Handle connection reset/aborted requests gracefully
     // These happen when the client disconnects before the request completes
     const isConnectionError = error instanceof Error && (
-      error.code === 'ECONNRESET' ||
+      ('code' in error && (error as any).code === 'ECONNRESET') || 
       error.message === 'aborted' ||
       error.message.includes('aborted')
     )
