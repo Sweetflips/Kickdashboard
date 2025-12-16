@@ -421,8 +421,17 @@ export default function UsersPage() {
         <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-kick-text">User Management</h1>
-            <div className="text-sm text-gray-600 dark:text-kick-text-secondary">
-              {total.toLocaleString()} total users
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-gray-600 dark:text-kick-text-secondary">
+                {total.toLocaleString()} total users
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push('/admin/moderation-bot')}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text text-sm font-medium hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-colors"
+              >
+                Moderation Bot
+              </button>
             </div>
           </div>
 
