@@ -124,7 +124,7 @@ export default function RaffleWheel({
                         await loadScript('https://unpkg.com/winwheel@2.7.0/Winwheel.min.js')
                     }
                 }
-                
+
                 // Double-check Winwheel is available
                 const Winwheel = (window as any).Winwheel
                 if (!Winwheel) {
