@@ -1,6 +1,8 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
 const KICK_OAUTH_BASE = 'https://id.kick.com'
 // Keep a single canonical host for auth flows (use www by default)
@@ -74,6 +76,55 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const action = searchParams.get('action')
         const referralCode = searchParams.get('ref')
+
+        if (action === 'debug') {
+            const isBot = searchParams.get('bot') === '1'
+            const redirectUri = buildRedirectUri(request)
+
+            const scopes = [
+                'events:subscribe',
+                'user:read',
+                'chat:write',
+                'channel:read',
+            ]
+            if (isBot) {
+                scopes.push('moderation:ban')
+            }
+
+            const scopeString = scopes.join(' ')
+            const { codeChallenge } = generatePKCE()
+            const state = crypto.randomUUID()
+
+            const authUrl = `${KICK_OAUTH_BASE}/oauth/authorize?` +
+                `response_type=code&` +
+                `client_id=${clientId}&` +
+                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+                `scope=${encodeURIComponent(scopeString)}&` +
+                `code_challenge=${codeChallenge}&` +
+                `code_challenge_method=S256&` +
+                `state=${state}` +
+                (isBot ? `&prompt=consent` : '')
+
+            return NextResponse.json({
+                ok: true,
+                now: new Date().toISOString(),
+                isBot,
+                redirectUri,
+                scopes,
+                scopeString,
+                authUrl,
+                // Best-effort deploy identifiers (depends on Railway runtime env vars)
+                railwayCommit:
+                    process.env.RAILWAY_GIT_COMMIT_SHA ||
+                    process.env.RAILWAY_GIT_COMMIT ||
+                    process.env.RAILWAY_GIT_SHA ||
+                    null,
+                railwayService:
+                    process.env.RAILWAY_SERVICE_NAME ||
+                    process.env.RAILWAY_SERVICE ||
+                    null,
+            })
+        }
 
         if (action === 'authorize') {
             // Generate authorization URL with PKCE
