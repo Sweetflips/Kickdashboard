@@ -110,23 +110,34 @@ export default function RaffleWheel({
 
         const bootstrap = async () => {
             try {
-                // TweenMax (GSAP v2) - required by Winwheel.js
-                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.3/TweenMax.min.js')
-                // Try multiple CDN sources for Winwheel.js (official site + CDNs)
+                // Prefer local vendor copies (avoids adblock/CSP/CDN flakiness in OBS).
+                // These files live in /public/vendor.
                 try {
-                    // Try official Winwheel.js CDN first
-                    await loadScript('https://dougtesting.net/winwheel/js/Winwheel.min.js')
+                    await loadScript('/vendor/TweenMax.min.js')
                 } catch {
+                    // Fallback to CDN
+                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.3/TweenMax.min.js')
+                }
+
+                try {
+                    await loadScript('/vendor/Winwheel.min.js')
+                } catch {
+                    // Try multiple CDN sources for Winwheel.js (official site + CDNs)
                     try {
-                        // Fallback to cdnjs
-                        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Winwheel.js/2.7.0/Winwheel.min.js')
+                        // Try official Winwheel.js CDN first (note: this URL has been flaky)
+                        await loadScript('https://dougtesting.net/winwheel/js/Winwheel.min.js')
                     } catch {
-                        // Fallback to jsdelivr (if available)
                         try {
-                            await loadScript('https://cdn.jsdelivr.net/npm/winwheel@2.7.0/Winwheel.min.js')
+                            // Legacy cdnjs (may 404 depending on mirror/version)
+                            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Winwheel.js/2.7.0/Winwheel.min.js')
                         } catch {
-                            // Last resort: unpkg
-                            await loadScript('https://unpkg.com/winwheel@2.7.0/Winwheel.min.js')
+                            // Fallback to jsdelivr (if available)
+                            try {
+                                await loadScript('https://cdn.jsdelivr.net/npm/winwheel@2.7.0/Winwheel.min.js')
+                            } catch {
+                                // Last resort: unpkg
+                                await loadScript('https://unpkg.com/winwheel@2.7.0/Winwheel.min.js')
+                            }
                         }
                     }
                 }
