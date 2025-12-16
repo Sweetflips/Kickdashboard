@@ -1338,3 +1338,263 @@ export async function getUserInfoBySlug(slug: string): Promise<{
 export function clearTokenCache(): void {
     cachedToken = null
 }
+
+/**
+ * Get moderator's User Access Token from database
+ * Used for moderation actions (ban/timeout) and chat messages
+ */
+export async function getModeratorToken(): Promise<string | null> {
+    const MODERATOR_USERNAME = process.env.KICK_MODERATOR_USERNAME || 'sweetflipsbot'
+    
+    try {
+        console.log(`[Kick API] Looking for moderator token for: ${MODERATOR_USERNAME}`)
+
+        const moderator = await db.user.findFirst({
+            where: {
+                username: {
+                    equals: MODERATOR_USERNAME,
+                    mode: 'insensitive',
+                },
+            },
+            select: {
+                access_token_encrypted: true,
+                refresh_token_encrypted: true,
+                username: true,
+                kick_user_id: true,
+            },
+        })
+
+        if (!moderator?.access_token_encrypted) {
+            console.warn(`[Kick API] No encrypted token found for moderator: ${MODERATOR_USERNAME}`)
+            return null
+        }
+
+        try {
+            const accessToken = decryptToken(moderator.access_token_encrypted)
+            console.log(`[Kick API] Successfully retrieved token for moderator: ${moderator.username}`)
+            return accessToken
+        } catch (decryptError) {
+            console.warn(`[Kick API] Failed to decrypt moderator token:`, decryptError instanceof Error ? decryptError.message : 'Unknown error')
+            
+            // Try to refresh if we have a refresh token
+            if (moderator.refresh_token_encrypted) {
+                const clientId = process.env.KICK_CLIENT_ID
+                const clientSecret = process.env.KICK_CLIENT_SECRET
+                const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
+
+                if (!clientId || !clientSecret) {
+                    console.warn(`[Kick API] KICK_CLIENT_ID and KICK_CLIENT_SECRET required for token refresh`)
+                    return null
+                }
+
+                try {
+                    const refreshToken = decryptToken(moderator.refresh_token_encrypted)
+                    const params = new URLSearchParams({
+                        grant_type: 'refresh_token',
+                        client_id: clientId,
+                        client_secret: clientSecret,
+                        refresh_token: refreshToken,
+                        redirect_uri: redirectUri,
+                    })
+
+                    const response = await fetch(KICK_AUTH_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: params.toString(),
+                    })
+
+                    if (response.ok) {
+                        const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
+                        
+                        // Update tokens in database
+                        await db.user.update({
+                            where: { kick_user_id: moderator.kick_user_id },
+                            data: {
+                                access_token_hash: hashToken(data.access_token),
+                                refresh_token_hash: data.refresh_token ? hashToken(data.refresh_token) : undefined,
+                                access_token_encrypted: encryptToken(data.access_token),
+                                ...(data.refresh_token && {
+                                    refresh_token_encrypted: encryptToken(data.refresh_token),
+                                }),
+                            },
+                        })
+
+                        console.log(`[Kick API] Successfully refreshed moderator token`)
+                        return data.access_token
+                    } else {
+                        const errorText = await response.text()
+                        console.warn(`[Kick API] Moderator token refresh failed: ${response.status} ${errorText}`)
+                    }
+                } catch (refreshError) {
+                    console.error(`[Kick API] Error refreshing moderator token:`, refreshError instanceof Error ? refreshError.message : 'Unknown error')
+                }
+            }
+            
+            return null
+        }
+    } catch (dbError) {
+        console.warn(`[Kick API] Error fetching moderator from database:`, dbError instanceof Error ? dbError.message : 'Unknown error')
+        return null
+    }
+}
+
+/**
+ * Ban or timeout a user from a channel
+ */
+export async function moderationBan(params: {
+    broadcaster_user_id: number | bigint
+    user_id: number | bigint
+    duration_seconds?: number
+    reason?: string
+}): Promise<{ success: boolean; error?: string }> {
+    const releaseSlot = await acquireRateLimitSlot()
+    
+    try {
+        const moderatorToken = await getModeratorToken()
+        if (!moderatorToken) {
+            return { success: false, error: 'Moderator token not available. Ensure moderator account is authorized with moderation:ban scope.' }
+        }
+
+        const clientId = process.env.KICK_CLIENT_ID
+        const headers: Record<string, string> = {
+            'Authorization': `Bearer ${moderatorToken}`,
+            'Content-Type': 'application/json',
+        }
+
+        if (clientId) {
+            headers['Client-Id'] = clientId
+        }
+
+        const body: any = {
+            broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint' 
+                ? params.broadcaster_user_id.toString() 
+                : params.broadcaster_user_id,
+            user_id: typeof params.user_id === 'bigint' 
+                ? params.user_id.toString() 
+                : params.user_id,
+        }
+
+        if (params.duration_seconds !== undefined) {
+            body.duration = params.duration_seconds
+        }
+
+        if (params.reason) {
+            body.reason = params.reason
+        }
+
+        const response = await fetch(`${KICK_API_BASE}/moderation/ban`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+        })
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After')
+                const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000
+                triggerGlobalBackoff(backoffMs)
+            }
+            
+            return { success: false, error: `Kick API error: ${response.status} ${errorText}` }
+        }
+
+        console.log(`[Kick API] Successfully ${params.duration_seconds ? 'timed out' : 'banned'} user ${params.user_id} from channel ${params.broadcaster_user_id}`)
+        return { success: true }
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error(`[Kick API] Error banning user:`, errorMessage)
+        return { success: false, error: errorMessage }
+    } finally {
+        releaseSlot()
+    }
+}
+
+/**
+ * Send a chat message as the moderator bot
+ * @param broadcaster_user_id - The broadcaster's user ID
+ * @param content - Message content (max 500 chars)
+ * @param type - Message type: 'user' or 'bot' (default: 'bot')
+ */
+export async function sendModeratorChatMessage(params: {
+    broadcaster_user_id: number | bigint
+    content: string
+    type?: 'user' | 'bot'
+}): Promise<{ success: boolean; error?: string }> {
+    const releaseSlot = await acquireRateLimitSlot()
+    
+    try {
+        const moderatorToken = await getModeratorToken()
+        if (!moderatorToken) {
+            return { success: false, error: 'Moderator token not available. Ensure moderator account is authorized.' }
+        }
+
+        if (!params.content || !params.content.trim()) {
+            return { success: false, error: 'Message content is required' }
+        }
+
+        if (params.content.length > 500) {
+            return { success: false, error: 'Message content cannot exceed 500 characters' }
+        }
+
+        const clientId = process.env.KICK_CLIENT_ID
+        const headers: Record<string, string> = {
+            'Authorization': `Bearer ${moderatorToken}`,
+            'Content-Type': 'application/json',
+        }
+
+        if (clientId) {
+            headers['Client-Id'] = clientId
+        }
+
+        const body = {
+            broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint' 
+                ? params.broadcaster_user_id.toString() 
+                : params.broadcaster_user_id,
+            content: params.content.trim(),
+            type: params.type || 'bot',
+        }
+
+        const response = await fetch(`${KICK_API_BASE}/chat`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+        })
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After')
+                const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000
+                triggerGlobalBackoff(backoffMs)
+            }
+            
+            if (response.status === 500) {
+                try {
+                    const errorJson = JSON.parse(errorText)
+                    const errorData = errorJson.data || errorJson.error || ''
+                    if (typeof errorData === 'string' && errorData.includes('SLOW_MODE_ERROR')) {
+                        return { success: false, error: 'Slow mode active - message sent too quickly' }
+                    }
+                } catch {
+                    // Not JSON, continue with normal error
+                }
+            }
+            
+            return { success: false, error: `Kick API error: ${response.status} ${errorText}` }
+        }
+
+        console.log(`[Kick API] Successfully sent chat message: ${params.content.substring(0, 50)}...`)
+        return { success: true }
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error(`[Kick API] Error sending chat message:`, errorMessage)
+        return { success: false, error: errorMessage }
+    } finally {
+        releaseSlot()
+    }
+}

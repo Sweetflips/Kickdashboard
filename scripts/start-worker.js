@@ -135,6 +135,58 @@ async function ensureTables() {
 
   await ensureTables();
 
+  // Check if this is a moderation-only service
+  const moderationOnly = String(process.env.MODERATION_ONLY || '').toLowerCase() === 'true';
+
+  if (moderationOnly) {
+    // Moderation-only mode - only run moderation worker
+    console.log('');
+    console.log('========================================');
+    console.log('🛡️ STARTING MODERATION WORKER');
+    console.log('========================================');
+    console.log('');
+    console.log('📝 Moderation Worker: Starting (moderation only, no message/point processing)...');
+    const moderationWorkerProcess = spawn('npx', ['tsx', 'scripts/moderation-worker.ts'], {
+      stdio: 'inherit',
+      env: process.env
+    });
+
+    console.log('');
+    console.log('✅ Moderation worker spawned successfully');
+    console.log('   Waiting for database connections...');
+    console.log('');
+
+    moderationWorkerProcess.on('exit', (code) => {
+      if (code !== 0 && code !== null) {
+        console.error(`⚠️ Moderation worker exited with code ${code}`);
+      }
+      healthServer.close(() => {
+        console.log('✅ Health check server closed');
+        process.exit(code || 0);
+      });
+    });
+
+    moderationWorkerProcess.on('error', (err) => {
+      console.error('❌ Failed to start moderation worker:', err.message);
+      healthServer.close();
+      process.exit(1);
+    });
+
+    // Handle graceful shutdown
+    const shutdown = (signal) => {
+      console.log(`\n${signal} received, shutting down moderation worker...`);
+      healthServer.close(() => {
+        console.log('✅ Health check server closed');
+      });
+      moderationWorkerProcess.kill(signal);
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    return;
+  }
+
+  // Normal mode - start all workers
   // Start chat worker (handles all writes: users, messages, points)
   console.log('');
   console.log('========================================');
