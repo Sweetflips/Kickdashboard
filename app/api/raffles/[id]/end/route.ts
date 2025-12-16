@@ -33,9 +33,16 @@ export async function POST(
             return NextResponse.json({ error: 'Invalid raffle id' }, { status: 400 })
         }
 
-        const exists = await db.raffle.findUnique({ where: { id: raffleId }, select: { id: true } })
-        if (!exists) {
-            return NextResponse.json({ error: 'Raffle not found' }, { status: 404 })
+        // Check if raffle exists first
+        try {
+            const exists = await db.raffle.findUnique({ where: { id: raffleId }, select: { id: true } })
+            if (!exists) {
+                return NextResponse.json({ error: 'Raffle not found' }, { status: 404 })
+            }
+        } catch (e) {
+            // Database error checking existence
+            console.error('Error checking raffle existence:', e)
+            return NextResponse.json({ error: 'Failed to check raffle' }, { status: 500 })
         }
 
         // Update raffle to end now
@@ -47,11 +54,12 @@ export async function POST(
                     status: 'completed',
                 },
             })
-        } catch (e) {
-            // Prisma P2025: "record to update not found" (race / already deleted)
-            if ((e as any)?.code === 'P2025') {
+        } catch (e: any) {
+            // Prisma P2025: "record to update not found" (race condition / already deleted)
+            if (e?.code === 'P2025') {
                 return NextResponse.json({ error: 'Raffle not found' }, { status: 404 })
             }
+            // Re-throw other Prisma errors to be caught by outer handler
             throw e
         }
 
