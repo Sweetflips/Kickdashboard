@@ -3,6 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import RaffleWheel from '@/components/RaffleWheel'
 
+// Make page background transparent for OBS overlay
+useEffect(() => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.style.background = 'transparent'
+    document.body.style.background = 'transparent'
+    // Also ensure html element is transparent
+    const html = document.documentElement
+    html.style.backgroundColor = 'transparent'
+  }
+}, [])
+
 type WheelStateResponse = {
   success: boolean
   state: {
@@ -114,22 +125,30 @@ export default function WheelOverlayPage() {
     }
   }, [overlayKey])
 
+  // For OBS overlay: transparent background, only show wheel and names
+  // Hide loading/error messages after initial load to keep overlay clean
+  const showMessages = loading && entries.length === 0
+
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-transparent">
+    <div className="min-h-screen w-full flex items-center justify-center" style={{ background: 'transparent' }}>
       <div className="flex flex-col items-center gap-4">
-        {title && (
-          <div className="px-4 py-2 rounded-lg bg-black/60 text-white text-xl font-semibold">
-            {title}
-          </div>
+        {/* Only show messages during initial load, then hide for clean overlay */}
+        {showMessages && (
+          <>
+            {loading && (
+              <div className="px-4 py-2 rounded-lg bg-black/60 text-white text-sm">Loading wheel…</div>
+            )}
+            {error && (
+              <div className="px-4 py-2 rounded-lg bg-black/60 text-white text-sm">{error}</div>
+            )}
+            {!loading && !error && (entries.length === 0 || totalTickets <= 0) && (
+              <div className="px-4 py-2 rounded-lg bg-black/60 text-white text-sm">No entrants</div>
+            )}
+          </>
         )}
 
-        {loading ? (
-          <div className="px-4 py-2 rounded-lg bg-black/60 text-white">Loading wheel…</div>
-        ) : error ? (
-          <div className="px-4 py-2 rounded-lg bg-black/60 text-white">{error}</div>
-        ) : entries.length === 0 || totalTickets <= 0 ? (
-          <div className="px-4 py-2 rounded-lg bg-black/60 text-white">No entrants</div>
-        ) : (
+        {/* Always render wheel when we have entries, even if still loading updates */}
+        {entries.length > 0 && totalTickets > 0 && (
           <RaffleWheel
             entries={entries as any}
             totalTickets={totalTickets}
@@ -139,12 +158,6 @@ export default function WheelOverlayPage() {
             sliceOpacity={sliceOpacity}
             maskNames={false}
           />
-        )}
-
-        {winnerLabel && !loading && !error && (
-          <div className="px-4 py-2 rounded-lg bg-black/70 text-white text-2xl font-bold">
-            Winner: {winnerLabel}
-          </div>
         )}
       </div>
     </div>
