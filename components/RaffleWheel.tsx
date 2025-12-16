@@ -38,6 +38,14 @@ export default function RaffleWheel({
 
     const lastTargetIndexRef = useRef<number | null>(null)
 
+    const getTextSettings = (segmentCount: number) => {
+        // Keep names readable even with lots of segments.
+        if (segmentCount >= 40) return { fontSize: 10, orientation: 'vertical' as const }
+        if (segmentCount >= 28) return { fontSize: 12, orientation: 'vertical' as const }
+        if (segmentCount >= 18) return { fontSize: 14, orientation: 'curved' as const }
+        return { fontSize: 16, orientation: 'curved' as const }
+    }
+
     useEffect(() => {
         // Load TweenMax (GSAP v2) and Winwheel via CDN if not already loaded
         const loadScript = (src: string, retries = 2): Promise<void> => {
@@ -151,6 +159,7 @@ export default function RaffleWheel({
 
                 // Build weighted segments: one segment per entry, sized by ticket count
                 const segmentArray: any[] = []
+                const { fontSize, orientation } = getTextSettings(entries.length)
                 for (const e of entries) {
                     const color = rgbaFromString(e.username || e.user_id || e.entry_id, sliceOpacity)
                     const segmentSize = (e.tickets / totalTickets) * 360
@@ -158,6 +167,13 @@ export default function RaffleWheel({
                         fillStyle: color,
                         text: formatName(e.username, maskNames),
                         size: segmentSize,
+                        textFillStyle: '#ffffff',
+                        textStrokeStyle: 'rgba(0,0,0,0.65)',
+                        textLineWidth: 2,
+                        textFontFamily: 'Inter, Arial, sans-serif',
+                        textFontWeight: '600',
+                        textFontSize: fontSize,
+                        textOrientation: orientation,
                     })
                 }
 
@@ -167,7 +183,6 @@ export default function RaffleWheel({
                     numSegments: segmentArray.length,
                     outerRadius: 260,
                     innerRadius: 60,
-                    textFontSize: 16,
                     textOrientation: 'curved',
                     textAlignment: 'outer',
                     textMargin: 5,
@@ -188,6 +203,18 @@ export default function RaffleWheel({
                     }
                 })
 
+                // Ensure sizes/angles are computed
+                try {
+                    winwheelRef.current.updateSegmentSizes()
+                } catch {
+                    // ignore
+                }
+                try {
+                    winwheelRef.current.draw()
+                } catch {
+                    // ignore
+                }
+
                 // If targetIndex changed and is provided, animate to that winner
                 if (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex !== lastTargetIndexRef.current) {
                     lastTargetIndexRef.current = targetIndex
@@ -198,12 +225,32 @@ export default function RaffleWheel({
                         const entryIndex = entries.indexOf(targetEntry)
                         const segmentNumber = entryIndex + 1 // Winwheel uses 1-based segment numbers
 
-                        // Use Winwheel's getRandomForSegment to get a random angle within that segment
-                        // This ensures we land somewhere in the segment, not just at the edge
-                        const stopAt = winwheelRef.current.getRandomForSegment(segmentNumber)
+                        // Pick a stop angle within the segment.
+                        // Prefer Winwheel helper if present; otherwise compute from start/end angles.
+                        let stopAt: number | null = null
+                        if (typeof winwheelRef.current.getRandomForSegment === 'function') {
+                            stopAt = winwheelRef.current.getRandomForSegment(segmentNumber)
+                        } else if (winwheelRef.current.segments && winwheelRef.current.segments[segmentNumber]) {
+                            const seg = winwheelRef.current.segments[segmentNumber]
+                            const start = Number(seg.startAngle ?? 0)
+                            const end = Number(seg.endAngle ?? 0)
+                            const span = Math.max(0, end - start - 2)
+                            stopAt = span > 0 ? start + 1 + Math.floor(Math.random() * span) : Math.round((start + end) / 2)
+                        }
+
+                        if (typeof stopAt !== 'number' || !Number.isFinite(stopAt)) {
+                            stopAt = 0
+                        }
 
                         // Set stopAngle and start animation
                         winwheelRef.current.animation.stopAngle = stopAt
+                        // Make sure rotation is reset so the animation is visible
+                        try {
+                            winwheelRef.current.rotationAngle = 0
+                            winwheelRef.current.draw()
+                        } catch {
+                            // ignore
+                        }
                         winwheelRef.current.startAnimation()
                     }
                 }

@@ -26,16 +26,34 @@ export async function POST(
             )
         }
 
-        const raffleId = BigInt(params.id)
+        let raffleId: bigint
+        try {
+            raffleId = BigInt(params.id)
+        } catch {
+            return NextResponse.json({ error: 'Invalid raffle id' }, { status: 400 })
+        }
+
+        const exists = await db.raffle.findUnique({ where: { id: raffleId }, select: { id: true } })
+        if (!exists) {
+            return NextResponse.json({ error: 'Raffle not found' }, { status: 404 })
+        }
 
         // Update raffle to end now
-        await db.raffle.update({
-            where: { id: raffleId },
-            data: {
-                end_at: new Date(),
-                status: 'completed',
-            },
-        })
+        try {
+            await db.raffle.update({
+                where: { id: raffleId },
+                data: {
+                    end_at: new Date(),
+                    status: 'completed',
+                },
+            })
+        } catch (e) {
+            // Prisma P2025: "record to update not found" (race / already deleted)
+            if ((e as any)?.code === 'P2025') {
+                return NextResponse.json({ error: 'Raffle not found' }, { status: 404 })
+            }
+            throw e
+        }
 
         return NextResponse.json({ success: true })
     } catch (error) {
