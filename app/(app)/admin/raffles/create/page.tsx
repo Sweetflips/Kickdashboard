@@ -132,6 +132,23 @@ export default function CreateRafflePage() {
         const item = ADVENT_ITEMS.find(i => i.id === itemId)
         if (!item) return
 
+        // Auto-fill dates: start today at current time, end tomorrow at end of day
+        const now = new Date()
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes())
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        tomorrow.setHours(23, 59, 0, 0)
+
+        // Format for datetime-local input (YYYY-MM-DDTHH:mm)
+        const formatDateTimeLocal = (date: Date) => {
+            const year = date.getFullYear()
+            const month = String(date.getMonth() + 1).padStart(2, '0')
+            const day = String(date.getDate()).padStart(2, '0')
+            const hours = String(date.getHours()).padStart(2, '0')
+            const minutes = String(date.getMinutes()).padStart(2, '0')
+            return `${year}-${month}-${day}T${hours}:${minutes}`
+        }
+
         setSelectedAdventItemId(itemId)
         setFormData(prev => ({
             ...prev,
@@ -142,6 +159,8 @@ export default function CreateRafflePage() {
             wheel_background_url: item.image,
             center_logo_url: prev.center_logo_url || '/icons/Sweetflipscoin.png',
             slice_opacity: prev.slice_opacity || '0.5',
+            start_at: prev.start_at || formatDateTimeLocal(today),
+            end_at: prev.end_at || formatDateTimeLocal(tomorrow),
         }))
     }
 
