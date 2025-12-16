@@ -146,7 +146,13 @@ class MemoryCache {
         // Also clean up in-flight requests
         this.cleanupInFlight()
 
-        if (cleaned > 0) {
+        // Avoid log spam in production (cleanup still runs either way).
+        // Enable explicitly with MEMORY_CACHE_CLEANUP_LOG=true
+        const shouldLogCleanup =
+            process.env.MEMORY_CACHE_CLEANUP_LOG === 'true' ||
+            (process.env.NODE_ENV !== 'production' && process.env.MEMORY_CACHE_CLEANUP_LOG !== 'false')
+
+        if (cleaned > 0 && shouldLogCleanup) {
             console.log(`[MemoryCache] Cleaned up ${cleaned} expired entries`)
         }
     }
