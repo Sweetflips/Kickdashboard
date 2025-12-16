@@ -199,6 +199,8 @@ export async function GET(request: Request) {
         }
 
         if (action === 'token') {
+            const isBot = searchParams.get('bot') === '1'
+            const { clientId, clientSecret } = isBot ? getKickBotCredentials() : getKickUserCredentials()
             const code = searchParams.get('code')
             const redirectUri = searchParams.get('redirectUri') || buildRedirectUri(request)
             const host = request.headers.get('host') || ''
