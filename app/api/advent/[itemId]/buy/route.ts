@@ -28,6 +28,11 @@ export async function POST(
   { params }: { params: { itemId: string } }
 ) {
   try {
+    // Check if request was aborted before processing
+    if (request.signal?.aborted) {
+      return new NextResponse(null, { status: 499 }) // Client Closed Request
+    }
+
     const auth = await getAuthenticatedUser(request)
     if (!auth) {
       return NextResponse.json(
@@ -36,7 +41,17 @@ export async function POST(
       )
     }
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (err) {
+      // Handle case where request body can't be read (connection closed, etc.)
+      if (err instanceof Error && (err.code === 'ECONNRESET' || err.message === 'aborted')) {
+        return new NextResponse(null, { status: 499 })
+      }
+      throw err
+    }
+
     const { quantity } = body
 
     if (!quantity || quantity <= 0) {
@@ -210,6 +225,26 @@ export async function POST(
       total_tickets: result.totalTickets,
     })
   } catch (error) {
+    // Handle connection reset/aborted requests gracefully
+    // These happen when the client disconnects before the request completes
+    const isConnectionError = error instanceof Error && (
+      error.code === 'ECONNRESET' ||
+      error.message === 'aborted' ||
+      error.message.includes('aborted')
+    )
+
+    if (isConnectionError) {
+      // Connection was closed by client - this is expected behavior, not an error
+      // Don't log it or try to send a response
+      // Return 499 (Client Closed Request) if possible, otherwise let Next.js handle it
+      try {
+        return new NextResponse(null, { status: 499 })
+      } catch {
+        // Connection already closed, can't send response - throw to let Next.js handle it
+        throw error
+      }
+    }
+
     // Handle unique constraint violation (shouldn't happen with transaction, but handle gracefully)
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json(

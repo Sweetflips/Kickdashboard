@@ -90,6 +90,7 @@ export default function PayoutsPage() {
         }
 
         fetch('/api/admin/verify', {
+            credentials: 'include', // Include cookies for authentication
             headers: {
                 'Authorization': `Bearer ${token}`,
             },
@@ -117,6 +118,7 @@ export default function PayoutsPage() {
                 if (!token) return
 
                 const response = await fetch('/api/stream-sessions?limit=100', {
+                    credentials: 'include', // Include cookies for authentication
                     headers: {
                         'Authorization': `Bearer ${token}`,
                     },
@@ -170,6 +172,7 @@ export default function PayoutsPage() {
             }
 
             const response = await fetch(url, {
+                credentials: 'include', // Include cookies for authentication
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
