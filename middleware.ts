@@ -12,7 +12,27 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url, 301)
   }
 
-  return NextResponse.next()
+  const res = NextResponse.next()
+
+  // Prevent CDN/edge caches from storing App Router data requests across deploys.
+  // When cached incorrectly, clients can hit the classic:
+  // "Failed to find Server Action ... This request might be from an older or newer deployment"
+  //
+  // We only apply this to RSC/data + Server Action request patterns (not to normal navigation HTML).
+  const isServerAction = request.method === 'POST' && request.headers.has('next-action')
+  const isRsc =
+    request.headers.get('rsc') === '1' ||
+    request.headers.has('next-router-state-tree') ||
+    request.headers.has('next-router-prefetch')
+
+  if (isServerAction || isRsc) {
+    res.headers.set('Cache-Control', 'no-store')
+    // Helpful for some CDNs that honor alternate cache-control headers
+    res.headers.set('CDN-Cache-Control', 'no-store')
+    res.headers.set('Surrogate-Control', 'no-store')
+  }
+
+  return res
 }
 
 export const config = {

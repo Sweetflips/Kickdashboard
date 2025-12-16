@@ -2,10 +2,39 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 function ensureStandaloneAssets(standaloneDir) {
   try {
     const rootDir = process.cwd();
+
+    const ensureServerActionsManifest = (baseDir) => {
+      try {
+        const serverDir = path.join(baseDir, '.next', 'server');
+        const actionsManifestJson = path.join(serverDir, 'server-actions-manifest.json');
+        const actionsManifestJs = path.join(serverDir, 'server-actions-manifest.js');
+        if (fs.existsSync(actionsManifestJson) || fs.existsSync(actionsManifestJs)) return;
+
+        fs.mkdirSync(serverDir, { recursive: true });
+        const refManifestPath = path.join(serverDir, 'server-reference-manifest.json');
+        let encryptionKey = '';
+        try {
+          if (fs.existsSync(refManifestPath)) {
+            const ref = JSON.parse(fs.readFileSync(refManifestPath, 'utf8'));
+            if (ref && typeof ref.encryptionKey === 'string') encryptionKey = ref.encryptionKey;
+          }
+        } catch {
+          // ignore
+        }
+        if (!encryptionKey) encryptionKey = crypto.randomBytes(32).toString('base64');
+        fs.writeFileSync(
+          actionsManifestJson,
+          JSON.stringify({ node: {}, edge: {}, workers: {}, encryptionKey })
+        );
+      } catch {
+        // ignore
+      }
+    };
 
     const linkOrCopyDir = (src, dest) => {
       if (!fs.existsSync(src) || fs.existsSync(dest)) return;
@@ -23,6 +52,10 @@ function ensureStandaloneAssets(standaloneDir) {
     linkOrCopyDir(path.join(rootDir, '.next', 'static'), path.join(standaloneDir, '.next', 'static'));
     // Ensure `.next/server` exists for standalone runtime (server actions manifest, app router files, etc.)
     linkOrCopyDir(path.join(rootDir, '.next', 'server'), path.join(standaloneDir, '.next', 'server'));
+
+    // Hardening: avoid Next crash paths when action manifests are missing/mismatched.
+    ensureServerActionsManifest(rootDir);
+    ensureServerActionsManifest(standaloneDir);
   } catch (e) {
     console.warn('⚠️ Failed to prepare standalone assets:', e && e.message ? e.message : String(e));
   }

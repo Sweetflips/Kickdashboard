@@ -31,6 +31,7 @@ function startWebServer() {
     const path = require('path');
     const fs = require('fs');
     const os = require('os');
+    const crypto = require('crypto');
 
     const port = process.env.PORT || '3000';
     const hostname = process.env.HOSTNAME || '0.0.0.0';
@@ -48,6 +49,48 @@ function startWebServer() {
     const ensureStandaloneAssets = (standaloneDir) => {
       try {
         const rootDir = process.cwd();
+
+        const ensureServerActionsManifest = (baseDir) => {
+          try {
+            const serverDir = path.join(baseDir, '.next', 'server');
+            const actionsManifestJson = path.join(serverDir, 'server-actions-manifest.json');
+            const actionsManifestJs = path.join(serverDir, 'server-actions-manifest.js');
+            if (fs.existsSync(actionsManifestJson) || fs.existsSync(actionsManifestJs)) return;
+
+            fs.mkdirSync(serverDir, { recursive: true });
+
+            // Next.js (App Router) can crash on some requests if it expects a server-actions manifest
+            // but the deployment artifact layout omitted it. This can surface as:
+            // "Failed to find Server Action" + "Cannot read properties of undefined (reading 'workers')"
+            //
+            // If this app doesn't use Server Actions, a minimal manifest is safe and prevents crashes.
+            // If it does use Server Actions, the real manifest should exist and we won't overwrite it.
+            const refManifestPath = path.join(serverDir, 'server-reference-manifest.json');
+            let encryptionKey = '';
+            try {
+              if (fs.existsSync(refManifestPath)) {
+                const ref = JSON.parse(fs.readFileSync(refManifestPath, 'utf8'));
+                if (ref && typeof ref.encryptionKey === 'string') encryptionKey = ref.encryptionKey;
+              }
+            } catch {
+              // ignore
+            }
+            if (!encryptionKey) {
+              // 32 bytes -> base64, similar shape to Next's keys (not used if no actions)
+              encryptionKey = crypto.randomBytes(32).toString('base64');
+            }
+
+            const minimal = {
+              node: {},
+              edge: {},
+              workers: {},
+              encryptionKey,
+            };
+            fs.writeFileSync(actionsManifestJson, JSON.stringify(minimal));
+          } catch (e) {
+            // Non-fatal: only affects hardening for missing manifests
+          }
+        };
 
         const linkOrCopyDir = (src, dest) => {
           if (!fs.existsSync(src) || fs.existsSync(dest)) return;
@@ -75,6 +118,11 @@ function startWebServer() {
         const serverSrc = path.join(rootDir, '.next', 'server');
         const serverDest = path.join(standaloneDir, '.next', 'server');
         linkOrCopyDir(serverSrc, serverDest);
+
+        // Ensure a server-actions manifest exists in BOTH locations (root + standalone runtime),
+        // to avoid edge cases where the server resolves manifests relative to CWD.
+        ensureServerActionsManifest(rootDir);
+        ensureServerActionsManifest(standaloneDir);
       } catch (e) {
         process.stdout.write('⚠️ Failed to prepare standalone assets: ' + (e && e.message ? e.message : String(e)) + '\n');
       }
@@ -87,6 +135,34 @@ function startWebServer() {
     const hasFullNextServer =
       fs.existsSync(path.join(process.cwd(), '.next', 'server', 'server-reference-manifest.json')) ||
       fs.existsSync(path.join(process.cwd(), '.next', 'server', 'server-reference-manifest.js'));
+
+    // Hardening: ensure server-actions manifest exists if the build/layout omitted it.
+    // This prevents runtime crashes on some POST requests that trigger the server-action pipeline.
+    try {
+      const serverDir = path.join(process.cwd(), '.next', 'server');
+      const actionsManifestJson = path.join(serverDir, 'server-actions-manifest.json');
+      const actionsManifestJs = path.join(serverDir, 'server-actions-manifest.js');
+      if (!fs.existsSync(actionsManifestJson) && !fs.existsSync(actionsManifestJs)) {
+        fs.mkdirSync(serverDir, { recursive: true });
+        const refPath = path.join(serverDir, 'server-reference-manifest.json');
+        let encryptionKey = '';
+        try {
+          if (fs.existsSync(refPath)) {
+            const ref = JSON.parse(fs.readFileSync(refPath, 'utf8'));
+            if (ref && typeof ref.encryptionKey === 'string') encryptionKey = ref.encryptionKey;
+          }
+        } catch {
+          // ignore
+        }
+        if (!encryptionKey) encryptionKey = crypto.randomBytes(32).toString('base64');
+        fs.writeFileSync(
+          actionsManifestJson,
+          JSON.stringify({ node: {}, edge: {}, workers: {}, encryptionKey })
+        );
+      }
+    } catch {
+      // ignore
+    }
 
     const spawnNode = (args, extraEnv = {}) =>
       spawn(process.execPath, args, {
