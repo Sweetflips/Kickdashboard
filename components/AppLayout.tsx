@@ -609,6 +609,18 @@ export default function AppLayout({ children }: LayoutProps) {
                                                 <span className="ml-3 text-body font-medium">Promo Codes</span>
                                             </Link>
                                         </li>
+                                        <li>
+                                            <Link href="/admin/notes" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/notes' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                                    setSidebarOpen(false)
+                                                }
+                                            }}>
+                                                <span className="w-5 h-5 flex items-center justify-center text-[18px] leading-none" aria-hidden="true">
+                                                    📝
+                                                </span>
+                                                <span className="ml-3 text-body font-medium">Notes</span>
+                                            </Link>
+                                        </li>
                                     </>
                                 )}
                             </>

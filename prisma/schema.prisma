@@ -77,8 +77,23 @@ model User {
   referrals_as_referrer        Referral[]            @relation("Referrer")
   referrals_as_referee         Referral[]            @relation("Referee")
   referral_rewards_earned      ReferralReward[]
+  meeting_notes_created        MeetingNote[]       @relation("MeetingNoteCreator")
 
   @@map("users")
+}
+
+model MeetingNote {
+  id         BigInt   @id @default(autoincrement())
+  title      String
+  content    String   @db.Text
+  created_by BigInt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  creator User @relation("MeetingNoteCreator", fields: [created_by], references: [id], onDelete: Cascade)
+
+  @@index([created_by, created_at])
+  @@map("meeting_notes")
 }
 
 model PurchaseTransaction {
