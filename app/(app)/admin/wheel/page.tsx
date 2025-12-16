@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type Raffle = { id: string; title: string; status: string }
+type OverlayKeyResponse = { success?: boolean; key?: string; error?: string }
 
 type OverlayState = {
   mode: 'raffle' | 'custom'
@@ -23,6 +24,8 @@ export default function AdminWheelPage() {
   const [loading, setLoading] = useState(true)
   const [isAdminUser, setIsAdminUser] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [overlayKey, setOverlayKey] = useState<string | null>(null)
+  const [overlayKeyLoading, setOverlayKeyLoading] = useState(false)
 
   const [raffles, setRaffles] = useState<Raffle[]>([])
   const [entrants, setEntrants] = useState<Entrant[]>([])
@@ -69,6 +72,40 @@ export default function AdminWheelPage() {
     }
     checkAdmin()
   }, [router, token])
+
+  const loadOverlayKey = async () => {
+    if (!token) return
+    setOverlayKeyLoading(true)
+    try {
+      const resp = await fetch('/api/admin/overlay-key', { headers: { Authorization: `Bearer ${token}` } })
+      const data = (await resp.json()) as OverlayKeyResponse
+      if (!resp.ok) {
+        setOverlayKey(null)
+        return
+      }
+      setOverlayKey(data?.key || null)
+    } catch {
+      setOverlayKey(null)
+    } finally {
+      setOverlayKeyLoading(false)
+    }
+  }
+
+  const buildObsOverlayUrl = () => {
+    if (!overlayKey || typeof window === 'undefined') return ''
+    return `${window.location.origin}/wheel?key=${encodeURIComponent(overlayKey)}`
+  }
+
+  const copyObsOverlayUrl = async () => {
+    const url = buildObsOverlayUrl()
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      setToast({ message: 'Copied fortune wheel OBS URL', type: 'success' })
+    } catch {
+      setToast({ message: 'Failed to copy to clipboard', type: 'error' })
+    }
+  }
 
   const loadAll = async () => {
     if (!token) return
@@ -122,6 +159,7 @@ export default function AdminWheelPage() {
   useEffect(() => {
     if (!isAdminUser) return
     loadAll()
+    loadOverlayKey()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdminUser])
 
@@ -258,6 +296,20 @@ export default function AdminWheelPage() {
             <p className="text-body text-gray-600 dark:text-kick-text-secondary">
               OBS overlay lives at <span className="font-mono">/wheel?key=...</span>
             </p>
+            {overlayKey && (
+              <div className="mt-2 flex items-center gap-2">
+                <code className="px-3 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
+                  {buildObsOverlayUrl()}
+                </code>
+                <button
+                  onClick={copyObsOverlayUrl}
+                  disabled={overlayKeyLoading}
+                  className="px-3 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 transition-colors text-xs font-medium disabled:opacity-50"
+                >
+                  Copy OBS URL
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -273,6 +325,13 @@ export default function AdminWheelPage() {
               className="px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg disabled:opacity-50"
             >
               {state.locked ? 'Unlock' : 'Lock'}
+            </button>
+            <button
+              onClick={loadOverlayKey}
+              disabled={overlayKeyLoading}
+              className="px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg disabled:opacity-50"
+            >
+              {overlayKeyLoading ? 'Loading…' : overlayKey ? 'Refresh Key' : 'Load Key'}
             </button>
           </div>
         </div>
