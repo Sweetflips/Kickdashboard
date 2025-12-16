@@ -80,6 +80,7 @@ export async function GET(request: Request) {
             const redirectUri = buildRedirectUri(request)
             const host = request.headers.get('host') || ''
             const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+            const isBot = searchParams.get('bot') === '1'
 
             const state = crypto.randomUUID()
             const { codeVerifier, codeChallenge } = generatePKCE()
@@ -88,6 +89,7 @@ export async function GET(request: Request) {
             // - user:read: Read user information (including email)
             // - chat:write: Send chat messages
             // - channel:read: Read channel information (for thumbnails, stream status)
+            // - moderation:ban: Execute moderation actions (ban/timeout) - ONLY for bot accounts
             const scopes = [
                 'events:subscribe',
                 'user:read',
@@ -95,14 +97,23 @@ export async function GET(request: Request) {
                 'channel:read',
             ]
 
+            // Add moderation scope only for bot authorization
+            // Note: Kick may not display all requested scopes in the UI unless the user is prompted to re-consent.
+            if (isBot) {
+                scopes.push('moderation:ban')
+            }
+
+            const scopeString = scopes.join(' ')
             const authUrl = `${KICK_OAUTH_BASE}/oauth/authorize?` +
                 `response_type=code&` +
                 `client_id=${clientId}&` +
                 `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-                `scope=${encodeURIComponent(scopes.join(' '))}&` +
+                `scope=${encodeURIComponent(scopeString)}&` +
                 `code_challenge=${codeChallenge}&` +
                 `code_challenge_method=S256&` +
-                `state=${state}`
+                `state=${state}` +
+                // Force Kick to re-show the consent screen so new scopes (like moderation:ban) get granted
+                (isBot ? `&prompt=consent` : '')
 
             // Redirect directly to Kick OAuth
             const response = NextResponse.redirect(authUrl)
