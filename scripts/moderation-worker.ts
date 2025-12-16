@@ -101,11 +101,11 @@ function hashMessageContent(content: string): string {
 
 function isExempt(payload: ChatJobPayload): boolean {
     const senderUsernameLower = payload.sender.username.toLowerCase()
-    
+
     if (senderUsernameLower === payload.broadcaster.username.toLowerCase()) return true
     if (senderUsernameLower === MODERATOR_USERNAME) return true
     if (ALLOWLIST.includes(senderUsernameLower)) return true
-    
+
     if (payload.sender.badges) {
         for (const badge of payload.sender.badges) {
             const badgeType = badge.type?.toLowerCase() || ''
@@ -114,7 +114,7 @@ function isExempt(payload: ChatJobPayload): boolean {
             }
         }
     }
-    
+
     return false
 }
 
@@ -125,26 +125,26 @@ function cleanMessageWindow(state: RaidState, now: number): void {
 
 function checkRaidMode(state: RaidState, broadcasterUserId: bigint, now: number): boolean {
     cleanMessageWindow(state, now)
-    
+
     if (state.raidModeUntil > now) {
         return true
     }
-    
+
     const fiveSecondsAgo = now - 5000
     const recentMessages = state.messageWindow.filter(msg => msg.timestamp > fiveSecondsAgo)
-    
+
     if (recentMessages.length < RAIDMODE_TRIGGER_MSGS_5S) {
         return false
     }
-    
+
     const uniqueSenders = new Set(recentMessages.map(msg => msg.sender_user_id.toString()))
-    
+
     if (uniqueSenders.size >= RAIDMODE_TRIGGER_UNIQUE_5S) {
         state.raidModeUntil = now + RAIDMODE_DURATION_MS
         console.log(`[moderation-worker] 🚨 RAID MODE ACTIVATED for broadcaster ${broadcasterUserId} (${recentMessages.length} msgs, ${uniqueSenders.size} unique senders in 5s)`)
         return true
     }
-    
+
     return false
 }
 
@@ -156,35 +156,35 @@ function checkUserSpam(state: RaidState, senderUserId: bigint, contentHash: stri
         last_message_hash: '',
         repeat_count: 0,
     }
-    
+
     if (offense.last_message_hash === contentHash) {
         offense.repeat_count++
     } else {
         offense.repeat_count = 1
     }
-    
+
     const tenSecondsAgo = now - 10000
     const userRecentMessages = state.messageWindow.filter(
         msg => msg.sender_user_id === senderUserId && msg.timestamp > tenSecondsAgo
     )
-    
+
     if (userRecentMessages.length >= SPAM_PER_USER_MSGS_10S) {
         offense.count++
         offense.last_message_hash = contentHash
         state.userOffenses.set(key, offense)
         return true
     }
-    
+
     if (offense.repeat_count >= SPAM_REPEAT_THRESHOLD) {
         offense.count++
         offense.last_message_hash = contentHash
         state.userOffenses.set(key, offense)
         return true
     }
-    
+
     offense.last_message_hash = contentHash
     state.userOffenses.set(key, offense)
-    
+
     return false
 }
 
@@ -211,37 +211,37 @@ function evaluateMessageForModeration(payload: ChatJobPayload): ModerationAction
     if (!MODERATION_ENABLED) {
         return null
     }
-    
+
     if (isExempt(payload)) {
         return null
     }
-    
+
     const broadcasterUserId = BigInt(payload.broadcaster.kick_user_id)
     const senderUserId = BigInt(payload.sender.kick_user_id)
     const now = Date.now()
     const contentHash = hashMessageContent(payload.content)
-    
+
     const state = getRaidState(broadcasterUserId)
-    
+
     state.messageWindow.push({
         timestamp: now,
         broadcaster_user_id: broadcasterUserId,
         sender_user_id: senderUserId,
         content_hash: contentHash,
     })
-    
+
     if (isInCooldown(state, broadcasterUserId, senderUserId, now)) {
         return null
     }
-    
+
     const raidModeActive = checkRaidMode(state, broadcasterUserId, now) || state.raidModeUntil > now
-    
+
     const isSpam = checkUserSpam(state, senderUserId, contentHash, now)
-    
+
     if (!isSpam && !raidModeActive) {
         return null
     }
-    
+
     const offenseKey = senderUserId.toString()
     const offense = state.userOffenses.get(offenseKey) || {
         count: 0,
@@ -249,9 +249,9 @@ function evaluateMessageForModeration(payload: ChatJobPayload): ModerationAction
         last_message_hash: '',
         repeat_count: 0,
     }
-    
+
     let action: ModerationAction | null = null
-    
+
     if (offense.count >= BAN_ON_REPEAT_COUNT) {
         action = {
             type: 'ban',
@@ -271,25 +271,25 @@ function evaluateMessageForModeration(payload: ChatJobPayload): ModerationAction
         action = {
             type: 'timeout',
             duration_seconds: raidModeActive ? TIMEOUT_SECONDS * 2 : TIMEOUT_SECONDS,
-            reason: raidModeActive 
-                ? `Spam detected during raid mode` 
+            reason: raidModeActive
+                ? `Spam detected during raid mode`
                 : `Spam detected (${state.messageWindow.filter(m => m.sender_user_id === senderUserId && m.timestamp > now - 10000).length} msgs in 10s)`,
             rule_id: raidModeActive ? 'raid_spam' : 'spam',
             raid_mode_active: raidModeActive,
         }
     }
-    
+
     if (action) {
         recordModerationAction(state, broadcasterUserId, senderUserId, now)
-        
+
         const prefix = DRY_RUN ? '[DRY RUN]' : ''
         console.log(`${prefix}[moderation-worker] ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason}`)
-        
+
         if (DRY_RUN) {
             return null
         }
     }
-    
+
     return action
 }
 
@@ -323,11 +323,11 @@ async function releaseAdvisoryLock(): Promise<void> {
 
 async function sendStartupMessage(): Promise<void> {
     if (startupMessageSent) return
-    
+
     try {
         // Get broadcaster user ID from environment or default
         const broadcasterSlug = process.env.KICK_CHANNEL_SLUG || 'sweetflips'
-        
+
         // Try to get broadcaster from database
         const broadcaster = await db.user.findFirst({
             where: {
@@ -340,14 +340,14 @@ async function sendStartupMessage(): Promise<void> {
                 kick_user_id: true,
             },
         })
-        
+
         if (broadcaster) {
             const result = await sendModeratorChatMessage({
                 broadcaster_user_id: broadcaster.kick_user_id,
                 content: 'Hi! 🛡️ Moderation bot is online and ready.',
                 type: 'bot',
             })
-            
+
             if (result.success) {
                 startupMessageSent = true
                 console.log(`[moderation-worker] ✅ Startup message sent to chat`)
@@ -406,14 +406,14 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
 
                 if (banResult.success) {
                     moderationActionsCount++
-                    
+
                     // Send chat message announcing the action
-                    const actionText = moderationAction.type === 'ban' 
-                        ? 'banned' 
+                    const actionText = moderationAction.type === 'ban'
+                        ? 'banned'
                         : `timed out for ${Math.floor((moderationAction.duration_seconds || 0) / 60)} minutes`
-                    
+
                     const announcement = `🛡️ ${payload.sender.username} has been ${actionText}. Reason: ${moderationAction.reason}`
-                    
+
                     await sendModeratorChatMessage({
                         broadcaster_user_id: broadcasterUserId,
                         content: announcement,
@@ -421,7 +421,7 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                     }).catch(() => {
                         // Non-critical if announcement fails
                     })
-                    
+
                     console.log(`[moderation-worker] ✅ ${moderationAction.type.toUpperCase()} user ${payload.sender.username} (${moderationAction.reason})`)
                 } else {
                     console.warn(`[moderation-worker] ⚠️ Moderation action failed: ${banResult.error}`)
@@ -515,4 +515,3 @@ runWorker().catch((error) => {
     console.error(`[moderation-worker] Fatal error:`, error)
     process.exit(1)
 })
-
