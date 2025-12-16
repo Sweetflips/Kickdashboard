@@ -7,6 +7,7 @@
 
 import { db } from '@/lib/db'
 import { decryptToken, encryptToken, hashToken } from '@/lib/encryption'
+import { getKickBotCredentials, getKickUserCredentials } from '@/lib/kick-oauth-creds'
 
 // Kick Dev API endpoints
 // Base URL for Kick Dev API v1 (public endpoint)
@@ -317,13 +318,7 @@ export async function refreshBroadcasterToken(): Promise<string | null> {
         }
 
         const refreshToken = decryptToken(broadcaster.refresh_token_encrypted)
-        const clientId = process.env.KICK_CLIENT_ID
-        const clientSecret = process.env.KICK_CLIENT_SECRET
-
-        if (!clientId || !clientSecret) {
-            console.warn(`[Kick API] KICK_CLIENT_ID and KICK_CLIENT_SECRET required for token refresh`)
-            return null
-        }
+        const { clientId, clientSecret } = getKickUserCredentials()
 
         // Build redirect URI (use a default one for server-side refresh)
         const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
@@ -1378,14 +1373,8 @@ export async function getModeratorToken(): Promise<string | null> {
             
             // Try to refresh if we have a refresh token
             if (moderator.refresh_token_encrypted) {
-                const clientId = process.env.KICK_CLIENT_ID
-                const clientSecret = process.env.KICK_CLIENT_SECRET
+                const { clientId, clientSecret } = getKickBotCredentials()
                 const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
-
-                if (!clientId || !clientSecret) {
-                    console.warn(`[Kick API] KICK_CLIENT_ID and KICK_CLIENT_SECRET required for token refresh`)
-                    return null
-                }
 
                 try {
                     const refreshToken = decryptToken(moderator.refresh_token_encrypted)

@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
+import { getKickBotCredentials, getKickUserCredentials } from '@/lib/kick-oauth-creds'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,15 +20,7 @@ const COOKIE_DOMAIN = APP_HOST.includes('localhost')
     ? undefined
     : `.${APP_HOST.replace(/:\d+$/, '').replace(/^www\./, '')}`
 
-// Get credentials at runtime to avoid startup crashes
-function getKickCredentials() {
-    const clientId = process.env.KICK_CLIENT_ID
-    const clientSecret = process.env.KICK_CLIENT_SECRET
-    if (!clientId || !clientSecret) {
-        throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set')
-    }
-    return { clientId, clientSecret }
-}
+const AUTH_FLOW_COOKIE = 'kick_auth_flow'
 
 // Generate PKCE code verifier and challenge
 function generatePKCE() {
@@ -72,7 +65,6 @@ function buildRedirectUri(request: Request): string {
 // Generate OAuth authorization URL
 export async function GET(request: Request) {
     try {
-        const { clientId, clientSecret } = getKickCredentials()
         const { searchParams } = new URL(request.url)
         const action = searchParams.get('action')
         const referralCode = searchParams.get('ref')
@@ -80,6 +72,7 @@ export async function GET(request: Request) {
         if (action === 'debug') {
             const isBot = searchParams.get('bot') === '1'
             const redirectUri = buildRedirectUri(request)
+            const { clientId } = isBot ? getKickBotCredentials() : getKickUserCredentials()
 
             const scopes = [
                 'events:subscribe',
@@ -109,6 +102,7 @@ export async function GET(request: Request) {
                 ok: true,
                 now: new Date().toISOString(),
                 isBot,
+                clientKind: isBot ? 'bot' : 'user',
                 redirectUri,
                 scopes,
                 scopeString,
@@ -132,6 +126,7 @@ export async function GET(request: Request) {
             const host = request.headers.get('host') || ''
             const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
             const isBot = searchParams.get('bot') === '1'
+            const { clientId } = isBot ? getKickBotCredentials() : getKickUserCredentials()
 
             const state = crypto.randomUUID()
             const { codeVerifier, codeChallenge } = generatePKCE()
@@ -174,6 +169,16 @@ export async function GET(request: Request) {
                 secure: !isLocalhost,
                 sameSite: 'lax',
                 maxAge: 7776000, // 3 months (90 days)
+                path: '/',
+                domain: isLocalhost ? undefined : COOKIE_DOMAIN,
+            })
+
+            // Store which OAuth client kind was used so callback can pick the right credentials
+            response.cookies.set(AUTH_FLOW_COOKIE, isBot ? 'bot' : 'user', {
+                httpOnly: true,
+                secure: !isLocalhost,
+                sameSite: 'lax',
+                maxAge: 15 * 60, // 15 minutes
                 path: '/',
                 domain: isLocalhost ? undefined : COOKIE_DOMAIN,
             })

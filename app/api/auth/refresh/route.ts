@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import crypto from 'crypto'
+import { getKickUserCredentials } from '@/lib/kick-oauth-creds'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,12 +9,8 @@ const KICK_OAUTH_BASE = 'https://id.kick.com'
 
 // Get credentials at runtime to avoid startup crashes
 function getKickCredentials() {
-    const clientId = process.env.KICK_CLIENT_ID
-    const clientSecret = process.env.KICK_CLIENT_SECRET
-    if (!clientId || !clientSecret) {
-        throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set')
-    }
-    return { clientId, clientSecret }
+    // Refresh endpoint is for normal user sessions; always use USER OAuth app.
+    return getKickUserCredentials()
 }
 
 function hashToken(token: string): string {

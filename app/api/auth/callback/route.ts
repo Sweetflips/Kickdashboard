@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { encryptToken, hashToken } from '@/lib/encryption'
+import { getKickBotCredentials, getKickUserCredentials } from '@/lib/kick-oauth-creds'
 import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
@@ -22,15 +23,7 @@ const COOKIE_DOMAIN = APP_HOST.includes('localhost')
     ? undefined
     : `.${APP_HOST.replace(/:\d+$/, '').replace(/^www\./, '')}`
 
-// Get credentials at runtime to avoid startup crashes
-function getKickCredentials() {
-    const clientId = process.env.KICK_CLIENT_ID
-    const clientSecret = process.env.KICK_CLIENT_SECRET
-    if (!clientId || !clientSecret) {
-        throw new Error('KICK_CLIENT_ID and KICK_CLIENT_SECRET must be set')
-    }
-    return { clientId, clientSecret }
-}
+const AUTH_FLOW_COOKIE = 'kick_auth_flow'
 
 /**
  * Extract IP address from request headers
@@ -101,7 +94,6 @@ function buildRedirectUri(request: Request): string {
 
 export async function GET(request: Request) {
     try {
-        const { clientId, clientSecret } = getKickCredentials()
         const { searchParams } = new URL(request.url)
         const code = searchParams.get('code')
         const state = searchParams.get('state')
@@ -126,10 +118,22 @@ export async function GET(request: Request) {
         const cookieStore = await cookies()
         const codeVerifier = cookieStore.get('pkce_code_verifier')?.value
         const referralCode = cookieStore.get('referral_code')?.value
+        const authFlow = cookieStore.get(AUTH_FLOW_COOKIE)?.value || 'user'
+
+        // Clear flow cookie (best-effort)
+        try {
+            cookieStore.delete(AUTH_FLOW_COOKIE)
+        } catch {
+            // ignore
+        }
 
         if (!codeVerifier) {
             return NextResponse.redirect(`${errorRedirect}/?error=${encodeURIComponent('PKCE code verifier not found. Please try authenticating again.')}`)
         }
+
+        const creds = authFlow === 'bot' ? getKickBotCredentials() : getKickUserCredentials()
+        const clientId = creds.clientId
+        const clientSecret = creds.clientSecret
 
         // Exchange code for token using form-urlencoded
         const params = new URLSearchParams({
