@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
     try {
         // Check admin access
@@ -26,11 +26,19 @@ export async function POST(
             )
         }
 
+        // Handle Next.js 15 params as Promise
+        const resolvedParams = await Promise.resolve(params)
+        const idString = resolvedParams.id
+
+        if (!idString || typeof idString !== 'string') {
+            return NextResponse.json({ error: 'Invalid raffle id' }, { status: 400 })
+        }
+
         let raffleId: bigint
         try {
-            raffleId = BigInt(params.id)
+            raffleId = BigInt(idString)
         } catch {
-            return NextResponse.json({ error: 'Invalid raffle id' }, { status: 400 })
+            return NextResponse.json({ error: 'Invalid raffle id format' }, { status: 400 })
         }
 
         // Check if raffle exists first
