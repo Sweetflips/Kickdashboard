@@ -373,7 +373,9 @@ export default function AppLayout({ children }: LayoutProps) {
     return (
         <div className="min-h-screen flex flex-col bg-white dark:bg-kick-dark">
             {/* Sidebar */}
-            <aside className={`fixed top-0 left-0 z-40 w-64 h-screen transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 bg-white dark:bg-kick-surface border-r border-gray-200 dark:border-kick-border`}>
+            <aside
+                className={`fixed top-0 left-0 z-40 w-64 h-screen transition-transform duration-200 ease-out transform-gpu will-change-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 bg-white dark:bg-kick-surface border-r border-gray-200 dark:border-kick-border`}
+            >
                 <div className="h-full px-3 py-4 overflow-y-auto">
                     <div className="flex items-center justify-between mb-5 px-2">
                         <Link href="/" className="flex items-center gap-3">
@@ -400,7 +402,7 @@ export default function AppLayout({ children }: LayoutProps) {
                     </div>
                     <ul className="space-y-2">
                         <li>
-                            <Link href="/" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -412,7 +414,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/activity" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/activity' || pathname?.startsWith('/activity/') ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/activity" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/activity' || pathname?.startsWith('/activity/') ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -424,7 +426,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/leaderboard" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/leaderboard' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/leaderboard" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/leaderboard' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -445,7 +447,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </div>
                         </li>
                         <li>
-                            <Link href="/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -457,7 +459,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/shop" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/shop' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/shop" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/shop' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -469,7 +471,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/achievements" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/achievements' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/achievements" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/achievements' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -482,7 +484,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/referrals" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/referrals' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/referrals" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/referrals' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
@@ -503,7 +505,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                 {isAdmin && (
                                     <>
                                         <li>
-                                            <Link href="/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                            <Link href="/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/streams' || pathname?.startsWith('/streams/') ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                                     setSidebarOpen(false)
                                                 }
@@ -515,7 +517,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                             </Link>
                                         </li>
                                         <li>
-                                            <Link href="/admin/analytics" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/analytics' || pathname === '/analytics' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                            <Link href="/admin/analytics" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/admin/analytics' || pathname === '/analytics' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                                     setSidebarOpen(false)
                                                 }
@@ -528,7 +530,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                             </Link>
                                         </li>
                                         <li>
-                                            <Link href="/admin/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                            <Link href="/admin/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/admin/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                                     setSidebarOpen(false)
                                                 }
@@ -541,7 +543,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                             </Link>
                                         </li>
                                         <li>
-                                            <Link href="/admin/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/streams' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                            <Link href="/admin/streams" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/admin/streams' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                                     setSidebarOpen(false)
                                                 }
@@ -553,7 +555,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                             </Link>
                                         </li>
                                         <li>
-                                            <Link href="/admin/users" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/users' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                            <Link href="/admin/users" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/admin/users' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                                     setSidebarOpen(false)
                                                 }
@@ -568,7 +570,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                 )}
                                 {canViewPayouts && (
                                     <li>
-                                        <Link href="/admin/payouts" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/payouts' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                        <Link href="/admin/payouts" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/admin/payouts' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                             if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                                 setSidebarOpen(false)
                                             }
@@ -584,7 +586,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                 {isAdmin && (
                                     <>
                                         <li>
-                                            <Link href="/admin/purchases" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/purchases' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                            <Link href="/admin/purchases" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/admin/purchases' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                                     setSidebarOpen(false)
                                                 }
@@ -597,7 +599,7 @@ export default function AppLayout({ children }: LayoutProps) {
                                             </Link>
                                         </li>
                                         <li>
-                                            <Link href="/admin/promo-codes" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/admin/promo-codes' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                                            <Link href="/admin/promo-codes" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/admin/promo-codes' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                                     setSidebarOpen(false)
                                                 }
@@ -622,7 +624,7 @@ export default function AppLayout({ children }: LayoutProps) {
                             </div>
                         </li>
                         <li>
-                            <Link href="/profile" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-all ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
+                            <Link href="/profile" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/profile' || pathname === '/settings' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
                                 }
