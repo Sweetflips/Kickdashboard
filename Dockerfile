@@ -5,6 +5,11 @@ FROM node:20-bookworm-slim AS base
 FROM base AS deps
 WORKDIR /app
 
+# Install OpenSSL for Prisma (needed during postinstall)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy package files and prisma schema (needed for postinstall)
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
