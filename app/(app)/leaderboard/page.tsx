@@ -9,6 +9,9 @@ interface LeaderboardEntry {
     username: string
     profile_picture_url: string | null
     total_points: number
+    coins_balance: number
+    coins_earned: number
+    coins_spent: number
     total_emotes: number
     total_messages: number
     streams_watched: number
@@ -30,6 +33,9 @@ type SortBy = 'points' | 'messages' | 'streams' | 'emotes'
 interface ViewerSummary {
     rank: number | null
     total_points: number
+    coins_balance: number
+    coins_earned: number
+    coins_spent: number
     total_emotes: number
     total_messages: number
     streams_watched: number
@@ -248,6 +254,8 @@ export default function LeaderboardPage() {
         return `#${rank}`
     }
 
+    const fmt = (n: number | null | undefined) => (Number(n || 0)).toLocaleString()
+
     const rangeLabel = (() => {
         switch (dateFilterMode) {
             case 'today':
@@ -390,7 +398,7 @@ export default function LeaderboardPage() {
                                     }}
                                     className="px-3 py-1.5 text-sm border border-gray-300 dark:border-kick-border rounded-md bg-white dark:bg-kick-surface text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
                                 >
-                                    <option value="points">Sweet Coins</option>
+                                    <option value="points">{dateFilterMode === 'overall' ? 'Balance' : 'Coins earned'}</option>
                                     <option value="messages">Messages sent</option>
                                     <option value="streams">Streams watched</option>
                                     <option value="emotes">Emotes used</option>
@@ -424,9 +432,22 @@ export default function LeaderboardPage() {
 
                     {/* Your Position */}
                     <div className="sticky top-0 z-10 -mx-6 mb-4 px-6 py-3 bg-gray-50/95 dark:bg-kick-surface-hover/95 backdrop-blur border-y border-gray-200 dark:border-kick-border">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-kick-text">
-                            {yourPositionText}
-                        </p>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-kick-text">
+                                {yourPositionText}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-700 dark:text-kick-text-secondary">
+                                <span className="whitespace-nowrap">
+                                    Earned ({rangeLabel}): <span className="font-semibold text-gray-900 dark:text-kick-text">{fmt(viewer?.coins_earned)}</span>
+                                </span>
+                                <span className="whitespace-nowrap">
+                                    Spent ({rangeLabel}): <span className="font-semibold text-gray-900 dark:text-kick-text">{fmt(viewer?.coins_spent)}</span>
+                                </span>
+                                <span className="whitespace-nowrap">
+                                    Balance: <span className="font-semibold text-gray-900 dark:text-kick-text">{fmt(viewer?.coins_balance)}</span>
+                                </span>
+                            </div>
+                        </div>
                     </div>
 
                     {loading ? (
@@ -519,33 +540,39 @@ export default function LeaderboardPage() {
                                         </div>
                                         <div className="grid grid-cols-2 gap-3 text-sm">
                                             <div>
-                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Sweet Coins</span>
-                                                <span className="font-semibold text-kick-purple text-body">
-                                                    {(entry.total_points || 0).toLocaleString()}
-                                                </span>
+                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Balance</span>
+                                                <span className="font-semibold text-kick-purple text-body">{fmt(entry.coins_balance)}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Earned ({rangeLabel})</span>
+                                                <span className="font-semibold text-gray-900 dark:text-kick-text text-body">{fmt(entry.coins_earned)}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Spent ({rangeLabel})</span>
+                                                <span className="font-semibold text-gray-900 dark:text-kick-text text-body">{fmt(entry.coins_spent)}</span>
                                             </div>
                                             <div>
                                                 <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Emotes</span>
                                                 <span className="font-semibold text-kick-green text-body">
-                                                    {(entry.total_emotes || 0).toLocaleString()}
+                                                    {fmt(entry.total_emotes)}
                                                 </span>
                                             </div>
                                             <div>
                                                 <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Streams</span>
                                                 <span className="text-gray-900 dark:text-kick-text text-body">
-                                                    {(entry.streams_watched || 0).toLocaleString()}
+                                                    {fmt(entry.streams_watched)}
                                                 </span>
                                             </div>
                                             <div>
                                                 <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Messages</span>
                                                 <span className="text-gray-900 dark:text-kick-text text-body">
-                                                    {(entry.total_messages || 0).toLocaleString()}
+                                                    {fmt(entry.total_messages)}
                                                 </span>
                                             </div>
                                             <div>
                                                 <span className="text-gray-600 dark:text-kick-text-secondary block mb-1">Achievements</span>
                                                 <span className="font-semibold text-amber-600 dark:text-amber-500 text-body">
-                                                    {(entry.achievements_unlocked ?? 0).toLocaleString()}
+                                                    {fmt(entry.achievements_unlocked ?? 0)}
                                                 </span>
                                             </div>
                                         </div>
@@ -555,12 +582,14 @@ export default function LeaderboardPage() {
 
                             {/* Desktop Table Layout */}
                             <div className="hidden md:block overflow-x-auto">
-                                <table className="w-full min-w-[640px]">
+                                <table className="w-full min-w-[880px]">
                                     <thead>
                                         <tr className="border-b border-gray-200 dark:border-kick-border">
                                             <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Rank</th>
                                             <th className="text-left py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">User</th>
-                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Sweet Coins</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Balance</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Earned ({rangeLabel})</th>
+                                            <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Spent ({rangeLabel})</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Emotes</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Streams Watched</th>
                                             <th className="text-right py-3 px-4 text-small font-semibold text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">Messages Sent</th>
@@ -645,27 +674,37 @@ export default function LeaderboardPage() {
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
                                                     <span className="font-semibold text-body text-kick-purple whitespace-nowrap">
-                                                        {(entry.total_points || 0).toLocaleString()}
+                                                        {fmt(entry.coins_balance)}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <span className="text-body text-gray-900 dark:text-kick-text whitespace-nowrap">
+                                                        {fmt(entry.coins_earned)}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <span className="text-body text-gray-900 dark:text-kick-text whitespace-nowrap">
+                                                        {fmt(entry.coins_spent)}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
                                                     <span className="font-semibold text-body text-kick-green whitespace-nowrap">
-                                                        {(entry.total_emotes || 0).toLocaleString()}
+                                                        {fmt(entry.total_emotes)}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
                                                     <span className="text-body text-gray-900 dark:text-kick-text whitespace-nowrap">
-                                                        {(entry.streams_watched || 0).toLocaleString()}
+                                                        {fmt(entry.streams_watched)}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
                                                     <span className="text-body text-gray-900 dark:text-kick-text whitespace-nowrap">
-                                                        {(entry.total_messages || 0).toLocaleString()}
+                                                        {fmt(entry.total_messages)}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
                                                     <span className="font-semibold text-body text-amber-600 dark:text-amber-500 whitespace-nowrap">
-                                                        {(entry.achievements_unlocked ?? 0).toLocaleString()}
+                                                        {fmt(entry.achievements_unlocked ?? 0)}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4 text-small text-gray-600 dark:text-kick-text-secondary whitespace-nowrap">

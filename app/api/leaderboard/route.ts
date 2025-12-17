@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { memoryCache } from '@/lib/memory-cache'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
+import { ensurePurchaseTransactionsTable } from '@/lib/purchases-ledger'
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 
@@ -20,6 +21,9 @@ export type LeaderboardEntry = {
     username: string
     profile_picture_url: string | null
     total_points: number
+    coins_balance: number
+    coins_earned: number
+    coins_spent: number
     total_emotes: number
     total_messages: number
     streams_watched: number
@@ -33,6 +37,9 @@ export type LeaderboardEntry = {
 type ViewerSummary = {
     rank: number | null
     total_points: number
+    coins_balance: number
+    coins_earned: number
+    coins_spent: number
     total_emotes: number
     total_messages: number
     streams_watched: number
@@ -109,7 +116,7 @@ export async function GET(request: Request) {
         }
 
         // Cache key excludes viewer + pagination (so the heavy work is reused)
-        const cacheKey = `leaderboard:v2:${sortBy}:${startDate || 'all'}:${endDate || 'all'}`
+        const cacheKey = `leaderboard:v3:${sortBy}:${startDate || 'all'}:${endDate || 'all'}`
         const cacheTTL = hasDateFilter ? 30000 : 15000 // 30s for date-filtered, 15s for overall
 
         // Try cache first
@@ -143,11 +150,14 @@ export async function GET(request: Request) {
                     ? {
                         rank: viewerEntry.rank,
                         total_points: viewerEntry.total_points,
+                        coins_balance: viewerEntry.coins_balance,
+                        coins_earned: viewerEntry.coins_earned,
+                        coins_spent: viewerEntry.coins_spent,
                         total_emotes: viewerEntry.total_emotes,
                         total_messages: viewerEntry.total_messages,
                         streams_watched: viewerEntry.streams_watched,
                     }
-                    : { rank: null, total_points: 0, total_emotes: 0, total_messages: 0, streams_watched: 0 }
+                    : { rank: null, total_points: 0, coins_balance: 0, coins_earned: 0, coins_spent: 0, total_emotes: 0, total_messages: 0, streams_watched: 0 }
                 : null
 
             return NextResponse.json({
@@ -198,11 +208,14 @@ export async function GET(request: Request) {
                 ? {
                     rank: viewerEntry.rank,
                     total_points: viewerEntry.total_points,
+                    coins_balance: viewerEntry.coins_balance,
+                    coins_earned: viewerEntry.coins_earned,
+                    coins_spent: viewerEntry.coins_spent,
                     total_emotes: viewerEntry.total_emotes,
                     total_messages: viewerEntry.total_messages,
                     streams_watched: viewerEntry.streams_watched,
                 }
-                : { rank: null, total_points: 0, total_emotes: 0, total_messages: 0, streams_watched: 0 }
+                : { rank: null, total_points: 0, coins_balance: 0, coins_earned: 0, coins_spent: 0, total_emotes: 0, total_messages: 0, streams_watched: 0 }
             : null
 
         return NextResponse.json({
@@ -240,6 +253,9 @@ type UserSummaryV2 = {
 type RowV2 = {
     user: UserSummaryV2
     total_points: number
+    coins_balance: number
+    coins_earned: number
+    coins_spent: number
     total_emotes: number
     total_messages: number
     streams_watched: number
@@ -326,6 +342,9 @@ function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
         username: user.username,
         profile_picture_url: rewriteApiMediaUrlToCdn(user.custom_profile_picture_url || user.profile_picture_url),
         total_points: row.total_points,
+        coins_balance: row.coins_balance,
+        coins_earned: row.coins_earned,
+        coins_spent: row.coins_spent,
         total_emotes: row.total_emotes,
         total_messages: row.total_messages,
         streams_watched: row.streams_watched,
@@ -337,6 +356,14 @@ function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
             discord: hasDiscord,
             telegram: hasTelegram,
         },
+    }
+}
+
+async function safeEnsurePurchaseTransactionsTable(): Promise<void> {
+    try {
+        await ensurePurchaseTransactionsTable(db as any)
+    } catch {
+        // If DB user can't create tables, we'll just treat spend as 0.
     }
 }
 
@@ -374,6 +401,48 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
 
     if (userPoints.length === 0) return []
 
+    const userIds = userPoints.map(up => up.user_id)
+
+    // Earned/Spent totals
+    const [earnedAgg, spentAgg] = await Promise.all([
+        withRetry(
+            () => db.sweetCoinHistory.groupBy({
+                by: ['user_id'],
+                where: { user_id: { in: userIds } },
+                _sum: { sweet_coins_earned: true },
+            }),
+            3,
+            'buildOverallRowsV2: earnedAgg groupBy'
+        ),
+        (async () => {
+            await safeEnsurePurchaseTransactionsTable()
+            try {
+                return await withRetry(
+                    () => db.purchaseTransaction.groupBy({
+                        by: ['user_id'],
+                        where: { user_id: { in: userIds } },
+                        _sum: { sweet_coins_spent: true },
+                    }),
+                    3,
+                    'buildOverallRowsV2: spentAgg groupBy'
+                )
+            } catch {
+                return []
+            }
+        })(),
+    ])
+
+    const earnedMap = new Map<bigint, number>()
+    for (const r of earnedAgg) earnedMap.set(r.user_id, r._sum.sweet_coins_earned || 0)
+
+    const spentMap = new Map<bigint, number>()
+    for (const r of spentAgg as any[]) {
+        // Prisma returns bigint user_id in PG; keep defensive.
+        const uid = (r as any).user_id as bigint
+        const sum = (r as any)._sum?.sweet_coins_spent as number | null | undefined
+        spentMap.set(uid, sum || 0)
+    }
+
     // Derive kick_user_ids to scope queries (keep as BigInt for Prisma compatibility)
     const kickUserIds = userPoints.map(up => {
         const kickId = (up.user as any).kick_user_id
@@ -387,6 +456,9 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
             return {
                 user,
                 total_points: up.total_sweet_coins,
+                coins_balance: up.total_sweet_coins,
+                coins_earned: earnedMap.get(user.id) || 0,
+                coins_spent: spentMap.get(user.id) || 0,
                 total_emotes: up.total_emotes,
                 total_messages: 0,
                 streams_watched: 0,
@@ -438,6 +510,9 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
         return {
             user,
             total_points: up.total_sweet_coins,
+            coins_balance: up.total_sweet_coins,
+            coins_earned: earnedMap.get(user.id) || 0,
+            coins_spent: spentMap.get(user.id) || 0,
             total_emotes: up.total_emotes,
             total_messages: messagesMap.get(user.kick_user_id) || 0,
             streams_watched: streamsMap.get(user.kick_user_id) || 0,
@@ -483,6 +558,36 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
 
     const userById = new Map<bigint, UserSummaryV2>()
     users.forEach((u) => userById.set(u.id, u as unknown as UserSummaryV2))
+
+    // Fetch balances
+    const balances = await withRetry(
+        () => db.userSweetCoins.findMany({
+            where: { user_id: { in: userIds } },
+            select: { user_id: true, total_sweet_coins: true },
+        }),
+        3,
+        'buildDateFilteredRowsV2: balances findMany'
+    ).catch(() => [] as Array<{ user_id: bigint; total_sweet_coins: number }>)
+    const balanceByUserId = new Map<bigint, number>(balances.map(b => [b.user_id, b.total_sweet_coins]))
+
+    // Spent in range
+    await safeEnsurePurchaseTransactionsTable()
+    let spentAgg: any[] = []
+    try {
+        spentAgg = await withRetry(
+            () => db.purchaseTransaction.groupBy({
+                by: ['user_id'],
+                where: { user_id: { in: userIds }, created_at: dateFilter },
+                _sum: { sweet_coins_spent: true },
+            }),
+            3,
+            'buildDateFilteredRowsV2: spentAgg groupBy'
+        ) as any
+    } catch {
+        spentAgg = []
+    }
+    const spentByUserId = new Map<bigint, number>()
+    for (const r of spentAgg) spentByUserId.set(r.user_id as bigint, r._sum?.sweet_coins_spent || 0)
 
     // Derive kick_user_ids to scope queries (keep as BigInt for Prisma compatibility)
     const kickUserIds = users.map(u => {
@@ -576,6 +681,9 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
             return {
                 user,
                 total_points: agg._sum.sweet_coins_earned || 0,
+                coins_balance: balanceByUserId.get(user.id) || 0,
+                coins_earned: agg._sum.sweet_coins_earned || 0,
+                coins_spent: spentByUserId.get(user.id) || 0,
                 total_emotes: emotesMap.get(kickId) || 0,
                 total_messages: messagesMap.get(kickId) || 0,
                 streams_watched: streamsMap.get(kickId) || 0,

@@ -95,7 +95,7 @@ export async function GET(request: Request) {
                     const sessionDuration = session.ended_at && session.started_at
                         ? session.ended_at.getTime() - session.started_at.getTime()
                         : 0
-                    
+
                     // If new session is longer, replace; otherwise keep existing
                     if (sessionDuration > existingDuration) {
                         acc[existingIndex] = session
