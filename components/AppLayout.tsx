@@ -196,7 +196,7 @@ export default function AppLayout({ children }: LayoutProps) {
         fetchUserData()
         checkAdminStatus()
         
-        // Proactively refresh token every 30 minutes to prevent expiration
+        // Proactively refresh token every 15 minutes to prevent expiration
         const refreshInterval = setInterval(async () => {
             const refreshToken = getRefreshToken()
             const token = getAccessToken()
@@ -219,7 +219,7 @@ export default function AppLayout({ children }: LayoutProps) {
                     console.debug('Background token refresh failed:', error)
                 }
             }
-        }, 30 * 60 * 1000) // Every 30 minutes
+        }, 15 * 60 * 1000) // Every 15 minutes
         
         return () => clearInterval(refreshInterval)
     }, [isAuthenticated, userData?.id])
