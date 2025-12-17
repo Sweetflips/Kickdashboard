@@ -1,6 +1,6 @@
 'use client'
 
-import { getAccessToken, getRefreshToken, setAuthTokens } from '@/lib/cookies'
+import { getAccessToken, getRefreshToken, setAuthTokens, getCookie, setCookie } from '@/lib/cookies'
 import { getClientAccessToken } from '@/lib/auth-client'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -32,6 +32,11 @@ export default function AppLayout({ children }: LayoutProps) {
     const [userData, setUserData] = useState<UserData | null>(null)
     const [isAdmin, setIsAdmin] = useState<boolean>(() => {
         if (typeof window !== 'undefined') {
+            // Check cookies first (more reliable), then localStorage as fallback
+            const cookieValue = getCookie('is_admin')
+            if (cookieValue !== null) {
+                return cookieValue === 'true'
+            }
             return localStorage.getItem('is_admin') === 'true'
         }
         return false
@@ -166,16 +171,22 @@ export default function AppLayout({ children }: LayoutProps) {
                 const payoutsAccess = data.can_view_payouts === true
                 setIsAdmin(adminStatus)
                 setCanViewPayouts(payoutsAccess)
+                // Store in both cookies and localStorage for reliability
+                setCookie('is_admin', String(adminStatus))
                 localStorage.setItem('is_admin', String(adminStatus))
             } else {
                 setIsAdmin(false)
                 setCanViewPayouts(false)
+                // Clear both cookies and localStorage
+                setCookie('is_admin', 'false')
                 localStorage.setItem('is_admin', 'false')
             }
         } catch (error) {
             console.error('Error checking admin status:', error)
             setIsAdmin(false)
             setCanViewPayouts(false)
+            // Clear both cookies and localStorage on error
+            setCookie('is_admin', 'false')
             localStorage.setItem('is_admin', 'false')
         }
     }
