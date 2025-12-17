@@ -102,7 +102,14 @@ export default function ShopPage() {
   const fetchAdventItems = async () => {
     try {
       setItemsLoading(true)
-      const response = await fetch('/api/advent')
+      const token = getClientAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const response = await fetch('/api/advent', {
+        credentials: 'include',
+        headers,
+      })
       if (response.ok) {
         const data = await response.json()
         setAdventItems(data.items || [])

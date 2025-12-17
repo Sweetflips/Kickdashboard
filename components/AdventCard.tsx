@@ -1,6 +1,7 @@
 'use client'
 
 import { getUnlockCountdown } from '@/lib/advent-calendar'
+import { getClientAccessToken } from '@/lib/auth-client'
 import Image from 'next/image'
 import { useState, useMemo } from 'react'
 import AdventBuyModal from './AdventBuyModal'
@@ -38,9 +39,14 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
   const purchaseDeadlineLabel = useMemo(() => formatPurchaseDeadlineLabel(item.day), [item.day])
 
   const handleBuy = async (quantity: number) => {
+    const token = getClientAccessToken()
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
     const response = await fetch(`/api/advent/${item.id}/buy`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers,
       body: JSON.stringify({ quantity }),
     })
 

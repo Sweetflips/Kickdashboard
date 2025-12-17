@@ -66,8 +66,8 @@ export default function AdminStreamsPage() {
     const fetchStreams = async () => {
         try {
             setLoading(true)
-            // Skip deduplication for admin view so all sessions are visible
-            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}&skip_deduplication=true`, {
+            // Default to deduplicated view (a single real stream can sometimes create a short "phantom" session on flaps/reconnects)
+            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}`, {
                 credentials: 'include', // Include cookies for authentication
             })
             if (response.ok) {
