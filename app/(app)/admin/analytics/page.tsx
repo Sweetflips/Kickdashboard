@@ -153,15 +153,15 @@ interface UserActivity {
     rank: number
     username: string
     profile_picture_url: string | null
-    total_points: number
+    total_sweet_coins: number
     total_emotes: number
     activity_breakdown: {
         messages: number
         emotes: number
         messages_with_emotes: number
-        points: number
+        sweet_coins: number
         streams_watched: number
-        avg_points_per_stream: number
+        avg_sweet_coins_per_stream: number
         avg_messages_per_stream: number
     }
     engagement_breakdown: {
@@ -171,7 +171,7 @@ interface UserActivity {
         total_messages_analyzed: number
     }
     activity_score: number
-    last_point_earned_at: string | null
+    last_sweet_coin_earned_at: string | null
 }
 
 interface ActivityTypes {
@@ -205,7 +205,7 @@ interface TopStream {
 
 interface OverallStats {
     total_messages: number
-    total_points: number
+    total_sweet_coins: number
     activity_types: ActivityTypes
     engagement_types?: Record<string, number>
     avg_message_length?: number
@@ -222,7 +222,7 @@ export default function AnalyticsPage() {
         totalMessages: 0,
         activeUsers: 0,
         totalStreams: 0,
-        totalPoints: 0,
+        totalSweetCoins: 0,
     })
     const [activityTypes, setActivityTypes] = useState<ActivityTypes>({
         messages: 0,
@@ -288,7 +288,7 @@ export default function AnalyticsPage() {
             totalMessages: overall?.total_messages || 0,
             activeUsers: totals.total_users || 0,
             totalStreams: totals.total_streams || 0,
-            totalPoints: overall?.total_points || 0,
+            totalSweetCoins: overall?.total_sweet_coins || 0,
         })
 
         if (overall?.activity_types) {
@@ -387,8 +387,8 @@ export default function AnalyticsPage() {
                                     <p className="text-3xl font-bold">{(stats.totalStreams ?? 0).toLocaleString()}</p>
                                 </div>
                                 <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
-                                    <p className="text-sm opacity-90 mb-2">Total Points Awarded</p>
-                                    <p className="text-3xl font-bold">{(stats.totalPoints ?? 0).toLocaleString()}</p>
+                                    <p className="text-sm opacity-90 mb-2">Total Sweetflips Coins Awarded</p>
+                                    <p className="text-3xl font-bold">{(stats.totalSweetCoins ?? 0).toLocaleString()}</p>
                                 </div>
                             </div>
 
@@ -567,7 +567,7 @@ export default function AnalyticsPage() {
                                             <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Rank</th>
                                             <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">User</th>
                                             <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Activity Score</th>
-                                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Points</th>
+                                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Sweetflips Coins</th>
                                             <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Messages</th>
                                             <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Emotes</th>
                                             <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Streams</th>
@@ -671,7 +671,7 @@ export default function AnalyticsPage() {
                                                             <span className="font-bold text-kick-purple">{(user.activity_score ?? 0).toLocaleString()}</span>
                                                         </td>
                                                         <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
-                                                            {(user.activity_breakdown?.points ?? 0).toLocaleString()}
+                                                            {(user.activity_breakdown?.sweet_coins ?? 0).toLocaleString()}
                                                         </td>
                                                         <td className="py-3 px-4 text-right text-gray-900 dark:text-kick-text">
                                                             {(user.activity_breakdown?.messages ?? 0).toLocaleString()}
@@ -683,7 +683,7 @@ export default function AnalyticsPage() {
                                                             {user.activity_breakdown.streams_watched}
                                                         </td>
                                                         <td className="py-3 px-4 text-right text-sm text-gray-600 dark:text-kick-text-secondary">
-                                                            {(user.activity_breakdown?.avg_points_per_stream ?? 0).toFixed(1)} pts
+                                                            {(user.activity_breakdown?.avg_sweet_coins_per_stream ?? 0).toFixed(1)} coins
                                                             <br />
                                                             {(user.activity_breakdown?.avg_messages_per_stream ?? 0).toFixed(1)} msgs
                                                         </td>
