@@ -666,7 +666,7 @@ export default function Dashboard() {
                         type: 'success'
                     })
                     // Refresh channel data to update Sweet Coins display
-                    fetchChannelData()
+                    fetchChannelData(dashboardSettings.channel_slug || 'sweetflips')
                 }}
             />
 
