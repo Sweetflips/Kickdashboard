@@ -63,13 +63,21 @@ export async function GET(request: Request) {
         const avg_message_length = engagementLenAgg._avg.message_length ? Number(engagementLenAgg._avg.message_length.toFixed(1)) : 0
 
         // Daily activity (last 30 days) via SQL aggregation (avoid fetching rows)
+        // Check both has_emotes field AND emotes JSON field to catch cases where has_emotes wasn't set
         const daily_activity: DailyActivity[] = await db.$queryRaw<
             Array<{ day: Date; messages: bigint; emotes: bigint }>
         >`
             SELECT
                 date_trunc('day', created_at) AS day,
                 COUNT(*)::bigint AS messages,
-                SUM(CASE WHEN has_emotes THEN 1 ELSE 0 END)::bigint AS emotes
+                SUM(
+                    CASE 
+                        WHEN has_emotes = true THEN 1
+                        WHEN emotes IS NOT NULL AND emotes::text != 'null' AND emotes::text != '[]' THEN 1
+                        WHEN content ~ '\\[emote:\\d+:[^\\]]+\\]' THEN 1
+                        ELSE 0
+                    END
+                )::bigint AS emotes
             FROM chat_messages
             WHERE created_at >= NOW() - INTERVAL '30 days'
             GROUP BY 1
