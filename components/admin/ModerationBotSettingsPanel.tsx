@@ -42,6 +42,7 @@ function clamp01(n: number) {
 export function ModerationBotSettingsPanel(props: {
   title?: string
   description?: string
+  onSaved?: () => void
 }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -97,6 +98,7 @@ export function ModerationBotSettingsPanel(props: {
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error || data?.details || 'Save failed')
       setSettings({ ...DEFAULTS, ...(data?.settings || DEFAULTS) })
+      props.onSaved?.()
     } catch (e: any) {
       setError(e?.message || 'Save failed')
     } finally {
@@ -139,8 +141,8 @@ export function ModerationBotSettingsPanel(props: {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg-secondary space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-kick-text">AI moderation</h2>
 
           <label className="flex items-center justify-between">
@@ -149,6 +151,7 @@ export function ModerationBotSettingsPanel(props: {
               type="checkbox"
               checked={settings.ai_moderation_enabled}
               onChange={(e) => setSettings((s) => ({ ...s, ai_moderation_enabled: e.target.checked }))}
+              className="h-4 w-4 accent-kick-purple"
             />
           </label>
 
@@ -170,6 +173,7 @@ export function ModerationBotSettingsPanel(props: {
               type="checkbox"
               checked={settings.moderation_announce_actions}
               onChange={(e) => setSettings((s) => ({ ...s, moderation_announce_actions: e.target.checked }))}
+              className="h-4 w-4 accent-kick-purple"
             />
           </label>
 
@@ -178,7 +182,7 @@ export function ModerationBotSettingsPanel(props: {
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg-secondary space-y-4">
+        <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-kick-text">Replies (when mentioned)</h2>
 
           <label className="flex items-center justify-between">
@@ -187,6 +191,7 @@ export function ModerationBotSettingsPanel(props: {
               type="checkbox"
               checked={settings.bot_reply_enabled}
               onChange={(e) => setSettings((s) => ({ ...s, bot_reply_enabled: e.target.checked }))}
+              className="h-4 w-4 accent-kick-purple"
             />
           </label>
 
@@ -221,11 +226,12 @@ export function ModerationBotSettingsPanel(props: {
               type="checkbox"
               checked={settings.ai_reply_enabled}
               onChange={(e) => setSettings((s) => ({ ...s, ai_reply_enabled: e.target.checked }))}
+              className="h-4 w-4 accent-kick-purple"
             />
           </label>
         </div>
 
-        <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg-secondary space-y-4">
+        <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-kick-text">Random slot calls</h2>
 
           <label className="flex items-center justify-between">
@@ -234,6 +240,7 @@ export function ModerationBotSettingsPanel(props: {
               type="checkbox"
               checked={settings.bot_slot_call_enabled}
               onChange={(e) => setSettings((s) => ({ ...s, bot_slot_call_enabled: e.target.checked }))}
+              className="h-4 w-4 accent-kick-purple"
             />
           </label>
 

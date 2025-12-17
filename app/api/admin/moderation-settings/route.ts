@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
-import { isAdmin } from '@/lib/auth'
+import { getAuthenticatedUser, isAdmin } from '@/lib/auth'
 import { getModeratorBotSettingsFromDb, normalizeModeratorBotSettings, setModeratorBotSettingsInDb } from '@/lib/moderation-settings'
+import { appendAdminAuditLog } from '@/lib/admin-audit-log'
+import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,9 +23,29 @@ export async function POST(request: Request) {
   }
 
   try {
+    const before = await getModeratorBotSettingsFromDb()
     const body = await request.json()
     const settings = normalizeModeratorBotSettings(body?.settings || {})
     await setModeratorBotSettingsInDb(settings)
+
+    const auth = await getAuthenticatedUser(request)
+    const actor = auth
+      ? await db.user.findUnique({ where: { kick_user_id: auth.kickUserId }, select: { username: true, kick_user_id: true } })
+      : null
+
+    const changed: string[] = []
+    for (const k of Object.keys(settings) as Array<keyof typeof settings>) {
+      if (JSON.stringify((before as any)[k]) !== JSON.stringify((settings as any)[k])) changed.push(String(k))
+    }
+    await appendAdminAuditLog({
+      ts: Date.now(),
+      actor_username: actor?.username || undefined,
+      actor_kick_user_id: actor?.kick_user_id ? String(actor.kick_user_id) : undefined,
+      action: 'update',
+      target: 'moderation_bot_settings',
+      summary: changed.length ? `Changed: ${changed.slice(0, 12).join(', ')}` : 'Saved (no diff detected)',
+    })
+
     return NextResponse.json({ ok: true, settings })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'

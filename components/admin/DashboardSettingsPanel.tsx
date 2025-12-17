@@ -96,7 +96,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
   }
 
   return (
-    <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg-secondary space-y-4">
+    <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-lg font-semibold text-gray-900 dark:text-kick-text">Dashboard settings</div>
@@ -125,7 +125,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
           <input
             value={settings.channel_slug}
             onChange={(e) => setSettings((s) => ({ ...s, channel_slug: e.target.value }))}
-            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text placeholder:text-gray-400 dark:placeholder:text-kick-text-muted"
             placeholder="sweetflips"
           />
         </label>
@@ -189,6 +189,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
               type="checkbox"
               checked={settings.show_chat}
               onChange={(e) => setSettings((s) => ({ ...s, show_chat: e.target.checked }))}
+              className="h-4 w-4 accent-kick-purple"
             />
           </label>
           <label className="flex items-center justify-between">
@@ -197,6 +198,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
               type="checkbox"
               checked={settings.show_leaderboard}
               onChange={(e) => setSettings((s) => ({ ...s, show_leaderboard: e.target.checked }))}
+              className="h-4 w-4 accent-kick-purple"
             />
           </label>
           <label className="flex items-center justify-between">
@@ -205,6 +207,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
               type="checkbox"
               checked={settings.show_redeem_code_button}
               onChange={(e) => setSettings((s) => ({ ...s, show_redeem_code_button: e.target.checked }))}
+              className="h-4 w-4 accent-kick-purple"
             />
           </label>
         </div>

@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardSettingsPanel } from '@/components/admin/DashboardSettingsPanel'
 import { ModerationBotSettingsPanel } from '@/components/admin/ModerationBotSettingsPanel'
+import { AdminAuditLogPanel } from '@/components/admin/AdminAuditLogPanel'
 
 export default function AdminDashboardSettingsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [logRefreshKey, setLogRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -55,16 +57,17 @@ export default function AdminDashboardSettingsPage() {
         </div>
       )}
 
-      <DashboardSettingsPanel />
+      <DashboardSettingsPanel onSaved={() => setLogRefreshKey((v) => v + 1)} />
 
       <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg-secondary">
         <ModerationBotSettingsPanel
           title="AI moderator settings"
           description="Controls Sweetflipsbot behavior (AI moderation, replies, and slot calls)."
+          onSaved={() => setLogRefreshKey((v) => v + 1)}
         />
       </div>
+
+      <AdminAuditLogPanel refreshKey={logRefreshKey} />
     </div>
   )
 }
-
-
