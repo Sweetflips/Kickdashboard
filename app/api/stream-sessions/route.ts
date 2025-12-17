@@ -59,7 +59,7 @@ export async function GET(request: Request) {
         // Deduplicate sessions with improved logic:
         // 1. If kick_stream_id exists: group by (broadcaster_user_id, kick_stream_id) - most reliable
         // 2. Else: group by (broadcaster_user_id, started_at within 60s) - fallback
-        // Always keep the session with LOWEST ID (most stable) within each group
+        // Always keep the session with LONGEST duration (the real stream, not a phantom short session)
         // Admin can skip deduplication to see all sessions
         let deduplicatedSessions = allSessions
 
@@ -87,11 +87,26 @@ export async function GET(request: Request) {
                 if (existingIndex === -1) {
                     acc.push(session)
                 } else {
-                    // Always keep the session with the LOWEST ID (oldest/created first) for stability
-                    // This ensures that deleting one session doesn't reveal another "duplicate"
+                    // Keep the session with the LONGEST duration (the real stream, not a phantom)
                     const existing = acc[existingIndex]
-                    if (session.id < existing.id) {
+                    const existingDuration = existing.ended_at && existing.started_at
+                        ? existing.ended_at.getTime() - existing.started_at.getTime()
+                        : 0
+                    const sessionDuration = session.ended_at && session.started_at
+                        ? session.ended_at.getTime() - session.started_at.getTime()
+                        : 0
+                    
+                    // If new session is longer, replace; otherwise keep existing
+                    if (sessionDuration > existingDuration) {
                         acc[existingIndex] = session
+                    }
+                    // If durations are equal, prefer the one with more messages or kick_stream_id
+                    else if (sessionDuration === existingDuration) {
+                        const sessionScore = (session.total_messages || 0) + (session.kick_stream_id ? 1000 : 0)
+                        const existingScore = (existing.total_messages || 0) + (existing.kick_stream_id ? 1000 : 0)
+                        if (sessionScore > existingScore) {
+                            acc[existingIndex] = session
+                        }
                     }
                     // Otherwise, keep the existing one (don't replace)
                 }
