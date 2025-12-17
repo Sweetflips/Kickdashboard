@@ -59,7 +59,7 @@ export default function AdminDashboardSettingsPage() {
 
       <DashboardSettingsPanel onSaved={() => setLogRefreshKey((v) => v + 1)} />
 
-      <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg-secondary">
+      <div className="p-4 rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface">
         <ModerationBotSettingsPanel
           title="AI moderator settings"
           description="Controls Sweetflipsbot behavior (AI moderation, replies, and slot calls)."

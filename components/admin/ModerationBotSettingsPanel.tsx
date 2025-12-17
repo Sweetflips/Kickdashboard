@@ -160,7 +160,7 @@ export function ModerationBotSettingsPanel(props: {
             <select
               value={settings.ai_action}
               onChange={(e) => setSettings((s) => ({ ...s, ai_action: e.target.value as any }))}
-              className="px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+              className="px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
             >
               <option value="timeout">timeout</option>
               <option value="ban">ban</option>
@@ -204,7 +204,7 @@ export function ModerationBotSettingsPanel(props: {
               step={0.05}
               value={settings.bot_reply_probability}
               onChange={(e) => setSettings((s) => ({ ...s, bot_reply_probability: Number(e.target.value) }))}
-              className="w-28 px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+              className="w-28 px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
             />
           </label>
 
@@ -216,7 +216,7 @@ export function ModerationBotSettingsPanel(props: {
               step={1000}
               value={settings.bot_reply_cooldown_ms}
               onChange={(e) => setSettings((s) => ({ ...s, bot_reply_cooldown_ms: Number(e.target.value) }))}
-              className="w-36 px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+              className="w-36 px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
             />
           </label>
 
@@ -253,7 +253,7 @@ export function ModerationBotSettingsPanel(props: {
               step={0.01}
               value={settings.bot_slot_call_probability}
               onChange={(e) => setSettings((s) => ({ ...s, bot_slot_call_probability: Number(e.target.value) }))}
-              className="w-28 px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+              className="w-28 px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
             />
           </label>
 
@@ -265,7 +265,7 @@ export function ModerationBotSettingsPanel(props: {
               step={60000}
               value={settings.bot_slot_call_min_interval_ms}
               onChange={(e) => setSettings((s) => ({ ...s, bot_slot_call_min_interval_ms: Number(e.target.value) }))}
-              className="w-40 px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+              className="w-40 px-2 py-1 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
             />
           </label>
 
@@ -278,7 +278,7 @@ export function ModerationBotSettingsPanel(props: {
             <input
               value={settings.bot_slot_call_message}
               onChange={(e) => setSettings((s) => ({ ...s, bot_slot_call_message: e.target.value }))}
-              className="px-2 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+              className="px-2 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
             />
           </label>
         </div>

@@ -69,7 +69,7 @@ export function AdminAuditLogPanel(props: { refreshKey?: number }) {
         <div className="flex items-center gap-2">
           <button
             onClick={load}
-            className="px-3 py-2 rounded-lg bg-gray-200 dark:bg-kick-bg-secondary text-gray-900 dark:text-kick-text"
+            className="px-3 py-2 rounded-lg bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text"
           >
             Refresh
           </button>
@@ -130,5 +130,3 @@ export function AdminAuditLogPanel(props: { refreshKey?: number }) {
     </div>
   )
 }
-
-

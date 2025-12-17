@@ -125,7 +125,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
           <input
             value={settings.channel_slug}
             onChange={(e) => setSettings((s) => ({ ...s, channel_slug: e.target.value }))}
-            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text placeholder:text-gray-400 dark:placeholder:text-kick-text-muted"
+            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text placeholder:text-gray-400 dark:placeholder:text-kick-text-muted outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
             placeholder="sweetflips"
           />
         </label>
@@ -139,7 +139,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
             step={10}
             value={settings.chat_height_px}
             onChange={(e) => setSettings((s) => ({ ...s, chat_height_px: Number(e.target.value) }))}
-            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
           />
         </label>
 
@@ -152,7 +152,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
             step={1000}
             value={settings.channel_refresh_ms}
             onChange={(e) => setSettings((s) => ({ ...s, channel_refresh_ms: Number(e.target.value) }))}
-            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
           />
         </label>
 
@@ -165,7 +165,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
             step={500}
             value={settings.leaderboard_refresh_ms}
             onChange={(e) => setSettings((s) => ({ ...s, leaderboard_refresh_ms: Number(e.target.value) }))}
-            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
           />
         </label>
 
@@ -178,7 +178,7 @@ export function DashboardSettingsPanel(props: { onSaved?: (settings: DashboardSe
             step={1}
             value={settings.leaderboard_max_rows}
             onChange={(e) => setSettings((s) => ({ ...s, leaderboard_max_rows: Number(e.target.value) }))}
-            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-bg text-gray-900 dark:text-kick-text"
+            className="px-3 py-2 rounded border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text outline-none focus:border-kick-purple focus:ring-2 focus:ring-kick-purple/30"
           />
         </label>
 
