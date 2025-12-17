@@ -1,6 +1,85 @@
 import { db } from '@/lib/db';
+import crypto from 'crypto'
+import { getKickUserCredentials } from './kick-oauth-creds'
 
 const KICK_API_BASE = 'https://api.kick.com/public/v1'
+const KICK_OAUTH_BASE = 'https://id.kick.com'
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+async function refreshTokenForUser(kickUserId: bigint): Promise<string | null> {
+  try {
+    const user = await db.user.findUnique({
+      where: { kick_user_id: kickUserId },
+      select: {
+        refresh_token_encrypted: true,
+      },
+    })
+
+    if (!user?.refresh_token_encrypted) {
+      return null
+    }
+
+    const { decryptToken, encryptToken } = await import('./encryption')
+    const refreshToken = decryptToken(user.refresh_token_encrypted)
+
+    const { clientId, clientSecret } = getKickUserCredentials()
+    const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://www.kickdashboard.com').replace(/\/$/, '')
+    const redirectUri = process.env.KICK_REDIRECT_URI || `${APP_URL}/api/auth/callback`
+
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      redirect_uri: redirectUri,
+    })
+
+    const response = await fetch(`${KICK_OAUTH_BASE}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const tokenData = await response.json()
+
+    if (!tokenData.access_token) {
+      return null
+    }
+
+    // Update tokens in database
+    try {
+      const encryptedAccessToken = encryptToken(tokenData.access_token)
+      const encryptedRefreshToken = tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null
+
+      await db.user.update({
+        where: { kick_user_id: kickUserId },
+        data: {
+          access_token_hash: hashToken(tokenData.access_token),
+          refresh_token_hash: tokenData.refresh_token ? hashToken(tokenData.refresh_token) : undefined,
+          access_token_encrypted: encryptedAccessToken,
+          refresh_token_encrypted: encryptedRefreshToken || undefined,
+          updated_at: new Date(),
+        },
+      })
+    } catch (dbError) {
+      console.error('Failed to update tokens in database:', dbError)
+    }
+
+    return tokenData.access_token
+  } catch (error) {
+    console.error('Error refreshing token:', error)
+    return null
+  }
+}
 
 export async function getAuthenticatedUser(request: Request): Promise<{ kickUserId: bigint; userId: bigint } | null> {
   try {
@@ -41,6 +120,54 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
         'Accept': 'application/json',
       },
     })
+
+    // If token expired (401), try to refresh it
+    if (response.status === 401) {
+      // Find user by token hash to get kickUserId for refresh
+      const tokenHash = hashToken(accessToken)
+      const user = await db.user.findFirst({
+        where: { access_token_hash: tokenHash },
+        select: { kick_user_id: true },
+      })
+
+      if (user) {
+        const newToken = await refreshTokenForUser(user.kick_user_id)
+        if (newToken) {
+          // Retry with new token
+          const retryResponse = await fetch(`${KICK_API_BASE}/users`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${newToken}`,
+              'Accept': 'application/json',
+            },
+          })
+
+          if (retryResponse.ok) {
+            const apiResponse = await retryResponse.json()
+            const userDataArray = apiResponse.data || []
+
+            if (Array.isArray(userDataArray) && userDataArray.length > 0) {
+              const userData = userDataArray[0]
+              const kickUserId = BigInt(userData.user_id)
+
+              const dbUser = await db.user.findUnique({
+                where: { kick_user_id: kickUserId },
+                select: { id: true },
+              })
+
+              if (dbUser) {
+                return {
+                  kickUserId,
+                  userId: dbUser.id,
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return null
+    }
 
     if (!response.ok) {
       return null

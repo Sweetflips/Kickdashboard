@@ -195,7 +195,34 @@ export default function AppLayout({ children }: LayoutProps) {
         if (!isAuthenticated) return
         fetchUserData()
         checkAdminStatus()
-    }, [isAuthenticated])
+        
+        // Proactively refresh token every 30 minutes to prevent expiration
+        const refreshInterval = setInterval(async () => {
+            const refreshToken = getRefreshToken()
+            const token = getAccessToken()
+            if (refreshToken && token && userData?.id) {
+                try {
+                    const refreshResponse = await fetch('/api/auth/refresh', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            refresh_token: refreshToken,
+                            kick_user_id: userData.id,
+                        }),
+                    })
+                    if (refreshResponse.ok) {
+                        const refreshData = await refreshResponse.json()
+                        setAuthTokens(refreshData.access_token, refreshData.refresh_token)
+                    }
+                } catch (error) {
+                    // Silent fail - don't interrupt user experience
+                    console.debug('Background token refresh failed:', error)
+                }
+            }
+        }, 30 * 60 * 1000) // Every 30 minutes
+        
+        return () => clearInterval(refreshInterval)
+    }, [isAuthenticated, userData?.id])
 
     // Keep points fresh in header
     useEffect(() => {
