@@ -68,6 +68,9 @@ const botReplyCooldowns = new Map<string, number>()
 // Reply policy
 // We ONLY reply when the bot is mentioned + the message looks like a request/question.
 const BOT_REPLY_REQUIRE_MENTION = String(process.env.BOT_REPLY_REQUIRE_MENTION || 'true').toLowerCase() !== 'false'
+// Optional stricter mode: require an ask/question (or greeting) in addition to mention.
+// Default false = any mention triggers a reply.
+const BOT_REPLY_REQUIRE_ASK = String(process.env.BOT_REPLY_REQUIRE_ASK || 'false').toLowerCase() === 'true'
 
 // Safety override for testing (will still respect mention requirement unless BOT_REPLY_REQUIRE_MENTION=false)
 const FORCE_BOT_REPLIES = String(process.env.BOT_REPLY_ALWAYS || '').toLowerCase() === 'true'
@@ -192,6 +195,20 @@ function looksLikeGreeting(content: string): boolean {
     return /\b(hi|hello|hey|yo|sup|what's up|whats up)\b/.test(text)
 }
 
+function isOnlyBotMention(content: string, botUsernameLower: string): boolean {
+    const text = normalizeText(content)
+    if (!text) return false
+
+    // Remove common mention patterns then see if anything meaningful remains
+    const withoutAt = text.replaceAll(`@${botUsernameLower}`, '').trim()
+    const withoutPlain = withoutAt.replace(
+        new RegExp(`\\b${botUsernameLower.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'gi'),
+        ''
+    ).trim()
+    const leftover = withoutPlain.replace(/[^\w]+/g, '').trim()
+    return leftover.length === 0
+}
+
 /**
  * Generate a bot reply using OpenAI API
  */
@@ -221,13 +238,13 @@ async function generateAIReply(messageContent: string, senderUsername: string): 
                     role: 'system',
                     content:
                         'You are Sweetflipsbot, a real-sounding human chat assistant in a Kick gambling streamer chat.\n' +
-                        'ONLY reply when the user explicitly mentions you and is asking something.\n' +
+                        'ONLY reply when the user explicitly mentions you.\n' +
                         'Tone: natural, chill, witty, a little streamer-chat energy, not corporate.\n' +
                         'Write 1 short message. Max ~220 characters.\n' +
                         'No roleplay, no disclaimers, no "as an AI".\n' +
                         'No spam. Don\'t start conversations.\n' +
                         'If asked about gambling: be hype but responsible; don\'t promise wins.\n' +
-                        'If the ask is unclear: ask one short clarifying question.\n' +
+                        'If the user just pings you / unclear: reply with a short friendly prompt like "yo?" or ask one clarifying question.\n' +
                         'If toxic/bait: de-escalate or ignore with a neutral short reply.\n' +
                         'Do not mention policies/moderation actions.',
                 },
@@ -827,14 +844,14 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                     const mentioned = isBotMentioned(payload.content, MODERATOR_USERNAME)
                     const asked = looksLikeRequestOrQuestion(payload.content)
                     const greeted = looksLikeGreeting(payload.content)
-                    return !mentioned || (!asked && !greeted)
+                    return !mentioned || (BOT_REPLY_REQUIRE_ASK && !asked && !greeted)
                 })()
             ) {
                 if (VERBOSE_LOGS) {
                     const mentioned = isBotMentioned(payload.content, MODERATOR_USERNAME)
                     const asked = looksLikeRequestOrQuestion(payload.content)
                     const greeted = looksLikeGreeting(payload.content)
-                    console.log(`[moderation-worker] 💬 Skipping reply - require mention+(ask|greeting) (mentioned=${mentioned}, asked=${asked}, greeted=${greeted})`)
+                    console.log(`[moderation-worker] 💬 Skipping reply - require mention${BOT_REPLY_REQUIRE_ASK ? '+(ask|greeting)' : ''} (mentioned=${mentioned}, asked=${asked}, greeted=${greeted})`)
                 }
             } else {
                 const broadcasterKey = broadcasterUserId.toString()
@@ -851,11 +868,18 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                 } else {
                     // No randomness: if we reached here, we reply.
                     // Generate reply using AI if enabled, otherwise simple fallback
-                    const replyText = await generateBotReply(
-                        payload.content,
-                        payload.sender.username,
-                        aiReplyEnabled
-                    )
+                    let replyText: string | null = null
+
+                    // Mention-only pings should always get a quick response.
+                    if (isBotMentioned(payload.content, MODERATOR_USERNAME) && isOnlyBotMention(payload.content, MODERATOR_USERNAME)) {
+                        replyText = pickOne(['yo?', 'sup?', 'yeah?', 'what you need?', 'what’s good?'])
+                    } else {
+                        replyText = await generateBotReply(
+                            payload.content,
+                            payload.sender.username,
+                            aiReplyEnabled
+                        )
+                    }
 
                     if (!replyText) {
                         if (VERBOSE_LOGS) {
