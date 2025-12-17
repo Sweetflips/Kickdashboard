@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react'
 import ChatFrame from '@/components/ChatFrame'
 import PromoCodeModal from '@/components/PromoCodeModal'
 import { Toast } from '@/components/Toast'
-import { DashboardAdminPanel } from '@/components/admin/DashboardAdminPanel'
 
 interface Stream {
     is_live: boolean
@@ -346,12 +345,6 @@ export default function Dashboard() {
                             </div>
                         </div>
                     </div>
-
-                    <DashboardAdminPanel
-                        onDashboardSettingsSaved={(s) => {
-                            if (s) setDashboardSettings((prev) => ({ ...prev, ...s }))
-                        }}
-                    />
 
                     {/* Status Cards */}
                     <div className={`grid grid-cols-1 md:grid-cols-3 ${isLive ? 'lg:grid-cols-4' : ''} gap-6`}>
