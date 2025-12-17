@@ -151,6 +151,15 @@ export async function GET(request: Request) {
         const isEmote = finalImageUrl.includes('files.kick.com/emotes')
         const isStreamThumbnail = finalImageUrl.includes('stream.kick.com')
 
+        // Emotes frequently 403 from server-side fetches in hosted environments.
+        // For emotes, redirect the client directly to Kick's CDN instead of proxy-fetching.
+        // This avoids 403 spam and lets the browser load the image normally.
+        if (isEmote) {
+            const res = NextResponse.redirect(finalImageUrl, 302)
+            res.headers.set('Cache-Control', 'public, max-age=3600')
+            return res
+        }
+
         // For stream thumbnails, use minimal headers initially to avoid 403s
         const getInitialHeaders = (): Record<string, string> => {
             if (isStreamThumbnail) {
