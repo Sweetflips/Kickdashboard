@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import ChatFrame from '@/components/ChatFrame'
 import PromoCodeModal from '@/components/PromoCodeModal'
 import { Toast } from '@/components/Toast'
+import { DashboardAdminPanel } from '@/components/admin/DashboardAdminPanel'
 
 interface Stream {
     is_live: boolean
@@ -78,19 +79,39 @@ export default function Dashboard() {
     const [streamDuration, setStreamDuration] = useState<string>('0:00:00')
     const [showPromoCodeModal, setShowPromoCodeModal] = useState(false)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+    const [dashboardSettings, setDashboardSettings] = useState({
+        channel_slug: 'sweetflips',
+        channel_refresh_ms: 60000,
+        leaderboard_refresh_ms: 10000,
+        chat_height_px: 600,
+        show_chat: true,
+        show_leaderboard: true,
+        show_redeem_code_button: true,
+        leaderboard_max_rows: 50,
+    })
 
     useEffect(() => {
-        fetchChannelData()
-        // Refresh every 60 seconds to reduce API calls
-        const interval = setInterval(() => {
-            fetchChannelData()
-        }, 60000) // Refresh every 60 seconds (1 minute)
-        return () => clearInterval(interval)
+        let cancelled = false
+        async function load() {
+            try {
+                const resp = await fetch('/api/dashboard-settings', { method: 'GET' })
+                const data = await resp.json()
+                if (!resp.ok) return
+                if (cancelled) return
+                if (data?.settings) {
+                    setDashboardSettings((prev) => ({ ...prev, ...data.settings }))
+                }
+            } catch {
+                // ignore
+            }
+        }
+        load()
+        return () => { cancelled = true }
     }, [])
 
-    const fetchChannelData = async () => {
+    const fetchChannelData = async (slug: string) => {
         try {
-            const response = await fetch('/api/channel?slug=sweetflips', {
+            const response = await fetch(`/api/channel?slug=${encodeURIComponent(slug || 'sweetflips')}`, {
                 // Always bypass any HTTP cache so we never show a stale LIVE state
                 cache: 'no-store',
             })
@@ -108,6 +129,15 @@ export default function Dashboard() {
     }
 
     const isLive = channelData?.is_live || false
+
+    useEffect(() => {
+        const slug = dashboardSettings.channel_slug || 'sweetflips'
+        fetchChannelData(slug)
+        const interval = setInterval(() => {
+            fetchChannelData(slug)
+        }, Math.max(5000, Number(dashboardSettings.channel_refresh_ms) || 60000))
+        return () => clearInterval(interval)
+    }, [dashboardSettings.channel_slug, dashboardSettings.channel_refresh_ms])
 
     useEffect(() => {
         if (!channelData?.broadcaster_user_id) return
@@ -201,9 +231,9 @@ export default function Dashboard() {
             if (isLive) {
                 fetchStreamLeaderboard()
             }
-        }, 10000)
+        }, Math.max(2500, Number(dashboardSettings.leaderboard_refresh_ms) || 10000))
         return () => clearInterval(interval)
-    }, [channelData?.broadcaster_user_id, isLive])
+    }, [channelData?.broadcaster_user_id, isLive, dashboardSettings.leaderboard_refresh_ms])
 
     // Update stream duration every second when live
     useEffect(() => {
@@ -316,6 +346,12 @@ export default function Dashboard() {
                             </div>
                         </div>
                     </div>
+
+                    <DashboardAdminPanel
+                        onDashboardSettingsSaved={(s) => {
+                            if (s) setDashboardSettings((prev) => ({ ...prev, ...s }))
+                        }}
+                    />
 
                     {/* Status Cards */}
                     <div className={`grid grid-cols-1 md:grid-cols-3 ${isLive ? 'lg:grid-cols-4' : ''} gap-6`}>
@@ -503,21 +539,23 @@ export default function Dashboard() {
                     {/* Chat Frame and Leaderboard Side by Side */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Chat Frame */}
-                        <div className="lg:col-span-2 bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 shadow-sm">
-                            <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-4">Live Chat</h3>
-                            <div className="h-[600px]">
-                                <ChatFrame
-                                    chatroomId={channelData?.chatroom_id}
-                                    broadcasterUserId={channelData?.broadcaster_user_id}
-                                    slug={channelData?.slug}
-                                    username={channelName}
-                                    isStreamLive={isLive}
-                                />
+                        {dashboardSettings.show_chat && (
+                            <div className="lg:col-span-2 bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 shadow-sm">
+                                <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-4">Live Chat</h3>
+                                <div style={{ height: Math.max(300, Number(dashboardSettings.chat_height_px) || 600) }}>
+                                    <ChatFrame
+                                        chatroomId={channelData?.chatroom_id}
+                                        broadcasterUserId={channelData?.broadcaster_user_id}
+                                        slug={channelData?.slug}
+                                        username={channelName}
+                                        isStreamLive={isLive}
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Stream Session Leaderboard - Only show when stream is live */}
-                        {isLive && hasActiveSession && (
+                        {dashboardSettings.show_leaderboard && isLive && hasActiveSession && (
                             <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 shadow-sm">
                                 <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-4">
                                     🏆 Top Chatters This Stream
@@ -529,7 +567,7 @@ export default function Dashboard() {
                                     </div>
                                 ) : (
                                     <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                                        {streamLeaderboard.map((entry) => (
+                                        {streamLeaderboard.slice(0, Math.max(5, Number(dashboardSettings.leaderboard_max_rows) || 50)).map((entry) => (
                                             <div
                                                 key={entry.user_id}
                                                 className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-all duration-300 ease-in-out"
@@ -584,7 +622,7 @@ export default function Dashboard() {
                                 )}
                             </div>
                         )}
-                        {!isLive && (
+                        {!isLive && dashboardSettings.show_leaderboard && (
                             <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6 shadow-sm">
                                 <div className="flex items-center gap-3 text-gray-600 dark:text-kick-text-secondary">
                                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -604,17 +642,19 @@ export default function Dashboard() {
             )}
 
             {/* Floating Redeem Code Button */}
-            <button
-                onClick={() => setShowPromoCodeModal(true)}
-                className="fixed bottom-6 right-6 bg-gradient-to-r from-kick-purple to-purple-600 text-white px-5 py-3 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center gap-2 font-medium z-40"
-                title="Redeem Promo Code"
-            >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
-                    <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
-                </svg>
-                <span>Redeem Code</span>
-            </button>
+            {dashboardSettings.show_redeem_code_button && (
+                <button
+                    onClick={() => setShowPromoCodeModal(true)}
+                    className="fixed bottom-6 right-6 bg-gradient-to-r from-kick-purple to-purple-600 text-white px-5 py-3 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center gap-2 font-medium z-40"
+                    title="Redeem Promo Code"
+                >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                        <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+                    </svg>
+                    <span>Redeem Code</span>
+                </button>
+            )}
 
             {/* Promo Code Modal */}
             <PromoCodeModal

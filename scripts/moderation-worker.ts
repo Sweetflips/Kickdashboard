@@ -15,6 +15,7 @@ console.log('')
 import { db } from '../lib/db'
 import { claimChatJobs, completeChatJob, failChatJob, getChatQueueStats, type ClaimedChatJob, type ChatJobPayload } from '../lib/chat-queue'
 import { moderationBan, sendModeratorChatMessage, getModeratorToken } from '../lib/kick-api'
+import { getModeratorBotSettingsFromDb, type ModeratorBotSettings } from '../lib/moderation-settings'
 
 const BATCH_SIZE = parseInt(process.env.MODERATION_WORKER_BATCH_SIZE || '50', 10)
 const POLL_INTERVAL_MS = parseInt(process.env.MODERATION_WORKER_POLL_INTERVAL_MS || '500', 10)
@@ -38,8 +39,17 @@ const BAN_ON_REPEAT_COUNT = parseInt(process.env.KICK_BAN_ON_REPEAT_COUNT || '3'
 const RAIDMODE_DURATION_MS = parseInt(process.env.KICK_RAIDMODE_DURATION_MS || '300000', 10)
 const MODERATION_COOLDOWN_MS = parseInt(process.env.KICK_MODERATION_COOLDOWN_MS || '60000', 10)
 
-// Advisory lock ID
-const ADVISORY_LOCK_ID = BigInt('9223372036854775806')
+// Advisory lock ID (must be unique per worker type; point-worker uses 9223372036854775806)
+const ADVISORY_LOCK_ID = BigInt('9223372036854775807')
+
+// OpenAI moderation settings (AI moderation decisions, not chat replies)
+const OPENAI_MODERATION_MODEL = process.env.OPENAI_MODERATION_MODEL || 'omni-moderation-latest'
+const OPENAI_MODERATION_SCORE_THRESHOLD = Number.isFinite(Number(process.env.OPENAI_MODERATION_SCORE_THRESHOLD))
+    ? Math.max(0, Math.min(1, Number(process.env.OPENAI_MODERATION_SCORE_THRESHOLD)))
+    : 0.85
+const OPENAI_MODERATION_TIMEOUT_SECONDS = Number.isFinite(Number(process.env.OPENAI_MODERATION_TIMEOUT_SECONDS))
+    ? Math.max(60, Math.trunc(Number(process.env.OPENAI_MODERATION_TIMEOUT_SECONDS)))
+    : TIMEOUT_SECONDS
 
 let isShuttingDown = false
 let activeWorkers = 0
@@ -50,6 +60,57 @@ let startupMessageSent = false
 let processedCount = 0
 let moderationActionsCount = 0
 let errorCount = 0
+let botRepliesCount = 0
+
+// Bot reply cooldown tracking (per broadcaster)
+const botReplyCooldowns = new Map<string, number>()
+
+// Reply policy
+// We ONLY reply when the bot is mentioned + the message looks like a request/question.
+const BOT_REPLY_REQUIRE_MENTION = String(process.env.BOT_REPLY_REQUIRE_MENTION || 'true').toLowerCase() !== 'false'
+
+// Safety override for testing (will still respect mention requirement unless BOT_REPLY_REQUIRE_MENTION=false)
+const FORCE_BOT_REPLIES = String(process.env.BOT_REPLY_ALWAYS || '').toLowerCase() === 'true'
+const FORCE_BOT_REPLIES_COOLDOWN_MS = Number.isFinite(Number(process.env.BOT_REPLY_ALWAYS_COOLDOWN_MS))
+    ? Math.max(0, Math.trunc(Number(process.env.BOT_REPLY_ALWAYS_COOLDOWN_MS)))
+    : 4000
+
+function normalizeText(s: string) {
+    return (s || '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim()
+}
+
+function isBotMentioned(content: string, botUsernameLower: string): boolean {
+    const text = normalizeText(content)
+    if (!text) return false
+
+    // Common mention patterns
+    if (text.includes(`@${botUsernameLower}`)) return true
+
+    // Word boundary match for plain mentions ("sweetflipsbot")
+    const re = new RegExp(`\\b${botUsernameLower.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'i')
+    return re.test(text)
+}
+
+function looksLikeRequestOrQuestion(content: string): boolean {
+    const text = normalizeText(content)
+    if (!text) return false
+
+    // Questions / asks
+    if (text.includes('?')) return true
+    if (text.startsWith('can you') || text.startsWith('could you') || text.startsWith('would you')) return true
+    if (text.includes('can you ') || text.includes('could you ') || text.includes('help ') || text.includes('how ') || text.includes('what ') || text.includes('why ')) return true
+
+    // Command-style pings
+    if (text.includes('!') || text.includes('/')) return true
+
+    // "botname do X" / "botname pls" etc
+    if (/\b(pls|please|plz)\b/.test(text)) return true
+
+    return false
+}
 
 // In-memory state for raid detection
 interface MessageWindow {
@@ -99,7 +160,7 @@ function hashMessageContent(content: string): string {
     return hash.toString(36)
 }
 
-function isExempt(payload: ChatJobPayload): boolean {
+function isExemptFromModeration(payload: ChatJobPayload): boolean {
     const senderUsernameLower = payload.sender.username.toLowerCase()
 
     if (senderUsernameLower === payload.broadcaster.username.toLowerCase()) return true
@@ -118,9 +179,275 @@ function isExempt(payload: ChatJobPayload): boolean {
     return false
 }
 
+function isExemptFromReplies(payload: ChatJobPayload): boolean {
+    // Only avoid replying to ourselves (prevents reply loops).
+    // Broadcaster/mod/staff/admin should still be able to talk to the bot.
+    const senderUsernameLower = payload.sender.username.toLowerCase()
+    return senderUsernameLower === MODERATOR_USERNAME
+}
+
+function looksLikeGreeting(content: string): boolean {
+    const text = normalizeText(content)
+    if (!text) return false
+    return /\b(hi|hello|hey|yo|sup|what's up|whats up)\b/.test(text)
+}
+
+/**
+ * Generate a bot reply using OpenAI API
+ */
+async function generateAIReply(messageContent: string, senderUsername: string): Promise<string | null> {
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+        console.warn('[moderation-worker] ⚠️ OPENAI_API_KEY not set, skipping AI reply')
+        return null
+    }
+
+    try {
+        // Default to a broadly available, cost-effective model.
+        // Can be overridden via OPENAI_CHAT_MODEL.
+        const preferredModel = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini'
+        const fallbackModel = 'gpt-4o-mini'
+        const temperature = Number.isFinite(Number(process.env.OPENAI_CHAT_TEMPERATURE))
+            ? Math.max(0, Math.min(2, Number(process.env.OPENAI_CHAT_TEMPERATURE)))
+            : 0.9
+        const maxTokens = Number.isFinite(Number(process.env.OPENAI_CHAT_MAX_TOKENS))
+            ? Math.max(16, Math.min(256, Math.trunc(Number(process.env.OPENAI_CHAT_MAX_TOKENS))))
+            : 140
+
+        const buildPayload = (model: string) => ({
+            model,
+            messages: [
+                {
+                    role: 'system',
+                    content:
+                        'You are Sweetflipsbot, a real-sounding human chat assistant in a Kick gambling streamer chat.\n' +
+                        'ONLY reply when the user explicitly mentions you and is asking something.\n' +
+                        'Tone: natural, chill, witty, a little streamer-chat energy, not corporate.\n' +
+                        'Write 1 short message. Max ~220 characters.\n' +
+                        'No roleplay, no disclaimers, no "as an AI".\n' +
+                        'No spam. Don\'t start conversations.\n' +
+                        'If asked about gambling: be hype but responsible; don\'t promise wins.\n' +
+                        'If the ask is unclear: ask one short clarifying question.\n' +
+                        'If toxic/bait: de-escalate or ignore with a neutral short reply.\n' +
+                        'Do not mention policies/moderation actions.',
+                },
+                {
+                    role: 'user',
+                    content:
+                        `Someone in chat said:\n` +
+                        `${senderUsername}: ${messageContent}\n\n` +
+                        `Reply like a normal person (only answer what they asked).`,
+                },
+            ],
+            max_tokens: maxTokens,
+            temperature,
+        })
+
+        const callOpenAI = async (model: string) => {
+            return await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify(buildPayload(model)),
+            })
+        }
+
+        let response = await callOpenAI(preferredModel)
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            const looksLikeModelIssue =
+                response.status === 404 ||
+                (response.status === 400 && /model/i.test(errorText))
+
+            if (looksLikeModelIssue && preferredModel !== fallbackModel) {
+                console.warn(`[moderation-worker] ⚠️ OpenAI model "${preferredModel}" not available; falling back to "${fallbackModel}"`)
+                response = await callOpenAI(fallbackModel)
+                if (!response.ok) {
+                    const fallbackErrorText = await response.text()
+                    console.warn(`[moderation-worker] ⚠️ OpenAI API error (fallback): ${response.status} ${fallbackErrorText.substring(0, 200)}`)
+                    return null
+                }
+            } else {
+                console.warn(`[moderation-worker] ⚠️ OpenAI API error: ${response.status} ${errorText.substring(0, 200)}`)
+                return null
+            }
+        }
+
+        const data = await response.json()
+        let reply = data.choices?.[0]?.message?.content?.trim()
+
+        if (!reply || reply.length === 0) {
+            return null
+        }
+
+        // Light cleanup so it doesn't look "generated"
+        reply = reply.replace(/^["'“”]+|["'“”]+$/g, '').trim()
+
+        // Ensure reply is under 500 chars (Kick API limit)
+        return reply.length > 500 ? reply.substring(0, 497) + '...' : reply
+    } catch (error) {
+        console.warn(`[moderation-worker] ⚠️ Error generating AI reply:`, error instanceof Error ? error.message : 'Unknown error')
+        return null
+    }
+}
+
+/**
+ * Generate a bot reply to a chat message
+ * Uses AI if enabled, otherwise falls back to simple keyword-based replies
+ */
+async function generateBotReply(messageContent: string, senderUsername: string, useAI: boolean): Promise<string | null> {
+    // If OpenAI is configured, prefer AI replies by default (unless explicitly disabled).
+    const openAiConfigured = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim())
+    const forceAiReplies = String(process.env.BOT_REPLY_USE_AI_ALWAYS || '').toLowerCase() === 'true'
+    const aiEnabledEffective = forceAiReplies ? true : (useAI || openAiConfigured)
+
+    // Try AI first if enabled
+    if (aiEnabledEffective) {
+        const aiReply = await generateAIReply(messageContent, senderUsername)
+        if (aiReply) {
+            return aiReply
+        }
+        // Fall back to simple replies if AI fails
+    }
+
+    // Simple keyword-based replies (works offline, fallback)
+    const content = messageContent.toLowerCase().trim()
+
+    if (content.includes('hello') || content.includes('hi') || content.includes('hey')) {
+        return pickOne(['yo', 'hey', 'heyy', 'sup', 'yo what\'s up']) + (Math.random() < 0.35 ? ' 👋' : '')
+    }
+    if (content.includes('bye') || content.includes('goodbye')) {
+        return pickOne(['later', 'cya', 'see ya', 'take it easy']) + (Math.random() < 0.3 ? ' 👋' : '')
+    }
+    if (content.includes('thanks') || content.includes('thank you')) {
+        return pickOne(['np', 'no worries', 'anytime', 'got you']) + (Math.random() < 0.25 ? ' 🤝' : '')
+    }
+    if (content.includes('?') && content.length < 100) {
+        return pickOne(['hmm good question', 'not sure tbh—what do you mean exactly?', 'depends—what are you trying to do?'])
+    }
+    if (content.includes('lol') || content.includes('haha')) {
+        return pickOne(['lmao', '😂', 'lol'])
+    }
+    if (content.includes('love') || content.includes('❤️')) {
+        return pickOne(['❤️', 'love that', 'big W'])
+    }
+
+    return null
+}
+
+function pickOne<T>(items: T[]): T {
+    return items[Math.floor(Math.random() * items.length)]
+}
+
 function cleanMessageWindow(state: RaidState, now: number): void {
     const cutoff = now - 10000
     state.messageWindow = state.messageWindow.filter(msg => msg.timestamp > cutoff)
+}
+
+type OpenAIModerationResult = {
+    flagged: boolean
+    categories: Record<string, boolean> | null
+    category_scores: Record<string, number> | null
+}
+
+let lastMissingOpenAIKeyWarnAt = 0
+let lastOpenAIModerationErrorAt = 0
+
+// Cache AI moderation results by content hash to reduce cost and improve consistency
+const aiModerationCache = new Map<string, { at: number; result: OpenAIModerationResult }>()
+const AI_MODERATION_CACHE_TTL_MS = Number.isFinite(Number(process.env.OPENAI_MODERATION_CACHE_TTL_MS))
+    ? Math.max(0, Math.trunc(Number(process.env.OPENAI_MODERATION_CACHE_TTL_MS)))
+    : 120000
+
+function getCachedAIModeration(contentHash: string): OpenAIModerationResult | null {
+    const entry = aiModerationCache.get(contentHash)
+    if (!entry) return null
+    if (AI_MODERATION_CACHE_TTL_MS > 0 && (Date.now() - entry.at) > AI_MODERATION_CACHE_TTL_MS) {
+        aiModerationCache.delete(contentHash)
+        return null
+    }
+    return entry.result
+}
+
+function setCachedAIModeration(contentHash: string, result: OpenAIModerationResult): void {
+    aiModerationCache.set(contentHash, { at: Date.now(), result })
+    // Simple bounded cache
+    const max = Number.isFinite(Number(process.env.OPENAI_MODERATION_CACHE_MAX))
+        ? Math.max(128, Math.trunc(Number(process.env.OPENAI_MODERATION_CACHE_MAX)))
+        : 2048
+    if (aiModerationCache.size > max) {
+        const firstKey = aiModerationCache.keys().next().value
+        if (firstKey) aiModerationCache.delete(firstKey)
+    }
+}
+
+function summarizeModerationScores(scores: Record<string, number> | null, threshold: number): string {
+    if (!scores) return ''
+    const entries = Object.entries(scores)
+        .filter(([, v]) => typeof v === 'number' && v >= threshold)
+        .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+        .slice(0, 3)
+        .map(([k, v]) => `${k} ${(v * 100).toFixed(0)}%`)
+    return entries.length ? entries.join(', ') : ''
+}
+
+async function runOpenAIModeration(content: string, contentHash: string): Promise<OpenAIModerationResult | null> {
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey || !apiKey.trim()) {
+        const now = Date.now()
+        if (now - lastMissingOpenAIKeyWarnAt > 60000) {
+            lastMissingOpenAIKeyWarnAt = now
+            console.warn('[moderation-worker] ⚠️ OPENAI_API_KEY not set, skipping AI moderation')
+        }
+        return null
+    }
+
+    const cached = getCachedAIModeration(contentHash)
+    if (cached) return cached
+
+    try {
+        const response = await fetch('https://api.openai.com/v1/moderations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model: OPENAI_MODERATION_MODEL,
+                input: content,
+            }),
+        })
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            const now = Date.now()
+            if (now - lastOpenAIModerationErrorAt > 60000) {
+                lastOpenAIModerationErrorAt = now
+                console.warn(`[moderation-worker] ⚠️ OpenAI moderation API error: ${response.status} ${errorText.substring(0, 200)}`)
+            }
+            return null
+        }
+
+        const data = await response.json()
+        const result = data?.results?.[0]
+        const parsed: OpenAIModerationResult = {
+            flagged: Boolean(result?.flagged),
+            categories: result?.categories && typeof result.categories === 'object' ? result.categories : null,
+            category_scores: result?.category_scores && typeof result.category_scores === 'object' ? result.category_scores : null,
+        }
+        setCachedAIModeration(contentHash, parsed)
+        return parsed
+    } catch (error) {
+        const now = Date.now()
+        if (now - lastOpenAIModerationErrorAt > 60000) {
+            lastOpenAIModerationErrorAt = now
+            console.warn(`[moderation-worker] ⚠️ Error calling OpenAI moderation:`, error instanceof Error ? error.message : 'Unknown error')
+        }
+        return null
+    }
 }
 
 function checkRaidMode(state: RaidState, broadcasterUserId: bigint, now: number): boolean {
@@ -207,12 +534,12 @@ interface ModerationAction {
     raid_mode_active: boolean
 }
 
-function evaluateMessageForModeration(payload: ChatJobPayload): ModerationAction | null {
+async function evaluateMessageForModeration(payload: ChatJobPayload, settings: ModeratorBotSettings): Promise<ModerationAction | null> {
     if (!MODERATION_ENABLED) {
         return null
     }
 
-    if (isExempt(payload)) {
+    if (isExemptFromModeration(payload)) {
         return null
     }
 
@@ -235,6 +562,50 @@ function evaluateMessageForModeration(payload: ChatJobPayload): ModerationAction
     }
 
     const raidModeActive = checkRaidMode(state, broadcasterUserId, now) || state.raidModeUntil > now
+
+    // AI moderation (toxicity / harassment / hate / sexual / violence etc)
+    // This is the "AI mods" path; if enabled and the model flags it (or scores exceed threshold), we act.
+    if (settings.ai_moderation_enabled) {
+        const content = String(payload.content || '').trim()
+        if (content.length > 0) {
+            const ai = await runOpenAIModeration(content, contentHash)
+            if (ai) {
+                const scores = ai.category_scores
+                const scoreValues = scores ? Object.values(scores).filter(v => typeof v === 'number') : []
+                const maxScore = scoreValues.length ? Math.max(...scoreValues) : 0
+                const shouldAct = ai.flagged || (Number.isFinite(maxScore) && maxScore >= OPENAI_MODERATION_SCORE_THRESHOLD)
+                if (shouldAct) {
+                    const scoreSummary = summarizeModerationScores(scores, OPENAI_MODERATION_SCORE_THRESHOLD)
+                    const reason = scoreSummary
+                        ? `AI moderation flagged: ${scoreSummary}`
+                        : `AI moderation flagged`
+
+                    const actionType = settings.ai_action === 'ban' ? 'ban' : 'timeout'
+                    const action: ModerationAction = actionType === 'ban'
+                        ? {
+                            type: 'ban',
+                            reason,
+                            rule_id: 'ai_moderation',
+                            raid_mode_active: raidModeActive,
+                        }
+                        : {
+                            type: 'timeout',
+                            duration_seconds: OPENAI_MODERATION_TIMEOUT_SECONDS,
+                            reason,
+                            rule_id: 'ai_moderation',
+                            raid_mode_active: raidModeActive,
+                        }
+
+                    recordModerationAction(state, broadcasterUserId, senderUserId, now)
+                    const prefix = DRY_RUN ? '[DRY RUN]' : ''
+                    console.log(`${prefix}[moderation-worker] 🤖 ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason}`)
+
+                    if (DRY_RUN) return null
+                    return action
+                }
+            }
+        }
+    }
 
     const isSpam = checkUserSpam(state, senderUserId, contentHash, now)
 
@@ -345,7 +716,7 @@ async function sendStartupMessage(): Promise<void> {
             const result = await sendModeratorChatMessage({
                 broadcaster_user_id: broadcaster.kick_user_id,
                 content: 'Hi! 🛡️ Moderation bot is online and ready.',
-                type: 'bot',
+                type: 'user',
             })
 
             if (result.success) {
@@ -393,8 +764,11 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
             await sendStartupMessage()
         }
 
+        // Load settings once per job (used by both moderation and replies)
+        const settings = await getModeratorBotSettingsFromDb()
+
         // Moderation check
-        const moderationAction = evaluateMessageForModeration(payload)
+        const moderationAction = await evaluateMessageForModeration(payload, settings)
         if (moderationAction) {
             try {
                 const banResult = await moderationBan({
@@ -407,20 +781,22 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                 if (banResult.success) {
                     moderationActionsCount++
 
-                    // Send chat message announcing the action
-                    const actionText = moderationAction.type === 'ban'
-                        ? 'banned'
-                        : `timed out for ${Math.floor((moderationAction.duration_seconds || 0) / 60)} minutes`
+                    // Send chat message announcing the action (if enabled)
+                    if (settings.moderation_announce_actions) {
+                        const actionText = moderationAction.type === 'ban'
+                            ? 'banned'
+                            : `timed out for ${Math.floor((moderationAction.duration_seconds || 0) / 60)} minutes`
 
-                    const announcement = `🛡️ ${payload.sender.username} has been ${actionText}. Reason: ${moderationAction.reason}`
+                        const announcement = `🛡️ ${payload.sender.username} has been ${actionText}. Reason: ${moderationAction.reason}`
 
-                    await sendModeratorChatMessage({
-                        broadcaster_user_id: broadcasterUserId,
-                        content: announcement,
-                        type: 'bot',
-                    }).catch(() => {
-                        // Non-critical if announcement fails
-                    })
+                        await sendModeratorChatMessage({
+                            broadcaster_user_id: broadcasterUserId,
+                            content: announcement,
+                            type: 'user',
+                        }).catch(() => {
+                            // Non-critical if announcement fails
+                        })
+                    }
 
                     console.log(`[moderation-worker] ✅ ${moderationAction.type.toUpperCase()} user ${payload.sender.username} (${moderationAction.reason})`)
                 } else {
@@ -428,6 +804,86 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                 }
             } catch (modError) {
                 console.warn(`[moderation-worker] ⚠️ Error executing moderation action:`, modError instanceof Error ? modError.message : 'Unknown error')
+            }
+        }
+
+        // Bot reply check (works regardless of stream status - online or offline)
+        try {
+            const replyEnabled = FORCE_BOT_REPLIES ? true : settings.bot_reply_enabled
+            const replyCooldownMs = FORCE_BOT_REPLIES ? FORCE_BOT_REPLIES_COOLDOWN_MS : settings.bot_reply_cooldown_ms
+            const aiReplyEnabled = FORCE_BOT_REPLIES ? true : settings.ai_reply_enabled
+
+            if (!replyEnabled) {
+                if (VERBOSE_LOGS) {
+                    console.log(`[moderation-worker] 💬 Bot replies disabled (bot_reply_enabled=false)`)
+                }
+            } else if (isExemptFromReplies(payload)) {
+                if (VERBOSE_LOGS) {
+                    console.log(`[moderation-worker] 💬 Skipping reply - user is exempt: ${payload.sender.username}`)
+                }
+            } else if (
+                BOT_REPLY_REQUIRE_MENTION &&
+                (() => {
+                    const mentioned = isBotMentioned(payload.content, MODERATOR_USERNAME)
+                    const asked = looksLikeRequestOrQuestion(payload.content)
+                    const greeted = looksLikeGreeting(payload.content)
+                    return !mentioned || (!asked && !greeted)
+                })()
+            ) {
+                if (VERBOSE_LOGS) {
+                    const mentioned = isBotMentioned(payload.content, MODERATOR_USERNAME)
+                    const asked = looksLikeRequestOrQuestion(payload.content)
+                    const greeted = looksLikeGreeting(payload.content)
+                    console.log(`[moderation-worker] 💬 Skipping reply - require mention+(ask|greeting) (mentioned=${mentioned}, asked=${asked}, greeted=${greeted})`)
+                }
+            } else {
+                const broadcasterKey = broadcasterUserId.toString()
+                const now = Date.now()
+                const lastReplyTime = botReplyCooldowns.get(broadcasterKey) || 0
+                const timeSinceLastReply = now - lastReplyTime
+
+                // Check cooldown
+                if (timeSinceLastReply < replyCooldownMs) {
+                    if (VERBOSE_LOGS) {
+                        const remaining = Math.ceil((replyCooldownMs - timeSinceLastReply) / 1000)
+                        console.log(`[moderation-worker] 💬 Bot reply on cooldown (${remaining}s remaining)`)
+                    }
+                } else {
+                    // No randomness: if we reached here, we reply.
+                    // Generate reply using AI if enabled, otherwise simple fallback
+                    const replyText = await generateBotReply(
+                        payload.content,
+                        payload.sender.username,
+                        aiReplyEnabled
+                    )
+
+                    if (!replyText) {
+                        if (VERBOSE_LOGS) {
+                            console.log(`[moderation-worker] 💬 No reply generated for message: "${payload.content.substring(0, 50)}..."`)
+                        }
+                    } else {
+                        const replyResult = await sendModeratorChatMessage({
+                            broadcaster_user_id: broadcasterUserId,
+                            content: replyText,
+                            type: 'user',
+                        })
+
+                        if (replyResult.success) {
+                            botRepliesCount++
+                            botReplyCooldowns.set(broadcasterKey, now)
+                            const replyType = aiReplyEnabled ? 'AI' : 'simple'
+                            console.log(`[moderation-worker] 💬 Bot replied (${replyType}): ${replyText.substring(0, 50)}...`)
+                        } else {
+                            console.warn(`[moderation-worker] ⚠️ Bot reply failed: ${replyResult.error}`)
+                        }
+                    }
+                }
+            }
+        } catch (replyError) {
+            // Non-critical - don't fail the job if bot reply fails
+            console.warn(`[moderation-worker] ⚠️ Error processing bot reply:`, replyError instanceof Error ? replyError.message : 'Unknown error')
+            if (VERBOSE_LOGS && replyError instanceof Error) {
+                console.warn(`[moderation-worker] ⚠️ Bot reply error stack:`, replyError.stack)
             }
         }
 
@@ -499,7 +955,7 @@ async function runWorker(): Promise<void> {
             const now = Date.now()
             if (now - lastStatsLog >= STATS_INTERVAL_MS) {
                 const stats = await getChatQueueStats()
-                console.log(`[moderation-worker] Queue: pending=${stats.pending}, processing=${stats.processing}, completed=${stats.completed}, failed=${stats.failed} | Processed: ${processedCount}, Actions: ${moderationActionsCount}, Errors: ${errorCount}`)
+                console.log(`[moderation-worker] Queue: pending=${stats.pending}, processing=${stats.processing}, completed=${stats.completed}, failed=${stats.failed} | Processed: ${processedCount}, Actions: ${moderationActionsCount}, Replies: ${botRepliesCount}, Errors: ${errorCount}`)
                 lastStatsLog = now
             }
 
