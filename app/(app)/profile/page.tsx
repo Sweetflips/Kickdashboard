@@ -54,6 +54,17 @@ export default function ProfilePage() {
     const [adminAwardAmount, setAdminAwardAmount] = useState('')
     const [adminAwardReason, setAdminAwardReason] = useState('')
 
+    // Referral code state
+    const [referralInfo, setReferralInfo] = useState<{
+        hasReferral: boolean
+        canAddReferral: boolean
+        accountAge: number
+        referrerUsername?: string
+    } | null>(null)
+    const [referralCodeInput, setReferralCodeInput] = useState('')
+    const [addingReferral, setAddingReferral] = useState(false)
+    const [referralCodeCopied, setReferralCodeCopied] = useState(false)
+
     const fetchUserData = async () => {
         try {
             const token = localStorage.getItem('kick_access_token')
@@ -222,6 +233,25 @@ export default function ProfilePage() {
         }
     }
 
+    const fetchReferralInfo = useCallback(async () => {
+        if (!userData?.id) return
+
+        try {
+            const response = await fetch('/api/referrals/check')
+            if (response.ok) {
+                const data = await response.json()
+                setReferralInfo({
+                    hasReferral: data.hasReferral,
+                    canAddReferral: data.canAddReferral,
+                    accountAge: data.accountAge,
+                    referrerUsername: data.referrerUsername,
+                })
+            }
+        } catch (error) {
+            console.error('Failed to fetch referral info:', error)
+        }
+    }, [userData?.id])
+
     useEffect(() => {
         fetchUserData()
         ;(async () => {
@@ -251,6 +281,12 @@ export default function ProfilePage() {
             // Will be handled after userData loads
         }
     }, [])
+
+    useEffect(() => {
+        if (userData?.id && activeTab === 'general') {
+            fetchReferralInfo()
+        }
+    }, [userData?.id, activeTab, fetchReferralInfo])
 
     useEffect(() => {
         if (userData?.id && activeTab === 'connected') {
@@ -494,6 +530,56 @@ export default function ProfilePage() {
                 showToast('Failed to remove profile picture', 'error')
             }
         }
+    }
+
+    const handleAddReferralCode = async () => {
+        if (!referralCodeInput.trim() || !userData?.id) return
+
+        setAddingReferral(true)
+        try {
+            const token = localStorage.getItem('kick_access_token')
+            const response = await fetch('/api/referrals/set', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    referralCode: referralCodeInput.trim().toUpperCase(),
+                }),
+            })
+
+            const data = await response.json()
+
+            if (response.ok) {
+                showToast('Referral code added successfully!', 'success')
+                setReferralCodeInput('')
+                await fetchReferralInfo()
+            } else {
+                showToast(data.error || 'Failed to add referral code', 'error')
+            }
+        } catch (error) {
+            console.error('Failed to add referral code:', error)
+            showToast('Failed to add referral code', 'error')
+        } finally {
+            setAddingReferral(false)
+        }
+    }
+
+    const handleCopyReferralCode = () => {
+        if (!userData?.username) return
+        const code = userData.username.toUpperCase()
+        navigator.clipboard.writeText(code)
+        setReferralCodeCopied(true)
+        showToast('Referral code copied!', 'success')
+        setTimeout(() => setReferralCodeCopied(false), 2000)
+    }
+
+    const handleCopyReferralLink = () => {
+        if (!userData?.username) return
+        const link = `https://kickdashboard.com/signup?ref=${userData.username.toUpperCase()}`
+        navigator.clipboard.writeText(link)
+        showToast('Referral link copied!', 'success')
     }
 
     const tabs = [
@@ -833,6 +919,89 @@ export default function ProfilePage() {
                                                     </div>
                                                 )}
                                             </div>
+                                        </div>
+
+                                        {/* Referral Code Section */}
+                                        <div className="border-t border-gray-200 dark:border-kick-border pt-6">
+                                            <h2 className="text-xl font-bold text-gray-900 dark:text-kick-text mb-4">Referral Code</h2>
+
+                                            {/* Your Referral Code */}
+                                            <div className="mb-6">
+                                                <label className="block text-sm font-medium text-gray-600 dark:text-kick-text-secondary mb-2">
+                                                    Your Referral Code
+                                                </label>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 px-4 py-3 bg-gray-50 dark:bg-kick-surface-hover border border-gray-200 dark:border-kick-border rounded-lg font-mono text-lg font-bold text-gray-900 dark:text-kick-text text-center">
+                                                        {userData?.username?.toUpperCase() || 'N/A'}
+                                                    </div>
+                                                    <button
+                                                        onClick={handleCopyReferralCode}
+                                                        className="px-4 py-3 bg-kick-purple text-white rounded-lg font-medium hover:bg-kick-purple-dark transition-colors"
+                                                    >
+                                                        {referralCodeCopied ? 'Copied!' : 'Copy'}
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-gray-600 dark:text-kick-text-secondary mt-2">
+                                                    Share this code with friends to earn rewards when they sign up!
+                                                </p>
+                                            </div>
+
+                                            {/* Referral Link */}
+                                            <div className="mb-6">
+                                                <label className="block text-sm font-medium text-gray-600 dark:text-kick-text-secondary mb-2">
+                                                    Your Referral Link
+                                                </label>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 px-4 py-3 bg-gray-50 dark:bg-kick-surface-hover border border-gray-200 dark:border-kick-border rounded-lg text-sm text-gray-600 dark:text-kick-text-secondary truncate">
+                                                        {userData?.username ? `https://kickdashboard.com/signup?ref=${userData.username.toUpperCase()}` : 'N/A'}
+                                                    </div>
+                                                    <button
+                                                        onClick={handleCopyReferralLink}
+                                                        className="px-4 py-3 bg-kick-purple text-white rounded-lg font-medium hover:bg-kick-purple-dark transition-colors"
+                                                    >
+                                                        Copy
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Add Referral Code (if eligible) */}
+                                            {referralInfo?.canAddReferral && !referralInfo.hasReferral && (
+                                                <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-kick-text mb-2">
+                                                        Add Referral Code
+                                                    </h3>
+                                                    <p className="text-xs text-gray-600 dark:text-kick-text-secondary mb-4">
+                                                        You can add a referral code within 24 hours of account creation. Enter the code of the person who referred you.
+                                                    </p>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Enter referral code"
+                                                            value={referralCodeInput}
+                                                            onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                                                            className="flex-1 px-4 py-2 bg-white dark:bg-kick-surface border border-gray-200 dark:border-kick-border rounded-lg text-sm text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple/50 focus:border-kick-purple"
+                                                            disabled={addingReferral}
+                                                        />
+                                                        <button
+                                                            onClick={handleAddReferralCode}
+                                                            disabled={addingReferral || !referralCodeInput.trim()}
+                                                            className="px-4 py-2 bg-kick-green hover:bg-kick-green-dark text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {addingReferral ? 'Adding...' : 'Add'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Show referrer info if user has a referral */}
+                                            {referralInfo?.hasReferral && referralInfo.referrerUsername && (
+                                                <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                                    <p className="text-sm text-gray-900 dark:text-kick-text">
+                                                        <span className="font-semibold">Referred by:</span>{' '}
+                                                        <span className="font-mono">{referralInfo.referrerUsername.toUpperCase()}</span>
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Connected Account */}

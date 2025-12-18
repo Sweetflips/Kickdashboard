@@ -14,6 +14,7 @@ function LoginContent() {
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [referralCode, setReferralCode] = useState<string | null>(null)
+    const [manualReferralCode, setManualReferralCode] = useState<string>('')
 
     useEffect(() => {
         // Check if already authenticated
@@ -116,9 +117,10 @@ function LoginContent() {
     const handleKickLogin = () => {
         setIsLoading(true)
         setError(null)
-        // Pass referral code to auth endpoint if provided
-        const authUrl = referralCode
-            ? `/api/auth?action=authorize&ref=${encodeURIComponent(referralCode)}`
+        // Use manual referral code if provided, otherwise use URL-based code
+        const codeToUse = manualReferralCode.trim() || referralCode
+        const authUrl = codeToUse
+            ? `/api/auth?action=authorize&ref=${encodeURIComponent(codeToUse)}`
             : '/api/auth?action=authorize'
         window.location.href = authUrl
     }
@@ -202,6 +204,36 @@ function LoginContent() {
                             </>
                         )}
                     </button>
+
+                    {/* Optional Referral Code Input */}
+                    <div className="mt-6">
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Referral Code (Optional)"
+                                value={manualReferralCode}
+                                onChange={(e) => setManualReferralCode(e.target.value.toUpperCase())}
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-kick-dark border border-gray-200 dark:border-kick-border rounded-lg text-sm text-gray-900 dark:text-kick-text placeholder-gray-400 dark:placeholder-kick-text-secondary focus:outline-none focus:ring-2 focus:ring-kick-purple/50 focus:border-kick-purple transition-colors"
+                                disabled={isLoading}
+                            />
+                            {referralCode && !manualReferralCode && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <span className="text-xs text-gray-500 dark:text-kick-text-secondary bg-gray-100 dark:bg-kick-dark px-2 py-1 rounded">
+                                        From URL
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        {(referralCode || manualReferralCode) && (
+                            <p className="mt-2 text-xs text-gray-500 dark:text-kick-text-secondary">
+                                {referralCode && !manualReferralCode ? (
+                                    <>Using referral code: <span className="font-mono font-semibold">{referralCode}</span></>
+                                ) : (
+                                    <>Using referral code: <span className="font-mono font-semibold">{manualReferralCode}</span></>
+                                )}
+                            </p>
+                        )}
+                    </div>
 
                     {/* Security Note */}
                     <div className="mt-8 pt-6 border-t border-gray-200 dark:border-kick-border">

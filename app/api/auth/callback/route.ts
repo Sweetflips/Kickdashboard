@@ -309,34 +309,52 @@ export async function GET(request: Request) {
                         create: createData,
                     })
 
-                    // Handle referral if provided and this is a new signup
-                    if (isNewSignup && finalReferralCode) {
+                    // Handle referral if provided
+                    if (finalReferralCode) {
                         try {
-                            // Find the referrer by username (referral code is uppercase username)
-                            const referrer = await db.user.findFirst({
-                                where: {
-                                    username: {
-                                        equals: finalReferralCode,
-                                        mode: 'insensitive',
-                                    }
-                                },
-                                select: { id: true, username: true },
+                            // Check if user already has a referral
+                            const existingReferral = await db.referral.findUnique({
+                                where: { referee_user_id: savedUser.id },
                             })
 
-                            if (referrer && referrer.id !== savedUser.id) {
-                                // Create referral relationship
-                                await db.referral.create({
-                                    data: {
-                                        referrer_user_id: referrer.id,
-                                        referee_user_id: savedUser.id,
-                                        referral_code: finalReferralCode,
+                            // Only create referral if:
+                            // 1. New signup, OR
+                            // 2. Existing user within 24 hours of account creation AND no existing referral
+                            const accountAge = Date.now() - savedUser.created_at.getTime()
+                            const twentyFourHours = 24 * 60 * 60 * 1000
+                            const isWithin24Hours = accountAge <= twentyFourHours
+
+                            if ((isNewSignup || (isWithin24Hours && !existingReferral))) {
+                                // Find the referrer by username (referral code is uppercase username)
+                                const referrer = await db.user.findFirst({
+                                    where: {
+                                        username: {
+                                            equals: finalReferralCode,
+                                            mode: 'insensitive',
+                                        }
                                     },
+                                    select: { id: true, username: true },
                                 })
-                                console.log(`✅ Referral created: ${referrer.username} -> ${username}`)
-                            } else if (!referrer) {
-                                console.warn(`⚠️ Referral code not found: ${finalReferralCode}`)
-                            } else {
-                                console.warn(`⚠️ User cannot refer themselves`)
+
+                                if (referrer && referrer.id !== savedUser.id) {
+                                    // Create referral relationship
+                                    await db.referral.create({
+                                        data: {
+                                            referrer_user_id: referrer.id,
+                                            referee_user_id: savedUser.id,
+                                            referral_code: finalReferralCode,
+                                        },
+                                    })
+                                    console.log(`✅ Referral created: ${referrer.username} -> ${username} (${isNewSignup ? 'new signup' : 'existing user within 24h'})`)
+                                } else if (!referrer) {
+                                    console.warn(`⚠️ Referral code not found: ${finalReferralCode}`)
+                                } else {
+                                    console.warn(`⚠️ User cannot refer themselves`)
+                                }
+                            } else if (existingReferral) {
+                                console.log(`ℹ️ User already has a referral, skipping`)
+                            } else if (!isWithin24Hours) {
+                                console.log(`ℹ️ Account is older than 24 hours, referral code ignored`)
                             }
                         } catch (referralError) {
                             // Non-critical - log but don't fail auth
