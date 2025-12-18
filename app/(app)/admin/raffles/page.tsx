@@ -195,7 +195,19 @@ export default function AdminRafflesPage() {
             if (data && data.winners && data.winners.length > 0) {
                 // Fetch raffle metadata for modal
                 const raffleData = await authenticatedFetchJson<{ raffle: Raffle }>(`/api/raffles/${id}`, {}, kickUserId || undefined).catch(() => null)
-                setViewingWinners({ raffle: raffleData?.raffle || { id }, winners: data.winners.map((w: any) => ({
+                // Find raffle from existing list as fallback
+                const existingRaffle = raffles.find(r => r.id === id)
+                const raffleForModal: Raffle = raffleData?.raffle || existingRaffle || {
+                    id,
+                    title: 'Unknown Raffle',
+                    type: 'general',
+                    status: 'completed',
+                    start_at: new Date().toISOString(),
+                    end_at: new Date().toISOString(),
+                    total_entries: 0,
+                    prize_description: '',
+                }
+                setViewingWinners({ raffle: raffleForModal, winners: data.winners.map((w: any) => ({
                     id: w.entry_id,
                     username: w.username,
                     user_id: w.user_id,
