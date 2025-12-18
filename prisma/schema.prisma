@@ -564,3 +564,52 @@ model AppSetting {
 
   @@map("app_settings")
 }
+
+// AI Moderation Action Log - tracks every moderation action taken
+model ModerationActionLog {
+  id                  BigInt   @id @default(autoincrement())
+  broadcaster_user_id BigInt
+  target_user_id      BigInt
+  target_username     String
+  action_type         String   // timeout | ban | unban | delete_message
+  duration_seconds    Int?     // For timeouts
+  reason              String?  @db.Text
+  rule_id             String?  // spam | repeated_message | raid_spam | ai_moderation | repeat_offender
+  ai_flagged          Boolean  @default(false)
+  ai_categories       Json?    // OpenAI moderation categories that triggered
+  ai_max_score        Float?   // Highest score from OpenAI
+  message_content     String?  @db.Text // The message that triggered the action
+  message_id          String?
+  raid_mode_active    Boolean  @default(false)
+  dry_run             Boolean  @default(false)
+  success             Boolean  @default(true)
+  error_message       String?  @db.Text
+  created_at          DateTime @default(now())
+
+  @@index([broadcaster_user_id, created_at])
+  @@index([target_user_id, created_at])
+  @@index([action_type, created_at])
+  @@index([rule_id, created_at])
+  @@index([ai_flagged, created_at])
+  @@map("moderation_action_logs")
+}
+
+// Bot Reply Log - tracks bot replies for analysis
+model BotReplyLog {
+  id                  BigInt   @id @default(autoincrement())
+  broadcaster_user_id BigInt
+  trigger_user_id     BigInt
+  trigger_username    String
+  trigger_message     String   @db.Text
+  reply_content       String   @db.Text
+  reply_type          String   // ai | simple | quick_response
+  ai_model            String?
+  success             Boolean  @default(true)
+  error_message       String?  @db.Text
+  latency_ms          Int?
+  created_at          DateTime @default(now())
+
+  @@index([broadcaster_user_id, created_at])
+  @@index([reply_type, created_at])
+  @@map("bot_reply_logs")
+}

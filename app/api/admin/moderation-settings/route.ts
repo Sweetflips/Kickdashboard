@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser, isAdmin } from '@/lib/auth'
-import { getModeratorBotSettingsFromDb, normalizeModeratorBotSettings, setModeratorBotSettingsInDb } from '@/lib/moderation-settings'
+import { getModeratorBotSettingsFromDb, normalizeModeratorBotSettings, setModeratorBotSettingsInDb, type ModeratorBotSettings } from '@/lib/moderation-settings'
 import { appendAdminAuditLog } from '@/lib/admin-audit-log'
 import { db } from '@/lib/db'
 
@@ -34,16 +34,17 @@ export async function POST(request: Request) {
       : null
 
     const changed: string[] = []
-    for (const k of Object.keys(settings) as Array<keyof typeof settings>) {
+    for (const k of Object.keys(settings) as Array<keyof ModeratorBotSettings>) {
       if (JSON.stringify((before as any)[k]) !== JSON.stringify((settings as any)[k])) changed.push(String(k))
     }
+
     await appendAdminAuditLog({
       ts: Date.now(),
       actor_username: actor?.username || undefined,
       actor_kick_user_id: actor?.kick_user_id ? String(actor.kick_user_id) : undefined,
       action: 'update',
       target: 'moderation_bot_settings',
-      summary: changed.length ? `Changed: ${changed.slice(0, 12).join(', ')}` : 'Saved (no diff detected)',
+      summary: changed.length ? `Changed: ${changed.slice(0, 12).join(', ')}${changed.length > 12 ? ` (+${changed.length - 12} more)` : ''}` : 'Saved (no diff detected)',
     })
 
     return NextResponse.json({ ok: true, settings })

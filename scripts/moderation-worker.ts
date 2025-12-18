@@ -15,7 +15,7 @@ console.log('')
 import { db } from '../lib/db'
 import { claimChatJobs, completeChatJob, failChatJob, getChatQueueStats, type ClaimedChatJob, type ChatJobPayload } from '../lib/chat-queue'
 import { moderationBan, sendModeratorChatMessage, getModeratorToken } from '../lib/kick-api'
-import { getModeratorBotSettingsFromDb, type ModeratorBotSettings } from '../lib/moderation-settings'
+import { getModeratorBotSettingsFromDb, logModerationAction, logBotReply, type ModeratorBotSettings } from '../lib/moderation-settings'
 
 const BATCH_SIZE = parseInt(process.env.MODERATION_WORKER_BATCH_SIZE || '50', 10)
 const POLL_INTERVAL_MS = parseInt(process.env.MODERATION_WORKER_POLL_INTERVAL_MS || '500', 10)
@@ -549,6 +549,8 @@ interface ModerationAction {
     reason: string
     rule_id: string
     raid_mode_active: boolean
+    ai_categories?: Record<string, boolean> | null
+    ai_max_score?: number
 }
 
 async function evaluateMessageForModeration(payload: ChatJobPayload, settings: ModeratorBotSettings): Promise<ModerationAction | null> {
@@ -557,6 +559,12 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
     }
 
     if (isExemptFromModeration(payload)) {
+        return null
+    }
+
+    // Also check settings allowlist (in addition to env var allowlist)
+    const senderUsernameLower = payload.sender.username.toLowerCase()
+    if (settings.moderation_allowlist?.includes(senderUsernameLower)) {
         return null
     }
 
@@ -585,18 +593,22 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
     if (settings.ai_moderation_enabled) {
         const content = String(payload.content || '').trim()
         if (content.length > 0) {
+            // Use score threshold from settings (with fallback to env var)
+            const scoreThreshold = settings.ai_moderation_score_threshold ?? OPENAI_MODERATION_SCORE_THRESHOLD
             const ai = await runOpenAIModeration(content, contentHash)
             if (ai) {
                 const scores = ai.category_scores
                 const scoreValues = scores ? Object.values(scores).filter(v => typeof v === 'number') : []
                 const maxScore = scoreValues.length ? Math.max(...scoreValues) : 0
-                const shouldAct = ai.flagged || (Number.isFinite(maxScore) && maxScore >= OPENAI_MODERATION_SCORE_THRESHOLD)
+                const shouldAct = ai.flagged || (Number.isFinite(maxScore) && maxScore >= scoreThreshold)
                 if (shouldAct) {
-                    const scoreSummary = summarizeModerationScores(scores, OPENAI_MODERATION_SCORE_THRESHOLD)
+                    const scoreSummary = summarizeModerationScores(scores, scoreThreshold)
                     const reason = scoreSummary
                         ? `AI moderation flagged: ${scoreSummary}`
                         : `AI moderation flagged`
 
+                    // Use timeout duration from settings
+                    const aiTimeoutSeconds = settings.ai_moderation_timeout_seconds ?? OPENAI_MODERATION_TIMEOUT_SECONDS
                     const actionType = settings.ai_action === 'ban' ? 'ban' : 'timeout'
                     const action: ModerationAction = actionType === 'ban'
                         ? {
@@ -604,24 +616,31 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
                             reason,
                             rule_id: 'ai_moderation',
                             raid_mode_active: raidModeActive,
+                            ai_categories: ai.categories,
+                            ai_max_score: maxScore,
                         }
                         : {
                             type: 'timeout',
-                            duration_seconds: OPENAI_MODERATION_TIMEOUT_SECONDS,
+                            duration_seconds: aiTimeoutSeconds,
                             reason,
                             rule_id: 'ai_moderation',
                             raid_mode_active: raidModeActive,
+                            ai_categories: ai.categories,
+                            ai_max_score: maxScore,
                         }
 
                     recordModerationAction(state, broadcasterUserId, senderUserId, now)
-                    const prefix = DRY_RUN ? '[DRY RUN]' : ''
-                    console.log(`${prefix}[moderation-worker] 🤖 ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason}`)
+                    console.log(`[moderation-worker] 🤖 ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason}`)
 
-                    if (DRY_RUN) return null
                     return action
                 }
             }
         }
+    }
+
+    // Skip spam detection if disabled in settings
+    if (!settings.spam_detection_enabled) {
+        return null
     }
 
     const isSpam = checkUserSpam(state, senderUserId, contentHash, now)
@@ -638,19 +657,24 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
         repeat_count: 0,
     }
 
+    // Use settings from DB with fallbacks to env vars
+    const timeoutSecs = settings.timeout_seconds ?? TIMEOUT_SECONDS
+    const banOnRepeatCount = settings.ban_on_repeat_count ?? BAN_ON_REPEAT_COUNT
+    const spamRepeatThreshold = settings.spam_repeat_threshold ?? SPAM_REPEAT_THRESHOLD
+
     let action: ModerationAction | null = null
 
-    if (offense.count >= BAN_ON_REPEAT_COUNT) {
+    if (offense.count >= banOnRepeatCount) {
         action = {
             type: 'ban',
             reason: `Repeat spam offender (${offense.count} offenses)`,
             rule_id: 'repeat_offender',
             raid_mode_active: raidModeActive,
         }
-    } else if (offense.repeat_count >= SPAM_REPEAT_THRESHOLD) {
+    } else if (offense.repeat_count >= spamRepeatThreshold) {
         action = {
             type: 'timeout',
-            duration_seconds: TIMEOUT_SECONDS,
+            duration_seconds: timeoutSecs,
             reason: `Repeated identical messages (${offense.repeat_count}x)`,
             rule_id: 'repeated_message',
             raid_mode_active: raidModeActive,
@@ -658,7 +682,7 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
     } else if (isSpam || raidModeActive) {
         action = {
             type: 'timeout',
-            duration_seconds: raidModeActive ? TIMEOUT_SECONDS * 2 : TIMEOUT_SECONDS,
+            duration_seconds: raidModeActive ? timeoutSecs * 2 : timeoutSecs,
             reason: raidModeActive
                 ? `Spam detected during raid mode`
                 : `Spam detected (${state.messageWindow.filter(m => m.sender_user_id === senderUserId && m.timestamp > now - 10000).length} msgs in 10s)`,
@@ -669,13 +693,7 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
 
     if (action) {
         recordModerationAction(state, broadcasterUserId, senderUserId, now)
-
-        const prefix = DRY_RUN ? '[DRY RUN]' : ''
-        console.log(`${prefix}[moderation-worker] ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason}`)
-
-        if (DRY_RUN) {
-            return null
-        }
+        console.log(`[moderation-worker] ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason}`)
     }
 
     return action
@@ -787,41 +805,78 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
         // Moderation check
         const moderationAction = await evaluateMessageForModeration(payload, settings)
         if (moderationAction) {
+            let actionSuccess = false
+            let actionError: string | undefined
+
             try {
-                const banResult = await moderationBan({
-                    broadcaster_user_id: broadcasterUserId,
-                    user_id: senderUserId,
-                    duration_seconds: moderationAction.duration_seconds,
-                    reason: moderationAction.reason,
-                })
+                // Check dry run mode from settings
+                const isDryRun = settings.dry_run_mode || DRY_RUN
 
-                if (banResult.success) {
-                    moderationActionsCount++
-
-                    // Send chat message announcing the action (if enabled)
-                    if (settings.moderation_announce_actions) {
-                        const actionText = moderationAction.type === 'ban'
-                            ? 'banned'
-                            : `timed out for ${Math.floor((moderationAction.duration_seconds || 0) / 60)} minutes`
-
-                        const announcement = `🛡️ ${payload.sender.username} has been ${actionText}. Reason: ${moderationAction.reason}`
-
-                        await sendModeratorChatMessage({
-                            broadcaster_user_id: broadcasterUserId,
-                            content: announcement,
-                            type: 'user',
-                        }).catch(() => {
-                            // Non-critical if announcement fails
-                        })
-                    }
-
-                    console.log(`[moderation-worker] ✅ ${moderationAction.type.toUpperCase()} user ${payload.sender.username} (${moderationAction.reason})`)
+                if (isDryRun) {
+                    // Dry run - just log, don't execute
+                    actionSuccess = true
+                    console.log(`[moderation-worker] [DRY RUN] Would ${moderationAction.type.toUpperCase()} user ${payload.sender.username} (${moderationAction.reason})`)
                 } else {
-                    console.warn(`[moderation-worker] ⚠️ Moderation action failed: ${banResult.error}`)
+                    const banResult = await moderationBan({
+                        broadcaster_user_id: broadcasterUserId,
+                        user_id: senderUserId,
+                        duration_seconds: moderationAction.duration_seconds,
+                        reason: moderationAction.reason,
+                    })
+
+                    if (banResult.success) {
+                        actionSuccess = true
+                        moderationActionsCount++
+
+                        // Send chat message announcing the action (if enabled)
+                        if (settings.moderation_announce_actions) {
+                            const actionText = moderationAction.type === 'ban'
+                                ? 'banned'
+                                : `timed out for ${Math.floor((moderationAction.duration_seconds || 0) / 60)} minutes`
+
+                            const announcement = `🛡️ ${payload.sender.username} has been ${actionText}. Reason: ${moderationAction.reason}`
+
+                            await sendModeratorChatMessage({
+                                broadcaster_user_id: broadcasterUserId,
+                                content: announcement,
+                                type: 'user',
+                            }).catch(() => {
+                                // Non-critical if announcement fails
+                            })
+                        }
+
+                        console.log(`[moderation-worker] ✅ ${moderationAction.type.toUpperCase()} user ${payload.sender.username} (${moderationAction.reason})`)
+                    } else {
+                        actionError = banResult.error || 'Unknown error'
+                        console.warn(`[moderation-worker] ⚠️ Moderation action failed: ${banResult.error}`)
+                    }
                 }
             } catch (modError) {
-                console.warn(`[moderation-worker] ⚠️ Error executing moderation action:`, modError instanceof Error ? modError.message : 'Unknown error')
+                actionError = modError instanceof Error ? modError.message : 'Unknown error'
+                console.warn(`[moderation-worker] ⚠️ Error executing moderation action:`, actionError)
             }
+
+            // Log the moderation action to database
+            await logModerationAction({
+                broadcaster_user_id: broadcasterUserId,
+                target_user_id: senderUserId,
+                target_username: payload.sender.username,
+                action_type: moderationAction.type,
+                duration_seconds: moderationAction.duration_seconds,
+                reason: moderationAction.reason,
+                rule_id: moderationAction.rule_id,
+                ai_flagged: moderationAction.rule_id === 'ai_moderation',
+                ai_categories: moderationAction.ai_categories,
+                ai_max_score: moderationAction.ai_max_score,
+                message_content: payload.content?.substring(0, 500),
+                message_id: payload.message_id,
+                raid_mode_active: moderationAction.raid_mode_active,
+                dry_run: settings.dry_run_mode || DRY_RUN,
+                success: actionSuccess,
+                error_message: actionError,
+            }).catch(err => {
+                console.warn(`[moderation-worker] ⚠️ Failed to log moderation action:`, err instanceof Error ? err.message : 'Unknown')
+            })
         }
 
         // Bot reply check (works regardless of stream status - online or offline)
@@ -829,6 +884,9 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
             const replyEnabled = FORCE_BOT_REPLIES ? true : settings.bot_reply_enabled
             const replyCooldownMs = FORCE_BOT_REPLIES ? FORCE_BOT_REPLIES_COOLDOWN_MS : settings.bot_reply_cooldown_ms
             const aiReplyEnabled = FORCE_BOT_REPLIES ? true : settings.ai_reply_enabled
+            // Use settings from DB for mention/ask requirements
+            const requireMention = settings.bot_reply_require_mention ?? BOT_REPLY_REQUIRE_MENTION
+            const requireAsk = settings.bot_reply_require_ask ?? BOT_REPLY_REQUIRE_ASK
 
             if (!replyEnabled) {
                 if (VERBOSE_LOGS) {
@@ -839,19 +897,19 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                     console.log(`[moderation-worker] 💬 Skipping reply - user is exempt: ${payload.sender.username}`)
                 }
             } else if (
-                BOT_REPLY_REQUIRE_MENTION &&
+                requireMention &&
                 (() => {
                     const mentioned = isBotMentioned(payload.content, MODERATOR_USERNAME)
                     const asked = looksLikeRequestOrQuestion(payload.content)
                     const greeted = looksLikeGreeting(payload.content)
-                    return !mentioned || (BOT_REPLY_REQUIRE_ASK && !asked && !greeted)
+                    return !mentioned || (requireAsk && !asked && !greeted)
                 })()
             ) {
                 if (VERBOSE_LOGS) {
                     const mentioned = isBotMentioned(payload.content, MODERATOR_USERNAME)
                     const asked = looksLikeRequestOrQuestion(payload.content)
                     const greeted = looksLikeGreeting(payload.content)
-                    console.log(`[moderation-worker] 💬 Skipping reply - require mention${BOT_REPLY_REQUIRE_ASK ? '+(ask|greeting)' : ''} (mentioned=${mentioned}, asked=${asked}, greeted=${greeted})`)
+                    console.log(`[moderation-worker] 💬 Skipping reply - require mention${requireAsk ? '+(ask|greeting)' : ''} (mentioned=${mentioned}, asked=${asked}, greeted=${greeted})`)
                 }
             } else {
                 const broadcasterKey = broadcasterUserId.toString()
@@ -869,16 +927,20 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                     // No randomness: if we reached here, we reply.
                     // Generate reply using AI if enabled, otherwise simple fallback
                     let replyText: string | null = null
+                    let replyType: 'ai' | 'simple' | 'quick_response' = 'simple'
+                    const replyStartTime = Date.now()
 
                     // Mention-only pings should always get a quick response.
                     if (isBotMentioned(payload.content, MODERATOR_USERNAME) && isOnlyBotMention(payload.content, MODERATOR_USERNAME)) {
-                        replyText = pickOne(['yo?', 'sup?', 'yeah?', 'what you need?', 'what’s good?'])
+                        replyText = pickOne(['yo?', 'sup?', 'yeah?', 'what you need?', 'what's good?'])
+                        replyType = 'quick_response'
                     } else {
                         replyText = await generateBotReply(
                             payload.content,
                             payload.sender.username,
                             aiReplyEnabled
                         )
+                        replyType = aiReplyEnabled ? 'ai' : 'simple'
                     }
 
                     if (!replyText) {
@@ -892,13 +954,44 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                             type: 'user',
                         })
 
+                        const latencyMs = Date.now() - replyStartTime
+
                         if (replyResult.success) {
                             botRepliesCount++
                             botReplyCooldowns.set(broadcasterKey, now)
-                            const replyType = aiReplyEnabled ? 'AI' : 'simple'
                             console.log(`[moderation-worker] 💬 Bot replied (${replyType}): ${replyText.substring(0, 50)}...`)
+
+                            // Log the successful reply
+                            await logBotReply({
+                                broadcaster_user_id: broadcasterUserId,
+                                trigger_user_id: senderUserId,
+                                trigger_username: payload.sender.username,
+                                trigger_message: payload.content?.substring(0, 500) || '',
+                                reply_content: replyText,
+                                reply_type: replyType,
+                                ai_model: replyType === 'ai' ? (settings.ai_chat_model || 'gpt-4o-mini') : undefined,
+                                success: true,
+                                latency_ms: latencyMs,
+                            }).catch(() => {
+                                // Non-critical
+                            })
                         } else {
                             console.warn(`[moderation-worker] ⚠️ Bot reply failed: ${replyResult.error}`)
+
+                            // Log the failed reply
+                            await logBotReply({
+                                broadcaster_user_id: broadcasterUserId,
+                                trigger_user_id: senderUserId,
+                                trigger_username: payload.sender.username,
+                                trigger_message: payload.content?.substring(0, 500) || '',
+                                reply_content: replyText,
+                                reply_type: replyType,
+                                success: false,
+                                error_message: replyResult.error,
+                                latency_ms: latencyMs,
+                            }).catch(() => {
+                                // Non-critical
+                            })
                         }
                     }
                 }
