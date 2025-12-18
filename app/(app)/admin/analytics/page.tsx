@@ -238,20 +238,11 @@ export default function AnalyticsPage() {
 
     useEffect(() => {
         // Check admin access using dedicated endpoint
-        const token = localStorage.getItem('kick_access_token')
-        if (!token) {
-            router.push('/')
-            return
-        }
-
-        // SECURITY: Use dedicated admin verification endpoint
-        fetch('/api/admin/verify', {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-        })
-            .then(res => res.json())
-            .then(data => {
+        const checkAdmin = async () => {
+            try {
+                const { authenticatedFetchJson, getKickUserIdFromCookie } = await import('@/lib/api-client')
+                const kickUserId = getKickUserIdFromCookie()
+                const data = await authenticatedFetchJson<{ is_admin: boolean }>('/api/admin/verify', {}, kickUserId || undefined)
                 if (!data.is_admin) {
                     router.push('/')
                     return
@@ -274,8 +265,11 @@ export default function AnalyticsPage() {
 
                 // Always do a live refresh in background.
                 fetchAnalytics()
-            })
-            .catch(() => router.push('/'))
+            } catch {
+                router.push('/')
+            }
+        }
+        checkAdmin()
     }, [router])
 
     const applySummary = (summary: any) => {
@@ -301,12 +295,9 @@ export default function AnalyticsPage() {
     const fetchAnalytics = async () => {
         try {
             setLoading(true)
-            const token = localStorage.getItem('kick_access_token')
-            const response = await fetch('/api/admin/analytics/summary?topUsersLimit=50', {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-
-            const data = response.ok ? await response.json() : null
+            const { authenticatedFetchJson, getKickUserIdFromCookie } = await import('@/lib/api-client')
+            const kickUserId = getKickUserIdFromCookie()
+            const data = await authenticatedFetchJson('/api/admin/analytics/summary?topUsersLimit=50', {}, kickUserId || undefined)
             if (data) {
                 applySummary(data)
                 // Refresh cached prefetch payload

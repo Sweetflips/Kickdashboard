@@ -160,6 +160,9 @@ export async function GET(request: Request) {
 
         const tokenData = await tokenResponse.json()
 
+        // Track kick_user_id for cookie storage
+        let kickUserId: bigint | null = null
+
         // Fetch user data from Kick API
         try {
             const userResponse = await fetch(`${KICK_API_BASE}/users`, {
@@ -176,7 +179,7 @@ export async function GET(request: Request) {
 
                 if (Array.isArray(userDataArray) && userDataArray.length > 0) {
                     const userData = userDataArray[0]
-                    const kickUserId = BigInt(userData.user_id)
+                    kickUserId = BigInt(userData.user_id)
                     const username = userData.name || userData.username || 'Unknown'
                     const email = userData.email || null
                     const profilePictureUrl = userData.profile_picture && typeof userData.profile_picture === 'string' && userData.profile_picture.trim() !== ''
@@ -448,6 +451,19 @@ export async function GET(request: Request) {
 
         if (tokenData.refresh_token) {
             response.cookies.set('kick_refresh_token', tokenData.refresh_token, {
+                httpOnly: false, // Needs to be accessible from client-side JavaScript
+                secure: !isLocalhost,
+                sameSite: 'lax',
+                maxAge: threeMonthsInSeconds,
+                path: '/',
+                domain: isLocalhost ? undefined : COOKIE_DOMAIN,
+            })
+        }
+
+        // Store kick_user_id in cookie for reliable user lookup during token refresh
+        // This allows us to find the user even when token hash doesn't match (after refresh)
+        if (kickUserId !== null) {
+            response.cookies.set('kick_user_id', kickUserId.toString(), {
                 httpOnly: false, // Needs to be accessible from client-side JavaScript
                 secure: !isLocalhost,
                 sameSite: 'lax',

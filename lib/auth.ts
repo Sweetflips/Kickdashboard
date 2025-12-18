@@ -125,10 +125,42 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
     if (response.status === 401) {
       // Find user by token hash to get kickUserId for refresh
       const tokenHash = hashToken(accessToken)
-      const user = await db.user.findFirst({
+      let user = await db.user.findFirst({
         where: { access_token_hash: tokenHash },
         select: { kick_user_id: true },
       })
+
+      // Fallback: if token hash lookup fails, try to get kick_user_id from cookie
+      // This handles cases where token was refreshed but old hash is no longer in DB
+      if (!user) {
+        const cookieHeader = request.headers.get('cookie')
+        if (cookieHeader) {
+          const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+            const [key, value] = cookie.trim().split('=')
+            if (key && value) {
+              acc[key] = decodeURIComponent(value)
+            }
+            return acc
+          }, {} as Record<string, string>)
+
+          const kickUserIdFromCookie = cookies['kick_user_id']
+          if (kickUserIdFromCookie) {
+            try {
+              const kickUserId = BigInt(kickUserIdFromCookie)
+              // Verify user exists in database
+              const dbUser = await db.user.findUnique({
+                where: { kick_user_id: kickUserId },
+                select: { kick_user_id: true },
+              })
+              if (dbUser) {
+                user = { kick_user_id: dbUser.kick_user_id }
+              }
+            } catch {
+              // Invalid kick_user_id format, continue with null user
+            }
+          }
+        }
+      }
 
       if (user) {
         const newToken = await refreshTokenForUser(user.kick_user_id)

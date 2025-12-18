@@ -39,23 +39,13 @@ export default function AdventCard({ item, userBalance, onPurchase }: AdventCard
   const purchaseDeadlineLabel = useMemo(() => formatPurchaseDeadlineLabel(item.day), [item.day])
 
   const handleBuy = async (quantity: number) => {
-    const token = getClientAccessToken()
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (token) headers['Authorization'] = `Bearer ${token}`
-
-    const response = await fetch(`/api/advent/${item.id}/buy`, {
+    const { authenticatedFetchJson, getKickUserIdFromCookie } = await import('@/lib/api-client')
+    const kickUserId = getKickUserIdFromCookie()
+    const data = await authenticatedFetchJson(`/api/advent/${item.id}/buy`, {
       method: 'POST',
-      credentials: 'include',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ quantity }),
-    })
-
-    if (!response.ok) {
-      const data = await response.json()
-      throw new Error(data.error || 'Failed to purchase')
-    }
-
-    const data = await response.json()
+    }, kickUserId || undefined)
     onPurchase()
     return data
   }

@@ -43,6 +43,9 @@ export async function GET(request: Request) {
         // Filter by status
         if (status && status !== 'all') {
             where.status = status
+        } else if (status === 'all' && includeHidden) {
+            // Admin view with status=all: show all statuses
+            // No status filter applied
         } else {
             // Default: show active and upcoming
             where.status = {

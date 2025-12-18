@@ -4,6 +4,7 @@ import RaffleWheel from '@/components/RaffleWheel'
 import { Toast } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { authenticatedFetchJson, getKickUserIdFromCookie } from '@/lib/api-client'
 
 type OverlayExamples = {
     raffleOverlayUrlTemplate: string
@@ -90,21 +91,10 @@ export default function AdminRafflesPage() {
     const fetchOverlayKey = async () => {
         try {
             setOverlayKeyLoading(true)
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) return
-
-            const response = await fetch('/api/admin/overlay-key', {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-
-            if (response.ok) {
-                const data = await response.json()
-                setOverlayKey(data?.key || null)
-                setOverlayExamples(data?.overlayExamples || null)
-            } else {
-                setOverlayKey(null)
-                setOverlayExamples(null)
-            }
+            const kickUserId = getKickUserIdFromCookie()
+            const data = await authenticatedFetchJson<{ key?: string; overlayExamples?: OverlayExamples }>('/api/admin/overlay-key', {}, kickUserId || undefined)
+            setOverlayKey(data?.key || null)
+            setOverlayExamples(data?.overlayExamples || null)
         } catch {
             setOverlayKey(null)
             setOverlayExamples(null)
@@ -141,28 +131,13 @@ export default function AdminRafflesPage() {
 
     const checkAdmin = async () => {
         try {
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) {
+            const kickUserId = getKickUserIdFromCookie()
+            const data = await authenticatedFetchJson<{ is_admin: boolean }>('/api/admin/verify', {}, kickUserId || undefined)
+            if (!data.is_admin) {
                 router.push('/')
                 return
             }
-
-            // SECURITY: Use dedicated admin verification endpoint
-            const response = await fetch('/api/admin/verify', {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            })
-            if (response.ok) {
-                const data = await response.json()
-                if (!data.is_admin) {
-                    router.push('/')
-                    return
-                }
-                setUserData({ is_admin: true })
-            } else {
-                router.push('/')
-            }
+            setUserData({ is_admin: true })
         } catch (error) {
             console.error('Error checking admin:', error)
             router.push('/')
@@ -174,21 +149,11 @@ export default function AdminRafflesPage() {
     const fetchRaffles = async () => {
         try {
             setLoading(true)
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) return
-
+            const kickUserId = getKickUserIdFromCookie()
             // Include hidden raffles for admin view
             const statusParam = selectedStatus === 'all' ? '?include_hidden=true' : `?status=${selectedStatus}&include_hidden=true`
-            const response = await fetch(`/api/raffles${statusParam}`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            })
-
-            if (response.ok) {
-                const data = await response.json()
-                setRaffles(data.raffles || [])
-            }
+            const data = await authenticatedFetchJson<{ raffles: Raffle[] }>(`/api/raffles${statusParam}`, {}, kickUserId || undefined)
+            setRaffles(data.raffles || [])
         } catch (error) {
             console.error('Error fetching raffles:', error)
         } finally {
@@ -202,26 +167,15 @@ export default function AdminRafflesPage() {
         }
 
         try {
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) return
-
-            const response = await fetch(`/api/raffles/${id}/end`, {
+            const kickUserId = getKickUserIdFromCookie()
+            await authenticatedFetchJson(`/api/raffles/${id}/end`, {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            })
-
-            if (response.ok) {
-                setToast({ message: 'Raffle ended early.', type: 'success' })
-                await fetchRaffles()
-            } else {
-                const error = await response.json()
-                setToast({ message: error.error || 'Failed to end raffle', type: 'error' })
-            }
-        } catch (error) {
+            }, kickUserId || undefined)
+            setToast({ message: 'Raffle ended early.', type: 'success' })
+            await fetchRaffles()
+        } catch (error: any) {
             console.error('Error ending raffle:', error)
-            setToast({ message: 'Failed to end raffle', type: 'error' })
+            setToast({ message: error?.data?.error || error?.message || 'Failed to end raffle', type: 'error' })
         }
     }
 
@@ -231,76 +185,47 @@ export default function AdminRafflesPage() {
         }
 
         try {
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) return
-
-            const response = await fetch(`/api/raffles/${id}/draw`, {
+            const kickUserId = getKickUserIdFromCookie()
+            const data = await authenticatedFetchJson<{ winners: any[] }>(`/api/raffles/${id}/draw`, {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            })
-
-            if (response.ok) {
-                const data = await response.json()
-                setToast({ message: '🎉 Winners have been drawn successfully.', type: 'success' })
-                await fetchRaffles()
-                // If we got winners back, show them in modal (include metadata for wheel animation)
-                if (data && data.winners && data.winners.length > 0) {
-                    // Fetch raffle metadata for modal
-                    const raffleResp = await fetch(`/api/raffles/${id}`)
-                    const raffleData = raffleResp.ok ? await raffleResp.json() : null
-                    setViewingWinners({ raffle: raffleData?.raffle || { id }, winners: data.winners.map((w: any) => ({
-                        id: w.entry_id,
-                        username: w.username,
-						user_id: w.user_id,
-                        tickets: w.tickets,
-                        selected_ticket_index: w.selected_ticket_index,
-                        ticket_range_start: w.ticket_range_start,
-                        ticket_range_end: w.ticket_range_end,
-                        spin_number: w.spin_number,
-                        is_rigged: w.is_rigged,
-                    })) })
-                }
-            } else {
-                const error = await response.json()
-                setToast({ message: error.error || 'Failed to draw winners', type: 'error' })
+            }, kickUserId || undefined)
+            setToast({ message: '🎉 Winners have been drawn successfully.', type: 'success' })
+            await fetchRaffles()
+            // If we got winners back, show them in modal (include metadata for wheel animation)
+            if (data && data.winners && data.winners.length > 0) {
+                // Fetch raffle metadata for modal
+                const raffleData = await authenticatedFetchJson<{ raffle: Raffle }>(`/api/raffles/${id}`, {}, kickUserId || undefined).catch(() => null)
+                setViewingWinners({ raffle: raffleData?.raffle || { id }, winners: data.winners.map((w: any) => ({
+                    id: w.entry_id,
+                    username: w.username,
+                    user_id: w.user_id,
+                    tickets: w.tickets,
+                    selected_ticket_index: w.selected_ticket_index,
+                    ticket_range_start: w.ticket_range_start,
+                    ticket_range_end: w.ticket_range_end,
+                    spin_number: w.spin_number,
+                    is_rigged: w.is_rigged,
+                })) })
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error drawing winners:', error)
-            setToast({ message: 'Failed to draw winners. Try again or contact support.', type: 'error' })
+            setToast({ message: error?.data?.error || error?.message || 'Failed to draw winners. Try again or contact support.', type: 'error' })
         }
     }
 
     const handleViewWinners = async (raffle: Raffle) => {
         try {
             setLoadingWinners(true)
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) return
+            const kickUserId = getKickUserIdFromCookie()
+            const data = await authenticatedFetchJson<{ winners: Winner[] }>(`/api/raffles/${raffle.id}/winners`, {}, kickUserId || undefined)
+            setViewingWinners({ raffle, winners: data.winners || [] })
 
-            const response = await fetch(`/api/raffles/${raffle.id}/winners`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            })
-
-            if (response.ok) {
-                const data = await response.json()
-                setViewingWinners({ raffle, winners: data.winners || [] })
-
-                // Load entries for wheel
-                const entriesResp = await fetch(`/api/raffles/${raffle.id}/entries`)
-                if (entriesResp.ok) {
-                    const entriesData = await entriesResp.json()
-                    setEntriesForWheel(entriesData.entries || [])
-                }
-            } else {
-                const error = await response.json()
-                setToast({ message: error.error || 'Failed to fetch winners', type: 'error' })
-            }
-        } catch (error) {
+            // Load entries for wheel
+            const entriesData = await authenticatedFetchJson<{ entries: any[] }>(`/api/raffles/${raffle.id}/entries`, {}, kickUserId || undefined).catch(() => ({ entries: [] }))
+            setEntriesForWheel(entriesData.entries || [])
+        } catch (error: any) {
             console.error('Error fetching winners:', error)
-            setToast({ message: 'Failed to fetch winners', type: 'error' })
+            setToast({ message: error?.data?.error || error?.message || 'Failed to fetch winners', type: 'error' })
         } finally {
             setLoadingWinners(false)
         }
@@ -309,63 +234,52 @@ export default function AdminRafflesPage() {
     const handleResetDraw = async (raffleId: string) => {
         if (!confirm('Reset draw? All winners will be deleted and raffle will be made active again.')) return
         try {
-            const token = localStorage.getItem('kick_access_token')
-            const resp = await fetch(`/api/raffles/${raffleId}/reset`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
-            if (resp.ok) {
-                setToast({ message: 'Draw has been reset.', type: 'success' })
-                await fetchRaffles()
-            } else {
-                const err = await resp.json()
-                setToast({ message: err.error || 'Failed to reset draw', type: 'error' })
-            }
-        } catch (err) {
-            setToast({ message: 'Failed to reset draw', type: 'error' })
+            const kickUserId = getKickUserIdFromCookie()
+            await authenticatedFetchJson(`/api/raffles/${raffleId}/reset`, { method: 'POST' }, kickUserId || undefined)
+            setToast({ message: 'Draw has been reset.', type: 'success' })
+            await fetchRaffles()
+        } catch (err: any) {
+            setToast({ message: err?.data?.error || err?.message || 'Failed to reset draw', type: 'error' })
         }
     }
 
     const handleRemoveTicketInstance = async (raffleId: string, entryId: string) => {
         if (!confirm('Remove this ticket instance?')) return
         try {
-            const token = localStorage.getItem('kick_access_token')
-            const response = await fetch(`/api/raffles/${raffleId}/entries/${entryId}/remove`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ count: 1 }) })
-            if (response.ok) {
-                setToast({ message: 'Ticket instance removed.', type: 'success' })
-                await fetchRaffles()
-                if (viewingWinners) {
-                    // refresh entries for wheel to update slices
-                    const entriesResp = await fetch(`/api/raffles/${viewingWinners.raffle.id}/entries`)
-                    const entriesData = entriesResp.ok ? await entriesResp.json() : null
-                    setEntriesForWheel(entriesData?.entries || [])
-                }
-            } else {
-                const err = await response.json()
-                setToast({ message: err.error || 'Failed to remove ticket', type: 'error' })
+            const kickUserId = getKickUserIdFromCookie()
+            await authenticatedFetchJson(`/api/raffles/${raffleId}/entries/${entryId}/remove`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ count: 1 }),
+            }, kickUserId || undefined)
+            setToast({ message: 'Ticket instance removed.', type: 'success' })
+            await fetchRaffles()
+            if (viewingWinners) {
+                // refresh entries for wheel to update slices
+                const entriesData = await authenticatedFetchJson<{ entries: any[] }>(`/api/raffles/${viewingWinners.raffle.id}/entries`, {}, kickUserId || undefined).catch(() => ({ entries: [] }))
+                setEntriesForWheel(entriesData.entries || [])
             }
-        } catch (err) {
-            setToast({ message: 'Failed to remove ticket', type: 'error' })
+        } catch (err: any) {
+            setToast({ message: err?.data?.error || err?.message || 'Failed to remove ticket', type: 'error' })
         }
     }
 
     const handleRemoveAllInstances = async (raffleId: string, entryId: string) => {
         if (!confirm('Remove all instances for this user?')) return
         try {
-            const token = localStorage.getItem('kick_access_token')
-            const response = await fetch(`/api/raffles/${raffleId}/entries/${entryId}/remove-all`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
-            if (response.ok) {
-                setToast({ message: 'All instances removed for this user.', type: 'success' })
-                await fetchRaffles()
-                if (viewingWinners) {
-                    // refresh entries for wheel to update slices
-                    const entriesResp = await fetch(`/api/raffles/${viewingWinners.raffle.id}/entries`)
-                    const entriesData = entriesResp.ok ? await entriesResp.json() : null
-                    setEntriesForWheel(entriesData?.entries || [])
-                }
-            } else {
-                const err = await response.json()
-                setToast({ message: err.error || 'Failed to remove instances', type: 'error' })
+            const kickUserId = getKickUserIdFromCookie()
+            await authenticatedFetchJson(`/api/raffles/${raffleId}/entries/${entryId}/remove-all`, {
+                method: 'POST',
+            }, kickUserId || undefined)
+            setToast({ message: 'All instances removed for this user.', type: 'success' })
+            await fetchRaffles()
+            if (viewingWinners) {
+                // refresh entries for wheel to update slices
+                const entriesData = await authenticatedFetchJson<{ entries: any[] }>(`/api/raffles/${viewingWinners.raffle.id}/entries`, {}, kickUserId || undefined).catch(() => ({ entries: [] }))
+                setEntriesForWheel(entriesData.entries || [])
             }
-        } catch (err) {
-            setToast({ message: 'Failed to remove instances', type: 'error' })
+        } catch (err: any) {
+            setToast({ message: err?.data?.error || err?.message || 'Failed to remove instances', type: 'error' })
         }
     }
 
@@ -379,58 +293,38 @@ export default function AdminRafflesPage() {
         }
 
         try {
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) return
-
-            const response = await fetch(`/api/raffles/${id}`, {
+            const kickUserId = getKickUserIdFromCookie()
+            await authenticatedFetchJson(`/api/raffles/${id}`, {
                 method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            })
-
-            if (response.ok) {
-                setToast({ message: 'Raffle deleted.', type: 'success' })
-                await fetchRaffles()
-            } else {
-                const error = await response.json()
-                setToast({ message: error.error || 'Failed to delete raffle', type: 'error' })
-            }
-        } catch (error) {
+            }, kickUserId || undefined)
+            setToast({ message: 'Raffle deleted.', type: 'success' })
+            await fetchRaffles()
+        } catch (error: any) {
             console.error('Error deleting raffle:', error)
-            setToast({ message: 'Failed to delete raffle', type: 'error' })
+            setToast({ message: error?.data?.error || error?.message || 'Failed to delete raffle', type: 'error' })
         }
     }
 
     const handleToggleHidden = async (id: string, currentlyHidden: boolean) => {
         try {
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) return
-
-            const response = await fetch(`/api/raffles/${id}`, {
+            const kickUserId = getKickUserIdFromCookie()
+            await authenticatedFetchJson(`/api/raffles/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
                     hidden: !currentlyHidden,
                 }),
+            }, kickUserId || undefined)
+            setToast({
+                message: currentlyHidden ? 'Raffle is now visible to users.' : 'Raffle hidden from public view.',
+                type: 'success',
             })
-
-            if (response.ok) {
-                setToast({
-                    message: currentlyHidden ? 'Raffle is now visible to users.' : 'Raffle hidden from public view.',
-                    type: 'success',
-                })
-                await fetchRaffles()
-            } else {
-                const error = await response.json()
-                setToast({ message: error.error || 'Failed to update raffle', type: 'error' })
-            }
-        } catch (error) {
+            await fetchRaffles()
+        } catch (error: any) {
             console.error('Error toggling raffle visibility:', error)
-            setToast({ message: 'Failed to update raffle', type: 'error' })
+            setToast({ message: error?.data?.error || error?.message || 'Failed to update raffle', type: 'error' })
         }
     }
 

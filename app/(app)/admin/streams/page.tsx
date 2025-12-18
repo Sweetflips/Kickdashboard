@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { authenticatedFetchJson, getKickUserIdFromCookie } from '@/lib/api-client'
 
 interface StreamSession {
     id: string
@@ -38,20 +39,10 @@ export default function AdminStreamsPage() {
 
     useEffect(() => {
         // Check admin access using dedicated endpoint
-        const token = localStorage.getItem('kick_access_token')
-        if (!token) {
-            router.push('/')
-            return
-        }
-
-        // SECURITY: Use dedicated admin verification endpoint
-        fetch('/api/admin/verify', {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-        })
-            .then(res => res.json())
-            .then(data => {
+        const checkAdmin = async () => {
+            try {
+                const kickUserId = getKickUserIdFromCookie()
+                const data = await authenticatedFetchJson<{ is_admin: boolean }>('/api/admin/verify', {}, kickUserId || undefined)
                 if (!data.is_admin) {
                     router.push('/')
                     return
@@ -59,21 +50,20 @@ export default function AdminStreamsPage() {
                 setUserData({ is_admin: true })
                 fetchStreams()
                 checkTestSessionStatus()
-            })
-            .catch(() => router.push('/'))
+            } catch {
+                router.push('/')
+            }
+        }
+        checkAdmin()
     }, [router])
 
     const fetchStreams = async () => {
         try {
             setLoading(true)
+            const kickUserId = getKickUserIdFromCookie()
             // Default to deduplicated view (a single real stream can sometimes create a short "phantom" session on flaps/reconnects)
-            const response = await fetch(`/api/stream-sessions?limit=${limit}&offset=${offset}`, {
-                credentials: 'include', // Include cookies for authentication
-            })
-            if (response.ok) {
-                const data = await response.json()
-                setSessions(data.sessions || [])
-            }
+            const data = await authenticatedFetchJson<{ sessions: StreamSession[] }>(`/api/stream-sessions?limit=${limit}&offset=${offset}`, {}, kickUserId || undefined)
+            setSessions(data.sessions || [])
         } catch (error) {
             console.error('Error fetching streams:', error)
         } finally {
@@ -83,18 +73,12 @@ export default function AdminStreamsPage() {
 
     const checkTestSessionStatus = async () => {
         try {
-            const token = localStorage.getItem('kick_access_token')
-            const response = await fetch('/api/admin/test-session', {
-                headers: { 'Authorization': `Bearer ${token}` },
-                credentials: 'include',
-            })
-            if (response.ok) {
-                const data = await response.json()
-                // Only show "TEST MODE ACTIVE" when the active session is explicitly a test session.
-                // Real live sessions also create an active streamSession row, which should NOT trigger test mode UI.
-                setTestSessionActive(data.isTestSession === true)
-                setTestSessionId(data.session?.id || null)
-            }
+            const kickUserId = getKickUserIdFromCookie()
+            const data = await authenticatedFetchJson<{ isTestSession?: boolean; session?: { id: string } }>('/api/admin/test-session', {}, kickUserId || undefined)
+            // Only show "TEST MODE ACTIVE" when the active session is explicitly a test session.
+            // Real live sessions also create an active streamSession row, which should NOT trigger test mode UI.
+            setTestSessionActive(data.isTestSession === true)
+            setTestSessionId(data.session?.id || null)
         } catch (error) {
             console.error('Error checking test session:', error)
         }
@@ -105,17 +89,14 @@ export default function AdminStreamsPage() {
 
         try {
             setTestSessionLoading(true)
-            const token = localStorage.getItem('kick_access_token')
+            const kickUserId = getKickUserIdFromCookie()
 
             if (testSessionActive) {
                 // End the session
-                const response = await fetch('/api/admin/test-session', {
+                const result = await authenticatedFetchJson<{ success: boolean; error?: string }>('/api/admin/test-session', {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    credentials: 'include',
-                })
-                const result = await response.json()
-                if (response.ok && result.success) {
+                }, kickUserId || undefined)
+                if (result.success) {
                     setTestSessionActive(false)
                     setTestSessionId(null)
                     setSyncResult({
@@ -131,13 +112,10 @@ export default function AdminStreamsPage() {
                 }
             } else {
                 // Start a new session
-                const response = await fetch('/api/admin/test-session', {
+                const result = await authenticatedFetchJson<{ success: boolean; session?: { id: string }; error?: string }>('/api/admin/test-session', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    credentials: 'include',
-                })
-                const result = await response.json()
-                if (response.ok && result.success) {
+                }, kickUserId || undefined)
+                if (result.success) {
                     setTestSessionActive(true)
                     setTestSessionId(result.session?.id || null)
                     setSyncResult({
@@ -152,9 +130,9 @@ export default function AdminStreamsPage() {
                     })
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error toggling test session:', error)
-            setSyncResult({ success: false, error: 'Failed to toggle test session' })
+            setSyncResult({ success: false, error: error?.data?.error || error?.message || 'Failed to toggle test session' })
         } finally {
             setTestSessionLoading(false)
         }
@@ -168,29 +146,17 @@ export default function AdminStreamsPage() {
             setSyncResult(null)
             // Always sync the monitored channel, not the logged-in user's channel
             const channelSlug = 'sweetflips'
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) {
-                router.push('/')
-                return
-            }
-
-            const response = await fetch(`/api/admin/sync-streams?slug=${channelSlug}&force=1`, {
+            const kickUserId = getKickUserIdFromCookie()
+            const result = await authenticatedFetchJson(`/api/admin/sync-streams?slug=${channelSlug}&force=1`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-                credentials: 'include',
-            })
-
-            const result = await response.json()
+            }, kickUserId || undefined)
             setSyncResult(result)
-            if (response.ok) {
+            if (result.success) {
                 await fetchStreams()
             }
-
-        } catch (error) {
+        } catch (error: any) {
             console.error('Sync error:', error)
-            setSyncResult({ success: false, error: 'Failed to execute sync' })
+            setSyncResult({ success: false, error: error?.data?.error || error?.message || 'Failed to execute sync' })
         } finally {
             setSyncing(false)
         }
@@ -203,28 +169,18 @@ export default function AdminStreamsPage() {
 
         try {
             setDeletingId(sessionId)
-            const response = await fetch(`/api/stream-sessions?id=${sessionId}`, {
+            const kickUserId = getKickUserIdFromCookie()
+            const result = await authenticatedFetchJson<{ success?: boolean; error?: string; message?: string }>(`/api/stream-sessions?id=${sessionId}`, {
                 method: 'DELETE',
-                credentials: 'include',
+            }, kickUserId || undefined)
+            setSyncResult({
+                success: true,
+                message: result.message || 'Stream deleted successfully',
             })
-
-            const result = await response.json()
-
-            if (response.ok) {
-                setSyncResult({
-                    success: true,
-                    message: 'Stream deleted successfully',
-                })
-                await fetchStreams()
-            } else {
-                setSyncResult({
-                    success: false,
-                    error: result.error || 'Failed to delete stream',
-                })
-            }
-        } catch (error) {
+            await fetchStreams()
+        } catch (error: any) {
             console.error('Delete stream error:', error)
-            setSyncResult({ success: false, error: 'Failed to delete stream' })
+            setSyncResult({ success: false, error: error?.data?.error || error?.message || 'Failed to delete stream' })
         } finally {
             setDeletingId(null)
         }
@@ -233,37 +189,24 @@ export default function AdminStreamsPage() {
     const handleMergeStream = async (sessionId: string) => {
         try {
             setMergingId(sessionId)
-            const token = localStorage.getItem('kick_access_token')
-            if (!token) {
-                router.push('/')
-                return
-            }
-
-            const response = await fetch('/api/admin/merge-stream-sessions', {
+            const kickUserId = getKickUserIdFromCookie()
+            const result = await authenticatedFetchJson<{ result?: { primarySessionId: string }; error?: string }>('/api/admin/merge-stream-sessions', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify({ sessionId }),
-                credentials: 'include',
+            }, kickUserId || undefined)
+            setSyncResult({
+                success: true,
+                message: result?.result
+                    ? `Merged into session ${result.result.primarySessionId}`
+                    : 'No duplicates found to merge',
             })
-
-            const result = await response.json()
-            if (response.ok) {
-                setSyncResult({
-                    success: true,
-                    message: result?.result
-                        ? `Merged into session ${result.result.primarySessionId}`
-                        : 'No duplicates found to merge',
-                })
-                await fetchStreams()
-            } else {
-                setSyncResult({ success: false, error: result.error || 'Failed to merge sessions' })
-            }
-        } catch (error) {
+            await fetchStreams()
+        } catch (error: any) {
             console.error('Merge stream error:', error)
-            setSyncResult({ success: false, error: 'Failed to merge sessions' })
+            setSyncResult({ success: false, error: error?.data?.error || error?.message || 'Failed to merge sessions' })
         } finally {
             setMergingId(null)
         }
@@ -272,30 +215,20 @@ export default function AdminStreamsPage() {
     const handleFetchStreamThumbnail = async (sessionId: string) => {
         try {
             setFetchingThumbnailId(sessionId)
-            const response = await fetch('/api/admin/fetch-stream-thumbnail', {
+            const kickUserId = getKickUserIdFromCookie()
+            const result = await authenticatedFetchJson<{ success?: boolean; error?: string }>('/api/admin/fetch-stream-thumbnail', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId }),
-                credentials: 'include',
+            }, kickUserId || undefined)
+            setSyncResult({
+                success: true,
+                message: 'Thumbnail updated successfully',
             })
-
-            const result = await response.json()
-
-            if (response.ok) {
-                setSyncResult({
-                    success: true,
-                    message: 'Thumbnail updated successfully',
-                })
-                await fetchStreams()
-            } else {
-                setSyncResult({
-                    success: false,
-                    error: result.error || 'Failed to fetch thumbnail',
-                })
-            }
-        } catch (error) {
+            await fetchStreams()
+        } catch (error: any) {
             console.error('Fetch thumbnail error:', error)
-            setSyncResult({ success: false, error: 'Failed to fetch thumbnail' })
+            setSyncResult({ success: false, error: error?.data?.error || error?.message || 'Failed to fetch thumbnail' })
         } finally {
             setFetchingThumbnailId(null)
         }
@@ -312,7 +245,8 @@ export default function AdminStreamsPage() {
 
         try {
             setUpdatingThumbnail(true)
-            const response = await fetch('/api/admin/update-stream-thumbnail', {
+            const kickUserId = getKickUserIdFromCookie()
+            await authenticatedFetchJson('/api/admin/update-stream-thumbnail', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -320,29 +254,18 @@ export default function AdminStreamsPage() {
                     thumbnailUrl: editThumbnailUrl || undefined,
                     kickVideoId: editKickVideoId || undefined,
                 }),
-                credentials: 'include',
+            }, kickUserId || undefined)
+            setSyncResult({
+                success: true,
+                message: 'Thumbnail updated successfully',
             })
-
-            const result = await response.json()
-
-            if (response.ok) {
-                setSyncResult({
-                    success: true,
-                    message: 'Thumbnail updated successfully',
-                })
-                setEditingThumbnailId(null)
-                setEditThumbnailUrl('')
-                setEditKickVideoId('')
-                await fetchStreams()
-            } else {
-                setSyncResult({
-                    success: false,
-                    error: result.error || 'Failed to update thumbnail',
-                })
-            }
-        } catch (error) {
+            setEditingThumbnailId(null)
+            setEditThumbnailUrl('')
+            setEditKickVideoId('')
+            await fetchStreams()
+        } catch (error: any) {
             console.error('Update thumbnail error:', error)
-            setSyncResult({ success: false, error: 'Failed to update thumbnail' })
+            setSyncResult({ success: false, error: error?.data?.error || error?.message || 'Failed to update thumbnail' })
         } finally {
             setUpdatingThumbnail(false)
         }
