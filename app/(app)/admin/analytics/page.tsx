@@ -333,16 +333,19 @@ export default function AnalyticsPage() {
 
     return (
         <div className="space-y-6">
-                <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-kick-text mb-6">Analytics</h1>
+                <div className="bg-white dark:bg-kick-surface rounded-xl shadow-lg border border-gray-200 dark:border-kick-border p-8">
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-kick-text mb-2">Analytics Dashboard</h1>
+                        <p className="text-gray-600 dark:text-kick-text-secondary">Comprehensive insights into your community engagement</p>
+                    </div>
 
                     {/* Tabs */}
-                    <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-kick-border">
+                    <div className="flex gap-1 mb-8 bg-gray-100 dark:bg-kick-dark rounded-lg p-1">
                         <button
                             onClick={() => setActiveTab('overview')}
-                            className={`px-4 py-2 font-medium transition-colors ${
+                            className={`px-6 py-3 font-semibold rounded-md transition-all ${
                                 activeTab === 'overview'
-                                    ? 'text-kick-purple border-b-2 border-kick-purple'
+                                    ? 'bg-white dark:bg-kick-surface text-kick-purple shadow-sm'
                                     : 'text-gray-600 dark:text-kick-text-secondary hover:text-gray-900 dark:hover:text-kick-text'
                             }`}
                         >
@@ -350,9 +353,9 @@ export default function AnalyticsPage() {
                         </button>
                         <button
                             onClick={() => setActiveTab('users')}
-                            className={`px-4 py-2 font-medium transition-colors ${
+                            className={`px-6 py-3 font-semibold rounded-md transition-all ${
                                 activeTab === 'users'
-                                    ? 'text-kick-purple border-b-2 border-kick-purple'
+                                    ? 'bg-white dark:bg-kick-surface text-kick-purple shadow-sm'
                                     : 'text-gray-600 dark:text-kick-text-secondary hover:text-gray-900 dark:hover:text-kick-text'
                             }`}
                         >
@@ -368,59 +371,83 @@ export default function AnalyticsPage() {
                         <>
                             {/* Overall Stats */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                                <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
-                                    <p className="text-sm opacity-90 mb-2">Total Views</p>
-                                    <p className="text-3xl font-bold">{(stats.totalViews ?? 0).toLocaleString()}</p>
+                                <div className="bg-gradient-to-br from-kick-purple to-purple-700 dark:from-kick-purple dark:to-purple-800 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-sm opacity-90">Total Views</p>
+                                        <svg className="w-5 h-5 opacity-70" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-4xl font-bold">{(stats.totalViews ?? 0).toLocaleString()}</p>
                                 </div>
-                                <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
-                                    <p className="text-sm opacity-90 mb-2">Total Messages</p>
-                                    <p className="text-3xl font-bold">{(stats.totalMessages ?? 0).toLocaleString()}</p>
+                                <div className="bg-gradient-to-br from-kick-purple to-purple-700 dark:from-kick-purple dark:to-purple-800 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-sm opacity-90">Total Messages</p>
+                                        <svg className="w-5 h-5 opacity-70" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-4xl font-bold">{(stats.totalMessages ?? 0).toLocaleString()}</p>
                                 </div>
-                                <div className="bg-kick-green/80 dark:bg-kick-green/60 rounded-lg p-6 text-white">
-                                    <p className="text-sm opacity-90 mb-2">Active Users</p>
-                                    <p className="text-3xl font-bold">{(stats.activeUsers ?? 0).toLocaleString()}</p>
+                                <div className="bg-gradient-to-br from-kick-green to-green-700 dark:from-kick-green dark:to-green-800 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-sm opacity-90">Active Users</p>
+                                        <svg className="w-5 h-5 opacity-70" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-4xl font-bold">{(stats.activeUsers ?? 0).toLocaleString()}</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
-                                    <p className="text-sm opacity-90 mb-2">Total Streams</p>
-                                    <p className="text-3xl font-bold">{(stats.totalStreams ?? 0).toLocaleString()}</p>
+                                <div className="bg-gradient-to-br from-blue-500 to-blue-700 dark:from-blue-600 dark:to-blue-800 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-sm opacity-90">Total Streams</p>
+                                        <svg className="w-5 h-5 opacity-70" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-4xl font-bold">{(stats.totalStreams ?? 0).toLocaleString()}</p>
                                 </div>
-                                <div className="bg-kick-purple/80 dark:bg-kick-purple/60 rounded-lg p-6 text-white">
-                                    <p className="text-sm opacity-90 mb-2">Total Sweetflips Coins Awarded</p>
-                                    <p className="text-3xl font-bold">{(stats.totalSweetCoins ?? 0).toLocaleString()}</p>
+                                <div className="bg-gradient-to-br from-amber-500 to-amber-700 dark:from-amber-600 dark:to-amber-800 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-sm opacity-90">Total Sweetflips Coins</p>
+                                        <Image src="/icons/Sweetflipscoin.png" alt="" width={24} height={24} className="w-6 h-6 opacity-90" />
+                                    </div>
+                                    <p className="text-4xl font-bold">{(stats.totalSweetCoins ?? 0).toLocaleString()}</p>
                                 </div>
                             </div>
 
                             {/* Activity Type Breakdown */}
-                            <div className="mt-6">
-                                <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">Activity Breakdown</h2>
+                            <div className="mt-8">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-kick-text mb-6">Activity Breakdown</h2>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-4 border border-gray-200 dark:border-kick-border">
-                                        <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-1">Total Messages</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.messages ?? 0).toLocaleString()}</p>
+                                    <div className="bg-white dark:bg-kick-surface rounded-xl p-5 border border-gray-200 dark:border-kick-border shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="text-sm font-medium text-gray-600 dark:text-kick-text-secondary mb-2">Total Messages</p>
+                                        <p className="text-3xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.messages ?? 0).toLocaleString()}</p>
                                     </div>
-                                    <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-4 border border-gray-200 dark:border-kick-border">
-                                        <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-1">Messages with Emotes</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.messages_with_emotes ?? 0).toLocaleString()}</p>
-                                        <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
+                                    <div className="bg-white dark:bg-kick-surface rounded-xl p-5 border border-gray-200 dark:border-kick-border shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="text-sm font-medium text-gray-600 dark:text-kick-text-secondary mb-2">Messages with Emotes</p>
+                                        <p className="text-3xl font-bold text-kick-green">{(activityTypes.messages_with_emotes ?? 0).toLocaleString()}</p>
+                                        <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-2">
                                             {(activityTypes.messages ?? 0) > 0
-                                                ? `${(((activityTypes.messages_with_emotes ?? 0) / (activityTypes.messages ?? 0)) * 100).toFixed(1)}%`
+                                                ? `${(((activityTypes.messages_with_emotes ?? 0) / (activityTypes.messages ?? 0)) * 100).toFixed(1)}% of total`
                                                 : '0%'}
                                         </p>
                                     </div>
-                                    <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-4 border border-gray-200 dark:border-kick-border">
-                                        <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-1">Text Only Messages</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.messages_with_text_only ?? 0).toLocaleString()}</p>
-                                        <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
+                                    <div className="bg-white dark:bg-kick-surface rounded-xl p-5 border border-gray-200 dark:border-kick-border shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="text-sm font-medium text-gray-600 dark:text-kick-text-secondary mb-2">Text Only Messages</p>
+                                        <p className="text-3xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.messages_with_text_only ?? 0).toLocaleString()}</p>
+                                        <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-2">
                                             {(activityTypes.messages ?? 0) > 0
-                                                ? `${(((activityTypes.messages_with_text_only ?? 0) / (activityTypes.messages ?? 0)) * 100).toFixed(1)}%`
+                                                ? `${(((activityTypes.messages_with_text_only ?? 0) / (activityTypes.messages ?? 0)) * 100).toFixed(1)}% of total`
                                                 : '0%'}
                                         </p>
                                     </div>
-                                    <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-4 border border-gray-200 dark:border-kick-border">
-                                        <p className="text-sm text-gray-600 dark:text-kick-text-secondary mb-1">Total Emotes Sent</p>
-                                        <p className="text-2xl font-bold text-gray-900 dark:text-kick-text">{(activityTypes.emotes ?? 0).toLocaleString()}</p>
+                                    <div className="bg-white dark:bg-kick-surface rounded-xl p-5 border border-gray-200 dark:border-kick-border shadow-sm hover:shadow-md transition-shadow">
+                                        <p className="text-sm font-medium text-gray-600 dark:text-kick-text-secondary mb-2">Total Emotes Sent</p>
+                                        <p className="text-3xl font-bold text-kick-purple">{(activityTypes.emotes ?? 0).toLocaleString()}</p>
                                     </div>
                                 </div>
                             </div>
@@ -466,9 +493,9 @@ export default function AnalyticsPage() {
 
                             {/* Daily Activity Chart */}
                             {overallStats?.daily_activity && overallStats.daily_activity.length > 0 && (
-                                <div className="mt-6">
-                                    <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">Daily Activity (Last 30 Days)</h2>
-                                    <div className="bg-gray-50 dark:bg-kick-dark rounded-lg p-6 border border-gray-200 dark:border-kick-border">
+                                <div className="mt-8">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-kick-text mb-6">Daily Activity (Last 30 Days)</h2>
+                                    <div className="bg-white dark:bg-kick-surface rounded-xl p-6 border border-gray-200 dark:border-kick-border shadow-sm">
                                         <ActivityChart data={overallStats.daily_activity} />
                                     </div>
                                 </div>

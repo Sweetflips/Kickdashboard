@@ -31,3 +31,4 @@ export async function DELETE(request: Request) {
   await clearAdminAuditLog()
   return NextResponse.json({ ok: true })
 }
+
