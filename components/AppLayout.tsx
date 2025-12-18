@@ -10,6 +10,7 @@ import Footer from './Footer'
 import ProfileDropdown from './ProfileDropdown'
 import ThemeToggle from './ThemeToggle'
 import ConnectAccountsNudge from './ConnectAccountsNudge'
+import LandingPage from './LandingPage'
 
 interface UserData {
     id?: number
@@ -195,7 +196,7 @@ export default function AppLayout({ children }: LayoutProps) {
         if (!isAuthenticated) return
         fetchUserData()
         checkAdminStatus()
-        
+
         // Proactively refresh token every 15 minutes to prevent expiration
         const refreshInterval = setInterval(async () => {
             const refreshToken = getRefreshToken()
@@ -220,7 +221,7 @@ export default function AppLayout({ children }: LayoutProps) {
                 }
             }
         }, 15 * 60 * 1000) // Every 15 minutes
-        
+
         return () => clearInterval(refreshInterval)
     }, [isAuthenticated, userData?.id])
 
@@ -400,7 +401,11 @@ export default function AppLayout({ children }: LayoutProps) {
         }
     }
 
+    // Show landing page on root path when not authenticated
     if (!isAuthenticated) {
+        if (pathname === '/' || pathname === '') {
+            return <LandingPage />
+        }
         return (
             <div className="flex items-center justify-center h-screen bg-white dark:bg-kick-dark">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-kick-purple"></div>
