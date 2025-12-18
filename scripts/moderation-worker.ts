@@ -932,7 +932,7 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
 
                     // Mention-only pings should always get a quick response.
                     if (isBotMentioned(payload.content, MODERATOR_USERNAME) && isOnlyBotMention(payload.content, MODERATOR_USERNAME)) {
-                        replyText = pickOne(['yo?', 'sup?', 'yeah?', 'what you need?', 'what's good?'])
+                        replyText = pickOne(['yo?', 'sup?', 'yeah?', 'what you need?', "what's good?"])
                         replyType = 'quick_response'
                     } else {
                         replyText = await generateBotReply(
