@@ -12,14 +12,11 @@ export const redis =
   globalForRedis.redis ??
   new Redis(process.env.REDIS_URL || '', {
     maxRetriesPerRequest: 3,
-    retryDelayOnFailover: 100,
     enableReadyCheck: true,
     enableOfflineQueue: false, // Don't queue commands when disconnected
     connectTimeout: 10000,
     lazyConnect: false,
-    // Connection pool settings
     keepAlive: 30000,
-    // Error handling
     showFriendlyErrorStack: process.env.NODE_ENV === 'development',
   })
 
