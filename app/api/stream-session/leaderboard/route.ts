@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { memoryCache } from '@/lib/memory-cache'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { NextResponse } from 'next/server'
+import { getSessionLeaderboard } from '@/lib/sweet-coins-redis'
 
 export const dynamic = 'force-dynamic'
 
@@ -162,6 +163,19 @@ export async function GET(request: Request) {
             throw new Error('Max retries exceeded')
         }
 
+        // For active sessions, use Redis for live leaderboard data
+        const isActiveSession = session.ended_at === null
+
+        // Get Redis leaderboard for active sessions (live data)
+        let redisLeaderboard: Array<{ userId: bigint; coins: number }> = []
+        if (isActiveSession) {
+            try {
+                redisLeaderboard = await getSessionLeaderboard(session.id, 500) // Get top 500
+            } catch (err) {
+                console.warn('[leaderboard] Failed to get Redis leaderboard, falling back to DB:', err)
+            }
+        }
+
         // Use groupBy/aggregate instead of fetching all messages
         const [messageCounts, pointsByUser, totalPointsResult, totalMessagesResult] = await Promise.all([
             // Message counts per user (using kick_user_id from sender_user_id)
@@ -176,25 +190,29 @@ export async function GET(request: Request) {
                     id: true,
                 },
             })),
-            // Points aggregated by user (internal user_id)
-            executeQueryWithRetry(() => db.sweetCoinHistory.groupBy({
-                by: ['user_id'],
-                where: {
-                    stream_session_id: session.id,
-                },
-                _sum: {
-                    sweet_coins_earned: true,
-                },
-            })),
-            // Total points for stats
-            executeQueryWithRetry(() => db.sweetCoinHistory.aggregate({
-                where: {
-                    stream_session_id: session.id,
-                },
-                _sum: {
-                    sweet_coins_earned: true,
-                },
-            })),
+            // Points aggregated by user (internal user_id) - only used for ended sessions
+            isActiveSession && redisLeaderboard.length > 0 
+                ? Promise.resolve([]) // Skip DB query for active sessions with Redis data
+                : executeQueryWithRetry(() => db.sweetCoinHistory.groupBy({
+                    by: ['user_id'],
+                    where: {
+                        stream_session_id: session.id,
+                    },
+                    _sum: {
+                        sweet_coins_earned: true,
+                    },
+                })),
+            // Total points for stats - only used for ended sessions
+            isActiveSession && redisLeaderboard.length > 0
+                ? Promise.resolve({ _sum: { sweet_coins_earned: null } })
+                : executeQueryWithRetry(() => db.sweetCoinHistory.aggregate({
+                    where: {
+                        stream_session_id: session.id,
+                    },
+                    _sum: {
+                        sweet_coins_earned: true,
+                    },
+                })),
             // Total messages for stats
             executeQueryWithRetry(() => db.chatMessage.count({
                 where: {
@@ -205,30 +223,77 @@ export async function GET(request: Request) {
             })),
         ])
 
-        const totalPoints = totalPointsResult._sum.sweet_coins_earned || 0
+        // Calculate total points from Redis or DB
+        const totalPoints = isActiveSession && redisLeaderboard.length > 0
+            ? redisLeaderboard.reduce((sum, entry) => sum + entry.coins, 0)
+            : (totalPointsResult._sum.sweet_coins_earned || 0)
         const totalMessages = totalMessagesResult
         const uniqueChatters = messageCounts.length
 
         // Get kick_user_ids from message counts to fetch user details
         const kickUserIds = messageCounts.map(m => m.sender_user_id)
 
+        // Also get user IDs from Redis leaderboard
+        const redisUserIds = redisLeaderboard.map(entry => entry.userId)
+
         // Batch fetch user details (no N+1)
-        const users = await executeQueryWithRetry(() => db.user.findMany({
-            where: {
-                kick_user_id: { in: kickUserIds },
-            },
-            select: {
-                id: true,
-                kick_user_id: true,
-                username: true,
-                profile_picture_url: true,
-                custom_profile_picture_url: true,
-            },
-        }))
+        // Need to fetch both by kick_user_id (for message counts) and by id (for Redis leaderboard)
+        const usersPromises = [
+            executeQueryWithRetry(() => db.user.findMany({
+                where: {
+                    kick_user_id: { in: kickUserIds },
+                },
+                select: {
+                    id: true,
+                    kick_user_id: true,
+                    username: true,
+                    profile_picture_url: true,
+                    custom_profile_picture_url: true,
+                },
+            })),
+        ]
+
+        // If we have Redis data, also fetch those users by internal ID
+        if (redisUserIds.length > 0) {
+            usersPromises.push(
+                executeQueryWithRetry(() => db.user.findMany({
+                    where: {
+                        id: { in: redisUserIds },
+                    },
+                    select: {
+                        id: true,
+                        kick_user_id: true,
+                        username: true,
+                        profile_picture_url: true,
+                        custom_profile_picture_url: true,
+                    },
+                }))
+            )
+        }
+
+        const usersResults = await Promise.all(usersPromises)
+        const allUsers = [...usersResults[0], ...(usersResults[1] || [])]
+
+        // Deduplicate users by id
+        const usersMap = new Map(allUsers.map(u => [u.id.toString(), u]))
+        const users = Array.from(usersMap.values())
 
         // Create maps for lookups
         const kickUserIdToUser = new Map(users.map(u => [Number(u.kick_user_id), u]))
-        const userIdToPoints = new Map(pointsByUser.map(p => [Number(p.user_id), p._sum.sweet_coins_earned || 0]))
+        const userIdToUser = new Map(users.map(u => [u.id.toString(), u]))
+
+        // Points map - use Redis for active sessions, DB for ended sessions
+        const userIdToPoints = new Map<number, number>()
+        if (isActiveSession && redisLeaderboard.length > 0) {
+            // Redis has internal user IDs
+            redisLeaderboard.forEach(entry => {
+                userIdToPoints.set(Number(entry.userId), entry.coins)
+            })
+        } else {
+            pointsByUser.forEach(p => {
+                userIdToPoints.set(Number(p.user_id), p._sum.sweet_coins_earned || 0)
+            })
+        }
 
         // Get emotes count - need to query messages with emotes
         // Since we can't filter JSON in groupBy, fetch messages with emotes only
