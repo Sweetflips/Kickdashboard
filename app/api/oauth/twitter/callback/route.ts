@@ -138,8 +138,8 @@ export async function GET(request: Request) {
         const response = NextResponse.redirect(
             `${APP_URL}/profile?tab=connected&success=twitter_connected`
         )
-        response.cookies.delete('twitter_code_verifier')
-        response.cookies.delete('twitter_oauth_state')
+        response.cookies.delete({ name: 'twitter_code_verifier', path: '/' })
+        response.cookies.delete({ name: 'twitter_oauth_state', path: '/' })
 
         return response
     } catch (error) {
