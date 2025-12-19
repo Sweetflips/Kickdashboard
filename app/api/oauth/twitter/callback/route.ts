@@ -50,7 +50,7 @@ export async function GET(request: Request) {
         // Decode state to get kick_user_id
         let kickUserId: string
         try {
-            const stateData = JSON.parse(Buffer.from(state, 'base64').toString())
+            const stateData = JSON.parse(Buffer.from(state, 'base64url').toString())
             kickUserId = stateData.kick_user_id
         } catch {
             return NextResponse.redirect(

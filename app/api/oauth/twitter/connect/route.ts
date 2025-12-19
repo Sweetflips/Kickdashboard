@@ -29,6 +29,20 @@ export async function POST(request: Request) {
             )
         }
 
+        // In production, never fall back to localhost redirect URIs
+        if (
+            process.env.NODE_ENV === 'production' &&
+            !process.env.TWITTER_REDIRECT_URI &&
+            !process.env.NEXT_PUBLIC_APP_URL &&
+            !process.env.NEXT_PUBLIC_BASE_URL
+        ) {
+            console.error('Twitter OAuth Error: No production base URL configured (set TWITTER_REDIRECT_URI or NEXT_PUBLIC_APP_URL)')
+            return NextResponse.json(
+                { error: 'Twitter OAuth not configured - set TWITTER_REDIRECT_URI (or NEXT_PUBLIC_APP_URL)' },
+                { status: 500 }
+            )
+        }
+
         // Generate PKCE code verifier and challenge
         const codeVerifier = crypto.randomBytes(32).toString('base64url')
         const codeChallenge = crypto
@@ -37,28 +51,37 @@ export async function POST(request: Request) {
             .digest('base64url')
 
         // Generate state parameter for CSRF protection
-        const state = Buffer.from(JSON.stringify({ kick_user_id })).toString('base64')
+        // Use base64url to avoid '+' '/' '=' issues in query strings
+        const state = Buffer.from(JSON.stringify({ kick_user_id })).toString('base64url')
 
-        // Store code_verifier in a cookie (will be used in callback)
-        const response = NextResponse.json({ authUrl: '' })
-        response.cookies.set('twitter_code_verifier', codeVerifier, {
+        const params = new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            response_type: 'code',
+            scope,
+            state,
+            code_challenge: codeChallenge,
+            code_challenge_method: 'S256',
+        })
+
+        const authUrl = `https://twitter.com/i/oauth2/authorize?${params.toString()}`
+
+        // Store code_verifier/state in cookies (used in callback)
+        const res = NextResponse.json({ authUrl })
+        res.cookies.set('twitter_code_verifier', codeVerifier, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             maxAge: 600, // 10 minutes
         })
-        response.cookies.set('twitter_oauth_state', state, {
+        res.cookies.set('twitter_oauth_state', state, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             maxAge: 600, // 10 minutes
         })
 
-        const authUrl = `https://twitter.com/i/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`
-
-        return NextResponse.json({ authUrl }, {
-            headers: response.headers,
-        })
+        return res
     } catch (error) {
         console.error('Error initiating Twitter OAuth:', error)
         return NextResponse.json(
