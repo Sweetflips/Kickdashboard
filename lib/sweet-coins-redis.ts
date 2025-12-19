@@ -1,9 +1,9 @@
 import { redis } from './redis'
 import { db } from './db'
 
-// Rate limit between coin awards per user (configurable via env)
-// Lower = more real-time engagement, Higher = less spam potential
-const RATE_LIMIT_SECONDS = parseInt(process.env.COIN_RATE_LIMIT_SECONDS || '30', 10) // 30 seconds (was 5 minutes)
+// Rate limit between coin awards per user
+// 5 minutes prevents spam while rewarding genuine engagement
+const RATE_LIMIT_SECONDS = 300 // 5 minutes
 
 /**
  * Award sweet coins instantly using Redis counters
