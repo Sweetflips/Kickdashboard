@@ -1192,13 +1192,13 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                     .filter((msg) => {
                         // Skip offline messages
                         if (msg.sent_when_offline) return false
-                        
+
                         // Include if we don't have coin data yet
                         if (msg.sweet_coins_earned === undefined) return true
-                        
+
                         // Include if it's still marked as pending
                         if (msg.sweet_coins_reason === 'pending') return true
-                        
+
                         // Skip if we already have a definitive result (0 with reason, or > 0)
                         return false
                     })
@@ -1286,8 +1286,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             })
         }
 
-        // Poll every 250ms for pending points (Redis is fast enough for this)
-        const pointsPollInterval = setInterval(pollForUpdatedPoints, 250)
+        // Poll every 2 seconds for pending points (coins only happen every 5 min, no need for aggressive polling)
+        const pointsPollInterval = setInterval(pollForUpdatedPoints, 2000)
 
         return () => {
             // Use ref instead of closure variable to ensure we're cleaning up the right instance
@@ -2038,53 +2038,20 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                     <span className="chat-entry-content inline" style={{ verticalAlign: 'baseline' }}>
                                                         {renderMessageWithEmotes(message.content, message.emotes, emoteMap)}
                                                     </span>
-                                                    {/* Coin indicator - show prominently when coins are earned */}
+                                                    {/* Only show coin indicator when coins ARE earned - clean and simple */}
                                                     {message.sweet_coins_earned && message.sweet_coins_earned > 0 && (
-                                                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-yellow-500/30 to-orange-500/30 dark:from-yellow-500/40 dark:to-orange-500/40 border border-yellow-500/50 rounded-full shadow-sm shadow-yellow-500/20">
+                                                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-yellow-500/30 to-orange-500/30 dark:from-yellow-500/40 dark:to-orange-500/40 border border-yellow-500/50 rounded-full">
                                                             <Image
                                                                 src="/icons/Sweetflipscoin.png"
                                                                 alt="Sweet Coin"
                                                                 width={16}
                                                                 height={16}
-                                                                className="w-4 h-4 animate-bounce"
+                                                                className="w-4 h-4"
                                                                 unoptimized
                                                             />
-                                                            <span className="text-xs font-bold text-yellow-400 drop-shadow-sm">+{message.sweet_coins_earned}</span>
+                                                            <span className="text-xs font-bold text-yellow-400">+{message.sweet_coins_earned}</span>
                                                         </span>
                                                     )}
-                                                    <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
-                                                        {!message.sent_when_offline && message.sweet_coins_earned !== undefined ? (
-                                                            message.sweet_coins_earned === 0 ? (
-                                                                message.sweet_coins_reason === 'Kick account not connected' ? (
-                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/20 dark:bg-red-500/30 text-red-600 dark:text-red-400 border border-red-500/40 dark:border-red-500/50">
-                                                                        <Image
-                                                                            src="/logos/kick-icon.svg"
-                                                                            alt="Kick logo"
-                                                                            width={14}
-                                                                            height={14}
-                                                                            className="w-3.5 h-3.5"
-                                                                            unoptimized
-                                                                        />
-                                                                        <span>No Kick connect</span>
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-kick-surface-hover text-kick-text-secondary border border-kick-border">
-                                                                        <img
-                                                                            src="https://www.clipartmax.com/png/small/360-3608833_alarm-timeout-comments-icon.png"
-                                                                            alt="Timeout - Message sent too quickly"
-                                                                            className="w-3.5 h-3.5"
-                                                                            title="Message sent too quickly (rate limited)"
-                                                                        />
-                                                                        <span>0 Sweet Coins</span>
-                                                                    </span>
-                                                                )
-                                                            ) : (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-kick-green/20 dark:bg-kick-green/30 text-kick-green dark:text-kick-green border border-kick-green/30 dark:border-kick-green/50">
-                                                                    +{message.sweet_coins_earned} {message.sweet_coins_earned !== 1 ? 'Sweet Coins' : 'Sweet Coin'}
-                                                                </span>
-                                                            )
-                                                        ) : null}
-                                                    </span>
                                                 </div>
                                                 {!pinnedMessages.some(m => m.message_id === message.message_id) && (
                                                     <button

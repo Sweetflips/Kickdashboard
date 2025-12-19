@@ -60,6 +60,8 @@ interface StreamLeaderboardEntry {
     points_earned: number
     messages_sent?: number
     emotes_used?: number
+    previousRank?: number // Track rank changes for animation
+    justEarnedCoin?: boolean // Flash when earning a coin
 }
 
 export default function Dashboard() {
@@ -177,18 +179,28 @@ export default function Dashboard() {
                 if (data.leaderboard && Array.isArray(data.leaderboard)) {
                     if (data.leaderboard.length > 0) {
                         setStreamLeaderboard(prev => {
-                            // Merge new data with existing, preserving unchanged entries
+                            // Merge new data with existing, tracking rank changes for animation
                             return data.leaderboard.map((newEntry: StreamLeaderboardEntry) => {
                                 const existing = prev.find(e => e.user_id === newEntry.user_id)
+                                
+                                // Track if coins increased
+                                const earnedCoin = existing && newEntry.points_earned > existing.points_earned
+                                
                                 // Only create new object if data changed
                                 if (existing &&
                                     existing.rank === newEntry.rank &&
                                     existing.points_earned === newEntry.points_earned &&
                                     existing.messages_sent === newEntry.messages_sent &&
                                     existing.emotes_used === newEntry.emotes_used) {
-                                    return existing
+                                    // Clear animation flags
+                                    return { ...existing, justEarnedCoin: false }
                                 }
-                                return newEntry
+                                
+                                return {
+                                    ...newEntry,
+                                    previousRank: existing?.rank,
+                                    justEarnedCoin: earnedCoin || false,
+                                }
                             })
                         })
                     } else {
@@ -245,18 +257,29 @@ export default function Dashboard() {
                     if (data.leaderboard && Array.isArray(data.leaderboard)) {
                         if (data.leaderboard.length > 0) {
                             setStreamLeaderboard(prev => {
-                                // Merge new data with existing, preserving unchanged entries
+                                // Merge new data with existing, tracking rank changes for animation
                                 return data.leaderboard.map((newEntry: StreamLeaderboardEntry) => {
                                     const existing = prev.find(e => e.user_id === newEntry.user_id)
+                                    
+                                    // Track if rank improved or coins increased
+                                    const rankImproved = existing && existing.rank > newEntry.rank
+                                    const earnedCoin = existing && newEntry.points_earned > existing.points_earned
+                                    
                                     // Only create new object if data changed
                                     if (existing &&
                                         existing.rank === newEntry.rank &&
                                         existing.points_earned === newEntry.points_earned &&
                                         existing.messages_sent === newEntry.messages_sent &&
                                         existing.emotes_used === newEntry.emotes_used) {
-                                        return existing
+                                        // Clear animation flags after a bit
+                                        return { ...existing, justEarnedCoin: false }
                                     }
-                                    return newEntry
+                                    
+                                    return {
+                                        ...newEntry,
+                                        previousRank: existing?.rank,
+                                        justEarnedCoin: earnedCoin || false,
+                                    }
                                 })
                             })
                         }
@@ -614,15 +637,32 @@ export default function Dashboard() {
                                     </div>
                                 ) : (
                                     <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                                        {streamLeaderboard.slice(0, Math.max(5, Number(dashboardSettings.leaderboard_max_rows) || 50)).map((entry) => (
+                                        {streamLeaderboard.slice(0, Math.max(5, Number(dashboardSettings.leaderboard_max_rows) || 50)).map((entry) => {
+                                            // Check if user just earned a coin (points increased)
+                                            const justEarned = entry.justEarnedCoin
+                                            // Check if rank improved
+                                            const rankUp = entry.previousRank !== undefined && entry.previousRank > entry.rank
+                                            
+                                            return (
                                             <div
                                                 key={entry.user_id}
-                                                className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-kick-surface-hover transition-all duration-300 ease-in-out"
+                                                className={`flex items-center justify-between p-3 rounded-lg transition-all duration-500 ease-out
+                                                    ${justEarned 
+                                                        ? 'bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-yellow-500/20 dark:from-yellow-500/30 dark:via-orange-500/30 dark:to-yellow-500/30 animate-pulse shadow-lg shadow-yellow-500/20 scale-[1.02]' 
+                                                        : 'hover:bg-gray-50 dark:hover:bg-kick-surface-hover'}
+                                                    ${rankUp ? 'ring-2 ring-green-500/50' : ''}
+                                                `}
                                             >
                                                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                    <span className="text-body font-semibold text-gray-600 dark:text-kick-text-secondary w-8 flex-shrink-0 transition-all duration-300">
-                                                        {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`}
-                                                    </span>
+                                                    <div className="relative">
+                                                        <span className="text-body font-semibold text-gray-600 dark:text-kick-text-secondary w-8 flex-shrink-0 transition-all duration-300">
+                                                            {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`}
+                                                        </span>
+                                                        {/* Rank up arrow */}
+                                                        {rankUp && (
+                                                            <span className="absolute -top-1 -right-1 text-green-500 text-xs animate-bounce">▲</span>
+                                                        )}
+                                                    </div>
                                                     {entry.profile_picture_url && !imageErrors.has(entry.user_id) ? (
                                                         <img
                                                             src={entry.profile_picture_url}
@@ -646,11 +686,21 @@ export default function Dashboard() {
                                                     </span>
                                                 </div>
                                                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-body text-kick-purple transition-all duration-300">
+                                                    <div className={`flex items-center gap-2 ${justEarned ? 'scale-110' : ''} transition-transform duration-300`}>
+                                                        <span className={`font-semibold text-body transition-all duration-300 ${justEarned ? 'text-yellow-400 text-lg' : 'text-kick-purple'}`}>
                                                             {entry.points_earned.toLocaleString()}
                                                         </span>
-                                                        <Image src="/icons/Sweetflipscoin.png" alt="" width={24} height={24} className="w-6 h-6 opacity-90" />
+                                                        <Image 
+                                                            src="/icons/Sweetflipscoin.png" 
+                                                            alt="" 
+                                                            width={24} 
+                                                            height={24} 
+                                                            className={`w-6 h-6 ${justEarned ? 'animate-spin' : 'opacity-90'}`} 
+                                                        />
+                                                        {/* +1 indicator when coin earned */}
+                                                        {justEarned && (
+                                                            <span className="text-green-400 font-bold text-sm animate-bounce">+1</span>
+                                                        )}
                                                     </div>
                                                     {(entry.messages_sent !== undefined || entry.emotes_used !== undefined) && (
                                                         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-kick-text-muted">
@@ -664,7 +714,7 @@ export default function Dashboard() {
                                                     )}
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
                                 )}
                             </div>
