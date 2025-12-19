@@ -263,6 +263,25 @@ async function syncCoins(): Promise<void> {
 }
 
 /**
+ * Wait for Redis connection with retries
+ */
+async function waitForRedis(maxRetries = 10, delayMs = 1000): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`[redis-sync] Checking Redis connection (attempt ${attempt}/${maxRetries})...`)
+    const healthy = await checkRedisHealth()
+    if (healthy) {
+      console.log('[redis-sync] ✅ Redis connection established')
+      return true
+    }
+    if (attempt < maxRetries) {
+      console.log(`[redis-sync] Redis not ready, waiting ${delayMs}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+  return false
+}
+
+/**
  * Main sync loop
  */
 async function runSync(): Promise<void> {
@@ -270,10 +289,10 @@ async function runSync(): Promise<void> {
   console.log(`[redis-sync] Message flush interval: ${MESSAGE_FLUSH_INTERVAL_MS}ms`)
   console.log(`[redis-sync] Coin sync interval: ${COIN_SYNC_INTERVAL_MS}ms`)
 
-  // Check Redis health
-  const redisHealthy = await checkRedisHealth()
+  // Wait for Redis with retries
+  const redisHealthy = await waitForRedis(15, 2000) // 15 attempts, 2s apart = 30s max wait
   if (!redisHealthy) {
-    console.error('[redis-sync] ❌ Redis health check failed - exiting')
+    console.error('[redis-sync] ❌ Redis connection failed after all retries - exiting')
     process.exit(1)
   }
 

@@ -13,10 +13,19 @@ export const redis =
   new Redis(process.env.REDIS_URL || '', {
     maxRetriesPerRequest: 3,
     enableReadyCheck: true,
-    enableOfflineQueue: false, // Don't queue commands when disconnected
+    enableOfflineQueue: true, // Queue commands when disconnected (wait for reconnect)
     connectTimeout: 10000,
     lazyConnect: false,
     keepAlive: 30000,
+    retryStrategy: (times) => {
+      if (times > 10) {
+        console.error('[Redis] Max retries exceeded, giving up')
+        return null // Stop retrying
+      }
+      const delay = Math.min(times * 200, 2000) // Exponential backoff, max 2s
+      console.log(`[Redis] Retrying connection in ${delay}ms (attempt ${times})`)
+      return delay
+    },
     showFriendlyErrorStack: process.env.NODE_ENV === 'development',
   })
 
