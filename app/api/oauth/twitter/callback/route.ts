@@ -63,19 +63,27 @@ export async function GET(request: Request) {
         const clientSecret = process.env.TWITTER_CLIENT_SECRET
         const redirectUri = process.env.TWITTER_REDIRECT_URI || `${APP_URL}/api/oauth/twitter/callback`
 
-        if (!clientId || !clientSecret) {
+        if (!clientId) {
             return NextResponse.redirect(
                 `${APP_URL}/profile?tab=connected&error=config_error`
             )
         }
 
         // Twitter OAuth 2.0 token exchange with PKCE
+        // Use Basic Auth for Confidential Clients (with client_secret)
+        // Use no auth for Public Clients (PKCE only)
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        }
+
+        // Only add Basic Auth if we have a client secret (Confidential Client)
+        if (clientSecret) {
+            headers['Authorization'] = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
+        }
+
         const tokenResponse = await fetch('https://api.twitter.com/2/oauth2/token', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-            },
+            headers,
             body: new URLSearchParams({
                 code: code,
                 grant_type: 'authorization_code',
