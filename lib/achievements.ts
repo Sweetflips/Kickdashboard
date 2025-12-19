@@ -97,6 +97,22 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: 'community',
   },
   {
+    id: 'twitter-connected',
+    name: 'Twitter Connected',
+    requirement: 'Connect your Twitter account.',
+    icon: '🐦',
+    reward: 100,
+    category: 'community',
+  },
+  {
+    id: 'instagram-connected',
+    name: 'Instagram Connected',
+    requirement: 'Connect your Instagram account.',
+    icon: '📸',
+    reward: 100,
+    category: 'community',
+  },
+  {
     id: 'custom-profile-picture',
     name: 'Custom Profile Picture',
     requirement: 'Set a custom profile picture.',

@@ -34,6 +34,16 @@ export async function POST(request: Request) {
             updateData.telegram_user_id = null
             updateData.telegram_username = null
             updateData.telegram_access_token_hash = null
+        } else if (provider === 'twitter') {
+            updateData.twitter_connected = false
+            updateData.twitter_user_id = null
+            updateData.twitter_username = null
+            updateData.twitter_access_token_hash = null
+        } else if (provider === 'instagram') {
+            updateData.instagram_connected = false
+            updateData.instagram_user_id = null
+            updateData.instagram_username = null
+            updateData.instagram_access_token_hash = null
         }
 
         await db.user.update({

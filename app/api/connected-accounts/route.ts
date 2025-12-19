@@ -35,6 +35,12 @@ export async function GET(request: Request) {
                 telegram_connected: true,
                 telegram_username: true,
                 telegram_user_id: true,
+                twitter_connected: true,
+                twitter_username: true,
+                twitter_user_id: true,
+                instagram_connected: true,
+                instagram_username: true,
+                instagram_user_id: true,
             },
         })
 
@@ -64,6 +70,18 @@ export async function GET(request: Request) {
                 username: user.telegram_username || undefined,
                 userId: user.telegram_user_id || undefined,
             },
+            {
+                provider: 'twitter' as const,
+                connected: user.twitter_connected ?? false,
+                username: user.twitter_username || undefined,
+                userId: user.twitter_user_id || undefined,
+            },
+            {
+                provider: 'instagram' as const,
+                connected: user.instagram_connected ?? false,
+                username: user.instagram_username || undefined,
+                userId: user.instagram_user_id || undefined,
+            },
         ]
 
         if (DEBUG_CONNECTED_ACCOUNTS) {
@@ -71,11 +89,15 @@ export async function GET(request: Request) {
             const kick = accounts.find(a => a.provider === 'kick')
             const discord = accounts.find(a => a.provider === 'discord')
             const telegram = accounts.find(a => a.provider === 'telegram')
+            const twitter = accounts.find(a => a.provider === 'twitter')
+            const instagram = accounts.find(a => a.provider === 'instagram')
             console.log(
                 `[CONNECTED ACCOUNTS] result kick_user_id=${kickUserId} username=${user.username}` +
                 ` kick=${kick?.connected ? '1' : '0'}` +
                 ` discord=${discord?.connected ? '1' : '0'}` +
-                ` telegram=${telegram?.connected ? '1' : '0'}`
+                ` telegram=${telegram?.connected ? '1' : '0'}` +
+                ` twitter=${twitter?.connected ? '1' : '0'}` +
+                ` instagram=${instagram?.connected ? '1' : '0'}`
             )
         }
 
