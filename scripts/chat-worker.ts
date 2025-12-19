@@ -26,10 +26,11 @@ import { queueUserEnrichment } from '../lib/user-enrichment'
 import { analyzeEngagementType, countExclamations, countSentences, hasEmotes, messageLength } from '../lib/analytics-classifier'
 import { resolveSessionForChat } from '../lib/stream-session-manager'
 
-const BATCH_SIZE = parseInt(process.env.CHAT_WORKER_BATCH_SIZE || '50', 10)
-const POLL_INTERVAL_MS = parseInt(process.env.CHAT_WORKER_POLL_INTERVAL_MS || '500', 10)
+// Ultra-fast settings for real-time message processing
+const BATCH_SIZE = parseInt(process.env.CHAT_WORKER_BATCH_SIZE || '25', 10) // Smaller batches, more frequent
+const POLL_INTERVAL_MS = parseInt(process.env.CHAT_WORKER_POLL_INTERVAL_MS || '100', 10) // 100ms for near-instant
 const CONCURRENCY = parseInt(process.env.CHAT_WORKER_CONCURRENCY || '10', 10)
-const STATS_INTERVAL_MS = parseInt(process.env.CHAT_WORKER_STATS_INTERVAL_MS || '60000', 10)
+const STATS_INTERVAL_MS = parseInt(process.env.CHAT_WORKER_STATS_INTERVAL_MS || '30000', 10) // 30 seconds
 const VERBOSE_LOGS = process.env.CHAT_WORKER_VERBOSE_LOGS === 'true'
 
 // Advisory lock ID to ensure only one worker instance runs

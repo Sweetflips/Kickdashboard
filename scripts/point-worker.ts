@@ -8,11 +8,13 @@ console.log('')
 
 import { claimJobs, processJob, getQueueStats } from '../lib/sweet-coin-queue'
 import { db } from '../lib/db'
+import { logger } from '../lib/logger'
 
-const BATCH_SIZE = parseInt(process.env.POINT_WORKER_BATCH_SIZE || '50', 10)
-const POLL_INTERVAL_MS = parseInt(process.env.POINT_WORKER_POLL_INTERVAL_MS || '500', 10)
+// Ultra-fast settings for real-time coin processing
+const BATCH_SIZE = parseInt(process.env.POINT_WORKER_BATCH_SIZE || '25', 10) // Smaller batches, more frequent
+const POLL_INTERVAL_MS = parseInt(process.env.POINT_WORKER_POLL_INTERVAL_MS || '100', 10) // 100ms for near-instant
 const CONCURRENCY = parseInt(process.env.POINT_WORKER_CONCURRENCY || '10', 10)
-const STATS_INTERVAL_MS = parseInt(process.env.POINT_WORKER_STATS_INTERVAL_MS || '60000', 10) // 1 minute
+const STATS_INTERVAL_MS = parseInt(process.env.POINT_WORKER_STATS_INTERVAL_MS || '30000', 10) // 30 seconds
 const IDLE_HEARTBEAT_INTERVAL_MS = 300000 // 5 minutes for idle heartbeat
 
 // Advisory lock ID to ensure only one worker instance runs
@@ -138,7 +140,7 @@ async function processBatch(): Promise<void> {
     // Log batch completion if jobs were processed
     if (jobDurations.length > 0) {
         const avgDuration = Math.round(jobDurations.reduce((a, b) => a + b, 0) / jobDurations.length)
-        console.log(`[point-worker] Processed ${jobDurations.length} jobs [avg ${avgDuration}ms]`)
+        logger.log('SYNC', `Point worker processed ${jobDurations.length} jobs [avg ${avgDuration}ms]`)
     }
 }
 
