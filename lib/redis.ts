@@ -4,19 +4,27 @@ const globalForRedis = globalThis as unknown as {
   redis: Redis | undefined
 }
 
+// Parse Redis URL and check if TLS is needed
+const redisUrl = process.env.REDIS_URL || ''
+const needsTls = redisUrl.includes('redislabs.com') || redisUrl.includes('redis.cloud') || redisUrl.startsWith('rediss://')
+
+console.log(`[Redis] Connecting to Redis (TLS: ${needsTls ? 'enabled' : 'disabled'})`)
+
 /**
  * Redis client singleton for high-performance message buffering and real-time counters
  * Uses Redis Cloud connection with retry logic and connection pooling
  */
 export const redis =
   globalForRedis.redis ??
-  new Redis(process.env.REDIS_URL || '', {
+  new Redis(redisUrl, {
     maxRetriesPerRequest: 3,
     enableReadyCheck: true,
     enableOfflineQueue: true, // Queue commands when disconnected (wait for reconnect)
     connectTimeout: 10000,
     lazyConnect: false,
     keepAlive: 30000,
+    // Enable TLS for Redis Cloud
+    tls: needsTls ? { rejectUnauthorized: false } : undefined,
     retryStrategy: (times) => {
       if (times > 10) {
         console.error('[Redis] Max retries exceeded, giving up')
