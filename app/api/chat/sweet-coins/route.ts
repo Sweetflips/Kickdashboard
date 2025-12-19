@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getMessageCoinAwards } from '@/lib/sweet-coins-redis'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -73,45 +74,62 @@ export async function POST(request: Request) {
         // Limit to 100 messages per request
         const limitedIds = messageIds.slice(0, 100)
 
-        // Fetch updated sweet coins for these messages with retry logic for connection pool exhaustion
-        let messages: { message_id: string; sweet_coins_earned: number; sweet_coins_reason: string | null }[] = []
-        for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-                messages = await db.chatMessage.findMany({
-                    where: {
-                        message_id: { in: limitedIds },
-                    },
-                    select: {
-                        message_id: true,
-                        sweet_coins_earned: true,
-                        sweet_coins_reason: true,
-                    },
-                })
-                closeDbCircuit()
-                break
-            } catch (error: any) {
-                if ((error?.code === 'P2024' || error?.message?.includes('connection pool')) && attempt < 2) {
-                    await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
-                    continue
-                }
-                throw error
-            }
+        // FAST PATH: Check Redis first for instant coin data
+        const redisCoinAwards = await getMessageCoinAwards(limitedIds)
+        
+        // Find which messages still need DB lookup (not in Redis)
+        const missingFromRedis = limitedIds.filter(id => !redisCoinAwards.has(id))
+        
+        // Create result map starting with Redis data
+        const sweetCoinsMap = new Map<string, { sweet_coins_earned: number; sweet_coins_reason: string | null }>()
+        
+        for (const [msgId, coins] of redisCoinAwards.entries()) {
+            sweetCoinsMap.set(msgId, {
+                sweet_coins_earned: coins,
+                sweet_coins_reason: 'chat_message',
+            })
         }
+        
+        // SLOW PATH: Only query DB for messages not found in Redis
+        if (missingFromRedis.length > 0) {
+            let messages: { message_id: string; sweet_coins_earned: number; sweet_coins_reason: string | null }[] = []
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    messages = await db.chatMessage.findMany({
+                        where: {
+                            message_id: { in: missingFromRedis },
+                        },
+                        select: {
+                            message_id: true,
+                            sweet_coins_earned: true,
+                            sweet_coins_reason: true,
+                        },
+                    })
+                    closeDbCircuit()
+                    break
+                } catch (error: any) {
+                    if ((error?.code === 'P2024' || error?.message?.includes('connection pool')) && attempt < 2) {
+                        await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)))
+                        continue
+                    }
+                    throw error
+                }
+            }
 
-        // Create a map for quick lookup
-        const sweetCoinsMap = new Map(
-            messages.map((msg) => [
-                msg.message_id,
-                {
+            // Add DB results to the map
+            for (const msg of messages) {
+                sweetCoinsMap.set(msg.message_id, {
                     sweet_coins_earned: msg.sweet_coins_earned,
                     sweet_coins_reason: msg.sweet_coins_reason,
-                },
-            ])
-        )
+                })
+            }
+        }
 
         return NextResponse.json({
             success: true,
             sweet_coins: Object.fromEntries(sweetCoinsMap),
+            redis_hits: redisCoinAwards.size,
+            db_lookups: missingFromRedis.length,
         })
     } catch (error) {
         // Filter out ECONNRESET errors (client disconnects) - not real errors

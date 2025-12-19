@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { bufferMessage, type ChatJobPayload } from '@/lib/message-buffer'
-import { awardCoins } from '@/lib/sweet-coins-redis'
+import { awardCoins, storeMessageCoinAward } from '@/lib/sweet-coins-redis'
 import type { ChatMessage } from '@/lib/chat-store'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 import { db } from '@/lib/db'
@@ -477,6 +477,9 @@ export async function POST(request: Request) {
                         // This will be included when the message is processed and displayed
                         jobPayload.sweet_coins_earned = coinsToAward
                         jobPayload.sweet_coins_reason = 'chat_message'
+
+                        // Store in Redis for instant UI updates (keyed by message_id)
+                        await storeMessageCoinAward(jobPayload.message_id, coinsToAward)
 
                         // Structured logging
                         logger.coin(

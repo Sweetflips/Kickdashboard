@@ -90,6 +90,43 @@ export async function getBalance(userId: bigint): Promise<number> {
 }
 
 /**
+ * Store coin award for a specific message (for instant UI updates)
+ * Expires after 1 hour (by then it's in PostgreSQL)
+ */
+export async function storeMessageCoinAward(messageId: string, coinsEarned: number): Promise<void> {
+  try {
+    await redis.setex(`msg-coins:${messageId}`, 3600, coinsEarned.toString())
+  } catch (error) {
+    console.error('[sweet-coins-redis] Error storing message coin award:', error)
+  }
+}
+
+/**
+ * Get coin awards for multiple messages from Redis (instant read)
+ */
+export async function getMessageCoinAwards(messageIds: string[]): Promise<Map<string, number>> {
+  try {
+    if (messageIds.length === 0) return new Map()
+    
+    const keys = messageIds.map(id => `msg-coins:${id}`)
+    const values = await redis.mget(...keys)
+    
+    const result = new Map<string, number>()
+    messageIds.forEach((id, index) => {
+      const value = values[index]
+      if (value !== null) {
+        result.set(id, parseInt(value, 10))
+      }
+    })
+    
+    return result
+  } catch (error) {
+    console.error('[sweet-coins-redis] Error getting message coin awards:', error)
+    return new Map()
+  }
+}
+
+/**
  * Deduct coins (for shop purchases)
  */
 export async function deductCoins(userId: bigint, amount: number): Promise<{ success: boolean; newBalance: number; error?: string }> {

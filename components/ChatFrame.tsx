@@ -1280,8 +1280,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             })
         }
 
-        // Poll every 2 seconds for pending points
-        const pointsPollInterval = setInterval(pollForUpdatedPoints, 2000)
+        // Poll every 1 second for pending points (faster coin visibility)
+        const pointsPollInterval = setInterval(pollForUpdatedPoints, 1000)
 
         return () => {
             // Use ref instead of closure variable to ensure we're cleaning up the right instance
