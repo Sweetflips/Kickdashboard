@@ -150,8 +150,8 @@ async function runWorker(): Promise<void> {
     // Acquire advisory lock - exit if another worker is already running
     const lockAcquired = await acquireAdvisoryLock()
     if (!lockAcquired) {
-        console.error(`[point-worker] Exiting - another worker instance is already running`)
-        process.exit(1)
+        console.log(`[point-worker] Another worker is running - this instance will exit`)
+        process.exit(0) // Exit cleanly - another instance handling the work is fine
     }
 
     let lastStatsLog = Date.now()

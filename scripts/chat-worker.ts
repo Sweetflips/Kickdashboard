@@ -422,8 +422,8 @@ async function runWorker(): Promise<void> {
 
     const lockAcquired = await acquireAdvisoryLock()
     if (!lockAcquired) {
-        console.error(`[chat-worker] Exiting - another worker is running`)
-        process.exit(1)
+        console.log(`[chat-worker] Another worker is running - this instance will exit`)
+        process.exit(0) // Exit cleanly - another instance handling the work is fine
     }
 
     let lastStatsLog = Date.now()
