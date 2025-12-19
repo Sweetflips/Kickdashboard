@@ -76,20 +76,20 @@ export async function POST(request: Request) {
 
         // FAST PATH: Check Redis first for instant coin data
         const redisCoinAwards = await getMessageCoinAwards(limitedIds)
-        
+
         // Find which messages still need DB lookup (not in Redis)
         const missingFromRedis = limitedIds.filter(id => !redisCoinAwards.has(id))
-        
+
         // Create result map starting with Redis data
         const sweetCoinsMap = new Map<string, { sweet_coins_earned: number; sweet_coins_reason: string | null }>()
-        
+
         for (const [msgId, coins] of redisCoinAwards.entries()) {
             sweetCoinsMap.set(msgId, {
                 sweet_coins_earned: coins,
                 sweet_coins_reason: 'chat_message',
             })
         }
-        
+
         // SLOW PATH: Only query DB for messages not found in Redis
         if (missingFromRedis.length > 0) {
             let messages: { message_id: string; sweet_coins_earned: number; sweet_coins_reason: string | null }[] = []

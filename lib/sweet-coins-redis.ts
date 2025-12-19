@@ -107,10 +107,10 @@ export async function storeMessageCoinAward(messageId: string, coinsEarned: numb
 export async function getMessageCoinAwards(messageIds: string[]): Promise<Map<string, number>> {
   try {
     if (messageIds.length === 0) return new Map()
-    
+
     const keys = messageIds.map(id => `msg-coins:${id}`)
     const values = await redis.mget(...keys)
-    
+
     const result = new Map<string, number>()
     messageIds.forEach((id, index) => {
       const value = values[index]
@@ -118,7 +118,7 @@ export async function getMessageCoinAwards(messageIds: string[]): Promise<Map<st
         result.set(id, parseInt(value, 10))
       }
     })
-    
+
     return result
   } catch (error) {
     console.error('[sweet-coins-redis] Error getting message coin awards:', error)

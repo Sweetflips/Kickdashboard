@@ -283,7 +283,7 @@ export default function Dashboard() {
             } catch (err) {
                 console.error('Error fetching stream leaderboard:', err)
             }
-        }, Math.max(1000, Number(dashboardSettings.leaderboard_refresh_ms) || 1000)) // 1 second default (ultra real-time)
+        }, Math.max(500, Number(dashboardSettings.leaderboard_refresh_ms) || 500)) // 500ms default (Redis is fast)
 
         return () => clearInterval(interval)
     }, [channelData?.broadcaster_user_id, isLive, dashboardSettings.leaderboard_refresh_ms])
