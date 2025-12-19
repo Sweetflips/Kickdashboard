@@ -37,7 +37,14 @@ healthServer.on('error', (err) => {
 const { execSync, spawn } = require('child_process');
 const { PrismaClient } = require('@prisma/client');
 
-// Run migrations before starting the worker
+// Resolve stuck migrations and run migrations before starting the worker
+try {
+  console.log('🔄 Resolving stuck migrations...');
+  execSync('node scripts/resolve-stuck-migrations.js', { stdio: 'inherit' });
+} catch (error) {
+  console.error('⚠️ Migration resolution warning:', error.message);
+}
+
 try {
   console.log('🔄 Running database migrations...');
   execSync('npx prisma migrate deploy', { stdio: 'inherit' });

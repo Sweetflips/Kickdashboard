@@ -251,14 +251,24 @@ function startWebServer() {
     process.on('SIGINT', () => shutdown('SIGINT'));
 
     // Run migrations in background after 5 seconds
-    setTimeout(() => {
-      process.stdout.write('🔄 Running background migrations...\n');
-      exec('prisma migrate deploy', { env: envWithPath, timeout: 30000 }, (error) => {
-        if (error) {
-          process.stdout.write('⚠️ Migration failed: ' + error.message + '\n');
-        } else {
-          process.stdout.write('✅ Migrations completed\n');
+    setTimeout(async () => {
+      process.stdout.write('🔄 Resolving stuck migrations...\n');
+      
+      // First resolve any stuck migrations
+      exec('node scripts/resolve-stuck-migrations.js', { env: envWithPath, timeout: 60000 }, (resolveError) => {
+        if (resolveError) {
+          process.stdout.write('⚠️ Migration resolution warning: ' + resolveError.message + '\n');
         }
+        
+        // Then run migrate deploy
+        process.stdout.write('🔄 Running database migrations...\n');
+        exec('npx prisma migrate deploy', { env: envWithPath, timeout: 60000 }, (error) => {
+          if (error) {
+            process.stdout.write('⚠️ Migration failed: ' + error.message + '\n');
+          } else {
+            process.stdout.write('✅ Migrations completed\n');
+          }
+        });
       });
     }, 5000);
 
