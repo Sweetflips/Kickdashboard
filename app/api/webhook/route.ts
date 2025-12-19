@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { enqueueChatJob, type ChatJobPayload } from '@/lib/chat-queue'
+import { bufferMessage, type ChatJobPayload } from '@/lib/message-buffer'
+import { awardCoins } from '@/lib/sweet-coins-redis'
 import type { ChatMessage } from '@/lib/chat-store'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 import { db } from '@/lib/db'
@@ -420,20 +421,56 @@ export async function POST(request: Request) {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // ENQUEUE JOB FOR WORKER PROCESSING
+        // BUFFER MESSAGE IN REDIS (INSTANT - < 1ms)
         // ═══════════════════════════════════════════════════════════════
 
-        const enqueueResult = await enqueueChatJob(jobPayload)
+        const bufferResult = await bufferMessage(jobPayload)
 
-        if (!enqueueResult.success) {
-            logErrorRateLimited(`[webhook] ❌ Failed to enqueue: ${enqueueResult.error}`)
+        if (!bufferResult.success) {
+            logErrorRateLimited(`[webhook] ❌ Failed to buffer message: ${bufferResult.error}`)
             return NextResponse.json(
-                { error: 'Failed to queue message for processing', received: true },
+                { error: 'Failed to buffer message for processing', received: true },
                 { status: 500 }
             )
         }
 
-        return NextResponse.json({ received: true, message: 'Chat message queued for processing' }, { status: 200 })
+        // ═══════════════════════════════════════════════════════════════
+        // AWARD SWEET COINS INSTANTLY (IF STREAM IS ACTIVE)
+        // ═══════════════════════════════════════════════════════════════
+        // Note: This is non-blocking - coins are awarded instantly via Redis
+        // Actual DB sync happens in redis-sync worker
+
+        if (sessionIsActive && jobPayload.stream_session_id) {
+            // Award coins instantly via Redis (non-blocking)
+            const senderKickUserId = BigInt(jobPayload.sender.kick_user_id)
+            const sessionId = jobPayload.stream_session_id
+
+            // Check if user exists and is eligible (quick check)
+            const user = await db.user.findUnique({
+                where: { kick_user_id: senderKickUserId },
+                select: { id: true, is_excluded: true, username: true, kick_connected: true },
+            })
+
+            if (user &&
+                !user.is_excluded &&
+                user.username.toLowerCase() !== 'sweetflipsbot' &&
+                user.kick_connected !== false) {
+                // Award coins instantly via Redis
+                const isSub = jobPayload.sender.badges?.some(badge =>
+                    ['subscriber', 'sub_gifter', 'founder', 'sub'].some(type =>
+                        badge.type?.toLowerCase().includes(type) || badge.text?.toLowerCase().includes('sub')
+                    )
+                ) || false
+
+                const coinsToAward = isSub ? 1 : 1 // Same for now, can be configured later
+
+                awardCoins(user.id, coinsToAward, sessionId).catch(err => {
+                    console.error('[webhook] Error awarding coins:', err)
+                })
+            }
+        }
+
+        return NextResponse.json({ received: true, message: 'Chat message buffered for processing' }, { status: 200 })
     } catch (error) {
         console.error('❌ Webhook error:', error)
         console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')

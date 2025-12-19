@@ -227,6 +227,13 @@ async function ensureTables() {
     env: process.env
   });
 
+  // Start Redis sync worker (syncs Redis buffer to PostgreSQL)
+  console.log('📝 Redis Sync Worker: Starting (syncs Redis to PostgreSQL)...');
+  const redisSyncProcess = spawn('npx', ['tsx', 'scripts/redis-sync.ts'], {
+    stdio: 'inherit',
+    env: process.env
+  });
+
   console.log('');
   console.log('✅ Workers spawned successfully');
   console.log('   Waiting for database connections...');
@@ -235,9 +242,10 @@ async function ensureTables() {
   let chatWorkerExited = false;
   let sessionTrackerExited = !sessionTrackerEnabled;
   let pointWorkerExited = false;
+  let redisSyncExited = false;
 
   const checkExit = () => {
-    if (chatWorkerExited && sessionTrackerExited && pointWorkerExited) {
+    if (chatWorkerExited && sessionTrackerExited && pointWorkerExited && redisSyncExited) {
       healthServer.close(() => {
         console.log('✅ Health check server closed');
         process.exit(0);
@@ -274,6 +282,20 @@ async function ensureTables() {
     checkExit();
   });
 
+  redisSyncProcess.on('exit', (code) => {
+    redisSyncExited = true;
+    if (code !== 0 && code !== null) {
+      console.error(`⚠️ Redis sync worker exited with code ${code}`);
+      // Critical worker - exit if it fails
+      chatWorkerProcess.kill('SIGTERM');
+      if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
+      pointWorkerProcess.kill('SIGTERM');
+      healthServer.close();
+      process.exit(1);
+    }
+    checkExit();
+  });
+
   chatWorkerProcess.on('error', (err) => {
     console.error('❌ Failed to start chat worker:', err.message);
     if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
@@ -296,6 +318,16 @@ async function ensureTables() {
     console.error('❌ Failed to start point worker:', err.message);
     chatWorkerProcess.kill('SIGTERM');
     if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
+    redisSyncProcess.kill('SIGTERM');
+    healthServer.close();
+    process.exit(1);
+  });
+
+  redisSyncProcess.on('error', (err) => {
+    console.error('❌ Failed to start Redis sync worker:', err.message);
+    chatWorkerProcess.kill('SIGTERM');
+    if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
+    pointWorkerProcess.kill('SIGTERM');
     healthServer.close();
     process.exit(1);
   });
@@ -309,6 +341,7 @@ async function ensureTables() {
     chatWorkerProcess.kill(signal);
     if (sessionTrackerProcess) sessionTrackerProcess.kill(signal);
     pointWorkerProcess.kill(signal);
+    redisSyncProcess.kill(signal);
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
