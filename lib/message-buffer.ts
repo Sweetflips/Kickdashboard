@@ -1,6 +1,9 @@
 import { redis } from './redis'
 import type { ChatJobPayload } from './chat-queue'
 
+// Re-export for consumers
+export type { ChatJobPayload }
+
 const BUFFER_KEY = 'chat:buffer'
 const FLUSH_INTERVAL_MS = 2000 // 2 seconds
 const MAX_BUFFER_SIZE = 500
