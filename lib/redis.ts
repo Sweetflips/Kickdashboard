@@ -4,9 +4,9 @@ const globalForRedis = globalThis as unknown as {
   redis: Redis | undefined
 }
 
-// Parse Redis URL and check if TLS is needed
+// Parse Redis URL - only use TLS if explicitly rediss:// protocol
 const redisUrl = process.env.REDIS_URL || ''
-const needsTls = redisUrl.includes('redislabs.com') || redisUrl.includes('redis.cloud') || redisUrl.startsWith('rediss://')
+const needsTls = redisUrl.startsWith('rediss://')
 
 console.log(`[Redis] Connecting to Redis (TLS: ${needsTls ? 'enabled' : 'disabled'})`)
 
