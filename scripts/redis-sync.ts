@@ -22,10 +22,11 @@ import type { ChatJobPayload } from '../lib/chat-queue'
 import { analyzeEngagementType, countExclamations, countSentences, hasEmotes, messageLength } from '../lib/analytics-classifier'
 import { logger } from '../lib/logger'
 
-// Faster intervals for real-time performance
-const MESSAGE_FLUSH_INTERVAL_MS = parseInt(process.env.MESSAGE_FLUSH_INTERVAL_MS || '500', 10) // 0.5 seconds (was 2s)
-const COIN_SYNC_INTERVAL_MS = parseInt(process.env.COIN_SYNC_INTERVAL_MS || '5000', 10) // 5 seconds (was 30s)
-const MAX_BATCH_SIZE = parseInt(process.env.MAX_MESSAGE_BATCH_SIZE || '100', 10) // Smaller batches (was 500)
+// Ultra-fast intervals for maximum real-time performance
+// With low Redis usage (< 1%), we can afford aggressive syncing
+const MESSAGE_FLUSH_INTERVAL_MS = parseInt(process.env.MESSAGE_FLUSH_INTERVAL_MS || '250', 10) // 0.25 seconds (ultra-fast)
+const COIN_SYNC_INTERVAL_MS = parseInt(process.env.COIN_SYNC_INTERVAL_MS || '2000', 10) // 2 seconds (near real-time)
+const MAX_BATCH_SIZE = parseInt(process.env.MAX_MESSAGE_BATCH_SIZE || '50', 10) // Smaller batches for faster processing
 
 let isShuttingDown = false
 let messageFlushInterval: NodeJS.Timeout | null = null
