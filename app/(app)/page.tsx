@@ -182,10 +182,10 @@ export default function Dashboard() {
                             // Merge new data with existing, tracking rank changes for animation
                             return data.leaderboard.map((newEntry: StreamLeaderboardEntry) => {
                                 const existing = prev.find(e => e.user_id === newEntry.user_id)
-                                
+
                                 // Track if coins increased
                                 const earnedCoin = existing && newEntry.points_earned > existing.points_earned
-                                
+
                                 // Only create new object if data changed
                                 if (existing &&
                                     existing.rank === newEntry.rank &&
@@ -195,7 +195,7 @@ export default function Dashboard() {
                                     // Clear animation flags
                                     return { ...existing, justEarnedCoin: false }
                                 }
-                                
+
                                 return {
                                     ...newEntry,
                                     previousRank: existing?.rank,
@@ -260,11 +260,11 @@ export default function Dashboard() {
                                 // Merge new data with existing, tracking rank changes for animation
                                 return data.leaderboard.map((newEntry: StreamLeaderboardEntry) => {
                                     const existing = prev.find(e => e.user_id === newEntry.user_id)
-                                    
+
                                     // Track if rank improved or coins increased
                                     const rankImproved = existing && existing.rank > newEntry.rank
                                     const earnedCoin = existing && newEntry.points_earned > existing.points_earned
-                                    
+
                                     // Only create new object if data changed
                                     if (existing &&
                                         existing.rank === newEntry.rank &&
@@ -274,7 +274,7 @@ export default function Dashboard() {
                                         // Clear animation flags after a bit
                                         return { ...existing, justEarnedCoin: false }
                                     }
-                                    
+
                                     return {
                                         ...newEntry,
                                         previousRank: existing?.rank,
@@ -642,13 +642,13 @@ export default function Dashboard() {
                                             const justEarned = entry.justEarnedCoin
                                             // Check if rank improved
                                             const rankUp = entry.previousRank !== undefined && entry.previousRank > entry.rank
-                                            
+
                                             return (
                                             <div
                                                 key={entry.user_id}
                                                 className={`flex items-center justify-between p-3 rounded-lg transition-all duration-500 ease-out
-                                                    ${justEarned 
-                                                        ? 'bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-yellow-500/20 dark:from-yellow-500/30 dark:via-orange-500/30 dark:to-yellow-500/30 animate-pulse shadow-lg shadow-yellow-500/20 scale-[1.02]' 
+                                                    ${justEarned
+                                                        ? 'bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-yellow-500/20 dark:from-yellow-500/30 dark:via-orange-500/30 dark:to-yellow-500/30 animate-pulse shadow-lg shadow-yellow-500/20 scale-[1.02]'
                                                         : 'hover:bg-gray-50 dark:hover:bg-kick-surface-hover'}
                                                     ${rankUp ? 'ring-2 ring-green-500/50' : ''}
                                                 `}
@@ -690,12 +690,12 @@ export default function Dashboard() {
                                                         <span className={`font-semibold text-body transition-all duration-300 ${justEarned ? 'text-yellow-400 text-lg' : 'text-kick-purple'}`}>
                                                             {entry.points_earned.toLocaleString()}
                                                         </span>
-                                                        <Image 
-                                                            src="/icons/Sweetflipscoin.png" 
-                                                            alt="" 
-                                                            width={24} 
-                                                            height={24} 
-                                                            className={`w-6 h-6 ${justEarned ? 'animate-spin' : 'opacity-90'}`} 
+                                                        <Image
+                                                            src="/icons/Sweetflipscoin.png"
+                                                            alt=""
+                                                            width={24}
+                                                            height={24}
+                                                            className={`w-6 h-6 ${justEarned ? 'animate-spin' : 'opacity-90'}`}
                                                         />
                                                         {/* +1 indicator when coin earned */}
                                                         {justEarned && (
