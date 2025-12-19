@@ -4,6 +4,7 @@ import { memoryCache } from '@/lib/memory-cache'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { NextResponse } from 'next/server'
 import { getSessionLeaderboard } from '@/lib/sweet-coins-redis'
+import { logger } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -443,6 +444,16 @@ export async function GET(request: Request) {
         // Cache the result
         memoryCache.set(cacheKey, result, cacheTTL)
 
+        // Log top 3 for monitoring
+        if (result.leaderboard.length >= 3) {
+            logger.leaderboard(result.leaderboard.slice(0, 3).map(entry => ({
+                username: entry.username,
+                coins: entry.points_earned,
+            })))
+        }
+
+        const lastUpdated = Date.now()
+
         return NextResponse.json({
             leaderboard: result.leaderboard,
             session_id: session.id.toString(),
@@ -451,11 +462,13 @@ export async function GET(request: Request) {
             ended_at: session.ended_at?.toISOString() || null,
             has_active_session: session.ended_at === null,
             stats: result.stats,
+            last_updated: lastUpdated, // For client-side diffing
         }, {
             headers: {
                 'Cache-Control': session.ended_at === null
                     ? 'no-cache, no-store, must-revalidate' // Real-time for active sessions
                     : 'public, max-age=30, stale-while-revalidate=60',
+                'Last-Modified': new Date(lastUpdated).toUTCString(),
             },
         })
     } catch (error) {

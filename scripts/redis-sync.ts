@@ -20,10 +20,12 @@ import { peekMessages, removeMessages, getBufferSize } from '../lib/message-buff
 import { getAllBalances, getSessionEarningsForSync } from '../lib/sweet-coins-redis'
 import type { ChatJobPayload } from '../lib/chat-queue'
 import { analyzeEngagementType, countExclamations, countSentences, hasEmotes, messageLength } from '../lib/analytics-classifier'
+import { logger } from '../lib/logger'
 
-const MESSAGE_FLUSH_INTERVAL_MS = 2000 // 2 seconds
-const COIN_SYNC_INTERVAL_MS = 30000 // 30 seconds
-const MAX_BATCH_SIZE = 500
+// Faster intervals for real-time performance
+const MESSAGE_FLUSH_INTERVAL_MS = parseInt(process.env.MESSAGE_FLUSH_INTERVAL_MS || '500', 10) // 0.5 seconds (was 2s)
+const COIN_SYNC_INTERVAL_MS = parseInt(process.env.COIN_SYNC_INTERVAL_MS || '5000', 10) // 5 seconds (was 30s)
+const MAX_BATCH_SIZE = parseInt(process.env.MAX_MESSAGE_BATCH_SIZE || '100', 10) // Smaller batches (was 500)
 
 let isShuttingDown = false
 let messageFlushInterval: NodeJS.Timeout | null = null
@@ -50,7 +52,7 @@ async function flushMessages(): Promise<void> {
       return
     }
 
-    console.log(`[redis-sync] Flushing ${messages.length} messages to PostgreSQL...`)
+    const flushStartTime = Date.now()
 
     // Process messages in batches
     const batchSize = 100
@@ -63,7 +65,11 @@ async function flushMessages(): Promise<void> {
     await removeMessages(messages.length)
     messagesFlushed += messages.length
 
-    console.log(`[redis-sync] ✅ Flushed ${messages.length} messages (total: ${messagesFlushed})`)
+    const durationMs = Date.now() - flushStartTime
+    const remainingSize = await getBufferSize()
+
+    // Structured logging
+    logger.sync(messages.length, remainingSize, durationMs)
   } catch (error) {
     errors++
     console.error('[redis-sync] Error flushing messages:', error)
@@ -179,7 +185,8 @@ async function processMessageBatch(messages: ChatJobPayload[]): Promise<void> {
       sender_badges: payload.sender.badges || undefined,
       sender_is_verified: payload.sender.is_verified || false,
       sender_is_anonymous: payload.sender.is_anonymous || false,
-      sweet_coins_earned: 0, // Will be updated by coin sync
+      sweet_coins_earned: (payload as any).sweet_coins_earned || 0, // Use coin data from payload if available
+      sweet_coins_reason: (payload as any).sweet_coins_reason || null,
       sent_when_offline: sentWhenOffline,
     }
 
@@ -255,7 +262,7 @@ async function syncCoins(): Promise<void> {
     // History records can be created from chat_messages table if needed
 
     coinsSynced += balances.length
-    console.log(`[redis-sync] ✅ Synced ${balances.length} coin balances (total: ${coinsSynced})`)
+    logger.log('SYNC', `Synced ${balances.length} coin balances (total: ${coinsSynced})`)
   } catch (error) {
     errors++
     console.error('[redis-sync] Error syncing coins:', error)

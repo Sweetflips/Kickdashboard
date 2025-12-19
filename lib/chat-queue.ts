@@ -32,6 +32,8 @@ export interface ChatJobPayload {
     emotes?: Array<{ emote_id: string; positions: Array<{ s: number; e: number }> }> | null
     stream_session_id?: bigint | null
     is_stream_active?: boolean
+    sweet_coins_earned?: number // Added for real-time coin visibility
+    sweet_coins_reason?: string // Reason for coin award or why it wasn't awarded
 }
 
 /**

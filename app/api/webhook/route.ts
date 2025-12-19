@@ -5,6 +5,7 @@ import type { ChatMessage } from '@/lib/chat-store'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 import { db } from '@/lib/db'
 import { getKickPublicKeyPem, verifyKickWebhookSignature } from '@/lib/kick-webhook'
+import { logger } from '@/lib/logger'
 import {
     resolveSessionForChat,
     getOrCreateActiveSession,
@@ -269,6 +270,7 @@ export async function POST(request: Request) {
 
                 if (session) {
                     await touchSession(session.id)
+                    logger.session('started', channelSlug, session.id)
                 }
 
                 return NextResponse.json({ received: true, eventType }, { status: 200 })
@@ -284,7 +286,10 @@ export async function POST(request: Request) {
                 new Date()
 
             // Force end: Kick webhook is authoritative and shouldn't be blocked by grace period
-            await endActiveSessionAt(broadcasterUserId, endedAt, true)
+            const ended = await endActiveSessionAt(broadcasterUserId, endedAt, true)
+            if (ended) {
+                logger.session('ended', channelSlug || 'unknown', broadcasterUserId.toString())
+            }
             return NextResponse.json({ received: true, eventType }, { status: 200 })
         }
 
@@ -464,9 +469,28 @@ export async function POST(request: Request) {
 
                 const coinsToAward = isSub ? 1 : 1 // Same for now, can be configured later
 
-                awardCoins(user.id, coinsToAward, sessionId).catch(err => {
-                    console.error('[webhook] Error awarding coins:', err)
-                })
+                try {
+                    const coinResult = await awardCoins(user.id, coinsToAward, sessionId)
+
+                    if (coinResult.awarded) {
+                        // Add coin info to the buffered message payload so it's visible in real-time
+                        // This will be included when the message is processed and displayed
+                        jobPayload.sweet_coins_earned = coinsToAward
+                        jobPayload.sweet_coins_reason = 'chat_message'
+
+                        // Structured logging
+                        logger.coin(
+                            jobPayload.sender.username,
+                            coinsToAward,
+                            coinResult.newBalance,
+                            sessionId
+                        )
+                    }
+                } catch (err) {
+                    logger.log('COIN', `Error awarding coins to @${jobPayload.sender.username}`, {
+                        error: err instanceof Error ? err.message : 'Unknown error',
+                    })
+                }
             }
         }
 

@@ -223,14 +223,68 @@ export default function Dashboard() {
             }
         }
 
+        // Track last update timestamp for smart diffing
+        const lastUpdateRef = { current: 0 }
+
         // Fetch immediately on mount and when dependencies change
         fetchStreamLeaderboard()
-        // Refresh leaderboard every 10 seconds when live (faster updates for real-time feel)
-        const interval = setInterval(() => {
-            if (isLive) {
-                fetchStreamLeaderboard()
+
+        // Smart polling: 2-second interval with diffing
+        const interval = setInterval(async () => {
+            if (!isLive) return
+
+            try {
+                const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}&_t=${Date.now()}`)
+                if (!response.ok) return
+
+                const data = await response.json()
+
+                // Only update if data has changed (using last_updated timestamp)
+                if (data.last_updated && data.last_updated > lastUpdateRef.current) {
+                    // Update leaderboard with data - smart merge to preserve unchanged entries
+                    if (data.leaderboard && Array.isArray(data.leaderboard)) {
+                        if (data.leaderboard.length > 0) {
+                            setStreamLeaderboard(prev => {
+                                // Merge new data with existing, preserving unchanged entries
+                                return data.leaderboard.map((newEntry: StreamLeaderboardEntry) => {
+                                    const existing = prev.find(e => e.user_id === newEntry.user_id)
+                                    // Only create new object if data changed
+                                    if (existing &&
+                                        existing.rank === newEntry.rank &&
+                                        existing.points_earned === newEntry.points_earned &&
+                                        existing.messages_sent === newEntry.messages_sent &&
+                                        existing.emotes_used === newEntry.emotes_used) {
+                                        return existing
+                                    }
+                                    return newEntry
+                                })
+                            })
+                        }
+                    }
+
+                    // Update session ID if changed
+                    if (data.session_id && data.session_id !== currentSessionId) {
+                        if (currentSessionId && currentSessionId !== data.session_id) {
+                            setStreamLeaderboard([])
+                        }
+                        setCurrentSessionId(data.session_id)
+                    }
+
+                    // Update active session status
+                    setHasActiveSession(data.has_active_session || false)
+
+                    // Update stream stats
+                    if (data.stats) {
+                        setStreamStats(data.stats)
+                    }
+
+                    lastUpdateRef.current = data.last_updated
+                }
+            } catch (err) {
+                console.error('Error fetching stream leaderboard:', err)
             }
-        }, Math.max(2500, Number(dashboardSettings.leaderboard_refresh_ms) || 10000))
+        }, Math.max(2000, Number(dashboardSettings.leaderboard_refresh_ms) || 2000)) // 2 seconds default
+
         return () => clearInterval(interval)
     }, [channelData?.broadcaster_user_id, isLive, dashboardSettings.leaderboard_refresh_ms])
 

@@ -814,7 +814,8 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
     }, [chatroomId, slug])
 
     useEffect(() => {
-        // Load messages from database API - don't require chatroomId, just broadcasterUserId
+        // Hybrid message loading: fetch from BOTH PostgreSQL and Redis buffer
+        // This ensures zero gaps when loading or reconnecting
         const loadMessagesFromDatabase = async () => {
             try {
                 setChatLoading(true)
@@ -827,21 +828,55 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                 params.append('limit', '500') // Load last 500 messages (includes offline messages)
 
                 console.log(`[ChatFrame] Loading messages with params: ${params.toString()}`)
-                const response = await fetch(`/api/chat?${params.toString()}`)
 
-                if (!response.ok) {
-                    const errorText = await response.text()
-                    console.error(`[ChatFrame] Failed to fetch messages: ${response.status} - ${errorText}`)
+                // Fetch from BOTH sources in parallel
+                const [dbResponse, recentResponse] = await Promise.all([
+                    fetch(`/api/chat?${params.toString()}`),
+                    broadcasterUserId ? fetch(`/api/chat/recent?broadcaster_user_id=${broadcasterUserId}&limit=100`) : Promise.resolve(null),
+                ])
+
+                if (!dbResponse.ok) {
+                    const errorText = await dbResponse.text()
+                    console.error(`[ChatFrame] Failed to fetch messages: ${dbResponse.status} - ${errorText}`)
                     return
                 }
 
-                const data = await response.json()
-                console.log(`[ChatFrame] Received ${data.messages?.length || 0} messages from API`)
+                const dbData = await dbResponse.json()
+                let recentData = null
 
-                if (data.messages && Array.isArray(data.messages)) {
-                    // Ensure messages are properly formatted and sorted by timestamp
-                    const formattedMessages = data.messages
-                        .map((msg: ChatMessage) => ({
+                if (recentResponse && recentResponse.ok) {
+                    recentData = await recentResponse.json()
+                }
+
+                // Merge messages from both sources
+                const dbMessages = dbData.messages || []
+                const recentMessages = recentData?.messages || []
+
+                // Create a map for deduplication by message_id
+                const messageMap = new Map<string, ChatMessage>()
+
+                // Add DB messages first (they're more complete)
+                dbMessages.forEach((msg: ChatMessage) => {
+                    messageMap.set(msg.message_id, {
+                        ...msg,
+                        sender: {
+                            ...msg.sender,
+                            is_verified: msg.sender.is_verified || isVerifiedUser(
+                                msg.sender.username || '',
+                                msg.sender.identity?.badges || []
+                            ),
+                            identity: msg.sender.identity || {
+                                username_color: '#FFFFFF',
+                                badges: [],
+                            },
+                        },
+                    })
+                })
+
+                // Add recent messages from Redis buffer (may have coin data)
+                recentMessages.forEach((msg: ChatMessage) => {
+                    if (!messageMap.has(msg.message_id)) {
+                        messageMap.set(msg.message_id, {
                             ...msg,
                             sender: {
                                 ...msg.sender,
@@ -854,27 +889,38 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                     badges: [],
                                 },
                             },
-                        }))
-                        .sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp)
-
-                    setChatMessages(formattedMessages)
-
-                    // Mark all loaded messages as processed to prevent duplicate saves
-                    formattedMessages.forEach((msg: ChatMessage) => {
-                        processedMessageIdsRef.current.add(msg.message_id)
-                    })
-
-                    // Scroll to bottom after messages load
-                    setTimeout(() => {
-                        if (chatContainerRef.current) {
-                            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+                        })
+                    } else {
+                        // Merge coin data from recent message if available
+                        const existing = messageMap.get(msg.message_id)!
+                        if (msg.sweet_coins_earned && msg.sweet_coins_earned > 0) {
+                            existing.sweet_coins_earned = msg.sweet_coins_earned
+                            existing.sweet_coins_reason = msg.sweet_coins_reason
                         }
-                    }, 100)
-                } else {
-                    console.warn('[ChatFrame] No messages in response or invalid format:', data)
-                }
+                    }
+                })
+
+                // Convert map to array and sort by timestamp
+                const formattedMessages = Array.from(messageMap.values())
+                    .sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp)
+
+                console.log(`[ChatFrame] Loaded ${formattedMessages.length} messages (${dbMessages.length} from DB, ${recentMessages.length} from Redis buffer)`)
+
+                setChatMessages(formattedMessages)
+
+                // Mark all loaded messages as processed to prevent duplicate saves
+                formattedMessages.forEach((msg: ChatMessage) => {
+                    processedMessageIdsRef.current.add(msg.message_id)
+                })
+
+                // Scroll to bottom after messages load
+                setTimeout(() => {
+                    if (chatContainerRef.current) {
+                        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+                    }
+                }, 100)
             } catch (error) {
-                console.error('[ChatFrame] Failed to load messages from database:', error)
+                console.error('[ChatFrame] Failed to load messages:', error)
             } finally {
                 setChatLoading(false)
             }
@@ -1986,6 +2032,20 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                     <span className="chat-entry-content inline" style={{ verticalAlign: 'baseline' }}>
                                                         {renderMessageWithEmotes(message.content, message.emotes, emoteMap)}
                                                     </span>
+                                                    {/* Coin indicator - show prominently when coins are earned */}
+                                                    {message.sweet_coins_earned && message.sweet_coins_earned > 0 && (
+                                                        <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-kick-purple/20 dark:bg-kick-purple/30 rounded-full animate-pulse">
+                                                            <Image
+                                                                src="/icons/Sweetflipscoin.png"
+                                                                alt="Sweet Coin"
+                                                                width={14}
+                                                                height={14}
+                                                                className="w-3.5 h-3.5"
+                                                                unoptimized
+                                                            />
+                                                            <span className="text-xs font-bold text-kick-purple">+{message.sweet_coins_earned}</span>
+                                                        </span>
+                                                    )}
                                                     <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
                                                         {!message.sent_when_offline && message.sweet_coins_earned !== undefined ? (
                                                             message.sweet_coins_earned === 0 ? (
