@@ -1186,15 +1186,21 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
             // Use functional update to get latest state
             setChatMessages((currentMessages) => {
                 // Find messages that might need point updates
+                // Only poll for messages that haven't been checked yet (no sweet_coins data)
+                // OR messages that are still pending
                 const pendingMessageIds = currentMessages
                     .filter((msg) => {
-                        // Check if message is pending points
-                        return (
-                            !msg.sent_when_offline &&
-                            (msg.sweet_coins_earned === undefined ||
-                                msg.sweet_coins_earned === 0 ||
-                                msg.sweet_coins_reason === 'pending')
-                        )
+                        // Skip offline messages
+                        if (msg.sent_when_offline) return false
+                        
+                        // Include if we don't have coin data yet
+                        if (msg.sweet_coins_earned === undefined) return true
+                        
+                        // Include if it's still marked as pending
+                        if (msg.sweet_coins_reason === 'pending') return true
+                        
+                        // Skip if we already have a definitive result (0 with reason, or > 0)
+                        return false
                     })
                     .map((msg) => msg.message_id)
                     .slice(0, 100) // Limit to 100 messages per poll
@@ -2034,16 +2040,16 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
                                                     </span>
                                                     {/* Coin indicator - show prominently when coins are earned */}
                                                     {message.sweet_coins_earned && message.sweet_coins_earned > 0 && (
-                                                        <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-kick-purple/20 dark:bg-kick-purple/30 rounded-full animate-pulse">
+                                                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-yellow-500/30 to-orange-500/30 dark:from-yellow-500/40 dark:to-orange-500/40 border border-yellow-500/50 rounded-full shadow-sm shadow-yellow-500/20">
                                                             <Image
                                                                 src="/icons/Sweetflipscoin.png"
                                                                 alt="Sweet Coin"
-                                                                width={14}
-                                                                height={14}
-                                                                className="w-3.5 h-3.5"
+                                                                width={16}
+                                                                height={16}
+                                                                className="w-4 h-4 animate-bounce"
                                                                 unoptimized
                                                             />
-                                                            <span className="text-xs font-bold text-kick-purple">+{message.sweet_coins_earned}</span>
+                                                            <span className="text-xs font-bold text-yellow-400 drop-shadow-sm">+{message.sweet_coins_earned}</span>
                                                         </span>
                                                     )}
                                                     <span className="ml-2 inline-flex items-center gap-1 flex-shrink-0">
