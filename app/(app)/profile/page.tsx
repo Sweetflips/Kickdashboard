@@ -18,7 +18,7 @@ interface UserData {
 type TabType = 'general' | 'preferences' | 'connected' | 'achievements' | 'security' | 'admin_tools'
 
 interface ConnectedAccount {
-    provider: 'kick' | 'discord' | 'telegram'
+    provider: 'kick' | 'discord' | 'telegram' | 'twitter' | 'instagram'
     connected: boolean
     username?: string
     userId?: string
