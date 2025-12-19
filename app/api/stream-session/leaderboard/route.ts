@@ -112,7 +112,7 @@ export async function GET(request: Request) {
 
         // Cache key - use session ID for active sessions, or session_id param for past sessions
         const cacheKey = `stream-leaderboard:${session.id.toString()}`
-        const cacheTTL = session.ended_at === null ? 3000 : 30000 // 3s for active, 30s for ended
+        const cacheTTL = session.ended_at === null ? 1000 : 30000 // 1s for active (near real-time), 30s for ended
 
         // Try cache first
         const cached = memoryCache.get<{
@@ -133,7 +133,7 @@ export async function GET(request: Request) {
             }, {
                 headers: {
                     'Cache-Control': session.ended_at === null
-                        ? 'public, max-age=3, stale-while-revalidate=5'
+                        ? 'no-cache, no-store, must-revalidate' // Real-time for active sessions
                         : 'public, max-age=30, stale-while-revalidate=60',
                 },
             })
@@ -191,7 +191,7 @@ export async function GET(request: Request) {
                 },
             })),
             // Points aggregated by user (internal user_id) - only used for ended sessions
-            isActiveSession && redisLeaderboard.length > 0 
+            isActiveSession && redisLeaderboard.length > 0
                 ? Promise.resolve([]) // Skip DB query for active sessions with Redis data
                 : executeQueryWithRetry(() => db.sweetCoinHistory.groupBy({
                     by: ['user_id'],
@@ -454,7 +454,7 @@ export async function GET(request: Request) {
         }, {
             headers: {
                 'Cache-Control': session.ended_at === null
-                    ? 'public, max-age=3, stale-while-revalidate=5'
+                    ? 'no-cache, no-store, must-revalidate' // Real-time for active sessions
                     : 'public, max-age=30, stale-while-revalidate=60',
             },
         })

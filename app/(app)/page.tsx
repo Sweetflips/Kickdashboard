@@ -81,7 +81,7 @@ export default function Dashboard() {
     const [dashboardSettings, setDashboardSettings] = useState({
         channel_slug: 'sweetflips',
         channel_refresh_ms: 60000,
-        leaderboard_refresh_ms: 10000,
+        leaderboard_refresh_ms: 3000, // 3 seconds for near-real-time updates
         chat_height_px: 600,
         show_chat: true,
         show_leaderboard: true,
