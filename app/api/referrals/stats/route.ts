@@ -61,9 +61,11 @@ export async function GET(request: Request) {
                 .reduce((sum: number, r: any) => sum + r.reward_sweet_coins, 0)
 
             return {
-                id: ref.id,
+                // Prisma BigInt -> JSON-safe
+                id: ref.id?.toString?.() ?? String(ref.id),
                 referee: {
-                    id: ref.referee.id,
+                    // Prisma BigInt -> JSON-safe
+                    id: ref.referee.id?.toString?.() ?? String(ref.referee.id),
                     username: ref.referee.username,
                     profilePicture: rewriteApiMediaUrlToCdn(ref.referee.profile_picture_url),
                 },
