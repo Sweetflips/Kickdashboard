@@ -60,6 +60,8 @@ interface ChatFrameProps {
     username?: string
     // Optional: real stream live status (from /api/channel). If omitted, keep legacy behavior.
     isStreamLive?: boolean
+    // Optional: notify parent about each incoming live message (for realtime leaderboard/stats)
+    onMessage?: (message: ChatMessage) => void
 }
 
 // Helper function to check if a user should be verified
@@ -428,7 +430,7 @@ function renderEmote(emoteId: string, emoteText: string, emoteMap?: Map<string, 
     )
 }
 
-export default function ChatFrame({ chatroomId, broadcasterUserId, slug, username, isStreamLive }: ChatFrameProps) {
+export default function ChatFrame({ chatroomId, broadcasterUserId, slug, username, isStreamLive, onMessage }: ChatFrameProps) {
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
     const [chatLoading, setChatLoading] = useState(false)
     const [chatInput, setChatInput] = useState('')
@@ -1149,6 +1151,13 @@ export default function ChatFrame({ chatroomId, broadcasterUserId, slug, usernam
 
                 return updated
             })
+
+            // Bubble message up to parent (best-effort; never block chat rendering)
+            try {
+                onMessage?.(message)
+            } catch {
+                // ignore
+            }
 
             // Fallback: Save message to database (webhook may not receive all messages)
             // Batched + backoff to avoid hammering the origin when it’s unhealthy

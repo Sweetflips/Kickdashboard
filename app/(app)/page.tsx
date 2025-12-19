@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ChatFrame from '@/components/ChatFrame'
 import PromoCodeModal from '@/components/PromoCodeModal'
 import { Toast } from '@/components/Toast'
@@ -90,6 +90,67 @@ export default function Dashboard() {
         show_redeem_code_button: true,
         leaderboard_max_rows: 50,
     })
+
+    // Track unique chatters for live stats updates without needing a refetch.
+    const seenChattersRef = useRef<Set<string>>(new Set())
+
+    const handleLiveChatMessage = (message: any) => {
+        // Only apply when we actually have an active session + leaderboard visible
+        if (!isLive || !hasActiveSession) return
+        if (!message?.sender?.user_id) return
+
+        const kickUserId = String(message.sender.user_id)
+        const emotesUsed = Array.isArray(message.emotes)
+            ? message.emotes.reduce((sum: number, e: any) => sum + (Array.isArray(e?.positions) ? e.positions.length : 0), 0)
+            : 0
+        const coinsEarned = typeof message.sweet_coins_earned === 'number' ? message.sweet_coins_earned : 0
+
+        // Update stream stats optimistically
+        setStreamStats((prev) => {
+            const base = prev || { total_messages: 0, total_points: 0, unique_chatters: 0 }
+            const next = { ...base }
+            next.total_messages += 1
+            if (coinsEarned > 0) next.total_points += coinsEarned
+            if (!seenChattersRef.current.has(kickUserId)) {
+                seenChattersRef.current.add(kickUserId)
+                next.unique_chatters += 1
+            }
+            return next
+        })
+
+        // Update leaderboard entry counts optimistically
+        setStreamLeaderboard((prev) => {
+            const idx = prev.findIndex((e) => e.kick_user_id === kickUserId || e.user_id === kickUserId)
+            if (idx === -1) {
+                // New chatter; create a placeholder row until the next poll returns canonical ranks/points.
+                const nextRank = prev.length + 1
+                const newEntry: StreamLeaderboardEntry = {
+                    rank: nextRank,
+                    user_id: kickUserId,
+                    kick_user_id: kickUserId,
+                    username: message.sender.username || 'Unknown',
+                    profile_picture_url: message.sender.profile_picture || null,
+                    points_earned: coinsEarned > 0 ? coinsEarned : 0,
+                    messages_sent: 1,
+                    emotes_used: emotesUsed,
+                    previousRank: undefined,
+                    justEarnedCoin: coinsEarned > 0,
+                }
+                return [...prev, newEntry]
+            }
+
+            const existing = prev[idx]
+            const next = [...prev]
+            next[idx] = {
+                ...existing,
+                messages_sent: (existing.messages_sent || 0) + 1,
+                emotes_used: (existing.emotes_used || 0) + emotesUsed,
+                points_earned: existing.points_earned + (coinsEarned > 0 ? coinsEarned : 0),
+                justEarnedCoin: coinsEarned > 0,
+            }
+            return next
+        })
+    }
 
     useEffect(() => {
         let cancelled = false
@@ -619,6 +680,7 @@ export default function Dashboard() {
                                         slug={channelData?.slug}
                                         username={channelName}
                                         isStreamLive={isLive}
+                                        onMessage={handleLiveChatMessage}
                                     />
                                 </div>
                             </div>
