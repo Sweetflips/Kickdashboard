@@ -450,14 +450,22 @@ export async function POST(request: Request) {
             const senderKickUserId = BigInt(jobPayload.sender.kick_user_id)
             const sessionId = jobPayload.stream_session_id
 
-            // Check if user exists and is eligible (quick check)
-            const user = await db.user.findUnique({
+            // Upsert user to ensure they exist (fixes first-time chatters missing coins)
+            const user = await db.user.upsert({
                 where: { kick_user_id: senderKickUserId },
+                update: {
+                    username: jobPayload.sender.username,
+                    profile_picture_url: jobPayload.sender.profile_picture || undefined,
+                },
+                create: {
+                    kick_user_id: senderKickUserId,
+                    username: jobPayload.sender.username,
+                    profile_picture_url: jobPayload.sender.profile_picture || null,
+                },
                 select: { id: true, is_excluded: true, username: true, kick_connected: true },
             })
 
-            if (user &&
-                !user.is_excluded &&
+            if (!user.is_excluded &&
                 user.username.toLowerCase() !== 'sweetflipsbot' &&
                 user.kick_connected !== false) {
                 // Award coins instantly via Redis
