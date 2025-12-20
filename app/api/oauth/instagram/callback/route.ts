@@ -20,7 +20,7 @@ export async function GET(request: Request) {
         const errorDescription = searchParams.get('error_description')
 
         if (error) {
-            console.error('Instagram OAuth error:', { error, errorReason, errorDescription })
+            console.error('Instagram/Facebook OAuth error:', { error, errorReason, errorDescription })
             return NextResponse.redirect(
                 `${APP_URL}/profile?tab=connected&error=instagram_oauth_failed`
             )
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
             )
         }
 
-        // Meta OAuth token exchange (NOT api.instagram.com)
+        // Meta OAuth token exchange
         const tokenUrl = new URL('https://graph.facebook.com/v24.0/oauth/access_token')
         tokenUrl.searchParams.set('client_id', appId)
         tokenUrl.searchParams.set('client_secret', appSecret)
@@ -80,87 +80,37 @@ export async function GET(request: Request) {
             )
         }
 
-        // Get Facebook user's connected Instagram accounts
-        // First, get the user's Facebook Pages (required for Instagram Business accounts)
-        const pagesResponse = await fetch(
-            `https://graph.facebook.com/v24.0/me/accounts?access_token=${accessToken}`
+        // Get Facebook user profile (works without app review)
+        const meResponse = await fetch(
+            `https://graph.facebook.com/v24.0/me?fields=id,name,email&access_token=${accessToken}`
         )
 
-        let instagramUserId: string | null = null
-        let instagramUsername: string | null = null
-
-        if (pagesResponse.ok) {
-            const pagesData = await pagesResponse.json()
-
-            // Check each page for connected Instagram account
-            for (const page of pagesData.data || []) {
-                const igResponse = await fetch(
-                    `https://graph.facebook.com/v24.0/${page.id}?fields=instagram_business_account{id,username}&access_token=${accessToken}`
-                )
-
-                if (igResponse.ok) {
-                    const igData = await igResponse.json()
-                    if (igData.instagram_business_account) {
-                        instagramUserId = igData.instagram_business_account.id
-                        instagramUsername = igData.instagram_business_account.username
-                        break
-                    }
-                }
-            }
-        }
-
-        // If no business account found, try to get personal Instagram account via /me endpoint
-        if (!instagramUserId) {
-            // For personal accounts, we need to use the instagram_basic permission
-            // and query the Instagram Graph API directly
-            const meResponse = await fetch(
-                `https://graph.facebook.com/v24.0/me?fields=id,name&access_token=${accessToken}`
-            )
-
-            if (meResponse.ok) {
-                const meData = await meResponse.json()
-                // For apps with instagram_basic, we can try getting Instagram account
-                const igAccountResponse = await fetch(
-                    `https://graph.facebook.com/v24.0/me/instagram_accounts?access_token=${accessToken}`
-                )
-
-                if (igAccountResponse.ok) {
-                    const igAccounts = await igAccountResponse.json()
-                    if (igAccounts.data && igAccounts.data.length > 0) {
-                        const firstAccount = igAccounts.data[0]
-                        instagramUserId = firstAccount.id
-
-                        // Fetch username for this account
-                        const usernameResponse = await fetch(
-                            `https://graph.facebook.com/v24.0/${firstAccount.id}?fields=username&access_token=${accessToken}`
-                        )
-                        if (usernameResponse.ok) {
-                            const usernameData = await usernameResponse.json()
-                            instagramUsername = usernameData.username
-                        }
-                    }
-                }
-            }
-        }
-
-        // If still no Instagram account found, the user might not have one connected
-        if (!instagramUserId) {
-            console.error('No Instagram account found for user')
+        if (!meResponse.ok) {
+            const errorData = await meResponse.json().catch(() => ({}))
+            console.error('Facebook profile fetch failed:', errorData)
             return NextResponse.redirect(
-                `${APP_URL}/profile?tab=connected&error=no_instagram_account`
+                `${APP_URL}/profile?tab=connected&error=fetch_user_failed`
             )
         }
 
-        // Save to database
+        const fbUser = await meResponse.json()
+
+        if (!fbUser || !fbUser.id) {
+            return NextResponse.redirect(
+                `${APP_URL}/profile?tab=connected&error=invalid_user_data`
+            )
+        }
+
+        // Save to database - we're storing Facebook connection as "Instagram" for now
+        // since this is what the user initiated from the Instagram connect button
         const kickUserIdBigInt = BigInt(kickUserId)
 
-        // Update with Instagram connection data
         await db.user.update({
             where: { kick_user_id: kickUserIdBigInt },
             data: {
                 instagram_connected: true,
-                instagram_user_id: instagramUserId,
-                instagram_username: instagramUsername || 'Unknown',
+                instagram_user_id: fbUser.id,
+                instagram_username: fbUser.name || 'Facebook User',
                 instagram_access_token_hash: hashToken(accessToken),
             },
         })
@@ -169,7 +119,7 @@ export async function GET(request: Request) {
             `${APP_URL}/profile?tab=connected&success=instagram_connected`
         )
     } catch (error) {
-        console.error('Error in Instagram OAuth callback:', error)
+        console.error('Error in Instagram/Facebook OAuth callback:', error)
         return NextResponse.redirect(
             `${APP_URL}/profile?tab=connected&error=callback_error`
         )

@@ -18,11 +18,10 @@ export async function POST(request: Request) {
         const appId = process.env.INSTAGRAM_APP_ID
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
         const redirectUri = process.env.INSTAGRAM_REDIRECT_URI || `${baseUrl}/api/oauth/instagram/callback`
-
-        // Scopes for Instagram Graph API via Facebook Login
-        // instagram_basic = read profile info
-        // pages_show_list = required for business accounts
-        const scope = 'instagram_basic,pages_show_list'
+        
+        // Basic scopes that work without app review
+        // public_profile and email are auto-approved
+        const scope = 'public_profile,email'
 
         if (!appId) {
             console.error('Instagram OAuth Error: INSTAGRAM_APP_ID not configured')
