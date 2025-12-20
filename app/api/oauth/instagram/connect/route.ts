@@ -14,11 +14,15 @@ export async function POST(request: Request) {
             )
         }
 
-        // Instagram Basic Display API configuration
+        // Meta App configuration (Instagram uses Facebook OAuth)
         const appId = process.env.INSTAGRAM_APP_ID
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
         const redirectUri = process.env.INSTAGRAM_REDIRECT_URI || `${baseUrl}/api/oauth/instagram/callback`
-        const scope = 'user_profile'
+        
+        // Scopes for Instagram Graph API via Facebook Login
+        // instagram_basic = read profile info
+        // pages_show_list = required for business accounts
+        const scope = 'instagram_basic,pages_show_list'
 
         if (!appId) {
             console.error('Instagram OAuth Error: INSTAGRAM_APP_ID not configured')
@@ -31,9 +35,15 @@ export async function POST(request: Request) {
         // Generate state parameter for CSRF protection
         const state = Buffer.from(JSON.stringify({ kick_user_id })).toString('base64')
 
-        const authUrl = `https://api.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=${state}`
+        // Use Meta OAuth dialog (NOT instagram.com/oauth/authorize)
+        const authUrl = new URL('https://www.facebook.com/v24.0/dialog/oauth')
+        authUrl.searchParams.set('client_id', appId)
+        authUrl.searchParams.set('redirect_uri', redirectUri)
+        authUrl.searchParams.set('scope', scope)
+        authUrl.searchParams.set('response_type', 'code')
+        authUrl.searchParams.set('state', state)
 
-        return NextResponse.json({ authUrl })
+        return NextResponse.json({ authUrl: authUrl.toString() })
     } catch (error) {
         console.error('Error initiating Instagram OAuth:', error)
         return NextResponse.json(

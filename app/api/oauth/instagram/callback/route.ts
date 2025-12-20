@@ -16,8 +16,11 @@ export async function GET(request: Request) {
         const code = searchParams.get('code')
         const state = searchParams.get('state')
         const error = searchParams.get('error')
+        const errorReason = searchParams.get('error_reason')
+        const errorDescription = searchParams.get('error_description')
 
         if (error) {
+            console.error('Instagram OAuth error:', { error, errorReason, errorDescription })
             return NextResponse.redirect(
                 `${APP_URL}/profile?tab=connected&error=instagram_oauth_failed`
             )
@@ -40,7 +43,7 @@ export async function GET(request: Request) {
             )
         }
 
-        // Exchange code for access token
+        // Exchange code for access token using Facebook Graph API
         const appId = process.env.INSTAGRAM_APP_ID
         const appSecret = process.env.INSTAGRAM_APP_SECRET
         const redirectUri = process.env.INSTAGRAM_REDIRECT_URI || `${APP_URL}/api/oauth/instagram/callback`
@@ -51,24 +54,18 @@ export async function GET(request: Request) {
             )
         }
 
-        // Instagram Basic Display API token exchange
-        const tokenResponse = await fetch('https://api.instagram.com/oauth/access_token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-                client_id: appId,
-                client_secret: appSecret,
-                grant_type: 'authorization_code',
-                redirect_uri: redirectUri,
-                code: code,
-            }),
-        })
+        // Meta OAuth token exchange (NOT api.instagram.com)
+        const tokenUrl = new URL('https://graph.facebook.com/v24.0/oauth/access_token')
+        tokenUrl.searchParams.set('client_id', appId)
+        tokenUrl.searchParams.set('client_secret', appSecret)
+        tokenUrl.searchParams.set('redirect_uri', redirectUri)
+        tokenUrl.searchParams.set('code', code)
+
+        const tokenResponse = await fetch(tokenUrl.toString())
 
         if (!tokenResponse.ok) {
-            const errorText = await tokenResponse.text()
-            console.error('Instagram token exchange failed:', errorText)
+            const errorData = await tokenResponse.json().catch(() => ({}))
+            console.error('Meta token exchange failed:', errorData)
             return NextResponse.redirect(
                 `${APP_URL}/profile?tab=connected&error=token_exchange_failed`
             )
@@ -83,22 +80,74 @@ export async function GET(request: Request) {
             )
         }
 
-        // Fetch user info from Instagram Graph API
-        const userResponse = await fetch(`https://graph.instagram.com/me?fields=id,username&access_token=${accessToken}`)
+        // Get Facebook user's connected Instagram accounts
+        // First, get the user's Facebook Pages (required for Instagram Business accounts)
+        const pagesResponse = await fetch(
+            `https://graph.facebook.com/v24.0/me/accounts?access_token=${accessToken}`
+        )
 
-        if (!userResponse.ok) {
-            const errorText = await userResponse.text()
-            console.error('Instagram user fetch failed:', errorText)
-            return NextResponse.redirect(
-                `${APP_URL}/profile?tab=connected&error=fetch_user_failed`
-            )
+        let instagramUserId: string | null = null
+        let instagramUsername: string | null = null
+
+        if (pagesResponse.ok) {
+            const pagesData = await pagesResponse.json()
+            
+            // Check each page for connected Instagram account
+            for (const page of pagesData.data || []) {
+                const igResponse = await fetch(
+                    `https://graph.facebook.com/v24.0/${page.id}?fields=instagram_business_account{id,username}&access_token=${accessToken}`
+                )
+                
+                if (igResponse.ok) {
+                    const igData = await igResponse.json()
+                    if (igData.instagram_business_account) {
+                        instagramUserId = igData.instagram_business_account.id
+                        instagramUsername = igData.instagram_business_account.username
+                        break
+                    }
+                }
+            }
         }
 
-        const instagramUser = await userResponse.json()
+        // If no business account found, try to get personal Instagram account via /me endpoint
+        if (!instagramUserId) {
+            // For personal accounts, we need to use the instagram_basic permission
+            // and query the Instagram Graph API directly
+            const meResponse = await fetch(
+                `https://graph.facebook.com/v24.0/me?fields=id,name&access_token=${accessToken}`
+            )
+            
+            if (meResponse.ok) {
+                const meData = await meResponse.json()
+                // For apps with instagram_basic, we can try getting Instagram account
+                const igAccountResponse = await fetch(
+                    `https://graph.facebook.com/v24.0/me/instagram_accounts?access_token=${accessToken}`
+                )
+                
+                if (igAccountResponse.ok) {
+                    const igAccounts = await igAccountResponse.json()
+                    if (igAccounts.data && igAccounts.data.length > 0) {
+                        const firstAccount = igAccounts.data[0]
+                        instagramUserId = firstAccount.id
+                        
+                        // Fetch username for this account
+                        const usernameResponse = await fetch(
+                            `https://graph.facebook.com/v24.0/${firstAccount.id}?fields=username&access_token=${accessToken}`
+                        )
+                        if (usernameResponse.ok) {
+                            const usernameData = await usernameResponse.json()
+                            instagramUsername = usernameData.username
+                        }
+                    }
+                }
+            }
+        }
 
-        if (!instagramUser || !instagramUser.id || !instagramUser.username) {
+        // If still no Instagram account found, the user might not have one connected
+        if (!instagramUserId) {
+            console.error('No Instagram account found for user')
             return NextResponse.redirect(
-                `${APP_URL}/profile?tab=connected&error=invalid_user_data`
+                `${APP_URL}/profile?tab=connected&error=no_instagram_account`
             )
         }
 
@@ -110,8 +159,8 @@ export async function GET(request: Request) {
             where: { kick_user_id: kickUserIdBigInt },
             data: {
                 instagram_connected: true,
-                instagram_user_id: instagramUser.id,
-                instagram_username: instagramUser.username,
+                instagram_user_id: instagramUserId,
+                instagram_username: instagramUsername || 'Unknown',
                 instagram_access_token_hash: hashToken(accessToken),
             },
         })
