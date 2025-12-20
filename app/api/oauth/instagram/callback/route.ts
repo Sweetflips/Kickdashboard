@@ -91,13 +91,13 @@ export async function GET(request: Request) {
 
         if (pagesResponse.ok) {
             const pagesData = await pagesResponse.json()
-            
+
             // Check each page for connected Instagram account
             for (const page of pagesData.data || []) {
                 const igResponse = await fetch(
                     `https://graph.facebook.com/v24.0/${page.id}?fields=instagram_business_account{id,username}&access_token=${accessToken}`
                 )
-                
+
                 if (igResponse.ok) {
                     const igData = await igResponse.json()
                     if (igData.instagram_business_account) {
@@ -116,20 +116,20 @@ export async function GET(request: Request) {
             const meResponse = await fetch(
                 `https://graph.facebook.com/v24.0/me?fields=id,name&access_token=${accessToken}`
             )
-            
+
             if (meResponse.ok) {
                 const meData = await meResponse.json()
                 // For apps with instagram_basic, we can try getting Instagram account
                 const igAccountResponse = await fetch(
                     `https://graph.facebook.com/v24.0/me/instagram_accounts?access_token=${accessToken}`
                 )
-                
+
                 if (igAccountResponse.ok) {
                     const igAccounts = await igAccountResponse.json()
                     if (igAccounts.data && igAccounts.data.length > 0) {
                         const firstAccount = igAccounts.data[0]
                         instagramUserId = firstAccount.id
-                        
+
                         // Fetch username for this account
                         const usernameResponse = await fetch(
                             `https://graph.facebook.com/v24.0/${firstAccount.id}?fields=username&access_token=${accessToken}`
