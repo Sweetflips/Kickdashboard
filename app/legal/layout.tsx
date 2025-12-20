@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation'
 const legalPages = [
     { href: '/legal/terms', label: 'Terms of Service', description: 'Rules for using SweetFlips' },
     { href: '/legal/privacy', label: 'Privacy Policy', description: 'How we handle your data' },
+    { href: '/legal/data-deletion', label: 'Data Deletion', description: 'Request removal of your data' },
     { href: '/legal/cookies', label: 'Cookie Policy', description: 'Cookies and storage we use' },
     { href: '/legal/responsible-gaming', label: 'Responsible Gaming', description: 'Guidelines for healthy participation' },
 ]

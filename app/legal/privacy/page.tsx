@@ -13,7 +13,7 @@ export default function PrivacyPolicy() {
                     Privacy Policy
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-kick-text-secondary mb-8">
-                    Last updated: December 7, 2024
+                    Last updated: December 20, 2024
                 </p>
 
                 <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -170,7 +170,7 @@ export default function PrivacyPolicy() {
                             <li><strong>Access:</strong> Request a copy of the data we hold about you</li>
                             <li><strong>Correction:</strong> Update or correct inaccurate information</li>
                             <li><strong>Deletion:</strong> Request deletion of your account and associated data</li>
-                            <li><strong>Disconnect:</strong> Remove connected accounts (Discord, Telegram) at any time</li>
+                            <li><strong>Disconnect:</strong> Remove connected accounts (Discord, Telegram, Facebook) at any time</li>
                             <li><strong>Opt-out:</strong> Adjust notification preferences in your settings</li>
                         </ul>
                         <p className="text-gray-600 dark:text-kick-text-secondary mt-4">
@@ -178,15 +178,71 @@ export default function PrivacyPolicy() {
                         </p>
                     </section>
 
+                    <section id="data-deletion" className="mb-8 p-6 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4 flex items-center gap-2">
+                            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            8. How to Delete Your Data
+                        </h2>
+                        <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
+                            You have the right to request deletion of all personal data we have collected about you.
+                            When you request data deletion, we will permanently remove:
+                        </p>
+                        <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2 mb-6">
+                            <li>Your account profile and authentication data</li>
+                            <li>Connected social accounts (Facebook, Discord, Telegram)</li>
+                            <li>Sweet Coins balance and transaction history</li>
+                            <li>Raffle entries and participation history</li>
+                            <li>Chat messages and activity logs</li>
+                            <li>Any stored preferences and settings</li>
+                        </ul>
+
+                        <h3 className="text-lg font-medium text-gray-800 dark:text-kick-text mb-3">
+                            To Request Data Deletion:
+                        </h3>
+                        <ol className="list-decimal pl-6 text-gray-600 dark:text-kick-text-secondary space-y-3 mb-6">
+                            <li>
+                                <strong>Email us directly:</strong> Send a deletion request to{' '}
+                                <a href="mailto:privacy@sweetflipsoftware.com" className="text-kick-green hover:underline font-medium">
+                                    privacy@sweetflipsoftware.com
+                                </a>{' '}
+                                with the subject line "Data Deletion Request"
+                            </li>
+                            <li>
+                                <strong>Include your account information:</strong> Provide the email address or username associated with your account so we can locate your data
+                            </li>
+                            <li>
+                                <strong>Verification:</strong> We may need to verify your identity to process the request
+                            </li>
+                        </ol>
+
+                        <div className="bg-white dark:bg-kick-surface rounded-lg p-4 border border-red-200 dark:border-red-800">
+                            <p className="text-sm text-gray-600 dark:text-kick-text-secondary">
+                                <strong className="text-gray-900 dark:text-kick-text">Processing Time:</strong>{' '}
+                                We will process your deletion request within 30 days. You will receive a confirmation email once your data has been deleted.
+                                Please note that some data may be retained for legal or regulatory compliance purposes as required by law.
+                            </p>
+                        </div>
+
+                        <p className="text-sm text-gray-500 dark:text-kick-text-secondary mt-4">
+                            If you connected your Facebook account, you can also manage your data through{' '}
+                            <a href="https://www.facebook.com/settings?tab=applications" target="_blank" rel="noopener noreferrer" className="text-kick-green hover:underline">
+                                Facebook's App Settings
+                            </a>.
+                        </p>
+                    </section>
+
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            8. Third-Party Services
+                            9. Third-Party Services
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             Our Service integrates with third-party platforms:
                         </p>
                         <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2">
                             <li><strong>Kick.com:</strong> Primary authentication and chat integration</li>
+                            <li><strong>Facebook:</strong> Optional account connection for login and social features</li>
                             <li><strong>Discord:</strong> Optional account connection for notifications</li>
                             <li><strong>Telegram:</strong> Optional account connection for notifications</li>
                         </ul>
@@ -197,7 +253,7 @@ export default function PrivacyPolicy() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            9. International Data Transfers
+                            10. International Data Transfers
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             Your data may be transferred to and processed in countries other than your own.
@@ -208,7 +264,7 @@ export default function PrivacyPolicy() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            10. Children's Privacy
+                            11. Children's Privacy
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             The Service is not intended for users under 18 years of age. We do not knowingly collect
@@ -219,7 +275,7 @@ export default function PrivacyPolicy() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            11. Changes to This Policy
+                            12. Changes to This Policy
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             We may update this Privacy Policy from time to time. We will notify you of significant
@@ -230,7 +286,7 @@ export default function PrivacyPolicy() {
 
                     <section>
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            12. Contact Us
+                            13. Contact Us
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             If you have questions about this Privacy Policy or wish to exercise your data rights,
