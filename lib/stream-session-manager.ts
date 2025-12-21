@@ -15,7 +15,8 @@ import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 
 // Grace period before ending a session (prevents flapping due to API inconsistencies)
-const SESSION_END_GRACE_PERIOD_MS = 2 * 60 * 1000 // 2 minutes
+// Increased to 5 minutes to handle Kick API flakiness
+const SESSION_END_GRACE_PERIOD_MS = 5 * 60 * 1000 // 5 minutes
 
 // How close start times need to be to match sessions
 const START_TIME_MATCH_WINDOW_MS = 5 * 60 * 1000 // 5 minutes

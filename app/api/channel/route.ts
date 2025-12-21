@@ -22,6 +22,13 @@ const channelCache = new Map<string, {
 
 const CACHE_TTL_MS = 15000 // 15 seconds - balance between freshness and rate limiting
 
+// Persistent cache for follower count (survives API failures)
+const followerCountCache = new Map<string, {
+    count: number
+    updatedAt: number
+}>()
+const FOLLOWER_CACHE_TTL_MS = 3600000 // 1 hour - fallback when API fails
+
 // In-flight request tracking to prevent duplicate concurrent requests
 const inFlightRequests = new Map<string, Promise<any>>()
 
@@ -398,7 +405,7 @@ async function fetchV2ChannelDataWithDedup(slug: string): Promise<{
             const releaseSlot = await acquireRateLimitSlot()
             try {
                 const controller = new AbortController()
-                const timeoutId = setTimeout(() => controller.abort(), 8000)
+                const timeoutId = setTimeout(() => controller.abort(), 10000) // Increased to 10s
 
                 const response = await fetch(url, {
                     headers: {
@@ -412,19 +419,31 @@ async function fetchV2ChannelDataWithDedup(slug: string): Promise<{
                 clearTimeout(timeoutId)
 
                 if (!response.ok) {
+                    console.warn(`[Channel API] v2 API returned ${response.status} for ${slug}`)
                     return null
                 }
 
                 const data = await response.json()
                 const parsed = parseV2ChannelData(data)
                 if (parsed) {
+                    // Cache follower count for fallback during API failures
+                    if (parsed.followers_count > 0) {
+                        followerCountCache.set(slug.toLowerCase(), {
+                            count: parsed.followers_count,
+                            updatedAt: Date.now(),
+                        })
+                    }
                     return { ...parsed, rawData: data }
                 }
+                console.warn(`[Channel API] v2 API returned unparseable data for ${slug}`)
                 return null
             } finally {
                 releaseSlot()
             }
         } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+            const isTimeout = error instanceof Error && error.name === 'AbortError'
+            console.warn(`[Channel API] v2 API ${isTimeout ? 'timeout' : 'error'} for ${slug}: ${errorMsg}`)
             return null
         } finally {
             // Remove from in-flight requests
@@ -894,6 +913,24 @@ export async function GET(request: Request) {
             }
         }
 
+        // FALLBACK: If we have an active session but API says offline, trust the session
+        // This handles cases where Kick API is flaky but the stream is actually live
+        if (!isLive && activeSession && !isTestSession) {
+            const lastCheck = activeSession.last_live_check_at
+            const sessionAge = lastCheck ? Date.now() - lastCheck.getTime() : Infinity
+
+            // If session was touched within last 10 minutes, consider stream still live
+            // This prevents premature offline status due to API flakiness
+            const SESSION_TRUST_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
+
+            if (sessionAge < SESSION_TRUST_WINDOW_MS) {
+                console.log(`[Channel API] Active session ${activeSession.id} exists (last check ${Math.round(sessionAge / 1000)}s ago), overriding offline status`)
+                isLive = true
+                streamTitle = activeSession.session_title || streamTitle
+                streamStartedAt = activeSession.started_at.toISOString()
+            }
+        }
+
         // Fallback: If API didn't provide started_at but stream is live, use database session time
         if (isLive && !streamStartedAt && activeSession) {
             streamStartedAt = activeSession.started_at.toISOString()
@@ -913,6 +950,15 @@ export async function GET(request: Request) {
                     channelData.user?.followers_count ||
                     channelData.followersCount ||
                     0
+            }
+
+            // Final fallback: use cached follower count if API failed
+            if (followerCount === 0) {
+                const cached = followerCountCache.get(slug.toLowerCase())
+                if (cached && (Date.now() - cached.updatedAt) < FOLLOWER_CACHE_TTL_MS) {
+                    followerCount = cached.count
+                    console.log(`[Channel API] Using cached follower count for ${slug}: ${followerCount}`)
+                }
             }
 
             // Get last live time from database

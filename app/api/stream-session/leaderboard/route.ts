@@ -444,12 +444,20 @@ export async function GET(request: Request) {
         // Cache the result
         memoryCache.set(cacheKey, result, cacheTTL)
 
-        // Log top 3 for monitoring
+        // Log top 3 for monitoring - only when it changes
         if (result.leaderboard.length >= 3) {
-            logger.leaderboard(result.leaderboard.slice(0, 3).map(entry => ({
-                username: entry.username,
-                coins: entry.points_earned,
-            })))
+            const top3Key = result.leaderboard.slice(0, 3)
+                .map(e => `${e.username}:${e.points_earned}`)
+                .join(',')
+            const lastTop3Key = memoryCache.get<string>(`leaderboard-log:${session.id}`)
+
+            if (top3Key !== lastTop3Key) {
+                memoryCache.set(`leaderboard-log:${session.id}`, top3Key, 60000) // Remember for 1 minute
+                logger.leaderboard(result.leaderboard.slice(0, 3).map(entry => ({
+                    username: entry.username,
+                    coins: entry.points_earned,
+                })))
+            }
         }
 
         const lastUpdated = Date.now()

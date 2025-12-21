@@ -143,6 +143,7 @@ export async function POST(request: Request) {
             // Try to parse error response
             let errorDetails = errorText
             let isSlowMode = false
+            let requiresReauth = false
             try {
                 const errorJson = JSON.parse(errorText)
                 const errorData = errorJson.data || errorJson.error || ''
@@ -157,11 +158,20 @@ export async function POST(request: Request) {
                 // Keep original error text
             }
 
+            // Handle 403 Forbidden - usually means token lacks permissions or user is muted/banned
+            if (response.status === 403) {
+                requiresReauth = true
+                if (errorDetails === 'Forbidden' || errorDetails.includes('Forbidden')) {
+                    errorDetails = 'Unable to send message. You may need to re-login or your chat permissions may be restricted.'
+                }
+            }
+
             return NextResponse.json(
                 {
                     error: `Failed to send message: ${response.status}`,
                     details: errorDetails,
                     isSlowMode: isSlowMode,
+                    requiresReauth: requiresReauth,
                 },
                 { status: response.status }
             )

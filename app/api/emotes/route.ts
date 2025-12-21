@@ -10,6 +10,10 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minutes cache
 const MAX_RETRIES = 3
 const INITIAL_RETRY_DELAY = 1000 // 1 second
 
+// Throttle emote loaded logs (one per minute max)
+let lastEmoteLogTime = 0
+const EMOTE_LOG_THROTTLE = 60 * 1000 // 1 minute
+
 // Exponential backoff helper
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -693,8 +697,12 @@ export async function GET(request: Request) {
         }
 
         // Always return categorized structure, even if empty
-        // Simple log: emotes loaded
-        console.log(`✅ Emotes loaded: ${allEmotes.length} total`)
+        // Simple log: emotes loaded (throttled to once per minute)
+        const now = Date.now()
+        if (now - lastEmoteLogTime > EMOTE_LOG_THROTTLE) {
+            lastEmoteLogTime = now
+            console.log(`✅ Emotes loaded: ${allEmotes.length} total`)
+        }
 
         return NextResponse.json({
             emotes: categorized,
