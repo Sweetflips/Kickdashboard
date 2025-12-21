@@ -874,6 +874,7 @@ export async function GET(request: Request) {
             session_title: string | null;
             thumbnail_url: string | null;
             kick_stream_id: string | null;
+            last_live_check_at: Date | null;
         } | null = null
         if (broadcasterUserId) {
             try {
