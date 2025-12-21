@@ -20,7 +20,7 @@ const channelCache = new Map<string, {
     expiresAt: number
 }>()
 
-const CACHE_TTL_MS = 15000 // 15 seconds - balance between freshness and rate limiting
+const CACHE_TTL_MS = 3000 // 3 seconds - fast polling for live status
 
 // Persistent cache for follower count (survives API failures)
 const followerCountCache = new Map<string, {
@@ -672,9 +672,9 @@ async function trackStreamSession(
                 }
             }
         } else {
-            // Stream is offline - end the active session (with grace period)
-            // The session manager will check grace period and skip test sessions
-            await endActiveSession(broadcasterIdBigInt, false)
+            // Stream is offline - end the active session immediately
+            // Kick v2 API is reliable, so force-end when it reports offline
+            await endActiveSession(broadcasterIdBigInt, true)
         }
     } catch (dbError) {
         console.error('❌ Error tracking stream session:', dbError)
