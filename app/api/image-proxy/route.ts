@@ -119,8 +119,7 @@ export async function GET(request: Request) {
         // Check if this URL recently failed (avoid repeated failed requests)
         const failedCacheEntry = failedImageCache.get(finalImageUrl)
         if (failedCacheEntry && Date.now() - failedCacheEntry.timestamp < FAILED_CACHE_TTL) {
-            console.log(`⏭️ Skipping recently failed image: ${finalImageUrl.substring(0, 80)}...`)
-            // Return default avatar immediately for recently failed URLs
+            // Silently return default avatar for recently failed URLs (no log spam)
             const host = request.headers.get('host') || request.headers.get('x-forwarded-host')
             const proto = request.headers.get('x-forwarded-proto') || 'https'
             const baseUrl = host ? `${proto}://${host}` : 'https://kickdashboard.com'

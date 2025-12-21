@@ -137,8 +137,12 @@ export async function POST(request: Request) {
         if (!response.ok) {
             const errorText = await response.text()
 
-            // Log all errors (including 401s - client will handle refresh)
-            console.error(`❌ Failed to send message: ${response.status} - ${errorText.substring(0, 200)}`)
+            // Log errors - 403s are expected for expired tokens, use warn level
+            if (response.status === 403) {
+                console.warn(`⚠️ Chat 403 (likely expired token): ${errorText.substring(0, 100)}`)
+            } else {
+                console.error(`❌ Failed to send message: ${response.status} - ${errorText.substring(0, 200)}`)
+            }
 
             // Try to parse error response
             let errorDetails = errorText
