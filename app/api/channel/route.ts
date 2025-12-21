@@ -915,23 +915,10 @@ export async function GET(request: Request) {
             }
         }
 
-        // FALLBACK: If we have an active session but API says offline, trust the session
-        // This handles cases where Kick API is flaky but the stream is actually live
-        if (!isLive && activeSession && !isTestSession) {
-            const lastCheck = activeSession.last_live_check_at
-            const sessionAge = lastCheck ? Date.now() - lastCheck.getTime() : Infinity
-
-            // If session was touched within last 10 minutes, consider stream still live
-            // This prevents premature offline status due to API flakiness
-            const SESSION_TRUST_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
-
-            if (sessionAge < SESSION_TRUST_WINDOW_MS) {
-                console.log(`[Channel API] Active session ${activeSession.id} exists (last check ${Math.round(sessionAge / 1000)}s ago), overriding offline status`)
-                isLive = true
-                streamTitle = activeSession.session_title || streamTitle
-                streamStartedAt = activeSession.started_at.toISOString()
-            }
-        }
+        // NOTE: Removed the 10-minute "trust window" fallback that would override Kick API's offline status.
+        // The Kick v2 API (kick.com/api/v2/channels/:slug) is reliable - if livestream is null, stream is offline.
+        // The old fallback was causing the dashboard to show LIVE for up to 10 minutes after the stream ended.
+        // Session ending is handled by trackStreamSession() below which has its own 5-minute grace period.
 
         // Fallback: If API didn't provide started_at but stream is live, use database session time
         if (isLive && !streamStartedAt && activeSession) {
