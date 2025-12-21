@@ -29,9 +29,15 @@ export async function GET(request: Request) {
         if (broadcasterUserIdParam) {
             broadcasterUserId = BigInt(broadcasterUserIdParam)
         } else {
-            // Find the main broadcaster
+            // Find the main broadcaster by username (from env or default to sweetflips)
+            const broadcasterSlug = process.env.KICK_CHANNEL_SLUG || 'sweetflips'
             const broadcaster = await db.user.findFirst({
-                where: { is_broadcaster: true },
+                where: { 
+                    username: {
+                        equals: broadcasterSlug,
+                        mode: 'insensitive',
+                    }
+                },
                 select: { kick_user_id: true },
             })
             if (broadcaster) {
