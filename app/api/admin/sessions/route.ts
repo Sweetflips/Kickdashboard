@@ -32,7 +32,7 @@ export async function GET(request: Request) {
             // Find the main broadcaster by username (from env or default to sweetflips)
             const broadcasterSlug = process.env.KICK_CHANNEL_SLUG || 'sweetflips'
             const broadcaster = await db.user.findFirst({
-                where: { 
+                where: {
                     username: {
                         equals: broadcasterSlug,
                         mode: 'insensitive',

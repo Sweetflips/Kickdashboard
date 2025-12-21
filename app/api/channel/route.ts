@@ -892,6 +892,7 @@ export async function GET(request: Request) {
                         session_title: true,
                         thumbnail_url: true,
                         kick_stream_id: true,
+                        last_live_check_at: true,
                     },
                 })
             } catch (err) {
