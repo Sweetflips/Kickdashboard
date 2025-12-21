@@ -199,6 +199,38 @@ export async function GET(request: Request) {
                             }
                         }
 
+                        // FIX: Update ended_at and duration_seconds from Kick video's actual duration
+                        // The Kick videos API provides accurate start_time + duration data
+                        if (best.startTime && best.durationMs && best.durationMs > 0) {
+                            const calculatedEndTime = new Date(best.startTime.getTime() + best.durationMs)
+                            const currentEndedAt = session.ended_at instanceof Date
+                                ? session.ended_at
+                                : (session.ended_at ? new Date(session.ended_at) : null)
+
+                            // Only update if end times differ by more than 1 minute
+                            // This fixes cases where our internal tracking detected offline late
+                            if (currentEndedAt && Math.abs(calculatedEndTime.getTime() - currentEndedAt.getTime()) > 60000) {
+                                updateData.ended_at = calculatedEndTime
+                                updateData.duration_seconds = Math.floor(best.durationMs / 1000)
+                                changed = true
+                                console.log(`[Stream Sessions] Correcting ended_at for session ${session.id}: ${currentEndedAt.toISOString()} -> ${calculatedEndTime.toISOString()} (from Kick video duration)`)
+                            }
+
+                            // Also update started_at if Kick's start time is more accurate
+                            const currentStartedAt = session.started_at instanceof Date
+                                ? session.started_at
+                                : new Date(session.started_at)
+                            if (Math.abs(best.startTime.getTime() - currentStartedAt.getTime()) > 60000) {
+                                updateData.started_at = best.startTime
+                                // Recalculate duration with correct start time
+                                if (updateData.ended_at) {
+                                    updateData.duration_seconds = Math.floor(best.durationMs / 1000)
+                                }
+                                changed = true
+                                console.log(`[Stream Sessions] Correcting started_at for session ${session.id}: ${currentStartedAt.toISOString()} -> ${best.startTime.toISOString()} (from Kick video)`)
+                            }
+                        }
+
                         if (changed) {
                             const updated = await db.streamSession.update({
                                 where: { id: session.id },
@@ -210,6 +242,10 @@ export async function GET(request: Request) {
                             session.session_title = updated.session_title
                             session.thumbnail_last_refreshed_at = updated.thumbnail_last_refreshed_at
                             session.thumbnail_source = updated.thumbnail_source
+                            // Also sync corrected times from Kick video data
+                            if (updated.started_at) session.started_at = updated.started_at
+                            if (updated.ended_at) session.ended_at = updated.ended_at
+                            if (updated.duration_seconds !== null) session.duration_seconds = updated.duration_seconds
                         }
                     }
                 }
