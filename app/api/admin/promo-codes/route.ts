@@ -266,7 +266,7 @@ export async function DELETE(request: Request) {
             )
         }
 
-        // Check if code has been used
+        // Check if code exists
         const promoCode = await db.promoCode.findUnique({
             where: { id: BigInt(id) },
             include: {
@@ -281,20 +281,18 @@ export async function DELETE(request: Request) {
             )
         }
 
-        if (promoCode.current_uses > 0 || promoCode.redemptions.length > 0) {
-            return NextResponse.json(
-                { error: 'Cannot delete promo code that has been used. Deactivate it instead.' },
-                { status: 400 }
-            )
-        }
+        const hasUses = promoCode.current_uses > 0 || promoCode.redemptions.length > 0
 
+        // Delete the promo code (even if it has been used)
         await db.promoCode.delete({
             where: { id: BigInt(id) },
         })
 
         return NextResponse.json({
             success: true,
-            message: 'Promo code deleted successfully',
+            message: hasUses 
+                ? `Promo code deleted successfully (had ${promoCode.current_uses} redemption(s))`
+                : 'Promo code deleted successfully',
         })
     } catch (error) {
         console.error('Error deleting promo code:', error)

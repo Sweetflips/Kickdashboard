@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 interface PromoCode {
     id: string
     code: string
-    points_value: number
+    sweet_coins_value: number
     max_uses: number | null
     current_uses: number
     expires_at: string | null
@@ -31,10 +31,9 @@ export default function AdminPromoCodesPage() {
     // Form state
     const [formData, setFormData] = useState({
         code: '',
-        points_value: '100',
+        sweet_coins_value: '100',
         max_uses: '',
         expires_at: '',
-        quantity: '1',
     })
     const [creating, setCreating] = useState(false)
 
@@ -108,10 +107,10 @@ export default function AdminPromoCodesPage() {
                 },
                 body: JSON.stringify({
                     code: formData.code.trim().toUpperCase(),
-                    points_value: parseInt(formData.points_value),
+                    sweet_coins_value: parseInt(formData.sweet_coins_value),
                     max_uses: formData.max_uses ? parseInt(formData.max_uses) : null,
                     expires_at: formData.expires_at || null,
-                    quantity: parseInt(formData.quantity),
+                    quantity: 1,
                 }),
             })
 
@@ -122,10 +121,9 @@ export default function AdminPromoCodesPage() {
                 setShowCreateModal(false)
                 setFormData({
                     code: '',
-                    points_value: '100',
+                    sweet_coins_value: '100',
                     max_uses: '',
                     expires_at: '',
-                    quantity: '1',
                 })
                 fetchPromoCodes()
             } else {
@@ -163,8 +161,13 @@ export default function AdminPromoCodesPage() {
         }
     }
 
-    const deleteCode = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this code? This cannot be undone.')) {
+    const deleteCode = async (id: string, code: PromoCode) => {
+        const hasUses = code.current_uses > 0
+        const warningMessage = hasUses
+            ? `Warning: This code has been used ${code.current_uses} time(s). Are you sure you want to delete it? This action cannot be undone.`
+            : 'Are you sure you want to delete this code? This cannot be undone.'
+
+        if (!confirm(warningMessage)) {
             return
         }
 
@@ -233,7 +236,7 @@ export default function AdminPromoCodesPage() {
                             Promo Codes
                         </h1>
                         <p className="text-body text-gray-600 dark:text-kick-text-secondary mt-1">
-                            Create and manage promotional codes for bonus points
+                            Create and manage promotional codes for sweet coins
                         </p>
                     </div>
                     <button
@@ -259,8 +262,8 @@ export default function AdminPromoCodesPage() {
                         <p className="text-h3 font-bold text-kick-purple">{promoCodes.reduce((sum, code) => sum + code.current_uses, 0)}</p>
                     </div>
                     <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-4">
-                        <p className="text-small text-gray-600 dark:text-kick-text-secondary mb-1">Points Given</p>
-                        <p className="text-h3 font-bold text-amber-600">{promoCodes.reduce((sum, code) => sum + (code.current_uses * (code.points_value ?? 0)), 0).toLocaleString()}</p>
+                        <p className="text-small text-gray-600 dark:text-kick-text-secondary mb-1">Sweet Coins Given</p>
+                        <p className="text-h3 font-bold text-amber-600">{promoCodes.reduce((sum, code) => sum + (code.current_uses * (code.sweet_coins_value ?? 0)), 0).toLocaleString()}</p>
                     </div>
                 </div>
 
@@ -271,7 +274,7 @@ export default function AdminPromoCodesPage() {
                             <thead className="bg-gray-50 dark:bg-kick-dark border-b border-gray-200 dark:border-kick-border">
                                 <tr>
                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Code</th>
-                                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Points</th>
+                                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Sweet Coins</th>
                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Usage</th>
                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Expires</th>
                                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-kick-text-secondary">Status</th>
@@ -294,7 +297,7 @@ export default function AdminPromoCodesPage() {
                                                 <div className="text-xs text-gray-500 dark:text-kick-text-muted">by {code.created_by}</div>
                                             </td>
                                             <td className="py-4 px-4">
-                                                <span className="font-bold text-kick-purple">{(code.points_value ?? 0).toLocaleString()}</span>
+                                                <span className="font-bold text-kick-purple">{(code.sweet_coins_value ?? 0).toLocaleString()}</span>
                                             </td>
                                             <td className="py-4 px-4">
                                                 <div className="text-gray-900 dark:text-kick-text">
@@ -328,14 +331,17 @@ export default function AdminPromoCodesPage() {
                                                     >
                                                         {code.is_active ? 'Deactivate' : 'Activate'}
                                                     </button>
-                                                    {code.current_uses === 0 && (
-                                                        <button
-                                                            onClick={() => deleteCode(code.id)}
-                                                            className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 rounded text-xs font-medium transition-colors"
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => deleteCode(code.id, code)}
+                                                        className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                                            code.current_uses > 0
+                                                                ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 opacity-75'
+                                                                : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400'
+                                                        }`}
+                                                        title={code.current_uses > 0 ? 'Cannot delete codes that have been used' : 'Delete this promo code'}
+                                                    >
+                                                        Delete
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -373,22 +379,22 @@ export default function AdminPromoCodesPage() {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-1">
-                                        Points Value *
+                                        Sweet Coins Value *
                                     </label>
                                     <input
                                         type="number"
                                         required
                                         min="1"
                                         max="1000000"
-                                        value={formData.points_value}
-                                        onChange={(e) => setFormData({ ...formData, points_value: e.target.value })}
+                                        value={formData.sweet_coins_value}
+                                        onChange={(e) => setFormData({ ...formData, sweet_coins_value: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
                                     />
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-1">
-                                        Max Uses (optional)
+                                        Max Uses
                                     </label>
                                     <input
                                         type="number"
@@ -396,10 +402,10 @@ export default function AdminPromoCodesPage() {
                                         value={formData.max_uses}
                                         onChange={(e) => setFormData({ ...formData, max_uses: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
-                                        placeholder="Unlimited"
+                                        placeholder="Enter number of uses"
                                     />
                                     <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
-                                        Leave empty for unlimited uses
+                                        How many times this code can be redeemed (leave empty for unlimited)
                                     </p>
                                 </div>
 
@@ -413,23 +419,6 @@ export default function AdminPromoCodesPage() {
                                         onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
                                     />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-1">
-                                        Quantity (bulk generation)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="100"
-                                        value={formData.quantity}
-                                        onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
-                                    />
-                                    <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
-                                        Create multiple codes with random suffixes (max 100)
-                                    </p>
                                 </div>
 
                                 <div className="flex gap-3 pt-2">
