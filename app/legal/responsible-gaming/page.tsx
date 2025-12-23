@@ -242,10 +242,16 @@ export default function ResponsibleGaming() {
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
                             9. Contact Us
                         </h2>
-                        <p className="text-gray-600 dark:text-kick-text-secondary">
+                        <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             If you have concerns about your platform usage or would like to discuss self-exclusion
-                            options, please reach out through our Discord or Telegram channels. We're here to help.
+                            options, please contact us:
                         </p>
+                        <div className="text-gray-600 dark:text-kick-text-secondary space-y-2">
+                            <p><strong>Email:</strong> <a href="mailto:info@sweetflips.gg" className="text-kick-green hover:underline">info@sweetflips.gg</a></p>
+                            <p className="mt-4">
+                                You may also reach out through our official Discord or Telegram channels. We're here to help.
+                            </p>
+                        </div>
                     </section>
                 </div>
             </div>

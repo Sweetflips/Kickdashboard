@@ -220,6 +220,7 @@ export default function TermsOfService() {
                             San Gwann, SGN 3000<br />
                             Malta</p>
                             <p><strong>Website:</strong> www.kickdashboard.com</p>
+                            <p><strong>Email:</strong> <a href="mailto:info@sweetflips.gg" className="text-kick-green hover:underline">info@sweetflips.gg</a></p>
                             <p className="mt-4">
                                 You may also contact us through our official Discord or Telegram channels, or reach out to the stream directly.
                             </p>
