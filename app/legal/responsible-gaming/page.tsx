@@ -13,7 +13,7 @@ export default function ResponsibleGaming() {
                     Responsible Gaming
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-kick-text-secondary mb-8">
-                    Last updated: December 7, 2024
+                    Last updated: December 20, 2024
                 </p>
 
                 <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -179,7 +179,38 @@ export default function ResponsibleGaming() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            7. Resources
+                            7. Geographic Restrictions and Compliance with Local Laws
+                        </h2>
+                        <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
+                            We are committed to compliance with all applicable local laws and regulations regarding gambling and similar activities. We do not promote, market, or actively solicit users from countries or jurisdictions where gambling or similar activities are prohibited or restricted by local laws.
+                        </p>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 mb-4">
+                            <h3 className="text-lg font-medium text-blue-800 dark:text-blue-200 mb-3">
+                                Specific Jurisdictions
+                            </h3>
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-1">Netherlands</h4>
+                                    <p className="text-sm text-blue-600 dark:text-blue-400">
+                                        We comply with Dutch gambling laws and regulations. The Service is not intended to promote gambling activities to residents of the Netherlands where such activities may be restricted. We respect the Netherlands' strict gambling regulations and do not target Dutch residents with promotional content.
+                                    </p>
+                                </div>
+                                <div>
+                                    <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-1">United Arab Emirates (UAE)</h4>
+                                    <p className="text-sm text-blue-600 dark:text-blue-400">
+                                        We comply with UAE laws regarding gambling and similar activities. The Service is not intended to promote gambling activities to residents of the UAE where gambling is prohibited. We respect UAE's prohibition on gambling and do not target UAE residents with promotional content.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-gray-600 dark:text-kick-text-secondary">
+                            If you access the Service from a jurisdiction where gambling or similar activities are prohibited, you do so at your own risk and are solely responsible for compliance with local laws. We reserve the right to restrict or terminate access to the Service for users from jurisdictions where our services may violate local laws.
+                        </p>
+                    </section>
+
+                    <section className="mb-8">
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
+                            8. Resources
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             If you or someone you know is struggling with problematic gaming or gambling behaviors,
@@ -209,7 +240,7 @@ export default function ResponsibleGaming() {
 
                     <section>
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            8. Contact Us
+                            9. Contact Us
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             If you have concerns about your platform usage or would like to discuss self-exclusion

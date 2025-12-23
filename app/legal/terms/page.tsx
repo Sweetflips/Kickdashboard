@@ -48,7 +48,26 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            3. Account and Authentication
+                            3. Geographic Restrictions and Compliance with Local Laws
+                        </h2>
+                        <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
+                            We do not promote, market, or actively solicit users from countries or jurisdictions where gambling or similar activities are prohibited or restricted by local laws. You are responsible for ensuring that your use of the Service complies with all applicable laws in your jurisdiction.
+                        </p>
+                        <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
+                            We explicitly comply with local gambling regulations and restrictions, including but not limited to:
+                        </p>
+                        <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2 mb-4">
+                            <li><strong>Netherlands:</strong> We comply with Dutch gambling laws and regulations. The Service is not intended to promote gambling activities to residents of the Netherlands where such activities may be restricted.</li>
+                            <li><strong>United Arab Emirates (UAE):</strong> We comply with UAE laws regarding gambling and similar activities. The Service is not intended to promote gambling activities to residents of the UAE where gambling is prohibited.</li>
+                        </ul>
+                        <p className="text-gray-600 dark:text-kick-text-secondary">
+                            If you access the Service from a jurisdiction where gambling or similar activities are prohibited, you do so at your own risk and are solely responsible for compliance with local laws. We reserve the right to restrict or terminate access to the Service for users from jurisdictions where our services may violate local laws.
+                        </p>
+                    </section>
+
+                    <section className="mb-8">
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
+                            4. Account and Authentication
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             The Service uses OAuth authentication through Kick.com. You are responsible for maintaining
@@ -62,7 +81,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            4. Sweet Coins and Rewards System
+                            5. Sweet Coins and Rewards System
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             The Service offers a Sweet Coins system where users can earn Sweet Coins through various activities
@@ -79,7 +98,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            5. Raffles and Giveaways
+                            6. Raffles and Giveaways
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             The Service may offer raffles and giveaways where users can use Sweet Coins to purchase entries.
@@ -100,7 +119,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            6. Prohibited Conduct
+                            7. Prohibited Conduct
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             You agree not to:
@@ -118,7 +137,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            7. Intellectual Property
+                            8. Intellectual Property
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             All content, features, and functionality of the Service are owned by Sweetflips Holdings Limited and are
@@ -129,7 +148,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            8. Disclaimer of Warranties
+                            9. Disclaimer of Warranties
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND,
@@ -144,7 +163,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            9. Limitation of Liability
+                            10. Limitation of Liability
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             TO THE MAXIMUM EXTENT PERMITTED BY LAW, SWEETFLIPS HOLDINGS LIMITED SHALL NOT BE LIABLE FOR ANY INDIRECT,
@@ -156,7 +175,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            10. Account Termination
+                            11. Account Termination
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             We may suspend or terminate your access to the Service at any time for violation of these
@@ -167,7 +186,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            11. Changes to Terms
+                            12. Changes to Terms
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             We reserve the right to modify these Terms at any time. We will notify users of material
@@ -178,7 +197,7 @@ export default function TermsOfService() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            12. Governing Law
+                            13. Governing Law
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             These Terms shall be governed by and construed in accordance with the laws of Malta, without regard to its conflict of law provisions.
@@ -188,7 +207,7 @@ export default function TermsOfService() {
 
                     <section>
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            13. Contact Information
+                            14. Contact Information
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             If you have any questions about these Terms, please contact us:
