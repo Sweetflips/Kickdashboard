@@ -22,9 +22,9 @@ export default function PrivacyPolicy() {
                             1. Introduction
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
-                            SweetFlips ("we," "our," or "us") is committed to protecting your privacy. This Privacy
+                            Sweetflips Holdings Limited ("we," "our," or "us"), a company registered in Malta, is committed to protecting your privacy. This Privacy
                             Policy explains how we collect, use, disclose, and safeguard your information when you
-                            use our Service. Please read this policy carefully to understand our views and practices
+                            use our Service available at www.kickdashboard.com. Please read this policy carefully to understand our views and practices
                             regarding your personal data.
                         </p>
                     </section>
@@ -203,10 +203,7 @@ export default function PrivacyPolicy() {
                         </h3>
                         <ol className="list-decimal pl-6 text-gray-600 dark:text-kick-text-secondary space-y-3 mb-6">
                             <li>
-                                <strong>Email us directly:</strong> Send a deletion request to{' '}
-                                <a href="mailto:privacy@sweetflipsoftware.com" className="text-kick-green hover:underline font-medium">
-                                    privacy@sweetflipsoftware.com
-                                </a>{' '}
+                                <strong>Email us directly:</strong> Send a deletion request through our official Discord or Telegram channels
                                 with the subject line "Data Deletion Request"
                             </li>
                             <li>
@@ -258,7 +255,7 @@ export default function PrivacyPolicy() {
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             Your data may be transferred to and processed in countries other than your own.
                             We ensure appropriate safeguards are in place for such transfers in compliance with
-                            applicable data protection laws.
+                            applicable data protection laws, including the General Data Protection Regulation (GDPR) and Maltese data protection legislation.
                         </p>
                     </section>
 
@@ -288,10 +285,21 @@ export default function PrivacyPolicy() {
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
                             13. Contact Us
                         </h2>
-                        <p className="text-gray-600 dark:text-kick-text-secondary">
-                            If you have questions about this Privacy Policy or wish to exercise your data rights,
-                            please contact us through our official Discord or Telegram channels.
+                        <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
+                            If you have questions about this Privacy Policy or wish to exercise your data rights, please contact us:
                         </p>
+                        <div className="text-gray-600 dark:text-kick-text-secondary space-y-2">
+                            <p><strong>Company:</strong> Sweetflips Holdings Limited</p>
+                            <p><strong>Registered Address:</strong><br />
+                            Capital Business Centre, Entrance A, Floor 1<br />
+                            Triq Taz-Zwejt<br />
+                            San Gwann, SGN 3000<br />
+                            Malta</p>
+                            <p><strong>Website:</strong> www.kickdashboard.com</p>
+                            <p className="mt-4">
+                                You may also contact us through our official Discord or Telegram channels.
+                            </p>
+                        </div>
                     </section>
                 </div>
             </div>

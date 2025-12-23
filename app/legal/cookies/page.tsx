@@ -13,7 +13,7 @@ export default function CookiePolicy() {
                     Cookie Policy
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-kick-text-secondary mb-8">
-                    Last updated: December 7, 2024
+                    Last updated: December 20, 2024
                 </p>
 
                 <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -33,7 +33,7 @@ export default function CookiePolicy() {
                             2. How We Use Cookies
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
-                            SweetFlips uses cookies and similar technologies for the following purposes:
+                            Sweetflips Holdings Limited ("we," "our," or "us") uses cookies and similar technologies for the following purposes:
                         </p>
 
                         <div className="bg-gray-50 dark:bg-kick-surface-hover rounded-xl p-6 mb-4">
@@ -206,10 +206,21 @@ export default function CookiePolicy() {
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
                             7. Contact Us
                         </h2>
-                        <p className="text-gray-600 dark:text-kick-text-secondary">
-                            If you have questions about our use of cookies, please contact us through our official
-                            Discord or Telegram channels.
+                        <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
+                            If you have questions about our use of cookies, please contact us:
                         </p>
+                        <div className="text-gray-600 dark:text-kick-text-secondary space-y-2">
+                            <p><strong>Company:</strong> Sweetflips Holdings Limited</p>
+                            <p><strong>Registered Address:</strong><br />
+                            Capital Business Centre, Entrance A, Floor 1<br />
+                            Triq Taz-Zwejt<br />
+                            San Gwann, SGN 3000<br />
+                            Malta</p>
+                            <p><strong>Website:</strong> www.kickdashboard.com</p>
+                            <p className="mt-4">
+                                You may also contact us through our official Discord or Telegram channels.
+                            </p>
+                        </div>
                     </section>
                 </div>
             </div>

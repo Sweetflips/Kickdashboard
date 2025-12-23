@@ -13,7 +13,7 @@ export default function TermsOfService() {
                     Terms of Service
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-kick-text-secondary mb-8">
-                    Last updated: December 7, 2024
+                    Last updated: December 20, 2024
                 </p>
 
                 <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -22,7 +22,7 @@ export default function TermsOfService() {
                             1. Acceptance of Terms
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
-                            By accessing or using SweetFlips ("the Service"), you agree to be bound by these Terms of Service.
+                            By accessing or using the Service available at www.kickdashboard.com ("the Service"), operated by Sweetflips Holdings Limited, a company registered in Malta ("we," "our," or "us"), you agree to be bound by these Terms of Service.
                             If you do not agree to these terms, please do not use the Service.
                         </p>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
@@ -121,7 +121,7 @@ export default function TermsOfService() {
                             7. Intellectual Property
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
-                            All content, features, and functionality of the Service are owned by SweetFlips and are
+                            All content, features, and functionality of the Service are owned by Sweetflips Holdings Limited and are
                             protected by intellectual property laws. You may not copy, modify, distribute, or create
                             derivative works without our express written permission.
                         </p>
@@ -147,7 +147,7 @@ export default function TermsOfService() {
                             9. Limitation of Liability
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
-                            TO THE MAXIMUM EXTENT PERMITTED BY LAW, SWEETFLIPS SHALL NOT BE LIABLE FOR ANY INDIRECT,
+                            TO THE MAXIMUM EXTENT PERMITTED BY LAW, SWEETFLIPS HOLDINGS LIMITED SHALL NOT BE LIABLE FOR ANY INDIRECT,
                             INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM YOUR USE OF THE SERVICE.
                             OUR TOTAL LIABILITY SHALL NOT EXCEED THE AMOUNT YOU PAID TO USE THE SERVICE (IF ANY) IN THE
                             12 MONTHS PRECEDING THE CLAIM.
@@ -181,8 +181,8 @@ export default function TermsOfService() {
                             12. Governing Law
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
-                            These Terms shall be governed by and construed in accordance with the laws of the
-                            jurisdiction where SweetFlips operates, without regard to its conflict of law provisions.
+                            These Terms shall be governed by and construed in accordance with the laws of Malta, without regard to its conflict of law provisions.
+                            Any disputes arising from these Terms shall be subject to the exclusive jurisdiction of the courts of Malta.
                         </p>
                     </section>
 
@@ -190,10 +190,21 @@ export default function TermsOfService() {
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
                             13. Contact Information
                         </h2>
-                        <p className="text-gray-600 dark:text-kick-text-secondary">
-                            If you have any questions about these Terms, please contact us through our official
-                            Discord or Telegram channels, or reach out to the stream directly.
+                        <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
+                            If you have any questions about these Terms, please contact us:
                         </p>
+                        <div className="text-gray-600 dark:text-kick-text-secondary space-y-2">
+                            <p><strong>Company:</strong> Sweetflips Holdings Limited</p>
+                            <p><strong>Registered Address:</strong><br />
+                            Capital Business Centre, Entrance A, Floor 1<br />
+                            Triq Taz-Zwejt<br />
+                            San Gwann, SGN 3000<br />
+                            Malta</p>
+                            <p><strong>Website:</strong> www.kickdashboard.com</p>
+                            <p className="mt-4">
+                                You may also contact us through our official Discord or Telegram channels, or reach out to the stream directly.
+                            </p>
+                        </div>
                     </section>
                 </div>
             </div>
