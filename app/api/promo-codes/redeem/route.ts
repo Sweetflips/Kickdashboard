@@ -4,14 +4,6 @@ import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-// Simple promo code mapping - codes to sweet coins amount
-const PROMO_CODES: Record<string, number> = {
-    // Add your promo codes here
-    // Example: 'WELCOME': 100,
-}
-
-const DEFAULT_SWEET_COINS = 50 // Default amount if code doesn't match
-
 /**
  * POST /api/promo-codes/redeem
  * Redeem a promo code and award sweet coins
@@ -47,30 +39,66 @@ export async function POST(request: Request) {
         }
         const authUser = auth
 
-        // Determine sweet coins amount from code
-        const sweetCoinsAmount = PROMO_CODES[normalizedCode] ?? DEFAULT_SWEET_COINS
-
         // Use transaction to ensure atomicity
         const result = await db.$transaction(async (tx) => {
-            // Check if user already redeemed this code today (prevent spam)
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
-            
-            const recentRedemption = await tx.sweetCoinHistory.findFirst({
+            // Look up promo code in database
+            const promoCode = await tx.promoCode.findUnique({
+                where: { code: normalizedCode },
+            })
+
+            if (!promoCode) {
+                throw new Error('Promo code not found')
+            }
+
+            // Check if code is active
+            if (!promoCode.is_active) {
+                throw new Error('This promo code is not active')
+            }
+
+            // Check if code has expired
+            if (promoCode.expires_at && new Date(promoCode.expires_at) < new Date()) {
+                throw new Error('This promo code has expired')
+            }
+
+            // Check if max uses reached
+            if (promoCode.max_uses !== null && promoCode.current_uses >= promoCode.max_uses) {
+                throw new Error('This promo code has reached its maximum uses')
+            }
+
+            // Check if user already redeemed this code (using unique constraint)
+            const existingRedemption = await tx.promoCodeRedemption.findUnique({
                 where: {
-                    user_id: authUser.userId,
-                    message_id: {
-                        startsWith: `promo-${normalizedCode}-`,
-                    },
-                    earned_at: {
-                        gte: today,
+                    promo_code_id_user_id: {
+                        promo_code_id: promoCode.id,
+                        user_id: authUser.userId,
                     },
                 },
             })
 
-            if (recentRedemption) {
-                throw new Error('You have already redeemed this code today')
+            if (existingRedemption) {
+                throw new Error('You have already redeemed this code')
             }
+
+            const sweetCoinsAmount = promoCode.sweet_coins_value
+
+            // Create redemption record
+            await tx.promoCodeRedemption.create({
+                data: {
+                    promo_code_id: promoCode.id,
+                    user_id: authUser.userId,
+                    sweet_coins_awarded: sweetCoinsAmount,
+                },
+            })
+
+            // Increment current_uses on promo code
+            await tx.promoCode.update({
+                where: { id: promoCode.id },
+                data: {
+                    current_uses: {
+                        increment: 1,
+                    },
+                },
+            })
 
             // Award Sweet Coins to user
             const userSweetCoins = await tx.userSweetCoins.upsert({
