@@ -4,9 +4,17 @@ import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
+// Simple promo code mapping - codes to sweet coins amount
+const PROMO_CODES: Record<string, number> = {
+    // Add your promo codes here
+    // Example: 'WELCOME': 100,
+}
+
+const DEFAULT_SWEET_COINS = 50 // Default amount if code doesn't match
+
 /**
  * POST /api/promo-codes/redeem
- * Redeem a promo code
+ * Redeem a promo code and award sweet coins
  */
 export async function POST(request: Request) {
     let body: { code?: string } | null = null
@@ -39,109 +47,61 @@ export async function POST(request: Request) {
         }
         const authUser = auth
 
+        // Determine sweet coins amount from code
+        const sweetCoinsAmount = PROMO_CODES[normalizedCode] ?? DEFAULT_SWEET_COINS
+
         // Use transaction to ensure atomicity
         const result = await db.$transaction(async (tx) => {
-            // Find promo code with lock
-            const promoCode = await tx.promoCode.findUnique({
-                where: { code: normalizedCode },
-                include: {
-                    redemptions: {
-                        where: { user_id: authUser.userId },
-                    },
-                },
-            })
-
-            if (!promoCode) {
-                console.error('Promo code not found', {
-                    attemptedCode: normalizedCode,
-                    originalCode: originalCode,
-                    userId: authUser.userId,
-                })
-                throw new Error('Invalid promo code')
-            }
-
-            if (!promoCode.is_active) {
-                console.error('Promo code is inactive', {
-                    code: promoCode.code,
-                    promoCodeId: promoCode.id,
-                    userId: authUser.userId,
-                    isActive: promoCode.is_active,
-                })
-                throw new Error('This promo code is no longer active')
-            }
-
-            // Check expiration
-            if (promoCode.expires_at && new Date() > promoCode.expires_at) {
-                console.error('Promo code expired', {
-                    code: promoCode.code,
-                    promoCodeId: promoCode.id,
-                    userId: authUser.userId,
-                    expiresAt: promoCode.expires_at,
-                    now: new Date(),
-                })
-                throw new Error('This promo code has expired')
-            }
-
-            // Check if user already redeemed
-            if (promoCode.redemptions.length > 0) {
-                console.error('User already redeemed this promo code', {
-                    code: promoCode.code,
-                    promoCodeId: promoCode.id,
-                    userId: authUser.userId,
-                    existingRedemptions: promoCode.redemptions.length,
-                })
-                throw new Error('You have already redeemed this promo code')
-            }
-
-            // Check max uses
-            if (promoCode.max_uses !== null && promoCode.current_uses >= promoCode.max_uses) {
-                console.error('Promo code usage limit reached', {
-                    code: promoCode.code,
-                    promoCodeId: promoCode.id,
-                    userId: authUser.userId,
-                    currentUses: promoCode.current_uses,
-                    maxUses: promoCode.max_uses,
-                })
-                throw new Error('This promo code has reached its usage limit')
-            }
-
-            // Create redemption record
-            await tx.promoCodeRedemption.create({
-                data: {
-                    promo_code_id: promoCode.id,
+            // Check if user already redeemed this code today (prevent spam)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            
+            const recentRedemption = await tx.sweetCoinHistory.findFirst({
+                where: {
                     user_id: authUser.userId,
-                    sweet_coins_awarded: promoCode.sweet_coins_value,
-                },
-            })
-
-            // Update usage count
-            await tx.promoCode.update({
-                where: { id: promoCode.id },
-                data: {
-                    current_uses: {
-                        increment: 1,
+                    message_id: {
+                        startsWith: `promo-${normalizedCode}-`,
+                    },
+                    earned_at: {
+                        gte: today,
                     },
                 },
             })
+
+            if (recentRedemption) {
+                throw new Error('You have already redeemed this code today')
+            }
 
             // Award Sweet Coins to user
-            await tx.userSweetCoins.upsert({
+            const userSweetCoins = await tx.userSweetCoins.upsert({
                 where: { user_id: authUser.userId },
                 update: {
                     total_sweet_coins: {
-                        increment: promoCode.sweet_coins_value,
+                        increment: sweetCoinsAmount,
                     },
                 },
                 create: {
                     user_id: authUser.userId,
-                    total_sweet_coins: promoCode.sweet_coins_value,
+                    total_sweet_coins: sweetCoinsAmount,
                     total_emotes: 0,
                 },
             })
 
+            // Create sweet coin history entry
+            await tx.sweetCoinHistory.create({
+                data: {
+                    user_id: authUser.userId,
+                    sweet_coins_earned: sweetCoinsAmount,
+                    message_id: `promo-${normalizedCode}-${Date.now()}`,
+                    stream_session_id: null,
+                    earned_at: new Date(),
+                },
+            })
+
             return {
-                sweet_coins_awarded: promoCode.sweet_coins_value,
-                code: promoCode.code,
+                sweet_coins_awarded: sweetCoinsAmount,
+                code: normalizedCode,
+                new_total: userSweetCoins.total_sweet_coins,
             }
         })
 
@@ -149,6 +109,7 @@ export async function POST(request: Request) {
             success: true,
             sweet_coins_awarded: result.sweet_coins_awarded,
             code: result.code,
+            points_awarded: result.sweet_coins_awarded, // Keep for backward compatibility
             message: `Successfully redeemed! You earned ${result.sweet_coins_awarded} Sweet Coins! 🎉`,
         })
     } catch (error) {
