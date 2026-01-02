@@ -5,61 +5,137 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { getClientAccessToken } from '@/lib/auth-client'
 
-// Sample challenge data - will be replaced with API data later
+// Helper function to generate Razed game URL
+const getRazedGameUrl = (gameName: string): string => {
+  const gameSlugs: Record<string, string> = {
+    'Big Bass Splash 1000': 'big-bass-splash-1000',
+    'Big Bass Splash 5000': 'big-bass-splash-5000',
+    'Le Zeus': 'le-zeus',
+    'Sweet Bonanza 1000': 'sweet-bonanza-1000',
+    'Wanted Dead or Wild': 'wanted-dead-or-a-wild',
+    'Donny & Danny': 'donny-and-danny',
+    'Fruit Party': 'fruit-party',
+    'Sugar Rush 1000': 'sugar-rush-1000',
+    'Big Stack Nutcracker': 'big-stack-nutcracker',
+    'Hammer Storm': 'hammer-storm',
+    '1000 Xmas': '1000-xmas',
+    'Toshi Ways Club': 'toshi-ways-club',
+    'Duck Hunters': 'duck-hunters',
+  }
+
+  const slug = gameSlugs[gameName] || gameName.toLowerCase().replace(/\s+/g, '-')
+  return `https://razed.com/game/${slug}?ref=sweetflips`
+}
+
+// Challenge data with images and game-specific URLs
 const SAMPLE_CHALLENGES = [
   {
     id: '1',
-    game: 'Gates of Olympus',
-    provider: 'PRAGMATIC',
-    image: null,
-    multiplier: 500,
+    game: 'Big Bass Splash 1000',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/big-bass-splash-1000.avif',
+    multiplier: 750,
     minBet: 0.20,
-    reward: 50,
+    reward: 100,
   },
   {
     id: '2',
-    game: 'Sweet Bonanza',
-    provider: 'PRAGMATIC',
-    image: null,
+    game: 'Big Bass Splash 1000',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/big-bass-splash-1000.avif',
     multiplier: 1000,
+    minBet: 0.20,
+    reward: 200,
+  },
+  {
+    id: '3',
+    game: 'Big Bass Splash 5000',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/big-bass-splash-1000.avif',
+    multiplier: 500,
     minBet: 0.20,
     reward: 100,
   },
   {
-    id: '3',
+    id: '4',
+    game: 'Le Zeus',
+    provider: 'HACKSAW',
+    image: '/Challenges/le-zeus-new (1).avif',
+    multiplier: 750,
+    minBet: 0.10,
+    reward: 50,
+  },
+  {
+    id: '5',
+    game: 'Sweet Bonanza 1000',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/sugar-rush-1000.avif',
+    multiplier: 1500,
+    minBet: 0.20,
+    reward: 100,
+  },
+  {
+    id: '6',
     game: 'Wanted Dead or Wild',
     provider: 'HACKSAW',
-    image: null,
+    image: '/Challenges/wanted-dead-or-a-wild.avif',
+    multiplier: 1000,
+    minBet: 0.20,
+    reward: 200,
+  },
+  {
+    id: '7',
+    game: 'Donny & Danny',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/donny-and-danny.avif',
     multiplier: 500,
     minBet: 0.10,
     reward: 50,
   },
   {
-    id: '4',
-    game: 'Chaos Crew',
-    provider: 'HACKSAW',
-    image: null,
+    id: '8',
+    game: 'Donny & Danny',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/donny-and-danny.avif',
     multiplier: 1000,
     minBet: 0.10,
     reward: 100,
   },
   {
-    id: '5',
+    id: '9',
     game: 'Fruit Party',
-    provider: 'PRAGMATIC',
-    image: null,
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/prag-vs20fruitswx (1).avif',
     multiplier: 500,
     minBet: 0.20,
     reward: 75,
   },
   {
-    id: '6',
-    game: 'Big Bass Bonanza',
-    provider: 'PRAGMATIC',
-    image: null,
+    id: '10',
+    game: 'Sugar Rush 1000',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/sugar-rush-1000.avif',
+    multiplier: 1000,
+    minBet: 0.20,
+    reward: 100,
+  },
+  {
+    id: '11',
+    game: 'Duck Hunters',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/donny-and-danny.avif',
+    multiplier: 500,
+    minBet: 0.10,
+    reward: 50,
+  },
+  {
+    id: '12',
+    game: 'Duck Hunters',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/donny-and-danny.avif',
     multiplier: 1000,
     minBet: 0.10,
-    reward: 150,
+    reward: 100,
   },
 ]
 
@@ -234,11 +310,23 @@ export default function ChallengesPage() {
               key={challenge.id}
               className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border overflow-hidden hover:border-kick-green dark:hover:border-kick-green transition-colors"
             >
-              {/* Game Image Placeholder */}
-              <div className="relative h-36 bg-gradient-to-br from-kick-purple/20 to-kick-green/20 flex items-center justify-center">
-                <span className="text-4xl">🎰</span>
+              {/* Game Image */}
+              <div className="relative h-36 bg-gradient-to-br from-kick-purple/20 to-kick-green/20 overflow-hidden">
+                {challenge.image ? (
+                  <Image
+                    src={challenge.image}
+                    alt={challenge.game}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-4xl">🎰</span>
+                  </div>
+                )}
                 {/* Provider Badge */}
-                <div className="absolute top-3 left-3">
+                <div className="absolute top-3 left-3 z-10">
                   <span className="bg-black/60 backdrop-blur-sm text-white text-xs font-medium px-2 py-1 rounded">
                     {challenge.provider}
                   </span>
@@ -285,7 +373,7 @@ export default function ChallengesPage() {
 
                 {/* Play Button */}
                 <a
-                  href="https://razed.com/?ref=sweetflips"
+                  href={getRazedGameUrl(challenge.game)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block w-full py-2.5 bg-kick-purple text-white text-center font-semibold rounded-lg hover:bg-kick-purple-dark transition-colors"
