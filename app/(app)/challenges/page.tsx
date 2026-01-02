@@ -27,115 +27,61 @@ const getRazedGameUrl = (gameName: string): string => {
   return `https://razed.com/game/${slug}?ref=sweetflips`
 }
 
-// Challenge data
+// Challenge data - One challenge per slot, 1000x multiplier, $50 reward, one-time claimable
 const CHALLENGES = [
   {
     id: '1',
     game: 'Big Bass Splash 1000',
     provider: 'PRAGMATIC PLAY',
     image: '/Challenges/big-bass-splash-1000.avif',
-    multiplier: 750,
+    multiplier: 1000,
     minBet: 0.20,
-    reward: 100,
+    reward: 50,
   },
   {
     id: '2',
-    game: 'Big Bass Splash 1000',
-    provider: 'PRAGMATIC PLAY',
-    image: '/Challenges/big-bass-splash-1000.avif',
-    multiplier: 1000,
-    minBet: 0.20,
-    reward: 200,
-  },
-  {
-    id: '3',
-    game: 'Big Bass Splash 5000',
-    provider: 'PRAGMATIC PLAY',
-    image: '/Challenges/big-bass-splash-1000.avif',
-    multiplier: 500,
-    minBet: 0.20,
-    reward: 100,
-  },
-  {
-    id: '4',
     game: 'Le Zeus',
     provider: 'HACKSAW',
     image: '/Challenges/le-zeus-new (1).avif',
-    multiplier: 750,
+    multiplier: 1000,
     minBet: 0.10,
     reward: 50,
   },
   {
-    id: '5',
-    game: 'Sweet Bonanza 1000',
-    provider: 'PRAGMATIC PLAY',
-    image: '/Challenges/sugar-rush-1000.avif',
-    multiplier: 1500,
-    minBet: 0.20,
-    reward: 100,
-  },
-  {
-    id: '6',
-    game: 'Wanted Dead or Wild',
-    provider: 'HACKSAW',
-    image: '/Challenges/wanted-dead-or-a-wild.avif',
-    multiplier: 1000,
-    minBet: 0.20,
-    reward: 200,
-  },
-  {
-    id: '7',
-    game: 'Donny & Danny',
-    provider: 'PRAGMATIC PLAY',
-    image: '/Challenges/donny-and-danny.avif',
-    multiplier: 500,
-    minBet: 0.10,
-    reward: 50,
-  },
-  {
-    id: '8',
-    game: 'Donny & Danny',
-    provider: 'PRAGMATIC PLAY',
-    image: '/Challenges/donny-and-danny.avif',
-    multiplier: 1000,
-    minBet: 0.10,
-    reward: 100,
-  },
-  {
-    id: '9',
-    game: 'Fruit Party',
-    provider: 'PRAGMATIC PLAY',
-    image: '/Challenges/prag-vs20fruitswx (1).avif',
-    multiplier: 500,
-    minBet: 0.20,
-    reward: 75,
-  },
-  {
-    id: '10',
+    id: '3',
     game: 'Sugar Rush 1000',
     provider: 'PRAGMATIC PLAY',
     image: '/Challenges/sugar-rush-1000.avif',
     multiplier: 1000,
     minBet: 0.20,
-    reward: 100,
-  },
-  {
-    id: '11',
-    game: 'Duck Hunters',
-    provider: 'PRAGMATIC PLAY',
-    image: '/Challenges/donny-and-danny.avif',
-    multiplier: 500,
-    minBet: 0.10,
     reward: 50,
   },
   {
-    id: '12',
-    game: 'Duck Hunters',
+    id: '4',
+    game: 'Wanted Dead or Wild',
+    provider: 'HACKSAW',
+    image: '/Challenges/wanted-dead-or-a-wild.avif',
+    multiplier: 1000,
+    minBet: 0.20,
+    reward: 50,
+  },
+  {
+    id: '5',
+    game: 'Donny & Danny',
     provider: 'PRAGMATIC PLAY',
     image: '/Challenges/donny-and-danny.avif',
     multiplier: 1000,
     minBet: 0.10,
-    reward: 100,
+    reward: 50,
+  },
+  {
+    id: '6',
+    game: 'Fruit Party',
+    provider: 'PRAGMATIC PLAY',
+    image: '/Challenges/prag-vs20fruitswx (1).avif',
+    multiplier: 1000,
+    minBet: 0.20,
+    reward: 50,
   },
 ]
 
@@ -221,7 +167,7 @@ export default function ChallengesPage() {
                 className="object-cover"
                 sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
               />
-              
+
               {/* Provider Badge - centered at top */}
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10">
                 <span className="bg-black/70 backdrop-blur-sm text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
