@@ -27,7 +27,7 @@ const getRazedGameUrl = (gameName: string): string => {
   return `https://razed.com/game/${slug}?ref=sweetflips`
 }
 
-// Challenge data with images and game-specific URLs
+// Challenge data
 const CHALLENGES = [
   {
     id: '1',
@@ -201,79 +201,69 @@ export default function ChallengesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-white">
-          {CHALLENGES.length} Challenges
-        </h1>
-      </div>
+      <h1 className="text-xl font-bold text-white">
+        {CHALLENGES.length} Challenges
+      </h1>
 
-      {/* Challenges Grid - 6 columns on xl, 5 on lg, 4 on md, 3 on sm, 2 on mobile */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+      {/* Challenges Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {CHALLENGES.map((challenge) => (
           <div
             key={challenge.id}
-            className="group bg-[#1a1a2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-kick-purple/50 transition-all duration-200"
+            className="group flex flex-col rounded-xl overflow-hidden bg-[#1a1a2e] hover:ring-2 hover:ring-kick-purple/60 transition-all"
           >
-            {/* Game Image with overlay */}
-            <div className="relative aspect-[4/3] overflow-hidden">
+            {/* Game Image */}
+            <div className="relative aspect-[3/4] overflow-hidden rounded-xl">
               <Image
                 src={challenge.image}
                 alt={challenge.game}
                 fill
-                className="object-cover group-hover:scale-105 transition-transform duration-300"
+                className="object-cover"
                 sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
               />
-
-              {/* Provider Badge */}
-              <div className="absolute top-1 left-1 z-10">
-                <span className="bg-black/70 backdrop-blur-sm text-white text-[8px] font-semibold px-1 py-0.5 rounded uppercase tracking-wide">
+              
+              {/* Provider Badge - centered at top */}
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10">
+                <span className="bg-black/70 backdrop-blur-sm text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                   {challenge.provider}
                 </span>
-              </div>
-
-              {/* Game Title Overlay */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-1.5 pt-4">
-                <h3 className="text-white text-[10px] font-bold leading-tight truncate">
-                  {challenge.game}
-                </h3>
               </div>
             </div>
 
             {/* Stats Row */}
-            <div className="px-1.5 py-1.5 flex items-center justify-between gap-1 text-[9px]">
+            <div className="flex items-center justify-between px-2 py-2 text-[11px]">
               {/* Multiplier */}
-              <div className="flex items-center gap-0.5">
-                <svg className="w-2.5 h-2.5 text-kick-green" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
+              <div className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5 text-kick-green" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
-                <span className="text-kick-green font-bold">{challenge.multiplier.toLocaleString()}x</span>
+                <span className="text-white font-semibold">{challenge.multiplier.toLocaleString()}x</span>
               </div>
 
               {/* Min Bet */}
-              <div className="flex items-center gap-0.5">
-                <svg className="w-2.5 h-2.5 text-kick-text-secondary" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
+              <div className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5 text-kick-text-secondary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-kick-text-secondary font-medium">${challenge.minBet.toFixed(2)}</span>
+                <span className="text-white font-semibold">${challenge.minBet.toFixed(2)}</span>
               </div>
 
               {/* Reward */}
-              <div className="flex items-center gap-0.5">
-                <svg className="w-2.5 h-2.5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5 2a2 2 0 00-2 2v14l3.5-2 3.5 2 3.5-2 3.5 2V4a2 2 0 00-2-2H5zm2.5 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm6.207.293a1 1 0 00-1.414 0l-6 6a1 1 0 101.414 1.414l6-6a1 1 0 000-1.414zM12.5 10a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" clipRule="evenodd" />
+              <div className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5 text-kick-purple" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
                 </svg>
-                <span className="text-yellow-500 font-bold">${challenge.reward}</span>
+                <span className="text-white font-semibold">${challenge.reward}</span>
               </div>
             </div>
 
             {/* Play Button */}
-            <div className="px-1.5 pb-1.5">
+            <div className="px-2 pb-2">
               <a
                 href={getRazedGameUrl(challenge.game)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full py-1.5 bg-kick-purple text-white text-center text-[10px] font-bold rounded-md hover:bg-kick-purple/80 transition-colors"
+                className="block w-full py-2 bg-kick-purple text-white text-center text-xs font-bold rounded-lg hover:bg-kick-purple/80 transition-colors"
               >
                 Play
               </a>
