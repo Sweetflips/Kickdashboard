@@ -207,15 +207,15 @@ export default function ChallengesPage() {
         </h1>
       </div>
 
-      {/* Challenges Grid - 6 columns on xl, 4 on lg, 3 on md, 2 on sm, 1 on mobile */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      {/* Challenges Grid - 6 columns on xl, 5 on lg, 4 on md, 3 on sm, 2 on mobile */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
         {CHALLENGES.map((challenge) => (
           <div
             key={challenge.id}
             className="group bg-[#1a1a2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-kick-purple/50 transition-all duration-200"
           >
             {/* Game Image with overlay */}
-            <div className="relative aspect-square overflow-hidden">
+            <div className="relative aspect-[4/3] overflow-hidden">
               <Image
                 src={challenge.image}
                 alt={challenge.game}
@@ -223,27 +223,27 @@ export default function ChallengesPage() {
                 className="object-cover group-hover:scale-105 transition-transform duration-300"
                 sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
               />
-              
+
               {/* Provider Badge */}
-              <div className="absolute top-2 left-2 z-10">
-                <span className="bg-black/70 backdrop-blur-sm text-white text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide">
+              <div className="absolute top-1 left-1 z-10">
+                <span className="bg-black/70 backdrop-blur-sm text-white text-[8px] font-semibold px-1 py-0.5 rounded uppercase tracking-wide">
                   {challenge.provider}
                 </span>
               </div>
 
               {/* Game Title Overlay */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2 pt-6">
-                <h3 className="text-white text-xs font-bold leading-tight truncate">
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-1.5 pt-4">
+                <h3 className="text-white text-[10px] font-bold leading-tight truncate">
                   {challenge.game}
                 </h3>
               </div>
             </div>
 
             {/* Stats Row */}
-            <div className="px-2 py-2 flex items-center justify-between gap-1 text-[10px]">
+            <div className="px-1.5 py-1.5 flex items-center justify-between gap-1 text-[9px]">
               {/* Multiplier */}
               <div className="flex items-center gap-0.5">
-                <svg className="w-3 h-3 text-kick-green" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-2.5 h-2.5 text-kick-green" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
                 </svg>
                 <span className="text-kick-green font-bold">{challenge.multiplier.toLocaleString()}x</span>
@@ -251,7 +251,7 @@ export default function ChallengesPage() {
 
               {/* Min Bet */}
               <div className="flex items-center gap-0.5">
-                <svg className="w-3 h-3 text-kick-text-secondary" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-2.5 h-2.5 text-kick-text-secondary" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
                 </svg>
@@ -260,7 +260,7 @@ export default function ChallengesPage() {
 
               {/* Reward */}
               <div className="flex items-center gap-0.5">
-                <svg className="w-3 h-3 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-2.5 h-2.5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M5 2a2 2 0 00-2 2v14l3.5-2 3.5 2 3.5-2 3.5 2V4a2 2 0 00-2-2H5zm2.5 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm6.207.293a1 1 0 00-1.414 0l-6 6a1 1 0 101.414 1.414l6-6a1 1 0 000-1.414zM12.5 10a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" clipRule="evenodd" />
                 </svg>
                 <span className="text-yellow-500 font-bold">${challenge.reward}</span>
@@ -268,12 +268,12 @@ export default function ChallengesPage() {
             </div>
 
             {/* Play Button */}
-            <div className="px-2 pb-2">
+            <div className="px-1.5 pb-1.5">
               <a
                 href={getRazedGameUrl(challenge.game)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full py-2 bg-kick-purple text-white text-center text-xs font-bold rounded-lg hover:bg-kick-purple/80 transition-colors"
+                className="block w-full py-1.5 bg-kick-purple text-white text-center text-[10px] font-bold rounded-md hover:bg-kick-purple/80 transition-colors"
               >
                 Play
               </a>
