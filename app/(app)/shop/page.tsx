@@ -1,29 +1,16 @@
 'use client'
 
-import AdventCard from '@/components/AdventCard'
 import SweetCoinsBar from '@/components/SweetCoinsBar'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { getClientAccessToken } from '@/lib/auth-client'
 
-interface AdventItem {
-  id: string
-  day: number
-  pointsCost: number
-  image: string
-  maxTickets: number
-  unlocked: boolean
-  userTickets: number
-}
-
 export default function ShopPage() {
   const router = useRouter()
   const [userBalance, setUserBalance] = useState(0)
   const [isConnected, setIsConnected] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [adventItems, setAdventItems] = useState<AdventItem[]>([])
-  const [itemsLoading, setItemsLoading] = useState(true)
   const [utcTime, setUtcTime] = useState('')
 
   useEffect(() => {
@@ -44,7 +31,6 @@ export default function ShopPage() {
   useEffect(() => {
     if (isConnected) {
       fetchUserBalance()
-      fetchAdventItems()
 
       // Poll for updated points balance every 5 seconds
       const balanceInterval = setInterval(() => {
@@ -99,33 +85,6 @@ export default function ShopPage() {
     }
   }
 
-  const fetchAdventItems = async () => {
-    try {
-      setItemsLoading(true)
-      const token = getClientAccessToken()
-      const headers: Record<string, string> = {}
-      if (token) headers['Authorization'] = `Bearer ${token}`
-
-      const response = await fetch('/api/advent', {
-        credentials: 'include',
-        headers,
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setAdventItems(data.items || [])
-      }
-    } catch (error) {
-      console.error('Error fetching advent items:', error)
-    } finally {
-      setItemsLoading(false)
-    }
-  }
-
-  const handlePurchase = () => {
-    fetchUserBalance()
-    fetchAdventItems()
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -136,12 +95,13 @@ export default function ShopPage() {
 
   if (!isConnected) {
     return (
-        <div className="max-w-2xl mx-auto text-center py-12">
-          <h2 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-4">
+      <div className="min-h-screen bg-kick-dark">
+        <div className="max-w-2xl mx-auto text-center py-12 px-4">
+          <h2 className="text-h2 font-semibold text-kick-text mb-4">
             Connect your Kick account to access the shop
           </h2>
-          <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
-            The shop is available for verified Kick viewers. Connect your account to exchange points for advent calendar tickets.
+          <p className="text-body text-kick-text-secondary mb-6">
+            The shop is available for verified Kick viewers. Connect your account to participate in raffles and challenges.
           </p>
           <button
             onClick={() => router.push('/login')}
@@ -150,154 +110,215 @@ export default function ShopPage() {
             Connect Kick
           </button>
         </div>
+      </div>
     )
   }
 
   return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-800 to-indigo-900 relative overflow-hidden">
-        {/* Snowflake decorations */}
-        <div className="absolute inset-0 pointer-events-none">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute text-white/30 text-2xl animate-pulse"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 2}s`,
-              }}
-            >
-              ❄️
+    <div className="min-h-screen bg-kick-dark">
+      <div className="container mx-auto px-4 py-8">
+        {/* UTC Time Display - Top Right */}
+        <div className="flex justify-end mb-4">
+          <div className="bg-kick-surface rounded-lg border border-kick-border px-4 py-2">
+            <div className="text-kick-text-secondary text-sm font-mono">
+              {utcTime}
             </div>
-          ))}
+          </div>
         </div>
 
-        <div className="relative z-10 container mx-auto px-4 py-8">
-          {/* UTC Time Display - Top Right */}
-          {isConnected && (
-            <div className="absolute top-4 right-4 z-20">
-              <div className="bg-white/10 backdrop-blur-md rounded-lg border border-white/20 px-4 py-2">
-                <div className="text-white text-sm font-mono">
-                  {utcTime}
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <Image
+              src="/icon.png"
+              alt="SweetFlips"
+              width={56}
+              height={56}
+              className="rounded-full"
+              unoptimized
+            />
+            <h1 className="text-4xl md:text-5xl font-bold text-kick-text">
+              Shop
+            </h1>
+          </div>
+          <p className="text-kick-text-secondary text-lg">
+            Powered by <span className="text-kick-green font-bold">RAZED</span>
+          </p>
+        </div>
+
+        {/* Sweet Coins Balance */}
+        <div className="max-w-2xl mx-auto mb-10">
+          <SweetCoinsBar points={userBalance} />
+        </div>
+
+        {/* Razed Raffles Section */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <div className="bg-kick-surface rounded-2xl border border-kick-border p-8 relative overflow-hidden">
+            {/* Accent glow */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-kick-green/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            
+            <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-3xl">🎰</span>
+                <h2 className="text-2xl md:text-3xl font-bold text-kick-green">
+                  RAZED
+                </h2>
+              </div>
+              
+              <h3 className="text-xl md:text-2xl font-semibold text-kick-text mb-2">
+                Super Saturday Raffles
+              </h3>
+              
+              <div className="flex flex-wrap items-center gap-4 mb-6">
+                <div className="bg-kick-green/20 border border-kick-green/30 rounded-lg px-4 py-2">
+                  <span className="text-kick-green font-bold text-2xl">$10,000</span>
+                  <span className="text-kick-text-secondary ml-2">every week</span>
                 </div>
               </div>
+              
+              <ul className="space-y-2 mb-6">
+                <li className="flex items-center gap-2 text-kick-text-secondary">
+                  <svg className="w-5 h-5 text-kick-green flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Prizes announced weekly
+                </li>
+                <li className="flex items-center gap-2 text-kick-text-secondary">
+                  <svg className="w-5 h-5 text-kick-green flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  First raffle: <span className="text-kick-text font-medium">Saturday, January 9</span>
+                </li>
+              </ul>
+              
+              <button className="px-6 py-3 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark transition-colors font-semibold">
+                Learn More
+              </button>
             </div>
-          )}
+          </div>
+        </div>
 
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-4 mb-4">
-              <Image
-                src="/icon.png"
-                alt="SweetFlips"
-                width={64}
-                height={64}
-                className="rounded-full"
-                unoptimized
-              />
-              <h1 className="text-4xl md:text-5xl font-bold text-white drop-shadow-lg">
-                $25,000 DECEMBER ADVENT CALENDAR
-              </h1>
+        {/* Razed Challenges Section */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="text-2xl">👀</span>
+            <h2 className="text-2xl font-bold text-kick-text">
+              Razed Challenges
+            </h2>
+            <span className="bg-kick-green/20 text-kick-green text-xs font-semibold px-2 py-1 rounded-full">
+              NEW
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            {/* Challenge Feature Card 1 */}
+            <div className="bg-kick-surface rounded-xl border border-kick-border p-6 hover:border-kick-green/50 transition-colors">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-kick-purple/20 flex items-center justify-center">
+                  <span className="text-xl">🎮</span>
+                </div>
+                <h3 className="text-lg font-semibold text-kick-text">Play Selected Games</h3>
+              </div>
+              <p className="text-kick-text-secondary text-sm">
+                Choose from curated games on Razed to complete challenges and earn rewards.
+              </p>
             </div>
-            <p className="text-white/90 text-lg">
-              Unlock daily prizes throughout December!
+
+            {/* Challenge Feature Card 2 */}
+            <div className="bg-kick-surface rounded-xl border border-kick-border p-6 hover:border-kick-green/50 transition-colors">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-kick-green/20 flex items-center justify-center">
+                  <span className="text-xl">🎯</span>
+                </div>
+                <h3 className="text-lg font-semibold text-kick-text">Hit Multiplier Targets</h3>
+              </div>
+              <p className="text-kick-text-secondary text-sm">
+                Reach set multiplier targets like <span className="text-kick-green font-semibold">500x</span> or <span className="text-kick-green font-semibold">1,000x</span> to win.
+              </p>
+            </div>
+
+            {/* Challenge Feature Card 3 */}
+            <div className="bg-kick-surface rounded-xl border border-kick-border p-6 hover:border-kick-green/50 transition-colors">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
+                  <span className="text-xl">💰</span>
+                </div>
+                <h3 className="text-lg font-semibold text-kick-text">Low Minimum Bets</h3>
+              </div>
+              <p className="text-kick-text-secondary text-sm">
+                Start with minimal risk. Low bet requirements make challenges accessible to everyone.
+              </p>
+            </div>
+
+            {/* Challenge Feature Card 4 */}
+            <div className="bg-kick-surface rounded-xl border border-kick-border p-6 hover:border-kick-green/50 transition-colors">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <span className="text-xl">🏆</span>
+                </div>
+                <h3 className="text-lg font-semibold text-kick-text">Guaranteed Rewards</h3>
+              </div>
+              <p className="text-kick-text-secondary text-sm">
+                Every completed challenge earns you guaranteed rewards. No luck needed.
+              </p>
+            </div>
+          </div>
+
+          {/* Stacking Note */}
+          <div className="bg-kick-surface-hover rounded-xl border border-kick-border p-4 flex items-start gap-3">
+            <svg className="w-5 h-5 text-kick-green flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+            <p className="text-kick-text-secondary text-sm">
+              <span className="text-kick-text font-medium">Pro tip:</span> Challenges refresh regularly and can stack with raffle entries for even more chances to win!
             </p>
           </div>
+        </div>
 
-          <div className="max-w-2xl mx-auto mb-6">
-            <SweetCoinsBar points={userBalance} />
-          </div>
-
-          {/* Shop Sections */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
-            <button
-              type="button"
-              className="px-4 py-2 rounded-full text-sm font-semibold bg-white text-gray-900 shadow-sm border border-white/60"
-              aria-current="page"
-            >
-              Advent Calendar
-            </button>
-            {[
-              'Raffle Tickets',
-              'Rewards',
-              'Limited-Time',
-            ].map((label) => (
-              <button
-                key={label}
-                type="button"
-                disabled
-                className="px-4 py-2 rounded-full text-sm font-semibold bg-white/10 text-white/70 border border-white/20 cursor-not-allowed"
-                title="Coming soon"
-              >
-                <span>{label}</span>
-                <span className="ml-2 inline-flex items-center rounded-full bg-white/15 border border-white/20 px-2 py-0.5 text-[11px] font-semibold text-white/80">
-                  Soon
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* Advent Calendar Grid */}
-          {itemsLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {[...adventItems].sort((a, b) => a.day - b.day).map((item) => (
-                <AdventCard
-                  key={item.id}
-                  item={item}
-                  userBalance={userBalance}
-                  onPurchase={handlePurchase}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Info Section */}
-          <div className="mt-12 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 p-6 max-w-3xl mx-auto">
-            <h2 className="text-h3 font-semibold text-white mb-4 text-center">
+        {/* How It Works Section */}
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-kick-surface rounded-2xl border border-kick-border p-8">
+            <h2 className="text-xl font-semibold text-kick-text mb-6 text-center">
               How It Works
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">📅</span>
+                <div className="w-14 h-14 rounded-full bg-kick-purple/20 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">🎟️</span>
                 </div>
-                <h3 className="text-h4 font-semibold text-white mb-2">
-                  Daily Unlocks
+                <h3 className="text-lg font-semibold text-kick-text mb-2">
+                  1. Enter Raffles
                 </h3>
-                <p className="text-small text-white/80">
-                  Each day unlocks on its calendar date in December. Come back daily to see new prizes!
+                <p className="text-sm text-kick-text-secondary">
+                  Join weekly $10k Super Saturday draws for a chance to win big prizes.
                 </p>
               </div>
               <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">🎫</span>
+                <div className="w-14 h-14 rounded-full bg-kick-green/20 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">🎯</span>
                 </div>
-                <h3 className="text-h4 font-semibold text-white mb-2">
-                  Buy Tickets
+                <h3 className="text-lg font-semibold text-kick-text mb-2">
+                  2. Complete Challenges
                 </h3>
-                <p className="text-small text-white/80">
-                  Exchange your points for advent calendar tickets. Max 25 tickets per item!
+                <p className="text-sm text-kick-text-secondary">
+                  Hit multiplier targets on selected games to earn guaranteed rewards.
                 </p>
               </div>
               <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">🎁</span>
+                <div className="w-14 h-14 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">⚡</span>
                 </div>
-                <h3 className="text-h4 font-semibold text-white mb-2">
-                  Win Prizes
+                <h3 className="text-lg font-semibold text-kick-text mb-2">
+                  3. Stack Rewards
                 </h3>
-                <p className="text-small text-white/80">
-                  Use your tickets to enter raffles and win amazing prizes worth $25,000!
+                <p className="text-sm text-kick-text-secondary">
+                  Challenges can earn extra raffle entries. The more you play, the more you can win!
                 </p>
               </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
   )
 }
