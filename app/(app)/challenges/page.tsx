@@ -177,39 +177,39 @@ export default function ChallengesPage() {
             </div>
 
             {/* Stats Row */}
-            <div className="flex items-center justify-between px-2 py-2 text-[11px]">
+            <div className="flex items-center justify-between px-3 py-3 text-sm">
               {/* Multiplier */}
-              <div className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5 text-kick-green" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <div className="flex items-center gap-1.5">
+                <svg className="w-5 h-5 text-kick-green" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
-                <span className="text-white font-semibold">{challenge.multiplier.toLocaleString()}x</span>
+                <span className="text-white font-bold">{challenge.multiplier.toLocaleString()}x</span>
               </div>
 
               {/* Min Bet */}
-              <div className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5 text-kick-text-secondary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <div className="flex items-center gap-1.5">
+                <svg className="w-5 h-5 text-kick-text-secondary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-white font-semibold">${challenge.minBet.toFixed(2)}</span>
+                <span className="text-white font-bold">${challenge.minBet.toFixed(2)}</span>
               </div>
 
               {/* Reward */}
-              <div className="flex items-center gap-1">
-                <svg className="w-3.5 h-3.5 text-kick-purple" fill="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center gap-1.5">
+                <svg className="w-5 h-5 text-kick-purple" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
                 </svg>
-                <span className="text-white font-semibold">${challenge.reward}</span>
+                <span className="text-white font-bold">${challenge.reward}</span>
               </div>
             </div>
 
             {/* Play Button */}
-            <div className="px-2 pb-2">
+            <div className="px-3 pb-3">
               <a
                 href={getRazedGameUrl(challenge.game)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full py-2 bg-kick-purple text-white text-center text-xs font-bold rounded-lg hover:bg-kick-purple/80 transition-colors"
+                className="block w-full py-2.5 bg-kick-purple text-white text-center text-sm font-bold rounded-lg hover:bg-kick-purple/80 transition-colors"
               >
                 Play
               </a>
