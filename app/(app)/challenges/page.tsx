@@ -105,108 +105,141 @@ export default function ChallengesPage() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-kick-dark">
-        <div className="max-w-2xl mx-auto text-center py-12 px-4">
-          <h2 className="text-h2 font-semibold text-kick-text mb-4">
-            Connect your Kick account to view challenges
-          </h2>
-          <p className="text-body text-kick-text-secondary mb-6">
-            Connect your account to participate in Razed challenges and earn rewards.
-          </p>
-          <button
-            onClick={() => router.push('/login')}
-            className="px-6 py-3 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark transition-colors"
-          >
-            Connect Kick
-          </button>
-        </div>
+      <div className="max-w-2xl mx-auto text-center py-12">
+        <h2 className="text-h2 font-semibold text-gray-900 dark:text-kick-text mb-4">
+          Connect your Kick account to view challenges
+        </h2>
+        <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-6">
+          Connect your account to participate in Razed challenges and earn rewards.
+        </p>
+        <button
+          onClick={() => router.push('/login')}
+          className="px-6 py-3 bg-kick-purple text-white rounded-lg hover:bg-kick-purple-dark transition-colors"
+        >
+          Connect Kick
+        </button>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-kick-dark">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl md:text-4xl font-bold text-kick-text">
-              Challenges
+    <div className="space-y-6">
+      {/* Hero */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 rounded-2xl p-8 text-white">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.08%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-50"></div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-bold mb-2">
+              🎯 Challenges
             </h1>
-            <span className="bg-kick-green/20 text-kick-green text-xs font-semibold px-2 py-1 rounded-full">
-              RAZED
-            </span>
+            <p className="text-lg text-white/90 max-w-2xl">
+              Hit multiplier targets on selected games to earn guaranteed rewards. Powered by <span className="font-bold">RAZED</span>.
+            </p>
           </div>
-          <p className="text-kick-text-secondary text-lg">
-            Hit multiplier targets to earn guaranteed rewards!
-          </p>
+          <a
+            href="https://razed.com/?ref=sweetflips"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-600 font-semibold rounded-lg hover:bg-white/90 transition-colors flex-shrink-0"
+          >
+            Play on Razed
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
         </div>
+        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+      </div>
 
-        {/* Info Banner */}
-        <div className="bg-kick-surface rounded-xl border border-kick-border p-6 mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+              <span className="text-xl">🎮</span>
+            </div>
             <div>
-              <h2 className="text-xl font-semibold text-kick-text mb-2">How Challenges Work</h2>
-              <ul className="space-y-1 text-kick-text-secondary text-sm">
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-kick-green flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  Play selected games on Razed with the minimum bet
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-kick-green flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  Hit the multiplier target to complete the challenge
-                </li>
-                <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-kick-green flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  Claim your guaranteed reward + bonus raffle entries
-                </li>
-              </ul>
-            </div>
-            <div className="flex-shrink-0">
-              <a
-                href="https://razed.com/?ref=sweetflips"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-kick-green text-kick-dark font-semibold rounded-lg hover:bg-kick-green-dark transition-colors"
-              >
-                Play on Razed
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
+              <p className="text-small text-gray-600 dark:text-kick-text-secondary">Active Challenges</p>
+              <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{SAMPLE_CHALLENGES.length}</p>
             </div>
           </div>
         </div>
-
-        {/* Challenge Count */}
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-kick-text">
-            {SAMPLE_CHALLENGES.length} Challenges
-          </h3>
-          <span className="text-sm text-kick-text-secondary">
-            Refreshes weekly
-          </span>
+        <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+              <span className="text-xl">💰</span>
+            </div>
+            <div>
+              <p className="text-small text-gray-600 dark:text-kick-text-secondary">Total Rewards</p>
+              <p className="text-h4 font-bold text-kick-green">${SAMPLE_CHALLENGES.reduce((sum, c) => sum + c.reward, 0)}</p>
+            </div>
+          </div>
         </div>
+        <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+              <span className="text-xl">🔄</span>
+            </div>
+            <div>
+              <p className="text-small text-gray-600 dark:text-kick-text-secondary">Refresh</p>
+              <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">Weekly</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        {/* Challenges Grid */}
+      {/* How It Works */}
+      <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
+        <h2 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-4">How It Works</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-kick-purple/20 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-kick-purple">1</span>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900 dark:text-kick-text">Play on Razed</h3>
+              <p className="text-sm text-gray-600 dark:text-kick-text-secondary">Choose a game from the challenges below with the minimum bet.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-kick-purple/20 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-kick-purple">2</span>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900 dark:text-kick-text">Hit the Multiplier</h3>
+              <p className="text-sm text-gray-600 dark:text-kick-text-secondary">Reach the target multiplier (500x or 1,000x) to complete the challenge.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-kick-purple/20 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-kick-purple">3</span>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900 dark:text-kick-text">Claim Reward</h3>
+              <p className="text-sm text-gray-600 dark:text-kick-text-secondary">Get your guaranteed reward + bonus raffle entries!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Challenges Grid */}
+      <div>
+        <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text mb-4">
+          Available Challenges
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {SAMPLE_CHALLENGES.map((challenge) => (
             <div
               key={challenge.id}
-              className="bg-kick-surface rounded-xl border border-kick-border overflow-hidden hover:border-kick-green/50 transition-colors group"
+              className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border overflow-hidden hover:border-kick-green dark:hover:border-kick-green transition-colors"
             >
               {/* Game Image Placeholder */}
-              <div className="relative h-40 bg-gradient-to-br from-kick-purple/30 to-kick-green/20 flex items-center justify-center">
+              <div className="relative h-36 bg-gradient-to-br from-kick-purple/20 to-kick-green/20 flex items-center justify-center">
                 <span className="text-4xl">🎰</span>
                 {/* Provider Badge */}
                 <div className="absolute top-3 left-3">
-                  <span className="bg-kick-dark/80 backdrop-blur-sm text-kick-text-secondary text-xs font-medium px-2 py-1 rounded">
+                  <span className="bg-black/60 backdrop-blur-sm text-white text-xs font-medium px-2 py-1 rounded">
                     {challenge.provider}
                   </span>
                 </div>
@@ -214,7 +247,7 @@ export default function ChallengesPage() {
 
               {/* Card Content */}
               <div className="p-4">
-                <h4 className="text-lg font-semibold text-kick-text mb-4 truncate">
+                <h4 className="text-body font-semibold text-gray-900 dark:text-kick-text mb-4 truncate">
                   {challenge.game}
                 </h4>
 
@@ -227,26 +260,26 @@ export default function ChallengesPage() {
                       </svg>
                       {challenge.multiplier}x
                     </div>
-                    <div className="text-kick-text-muted text-xs mt-1">Multiplier</div>
+                    <div className="text-gray-500 dark:text-kick-text-muted text-xs mt-1">Multiplier</div>
                   </div>
                   <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-kick-text font-semibold">
-                      <svg className="w-4 h-4 text-kick-text-secondary" fill="currentColor" viewBox="0 0 20 20">
+                    <div className="flex items-center justify-center gap-1 text-gray-900 dark:text-kick-text font-semibold">
+                      <svg className="w-4 h-4 text-gray-500 dark:text-kick-text-secondary" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
                       </svg>
                       ${challenge.minBet.toFixed(2)}
                     </div>
-                    <div className="text-kick-text-muted text-xs mt-1">Min Bet</div>
+                    <div className="text-gray-500 dark:text-kick-text-muted text-xs mt-1">Min Bet</div>
                   </div>
                   <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-yellow-400 font-semibold">
+                    <div className="flex items-center justify-center gap-1 text-yellow-500 font-semibold">
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M5 2a2 2 0 00-2 2v14l3.5-2 3.5 2 3.5-2 3.5 2V4a2 2 0 00-2-2H5zm2.5 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm6.207.293a1 1 0 00-1.414 0l-6 6a1 1 0 101.414 1.414l6-6a1 1 0 000-1.414zM12.5 10a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" clipRule="evenodd" />
                       </svg>
                       ${challenge.reward}
                     </div>
-                    <div className="text-kick-text-muted text-xs mt-1">Reward</div>
+                    <div className="text-gray-500 dark:text-kick-text-muted text-xs mt-1">Reward</div>
                   </div>
                 </div>
 
@@ -255,7 +288,7 @@ export default function ChallengesPage() {
                   href="https://razed.com/?ref=sweetflips"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block w-full py-3 bg-kick-purple text-white text-center font-semibold rounded-lg hover:bg-kick-purple-dark transition-colors"
+                  className="block w-full py-2.5 bg-kick-purple text-white text-center font-semibold rounded-lg hover:bg-kick-purple-dark transition-colors"
                 >
                   Play
                 </a>
@@ -263,16 +296,23 @@ export default function ChallengesPage() {
             </div>
           ))}
         </div>
+      </div>
 
-        {/* Bottom Info */}
-        <div className="mt-8 bg-kick-surface-hover rounded-xl border border-kick-border p-4 flex items-start gap-3">
-          <svg className="w-5 h-5 text-kick-green flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-          </svg>
-          <p className="text-kick-text-secondary text-sm">
-            <span className="text-kick-text font-medium">Pro tip:</span> Completed challenges can stack with raffle entries for even more chances to win in our weekly $10,000 Super Saturday Raffles!
-          </p>
-        </div>
+      {/* Info Section */}
+      <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-kick-surface dark:to-kick-dark rounded-xl border border-gray-200 dark:border-kick-border p-6 text-center">
+        <h3 className="text-h4 font-semibold text-gray-900 dark:text-kick-text mb-2">
+          Stack your rewards
+        </h3>
+        <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-4">
+          Completed challenges can stack with raffle entries for even more chances to win in our weekly $10,000 Super Saturday Raffles!
+        </p>
+        <a
+          href="/raffles"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-kick-green text-white rounded-lg hover:bg-kick-green/90 transition-colors font-medium"
+        >
+          <span className="text-lg">🎟</span>
+          View Raffles
+        </a>
       </div>
     </div>
   )

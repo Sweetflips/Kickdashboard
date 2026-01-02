@@ -252,14 +252,19 @@ export default function RafflesPage() {
     return (
         <>
             <div className="space-y-6">
-                {/* Header */}
-                <div>
-                    <h1 className="text-h1 font-semibold text-gray-900 dark:text-kick-text mb-2">
-                        Raffles
-                    </h1>
-                    <p className="text-body text-gray-600 dark:text-kick-text-secondary">
-                        Use your points to enter raffles and win rewards.
-                    </p>
+                {/* Hero */}
+                <div className="relative overflow-hidden bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-500 rounded-2xl p-8 text-white">
+                    <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.08%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-50"></div>
+                    <div className="relative z-10 text-center">
+                        <h1 className="text-4xl md:text-5xl font-bold mb-4">
+                            🎟 Raffles
+                        </h1>
+                        <p className="text-lg text-white/90 max-w-2xl mx-auto">
+                            Use your Sweet Coins to enter raffles and win amazing prizes! Weekly $10,000 Super Saturday draws powered by <span className="font-bold">RAZED</span>.
+                        </p>
+                    </div>
+                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+                    <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
                 </div>
 
                 <SweetCoinsBar points={userBalance} />
