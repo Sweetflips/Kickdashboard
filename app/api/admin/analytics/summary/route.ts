@@ -205,6 +205,7 @@ export async function GET(request: Request) {
         type TopUserEntry = {
             total_sweet_coins: number
             total_emotes: number
+            last_sweet_coin_earned_at: Date | null
             user: {
                 kick_user_id: bigint
                 username: string
