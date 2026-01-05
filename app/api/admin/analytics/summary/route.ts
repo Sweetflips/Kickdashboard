@@ -169,13 +169,17 @@ export async function GET(request: Request) {
         ])
 
         const messagesMap = new Map<string, number>()
-        for (const row of msgCounts) messagesMap.set(row.sender_user_id.toString(), row._count._all)
+        for (const row of msgCounts as Array<{ sender_user_id: bigint; _count: { _all: number } }>) {
+            messagesMap.set(row.sender_user_id.toString(), row._count._all)
+        }
 
         const messagesWithEmotesMap = new Map<string, number>()
-        for (const row of msgWithEmotesCounts) messagesWithEmotesMap.set(row.sender_user_id.toString(), row._count._all)
+        for (const row of msgWithEmotesCounts as Array<{ sender_user_id: bigint; _count: { _all: number } }>) {
+            messagesWithEmotesMap.set(row.sender_user_id.toString(), row._count._all)
+        }
 
         const engagementMap = new Map<string, Record<string, number>>()
-        for (const row of engagementByUserType) {
+        for (const row of engagementByUserType as Array<{ sender_user_id: bigint; engagement_type: string; _count: { _all: number } }>) {
             const key = row.sender_user_id.toString()
             if (!engagementMap.has(key)) engagementMap.set(key, {})
             const obj = engagementMap.get(key)!
@@ -183,7 +187,7 @@ export async function GET(request: Request) {
         }
 
         const lenAggMap = new Map<string, { avg: number; max: number; total: number }>()
-        for (const row of lenAggByUser) {
+        for (const row of lenAggByUser as Array<{ sender_user_id: bigint; _avg: { message_length: number | null }; _max: { message_length: number | null }; _count: { _all: number } }>) {
             lenAggMap.set(row.sender_user_id.toString(), {
                 avg: row._avg.message_length ? Number(row._avg.message_length.toFixed(1)) : 0,
                 max: row._max.message_length || 0,
@@ -192,7 +196,7 @@ export async function GET(request: Request) {
         }
 
         const streamsSetByUser = new Map<string, Set<string>>()
-        for (const row of streamsByUserSession) {
+        for (const row of streamsByUserSession as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>) {
             const key = row.sender_user_id.toString()
             if (!streamsSetByUser.has(key)) streamsSetByUser.set(key, new Set())
             if (row.stream_session_id) streamsSetByUser.get(key)!.add(row.stream_session_id.toString())
