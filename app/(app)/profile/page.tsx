@@ -1555,8 +1555,12 @@ export default function ProfilePage() {
                                                             <div className="p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border">
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex items-center gap-4">
-                                                                        <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center bg-gradient-to-br from-orange-500 to-red-600">
-                                                                            <span className="text-white font-bold text-xl">R</span>
+                                                                        <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center bg-black">
+                                                                            <img
+                                                                                src="/logos/razed_icon.svg"
+                                                                                alt="Razed"
+                                                                                className="w-6 h-6 object-contain"
+                                                                            />
                                                                         </div>
                                                                         <div>
                                                                             <p className="text-sm font-medium text-gray-900 dark:text-kick-text">Razed</p>
@@ -1585,9 +1589,13 @@ export default function ProfilePage() {
                                                                     ) : (
                                                                         <button
                                                                             onClick={() => handleConnectAccount('razed')}
-                                                                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-md transition-colors text-xs font-medium"
+                                                                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-black hover:bg-gray-800 text-white rounded-md transition-colors text-xs font-medium"
                                                                         >
-                                                                            <span className="font-bold">R</span>
+                                                                            <img
+                                                                                src="/logos/razed_icon.svg"
+                                                                                alt="Razed"
+                                                                                className="w-4 h-4 object-contain"
+                                                                            />
                                                                             Connect Razed
                                                                         </button>
                                                                     )}
