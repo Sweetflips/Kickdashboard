@@ -137,7 +137,7 @@ export async function GET(request: Request) {
             },
         })
 
-        const kickUserIds = (topUsers as Array<{ user: { kick_user_id: bigint } }>).map(u => u.user.kick_user_id)
+        const kickUserIds = (topUsers as unknown as Array<{ user: { kick_user_id: bigint } }>).map(u => u.user.kick_user_id)
 
         const [msgCounts, msgWithEmotesCounts, engagementByUserType, lenAggByUser, streamsByUserSession] = await Promise.all([
             db.chatMessage.groupBy({
@@ -205,6 +205,7 @@ export async function GET(request: Request) {
         type TopUserEntry = {
             total_sweet_coins: number
             total_emotes: number
+            last_sweet_coin_earned_at: Date | null
             user: {
                 kick_user_id: bigint
                 username: string
@@ -213,7 +214,7 @@ export async function GET(request: Request) {
             }
         }
 
-        const users = (topUsers as TopUserEntry[])
+        const users = (topUsers as unknown as TopUserEntry[])
             .map((entry, idx) => {
                 const kickUserId = entry.user.kick_user_id
                 const key = kickUserId.toString()

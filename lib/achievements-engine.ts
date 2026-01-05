@@ -152,11 +152,11 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
   let isMonthlyLegend = false
   if (monthlyPointAggs.length > 0) {
     let maxSweetCoins = 0
-    for (const agg of monthlyPointAggs) {
+    for (const agg of monthlyPointAggs as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>) {
       const coins = agg._sum.sweet_coins_earned || 0
       if (coins > maxSweetCoins) maxSweetCoins = coins
     }
-    const topUsers = monthlyPointAggs.filter((agg) => (agg._sum.sweet_coins_earned || 0) === maxSweetCoins)
+    const topUsers = (monthlyPointAggs as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>).filter((agg) => (agg._sum.sweet_coins_earned || 0) === maxSweetCoins)
     isMonthlyLegend = topUsers.some((agg) => agg.user_id === auth.userId)
   }
 

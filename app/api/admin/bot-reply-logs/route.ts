@@ -104,7 +104,7 @@ export async function POST(request: Request) {
           total,
           last_24h: last24h,
           last_week: lastWeek,
-          by_type: byType.map(r => ({ type: r.reply_type, count: r._count })),
+          by_type: (byType as Array<{ reply_type: string; _count: number }>).map(r => ({ type: r.reply_type, count: r._count })),
           success_rate: successRate,
           avg_latency_ms: avgLatency._avg.latency_ms,
         },

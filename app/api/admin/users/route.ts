@@ -17,7 +17,7 @@ async function getClaimedAchievementCounts(userIds: bigint[]): Promise<Map<strin
     _count: { _all: true },
   })
 
-  return new Map(rows.map((r) => [r.user_id.toString(), r._count._all]))
+  return new Map((rows as Array<{ user_id: bigint; _count: { _all: number } }>).map((r) => [r.user_id.toString(), r._count._all]))
 }
 
 export async function GET(request: Request) {
@@ -101,7 +101,7 @@ export async function GET(request: Request) {
       },
     })
 
-    const sessionStatsMap = new Map(sessionStats.map(s => [s.user_id.toString(), s._count.id]))
+    const sessionStatsMap = new Map((sessionStats as Array<{ user_id: bigint; _count: { id: number } }>).map(s => [s.user_id.toString(), s._count.id]))
 
     // Duplicate detection: Find users sharing IP addresses
     const userIdsForDuplicates = users.map(u => u.id)
