@@ -1,8 +1,12 @@
 import { PrismaClient } from '@prisma/client'
+import { withAccelerate } from '@prisma/extension-accelerate'
 import { logErrorRateLimited } from './rate-limited-logger'
 
+// Extended Prisma Client type with Accelerate
+type PrismaClientWithAccelerate = ReturnType<typeof createPrismaClient>
+
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+  prisma: PrismaClientWithAccelerate | undefined
 }
 
 // Configure connection pooling for Railway PostgreSQL
@@ -24,13 +28,9 @@ const getDatabaseUrl = () => {
   return url
 }
 
-// CRITICAL: Always use singleton pattern in both dev and production
-// This prevents multiple PrismaClient instances from creating separate connection pools
-// Disable Prisma's built-in logging to prevent connection error spam
-// We handle errors with rate-limited logging in our code instead
-export const db =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+// Create Prisma Client with Accelerate extension
+function createPrismaClient() {
+  return new PrismaClient({
     log: [], // Disable all Prisma logging - we handle errors with rate-limited logger
     datasources: {
       db: {
@@ -42,7 +42,14 @@ export const db =
       maxWait: 5000, // Wait up to 5 seconds for transaction to start
       timeout: 15000, // Transaction timeout of 15 seconds
     },
-  })
+  }).$extends(withAccelerate())
+}
+
+// CRITICAL: Always use singleton pattern in both dev and production
+// This prevents multiple PrismaClient instances from creating separate connection pools
+// Disable Prisma's built-in logging to prevent connection error spam
+// We handle errors with rate-limited logging in our code instead
+export const db = globalForPrisma.prisma ?? createPrismaClient()
 
 // Always store in global to ensure singleton pattern works in production
 // Next.js in production can have multiple instances, but globalThis persists across them
