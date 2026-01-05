@@ -44,6 +44,7 @@ prisma/migrations/
 .env
 .env.production
 .env.local
+railway.env
 
 # Temp SQL files
 tmp_*.sql
