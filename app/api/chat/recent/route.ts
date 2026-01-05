@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { peekMessages } from '@/lib/message-buffer'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
+import { getAuthenticatedUser } from '@/lib/auth'
+import { validateApiKey } from '@/lib/api-key-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,9 +26,26 @@ function isVerifiedUser(username: string, badges: Array<{ type: string }> = []):
  * GET /api/chat/recent
  * Returns recent messages from Redis buffer (not yet flushed to PostgreSQL)
  * Used for hybrid loading to prevent message gaps on page load/reconnect
+ * 
+ * Authentication: Requires API key (?api_key=) OR authenticated session
+ * External tools: Use ?api_key=YOUR_API_SECRET_KEY
+ * Internal dashboard: Uses session cookies automatically
  */
 export async function GET(request: Request) {
     try {
+        // Allow external tools with API key
+        const hasValidApiKey = validateApiKey(request, 'chat')
+        
+        // Allow authenticated users (internal dashboard)
+        const auth = await getAuthenticatedUser(request)
+        
+        if (!hasValidApiKey && !auth) {
+            return NextResponse.json(
+                { error: 'Authentication required. Use api_key parameter or login.' },
+                { status: 401 }
+            )
+        }
+
         const { searchParams } = new URL(request.url)
         const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 200) // Cap at 200
         const broadcasterUserId = searchParams.get('broadcaster_user_id')

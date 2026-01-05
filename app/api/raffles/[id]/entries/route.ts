@@ -1,12 +1,28 @@
 import { db } from '@/lib/db'
 import { buildEntryRanges } from '@/lib/raffle-utils'
 import { NextResponse } from 'next/server'
+import { getAuthenticatedUser } from '@/lib/auth'
 
+/**
+ * GET /api/raffles/[id]/entries
+ * Get all entries for a raffle
+ * 
+ * Authentication: Requires authenticated session
+ */
 export async function GET(
     request: Request,
     { params }: { params: { id: string } }
 ) {
     try {
+        // Require authenticated session
+        const auth = await getAuthenticatedUser(request)
+        if (!auth) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            )
+        }
+
         const raffleId = BigInt(params.id)
         const entries = await db.raffleEntry.findMany({
             where: { raffle_id: raffleId },

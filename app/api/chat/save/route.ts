@@ -3,9 +3,13 @@ import { db } from '@/lib/db';
 import { logErrorRateLimited } from '@/lib/rate-limited-logger';
 import { resolveSessionForChat } from '@/lib/stream-session-manager';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
+
+// Internal webhook secret for server-to-server communication
+const INTERNAL_WEBHOOK_SECRET = process.env.INTERNAL_WEBHOOK_SECRET || ''
 
 // In-memory DB circuit breaker to avoid request storms when Postgres is down.
 // This is per-instance (fine) and intentionally simple.
@@ -82,6 +86,10 @@ async function getCachedResolvedSession(broadcasterUserId: bigint, messageTimest
  * 3. Check for active stream session (read-only)
  * 4. Enqueue job for worker
  * 5. Return immediately
+ *
+ * SECURITY: This endpoint requires either:
+ * - Authenticated user session (for frontend dashboard)
+ * - Internal webhook secret header (X-Internal-Secret) for server-to-server calls
  */
 
 // Helper function to extract emotes from message content [emote:ID:Name] format
@@ -117,6 +125,19 @@ function toFiniteInt(value: any): number | null {
 export async function POST(request: Request) {
     const startTime = Date.now()
     try {
+        // SECURITY: Allow authenticated users (frontend) OR internal webhook secret (server-to-server)
+        const providedSecret = request.headers.get('x-internal-secret')
+        const auth = await getAuthenticatedUser(request)
+        
+        const hasValidSecret = INTERNAL_WEBHOOK_SECRET && providedSecret === INTERNAL_WEBHOOK_SECRET
+        
+        if (!hasValidSecret && !auth) {
+            return NextResponse.json(
+                { error: 'Forbidden - Authentication required' },
+                { status: 403 }
+            )
+        }
+
         let body: any
         try {
             body = await request.json()

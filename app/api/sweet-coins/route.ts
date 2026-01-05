@@ -1,11 +1,34 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { memoryCache } from '@/lib/memory-cache'
+import { getAuthenticatedUser } from '@/lib/auth'
+import { validateApiKey } from '@/lib/api-key-auth'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * GET /api/sweet-coins
+ * Get user's sweet coins balance
+ * 
+ * Authentication: Requires API key (?api_key=) OR authenticated session
+ * External tools: Use ?api_key=YOUR_API_SECRET_KEY
+ * Internal dashboard: Uses session cookies automatically
+ */
 export async function GET(request: Request) {
     try {
+        // Allow external tools with API key
+        const hasValidApiKey = validateApiKey(request, 'sweet-coins')
+        
+        // Allow authenticated users (internal dashboard)
+        const auth = await getAuthenticatedUser(request)
+        
+        if (!hasValidApiKey && !auth) {
+            return NextResponse.json(
+                { error: 'Authentication required. Use api_key parameter or login.' },
+                { status: 401 }
+            )
+        }
+
         const { searchParams } = new URL(request.url)
         const kickUserId = searchParams.get('kick_user_id')
 

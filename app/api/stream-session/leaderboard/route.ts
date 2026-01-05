@@ -1,10 +1,11 @@
-import { isAdmin } from '@/lib/auth'
+import { isAdmin, getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { memoryCache } from '@/lib/memory-cache'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { NextResponse } from 'next/server'
 import { getSessionLeaderboard } from '@/lib/sweet-coins-redis'
 import { logger } from '@/lib/logger'
+import { validateApiKey } from '@/lib/api-key-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,11 @@ export const dynamic = 'force-dynamic'
  * Get top chatters for stream session
  * GET /api/stream-session/leaderboard?broadcaster_user_id=123&session_id=456
  * If session_id is provided, get leaderboard for that session (admin-only for past streams)
- * Otherwise, get leaderboard for active session (public)
+ * Otherwise, get leaderboard for active session
+ * 
+ * Authentication: Requires API key (?api_key=) OR authenticated session
+ * External tools: Use ?api_key=YOUR_API_SECRET_KEY
+ * Internal dashboard: Uses session cookies automatically
  */
 export async function GET(request: Request) {
     try {
@@ -20,6 +25,12 @@ export async function GET(request: Request) {
         const broadcasterUserId = searchParams.get('broadcaster_user_id')
         const sessionId = searchParams.get('session_id')
 
+        // Allow external tools with API key
+        const hasValidApiKey = validateApiKey(request, 'stream-leaderboard')
+        
+        // Allow authenticated users (internal dashboard)
+        const auth = await getAuthenticatedUser(request)
+        
         // If session_id is provided, this is a past stream - require admin access
         if (sessionId) {
             const adminCheck = await isAdmin(request)
@@ -27,6 +38,14 @@ export async function GET(request: Request) {
                 return NextResponse.json(
                     { error: 'Unauthorized - Admin access required for past stream leaderboards' },
                     { status: 403 }
+                )
+            }
+        } else {
+            // For active sessions, require either API key or authenticated session
+            if (!hasValidApiKey && !auth) {
+                return NextResponse.json(
+                    { error: 'Authentication required. Use api_key parameter or login.' },
+                    { status: 401 }
                 )
             }
         }

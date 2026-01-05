@@ -1,12 +1,28 @@
 import { getBroadcasterToken } from '@/lib/kick-api'
 import { NextResponse } from 'next/server'
+import { isAdmin } from '@/lib/auth'
 
 const KICK_API_BASE = process.env.KICK_API_BASE || 'https://api.kick.com/public/v1'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * GET /api/debug/check-live
+ * Debug endpoint to check Kick API livestream status
+ * 
+ * SECURITY: Admin-only endpoint
+ */
 export async function GET(request: Request) {
     try {
+        // Require admin access
+        const adminCheck = await isAdmin(request)
+        if (!adminCheck) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Admin access required' },
+                { status: 403 }
+            )
+        }
+
         const { searchParams } = new URL(request.url)
         const broadcasterId = searchParams.get('broadcaster_id')
 
