@@ -41,6 +41,9 @@ export async function GET(request: Request) {
                 instagram_connected: true,
                 instagram_username: true,
                 instagram_user_id: true,
+                razed_connected: true,
+                razed_username: true,
+                razed_user_id: true,
             },
         })
 
@@ -82,6 +85,12 @@ export async function GET(request: Request) {
                 username: user.instagram_username || undefined,
                 userId: user.instagram_user_id || undefined,
             },
+            {
+                provider: 'razed' as const,
+                connected: user.razed_connected ?? false,
+                username: user.razed_username || undefined,
+                userId: user.razed_user_id || undefined,
+            },
         ]
 
         if (DEBUG_CONNECTED_ACCOUNTS) {
@@ -91,13 +100,15 @@ export async function GET(request: Request) {
             const telegram = accounts.find(a => a.provider === 'telegram')
             const twitter = accounts.find(a => a.provider === 'twitter')
             const instagram = accounts.find(a => a.provider === 'instagram')
+            const razed = accounts.find(a => a.provider === 'razed')
             console.log(
                 `[CONNECTED ACCOUNTS] result kick_user_id=${kickUserId} username=${user.username}` +
                 ` kick=${kick?.connected ? '1' : '0'}` +
                 ` discord=${discord?.connected ? '1' : '0'}` +
                 ` telegram=${telegram?.connected ? '1' : '0'}` +
                 ` twitter=${twitter?.connected ? '1' : '0'}` +
-                ` instagram=${instagram?.connected ? '1' : '0'}`
+                ` instagram=${instagram?.connected ? '1' : '0'}` +
+                ` razed=${razed?.connected ? '1' : '0'}`
             )
         }
 

@@ -12,7 +12,14 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "diagnose:cloudflare": "node scripts/diagnose-cloudflare-502.js"
+    "diagnose:cloudflare": "node scripts/diagnose-cloudflare-502.js",
+    "test:razed:worker": "tsx scripts/test-razed-worker.ts",
+    "test:razed:verification": "tsx scripts/test-razed-verification.ts",
+    "test:razed:api": "tsx scripts/test-razed-api.ts",
+    "test:razed:db": "tsx scripts/test-razed-db.ts",
+    "test:razed:full": "tsx scripts/test-razed-full-flow.ts",
+    "test:razed:all": "npm run test:razed:verification && npm run test:razed:db",
+    "migrate:razed": "tsx scripts/apply-razed-migration.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.948.0",
@@ -23,12 +30,14 @@
     "pusher-js": "^8.4.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "tsx": "^4.7.0"
+    "tsx": "^4.7.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/ws": "^8.5.12",
     "autoprefixer": "^10.4.17",
     "dotenv": "^17.2.3",
     "eslint": "^8.57.1",

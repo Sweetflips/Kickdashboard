@@ -54,11 +54,14 @@ model User {
   instagram_user_id           String?
   instagram_username          String?
   instagram_access_token_hash String?
+  razed_user_id               String?
+  razed_username               String?
   kick_connected              Boolean   @default(true)
   discord_connected           Boolean   @default(false)
   telegram_connected          Boolean   @default(false)
   twitter_connected           Boolean   @default(false)
   instagram_connected         Boolean   @default(false)
+  razed_connected             Boolean   @default(false)
   is_admin                    Boolean   @default(false)
   is_excluded                 Boolean   @default(false)
   moderator_override          Boolean? // null = auto-detect, true = force on, false = force off
@@ -620,4 +623,20 @@ model BotReplyLog {
   @@index([broadcaster_user_id, created_at])
   @@index([reply_type, created_at])
   @@map("bot_reply_logs")
+}
+
+// Razed Account Verification - tracks chat-based verification codes
+model RazedVerification {
+  id                BigInt   @id @default(autoincrement())
+  kick_user_id      BigInt
+  razed_username    String
+  verification_code String   @unique
+  status            String   @default("pending") // pending, verified, expired
+  verified_at       DateTime?
+  expires_at        DateTime
+  created_at        DateTime @default(now())
+
+  @@index([verification_code])
+  @@index([status, expires_at])
+  @@map("razed_verifications")
 }

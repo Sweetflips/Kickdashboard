@@ -44,6 +44,10 @@ export async function POST(request: Request) {
             updateData.instagram_user_id = null
             updateData.instagram_username = null
             updateData.instagram_access_token_hash = null
+        } else if (provider === 'razed') {
+            updateData.razed_connected = false
+            updateData.razed_user_id = null
+            updateData.razed_username = null
         }
 
         await db.user.update({

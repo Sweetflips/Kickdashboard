@@ -234,6 +234,13 @@ async function ensureTables() {
     env: process.env
   });
 
+  // Start Razed worker (monitors Razed chat for verification codes)
+  console.log('🎮 Razed Worker: Starting (monitors Razed chat for verification)...');
+  const razedWorkerProcess = spawn('npx', ['tsx', 'scripts/razed-worker.ts'], {
+    stdio: 'inherit',
+    env: process.env
+  });
+
   console.log('');
   console.log('✅ Workers spawned successfully');
   console.log('   Waiting for database connections...');
@@ -243,9 +250,10 @@ async function ensureTables() {
   let sessionTrackerExited = !sessionTrackerEnabled;
   let pointWorkerExited = false;
   let redisSyncExited = false;
+  let razedWorkerExited = false;
 
   const checkExit = () => {
-    if (chatWorkerExited && sessionTrackerExited && pointWorkerExited && redisSyncExited) {
+    if (chatWorkerExited && sessionTrackerExited && pointWorkerExited && redisSyncExited && razedWorkerExited) {
       healthServer.close(() => {
         console.log('✅ Health check server closed');
         process.exit(0);
@@ -290,8 +298,18 @@ async function ensureTables() {
       chatWorkerProcess.kill('SIGTERM');
       if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
       pointWorkerProcess.kill('SIGTERM');
+      razedWorkerProcess.kill('SIGTERM');
       healthServer.close();
       process.exit(1);
+    }
+    checkExit();
+  });
+
+  razedWorkerProcess.on('exit', (code) => {
+    razedWorkerExited = true;
+    if (code !== 0 && code !== null) {
+      console.error(`⚠️ Razed worker exited with code ${code}`);
+      // Don't exit immediately - let other workers continue
     }
     checkExit();
   });
@@ -300,6 +318,8 @@ async function ensureTables() {
     console.error('❌ Failed to start chat worker:', err.message);
     if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
     pointWorkerProcess.kill('SIGTERM');
+    redisSyncProcess.kill('SIGTERM');
+    razedWorkerProcess.kill('SIGTERM');
     healthServer.close();
     process.exit(1);
   });
@@ -309,6 +329,8 @@ async function ensureTables() {
       console.error('❌ Failed to start session tracker:', err.message);
       chatWorkerProcess.kill('SIGTERM');
       pointWorkerProcess.kill('SIGTERM');
+      redisSyncProcess.kill('SIGTERM');
+      razedWorkerProcess.kill('SIGTERM');
       healthServer.close();
       process.exit(1);
     });
@@ -319,6 +341,7 @@ async function ensureTables() {
     chatWorkerProcess.kill('SIGTERM');
     if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
     redisSyncProcess.kill('SIGTERM');
+    razedWorkerProcess.kill('SIGTERM');
     healthServer.close();
     process.exit(1);
   });
@@ -328,6 +351,17 @@ async function ensureTables() {
     chatWorkerProcess.kill('SIGTERM');
     if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
     pointWorkerProcess.kill('SIGTERM');
+    razedWorkerProcess.kill('SIGTERM');
+    healthServer.close();
+    process.exit(1);
+  });
+
+  razedWorkerProcess.on('error', (err) => {
+    console.error('❌ Failed to start Razed worker:', err.message);
+    chatWorkerProcess.kill('SIGTERM');
+    if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
+    pointWorkerProcess.kill('SIGTERM');
+    redisSyncProcess.kill('SIGTERM');
     healthServer.close();
     process.exit(1);
   });
@@ -342,6 +376,7 @@ async function ensureTables() {
     if (sessionTrackerProcess) sessionTrackerProcess.kill(signal);
     pointWorkerProcess.kill(signal);
     redisSyncProcess.kill(signal);
+    razedWorkerProcess.kill(signal);
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));

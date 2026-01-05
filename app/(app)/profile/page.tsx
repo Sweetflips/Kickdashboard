@@ -18,7 +18,7 @@ interface UserData {
 type TabType = 'general' | 'preferences' | 'connected' | 'achievements' | 'security' | 'admin_tools'
 
 interface ConnectedAccount {
-    provider: 'kick' | 'discord' | 'telegram' | 'twitter' | 'instagram'
+    provider: 'kick' | 'discord' | 'telegram' | 'twitter' | 'instagram' | 'razed'
     connected: boolean
     username?: string
     userId?: string
@@ -40,6 +40,12 @@ export default function ProfilePage() {
     const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([])
     const [loadingAccounts, setLoadingAccounts] = useState(false)
     const [telegramAuthUrl, setTelegramAuthUrl] = useState<string | null>(null)
+    const [razedModalOpen, setRazedModalOpen] = useState(false)
+    const [razedUsername, setRazedUsername] = useState('')
+    const [razedVerificationCode, setRazedVerificationCode] = useState<string | null>(null)
+    const [razedVerificationStatus, setRazedVerificationStatus] = useState<'pending' | 'verified' | 'expired' | null>(null)
+    const [razedVerificationExpiresAt, setRazedVerificationExpiresAt] = useState<Date | null>(null)
+    const [razedPollingInterval, setRazedPollingInterval] = useState<NodeJS.Timeout | null>(null)
     const [achievementStatuses, setAchievementStatuses] = useState<Record<string, AchievementRuntimeStatus>>({})
     const [loadingAchievements, setLoadingAchievements] = useState(false)
     const [connectAchievementBanner, setConnectAchievementBanner] = useState<{ visible: boolean; label: string } | null>(null)
@@ -170,9 +176,16 @@ export default function ProfilePage() {
         }
     }
 
-    const handleConnectAccount = async (provider: 'discord' | 'telegram' | 'twitter' | 'instagram') => {
+    const handleConnectAccount = async (provider: 'discord' | 'telegram' | 'twitter' | 'instagram' | 'razed') => {
         if (!userData?.id) {
-            showToast('User data not available', 'error')
+            console.error('[CONNECT] userData.id is missing:', { userData, provider })
+            showToast('User data not available. Please refresh the page.', 'error')
+            return
+        }
+
+        if (provider === 'razed') {
+            // For Razed, open the modal (user will enter username and click Generate Code)
+            setRazedModalOpen(true)
             return
         }
 
@@ -207,7 +220,7 @@ export default function ProfilePage() {
         }
     }
 
-    const handleDisconnectAccount = async (provider: 'discord' | 'telegram' | 'twitter' | 'instagram') => {
+    const handleDisconnectAccount = async (provider: 'discord' | 'telegram' | 'twitter' | 'instagram' | 'razed') => {
         if (!userData?.id) return
 
         // Use a custom confirmation toast-like approach or proceed directly
@@ -230,6 +243,108 @@ export default function ProfilePage() {
         } catch (error) {
             console.error('Failed to disconnect account:', error)
             showToast('Failed to disconnect account', 'error')
+        }
+    }
+
+    const handleRazedVerification = async () => {
+        if (!razedUsername.trim()) {
+            showToast('Please enter your Razed username', 'error')
+            return
+        }
+
+        if (!userData?.id) {
+            console.error('[RAZED] userData.id is missing:', userData)
+            showToast('User data not available. Please refresh the page.', 'error')
+            return
+        }
+
+        const requestBody = {
+            kick_user_id: userData.id,
+            razed_username: razedUsername.trim(),
+        }
+
+        console.log('[RAZED] Sending verification request:', requestBody)
+
+        try {
+            const response = await fetch('/api/oauth/razed/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                setRazedVerificationCode(data.verification_code)
+                setRazedVerificationStatus('pending')
+                setRazedVerificationExpiresAt(new Date(data.expires_at))
+                
+                // Start polling for verification status
+                startRazedPolling(data.verification_code)
+            } else {
+                const errorData = await response.json().catch(() => ({ error: 'Failed to initiate verification' }))
+                showToast(errorData.error || 'Failed to initiate verification', 'error')
+            }
+        } catch (error) {
+            console.error('Error initiating Razed verification:', error)
+            showToast('Failed to initiate verification', 'error')
+        }
+    }
+
+    const startRazedPolling = (code: string) => {
+        // Clear any existing polling
+        if (razedPollingInterval) {
+            clearInterval(razedPollingInterval)
+        }
+
+        const interval = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/oauth/razed/status?code=${encodeURIComponent(code)}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setRazedVerificationStatus(data.status)
+
+                    if (data.status === 'verified') {
+                        clearInterval(interval)
+                        setRazedPollingInterval(null)
+                        showToast('Razed account verified successfully!', 'success')
+                        await fetchConnectedAccounts()
+                        setTimeout(() => {
+                            setRazedModalOpen(false)
+                            setRazedVerificationCode(null)
+                            setRazedVerificationStatus(null)
+                            setRazedVerificationExpiresAt(null)
+                            setRazedUsername('')
+                        }, 1500)
+                    } else if (data.status === 'expired') {
+                        clearInterval(interval)
+                        setRazedPollingInterval(null)
+                        showToast('Verification code expired. Please try again.', 'error')
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling verification status:', error)
+            }
+        }, 3000) // Poll every 3 seconds
+
+        setRazedPollingInterval(interval)
+    }
+
+    const closeRazedModal = () => {
+        if (razedPollingInterval) {
+            clearInterval(razedPollingInterval)
+            setRazedPollingInterval(null)
+        }
+        setRazedModalOpen(false)
+        setRazedVerificationCode(null)
+        setRazedVerificationStatus(null)
+        setRazedVerificationExpiresAt(null)
+        setRazedUsername('')
+    }
+
+    const copyVerificationCode = () => {
+        if (razedVerificationCode) {
+            navigator.clipboard.writeText(razedVerificationCode)
+            showToast('Verification code copied to clipboard', 'success')
         }
     }
 
@@ -325,6 +440,15 @@ export default function ProfilePage() {
             setTelegramAuthUrl(null)
         }
     }, [connectedAccounts])
+
+    useEffect(() => {
+        // Cleanup polling interval on unmount
+        return () => {
+            if (razedPollingInterval) {
+                clearInterval(razedPollingInterval)
+            }
+        }
+    }, [razedPollingInterval])
 
     useEffect(() => {
         // Handle URL parameters for OAuth callbacks
@@ -686,6 +810,7 @@ export default function ProfilePage() {
     const initials = username.charAt(0).toUpperCase()
 
     return (
+        <>
         <div className="space-y-6">
                 {/* Header */}
                 <div className="bg-white dark:bg-kick-surface rounded-lg shadow-sm border border-gray-200 dark:border-kick-border p-6">
@@ -1187,16 +1312,10 @@ export default function ProfilePage() {
                                                             <div className="p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border">
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex items-center gap-4">
-                                                                        <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
-                                                                            <img
-                                                                                src="/icons/discord.png"
-                                                                                alt="Discord connected"
-                                                                                width="16"
-                                                                                height="16"
-                                                                                className="object-contain w-4 h-4"
-                                                                                title="Connected via Discord"
-                                                                                style={{ width: '21px', height: '21px' }}
-                                                                            />
+                                                                        <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center bg-[#5865F2]">
+                                                                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                                                                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/>
+                                                                            </svg>
                                                                         </div>
                                                                         <div>
                                                                             <p className="text-sm font-medium text-gray-900 dark:text-kick-text">Discord</p>
@@ -1245,16 +1364,10 @@ export default function ProfilePage() {
                                                             <div className="p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border">
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex items-center gap-4">
-                                                                        <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
-                                                                            <img
-                                                                                src="/logos/telegram-logo.png"
-                                                                                alt="Telegram connected"
-                                                                                width="18"
-                                                                                height="18"
-                                                                                className="object-contain"
-                                                                                title="Connected via Telegram"
-                                                                                style={{ width: '32px', height: '32px' }}
-                                                                            />
+                                                                        <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center bg-[#0088cc]">
+                                                                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                                                                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16l-1.704 8.04c-.128.576-.456.718-.927.446l-2.56-1.888-1.234 1.184c-.14.14-.258.258-.53.258l.184-2.608 4.736-4.28c.206-.184-.046-.286-.32-.104l-5.856 3.688-2.52-.788c-.54-.168-.554-.54.112-.804l9.856-3.8c.448-.16.84.112.696.696z"/>
+                                                                            </svg>
                                                                         </div>
                                                                         <div>
                                                                             <p className="text-sm font-medium text-gray-900 dark:text-kick-text">Telegram</p>
@@ -1428,6 +1541,54 @@ export default function ProfilePage() {
                                                                                 <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                                                                             </svg>
                                                                             Connect Instagram
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })()}
+
+                                                    {/* Razed Account */}
+                                                    {(() => {
+                                                        const razed = connectedAccounts.find(acc => acc.provider === 'razed')
+                                                        return (
+                                                            <div className="p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center bg-gradient-to-br from-orange-500 to-red-600">
+                                                                            <span className="text-white font-bold text-xl">R</span>
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-sm font-medium text-gray-900 dark:text-kick-text">Razed</p>
+                                                                            {razed?.connected ? (
+                                                                                <p className="text-xs text-gray-600 dark:text-kick-text-secondary">
+                                                                                    {razed.username || 'Connected'}
+                                                                                </p>
+                                                                            ) : (
+                                                                                <p className="text-xs text-gray-600 dark:text-kick-text-secondary">
+                                                                                    Not connected
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    {razed?.connected ? (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (confirm('Are you sure you want to disconnect your Razed account?')) {
+                                                                                    handleDisconnectAccount('razed')
+                                                                                }
+                                                                            }}
+                                                                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors text-xs font-medium"
+                                                                        >
+                                                                            Disconnect
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => handleConnectAccount('razed')}
+                                                                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-md transition-colors text-xs font-medium"
+                                                                        >
+                                                                            <span className="font-bold">R</span>
+                                                                            Connect Razed
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -1815,5 +1976,131 @@ export default function ProfilePage() {
                     </div>
                 )}
             </div>
+
+            {/* Razed Verification Modal */}
+            {razedModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-kick-surface rounded-lg shadow-xl max-w-md w-full p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-kick-text">Connect Razed Account</h3>
+                            <button
+                                onClick={closeRazedModal}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {!razedVerificationCode ? (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-600 dark:text-kick-text-secondary">
+                                    Enter your Razed username to receive a verification code. You'll need to send this code in Razed chat to verify your account.
+                                </p>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-900 dark:text-kick-text mb-2">
+                                        Razed Username
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={razedUsername}
+                                        onChange={(e) => setRazedUsername(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && razedUsername.trim()) {
+                                                handleRazedVerification()
+                                            }
+                                        }}
+                                        placeholder="Enter your Razed username"
+                                        className="w-full px-4 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text focus:outline-none focus:ring-2 focus:ring-kick-purple"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleRazedVerification}
+                                        disabled={!razedUsername.trim()}
+                                        className="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                    >
+                                        Generate Code
+                                    </button>
+                                    <button
+                                        onClick={closeRazedModal}
+                                        className="px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-surface transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="bg-kick-purple/10 dark:bg-kick-purple/20 border border-kick-purple/30 dark:border-kick-purple/50 rounded-lg p-4">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-kick-text mb-2">
+                                        Send this code in Razed chat:
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <code className="flex-1 px-3 py-2 bg-white dark:bg-kick-dark border border-gray-300 dark:border-kick-border rounded-lg text-lg font-mono font-bold text-gray-900 dark:text-kick-text">
+                                            {razedVerificationCode}
+                                        </code>
+                                        <button
+                                            onClick={copyVerificationCode}
+                                            className="px-3 py-2 bg-kick-purple hover:bg-kick-purple-dark text-white rounded-lg transition-colors text-sm font-medium"
+                                        >
+                                            Copy
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {razedVerificationExpiresAt && (
+                                    <div className="text-xs text-gray-600 dark:text-kick-text-secondary text-center">
+                                        Expires in {Math.max(0, Math.floor((razedVerificationExpiresAt.getTime() - Date.now()) / 1000 / 60))} minutes
+                                    </div>
+                                )}
+
+                                {razedVerificationStatus === 'pending' && (
+                                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-kick-text-secondary">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-kick-purple"></div>
+                                        <span>Waiting for verification...</span>
+                                    </div>
+                                )}
+
+                                {razedVerificationStatus === 'verified' && (
+                                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                                        <p className="text-sm font-medium text-green-800 dark:text-green-200 text-center">
+                                            ✓ Account verified successfully!
+                                        </p>
+                                    </div>
+                                )}
+
+                                {razedVerificationStatus === 'expired' && (
+                                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                                        <p className="text-sm font-medium text-red-800 dark:text-red-200 text-center mb-2">
+                                            Verification code expired
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                setRazedVerificationCode(null)
+                                                setRazedVerificationStatus(null)
+                                                setRazedVerificationExpiresAt(null)
+                                            }}
+                                            className="w-full px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-lg transition-colors font-medium"
+                                        >
+                                            Generate New Code
+                                        </button>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={closeRazedModal}
+                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-surface transition-colors"
+                                >
+                                    {razedVerificationStatus === 'verified' ? 'Close' : 'Cancel'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </>
     )
 }
