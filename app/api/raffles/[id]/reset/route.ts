@@ -14,9 +14,9 @@ export async function POST(
         const raffleId = BigInt(params.id)
 
         // Reset draw fields
-        await db.raffle.update({ 
-            where: { id: raffleId }, 
-            data: { draw_seed: null, drawn_at: null, status: 'active' } 
+        await db.raffle.update({
+            where: { id: raffleId },
+            data: { draw_seed: null, drawn_at: null, status: 'active' }
         })
 
         return NextResponse.json({ success: true })

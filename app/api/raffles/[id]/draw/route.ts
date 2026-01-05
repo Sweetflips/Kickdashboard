@@ -37,7 +37,6 @@ export async function POST(
                 status: true,
                 prize_description: true,
                 number_of_winners: true,
-                rigging_enabled: true,
             },
         })
 
@@ -84,7 +83,6 @@ export async function POST(
                 ticket_range_start: w.ticketRangeStart,
                 ticket_range_end: w.ticketRangeEnd,
                 spin_number: w.spinNumber,
-                is_rigged: w.isRigged,
             })),
             draw_seed: result.drawSeed,
         })

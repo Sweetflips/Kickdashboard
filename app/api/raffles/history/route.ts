@@ -40,20 +40,6 @@ export async function GET(request: Request) {
         const raffles = await db.raffle.findMany({
             where,
             include: {
-                winners: {
-                    include: {
-                        entry: {
-                            include: {
-                                user: {
-                                    select: {
-                                        username: true,
-                                        kick_user_id: true,
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
                 _count: {
                     select: {
                         entries: true,
@@ -82,11 +68,7 @@ export async function GET(request: Request) {
                     end_at: raffle.end_at.toISOString(),
                     total_tickets_sold: totalTickets,
                     total_entries: raffle._count.entries,
-                    winners: raffle.winners.map(w => ({
-                        username: w.entry.user.username,
-                        kick_user_id: w.entry.user.kick_user_id.toString(),
-                        tickets: w.entry.tickets,
-                    })),
+                    winners: [],
                     draw_seed: raffle.draw_seed,
                     drawn_at: raffle.drawn_at?.toISOString() || null,
                 }

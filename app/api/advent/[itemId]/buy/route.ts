@@ -215,7 +215,7 @@ export async function POST(
     // Handle connection reset/aborted requests gracefully
     // These happen when the client disconnects before the request completes
     const isConnectionError = error instanceof Error && (
-      ('code' in error && (error as any).code === 'ECONNRESET') || 
+      ('code' in error && (error as any).code === 'ECONNRESET') ||
       error.message === 'aborted' ||
       error.message.includes('aborted')
     )

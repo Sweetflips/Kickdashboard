@@ -1,15 +1,9 @@
 'use client'
 
-import RaffleWheel from '@/components/RaffleWheel'
 import { Toast } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { authenticatedFetchJson, getKickUserIdFromCookie } from '@/lib/api-client'
-
-type OverlayExamples = {
-    raffleOverlayUrlTemplate: string
-    globalOverlayUrlTemplate: string
-}
 
 interface Raffle {
     id: string
@@ -24,24 +18,6 @@ interface Raffle {
     drawn_at?: string
     hidden?: boolean
     number_of_winners?: number
-    rigging_enabled?: boolean
-    wheel_background_url?: string | null
-    center_logo_url?: string | null
-    slice_opacity?: number
-}
-
-interface Winner {
-    id: string
-    username: string
-    tickets: number
-    selected_at?: string
-    selected_ticket_index?: number | null
-    ticket_range_start?: number
-    ticket_range_end?: number
-    spin_number?: number | null
-    is_rigged?: boolean
-    user_id?: string
-    entry_id?: string
 }
 
 export default function AdminRafflesPage() {
@@ -53,15 +29,6 @@ export default function AdminRafflesPage() {
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [editingRaffle, setEditingRaffle] = useState<Raffle | null>(null)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-    const [viewingWinners, setViewingWinners] = useState<{ raffle: Raffle; winners: Winner[] } | null>(null)
-    const [entriesForWheel, setEntriesForWheel] = useState<any[]>([])
-    const [loadingWinners, setLoadingWinners] = useState(false)
-    const [overlayKey, setOverlayKey] = useState<string | null>(null)
-    const [overlayExamples, setOverlayExamples] = useState<OverlayExamples | null>(null)
-    const [overlayKeyLoading, setOverlayKeyLoading] = useState(false)
-    const [showOverlayKey, setShowOverlayKey] = useState(false)
-    const [selectedOverlayRaffleId, setSelectedOverlayRaffleId] = useState<string>('')
-
     useEffect(() => {
         checkAdmin()
     }, [])
@@ -71,54 +38,6 @@ export default function AdminRafflesPage() {
             fetchRaffles()
         }
     }, [selectedStatus, userData])
-
-    useEffect(() => {
-        if (!selectedOverlayRaffleId && raffles.length > 0) {
-            setSelectedOverlayRaffleId(raffles[0].id)
-        } else if (selectedOverlayRaffleId && raffles.length > 0) {
-            const stillExists = raffles.some((r) => r.id === selectedOverlayRaffleId)
-            if (!stillExists) setSelectedOverlayRaffleId(raffles[0].id)
-        }
-    }, [raffles, selectedOverlayRaffleId])
-
-    useEffect(() => {
-        if (userData?.is_admin) {
-            fetchOverlayKey()
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userData])
-
-    const fetchOverlayKey = async () => {
-        try {
-            setOverlayKeyLoading(true)
-            const kickUserId = getKickUserIdFromCookie()
-            const data = await authenticatedFetchJson<{ key?: string; overlayExamples?: OverlayExamples }>('/api/admin/overlay-key', {}, kickUserId || undefined)
-            setOverlayKey(data?.key || null)
-            setOverlayExamples(data?.overlayExamples || null)
-        } catch {
-            setOverlayKey(null)
-            setOverlayExamples(null)
-        } finally {
-            setOverlayKeyLoading(false)
-        }
-    }
-
-    const getPublicOrigin = () => {
-        if (typeof window === 'undefined') return ''
-        return window.location.origin
-    }
-
-    const buildGlobalOverlayUrl = () => {
-        if (!overlayKey) return ''
-        const origin = getPublicOrigin()
-        return `${origin}/wheel?key=${encodeURIComponent(overlayKey)}`
-    }
-
-    const buildRaffleOverlayUrl = (raffleId: string) => {
-        if (!overlayKey) return ''
-        const origin = getPublicOrigin()
-        return `${origin}/raffles/${raffleId}/wheel?overlay=1&key=${encodeURIComponent(overlayKey)}`
-    }
 
     const copyText = async (text: string, successMessage: string) => {
         try {
@@ -191,55 +110,9 @@ export default function AdminRafflesPage() {
             }, kickUserId || undefined)
             setToast({ message: '🎉 Winners have been drawn successfully.', type: 'success' })
             await fetchRaffles()
-            // If we got winners back, show them in modal (include metadata for wheel animation)
-            if (data && data.winners && data.winners.length > 0) {
-                // Fetch raffle metadata for modal
-                const raffleData = await authenticatedFetchJson<{ raffle: Raffle }>(`/api/raffles/${id}`, {}, kickUserId || undefined).catch(() => null)
-                // Find raffle from existing list as fallback
-                const existingRaffle = raffles.find(r => r.id === id)
-                const raffleForModal: Raffle = raffleData?.raffle || existingRaffle || {
-                    id,
-                    title: 'Unknown Raffle',
-                    type: 'general',
-                    status: 'completed',
-                    start_at: new Date().toISOString(),
-                    end_at: new Date().toISOString(),
-                    total_entries: 0,
-                    prize_description: '',
-                }
-                setViewingWinners({ raffle: raffleForModal, winners: data.winners.map((w: any) => ({
-                    id: w.entry_id,
-                    username: w.username,
-                    user_id: w.user_id,
-                    tickets: w.tickets,
-                    selected_ticket_index: w.selected_ticket_index,
-                    ticket_range_start: w.ticket_range_start,
-                    ticket_range_end: w.ticket_range_end,
-                    spin_number: w.spin_number,
-                    is_rigged: w.is_rigged,
-                })) })
-            }
         } catch (error: any) {
             console.error('Error drawing winners:', error)
             setToast({ message: error?.data?.error || error?.message || 'Failed to draw winners. Try again or contact support.', type: 'error' })
-        }
-    }
-
-    const handleViewWinners = async (raffle: Raffle) => {
-        try {
-            setLoadingWinners(true)
-            const kickUserId = getKickUserIdFromCookie()
-            const data = await authenticatedFetchJson<{ winners: Winner[] }>(`/api/raffles/${raffle.id}/winners`, {}, kickUserId || undefined)
-            setViewingWinners({ raffle, winners: data.winners || [] })
-
-            // Load entries for wheel
-            const entriesData = await authenticatedFetchJson<{ entries: any[] }>(`/api/raffles/${raffle.id}/entries`, {}, kickUserId || undefined).catch(() => ({ entries: [] }))
-            setEntriesForWheel(entriesData.entries || [])
-        } catch (error: any) {
-            console.error('Error fetching winners:', error)
-            setToast({ message: error?.data?.error || error?.message || 'Failed to fetch winners', type: 'error' })
-        } finally {
-            setLoadingWinners(false)
         }
     }
 
@@ -252,46 +125,6 @@ export default function AdminRafflesPage() {
             await fetchRaffles()
         } catch (err: any) {
             setToast({ message: err?.data?.error || err?.message || 'Failed to reset draw', type: 'error' })
-        }
-    }
-
-    const handleRemoveTicketInstance = async (raffleId: string, entryId: string) => {
-        if (!confirm('Remove this ticket instance?')) return
-        try {
-            const kickUserId = getKickUserIdFromCookie()
-            await authenticatedFetchJson(`/api/raffles/${raffleId}/entries/${entryId}/remove`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ count: 1 }),
-            }, kickUserId || undefined)
-            setToast({ message: 'Ticket instance removed.', type: 'success' })
-            await fetchRaffles()
-            if (viewingWinners) {
-                // refresh entries for wheel to update slices
-                const entriesData = await authenticatedFetchJson<{ entries: any[] }>(`/api/raffles/${viewingWinners.raffle.id}/entries`, {}, kickUserId || undefined).catch(() => ({ entries: [] }))
-                setEntriesForWheel(entriesData.entries || [])
-            }
-        } catch (err: any) {
-            setToast({ message: err?.data?.error || err?.message || 'Failed to remove ticket', type: 'error' })
-        }
-    }
-
-    const handleRemoveAllInstances = async (raffleId: string, entryId: string) => {
-        if (!confirm('Remove all instances for this user?')) return
-        try {
-            const kickUserId = getKickUserIdFromCookie()
-            await authenticatedFetchJson(`/api/raffles/${raffleId}/entries/${entryId}/remove-all`, {
-                method: 'POST',
-            }, kickUserId || undefined)
-            setToast({ message: 'All instances removed for this user.', type: 'success' })
-            await fetchRaffles()
-            if (viewingWinners) {
-                // refresh entries for wheel to update slices
-                const entriesData = await authenticatedFetchJson<{ entries: any[] }>(`/api/raffles/${viewingWinners.raffle.id}/entries`, {}, kickUserId || undefined).catch(() => ({ entries: [] }))
-                setEntriesForWheel(entriesData.entries || [])
-            }
-        } catch (err: any) {
-            setToast({ message: err?.data?.error || err?.message || 'Failed to remove instances', type: 'error' })
         }
     }
 
@@ -381,115 +214,6 @@ export default function AdminRafflesPage() {
                     >
                         + Create Raffle
                     </button>
-                </div>
-
-                {/* OBS Overlay Access Key */}
-                <div className="bg-white dark:bg-kick-surface rounded-xl border border-gray-200 dark:border-kick-border p-6">
-                    <div className="flex items-start justify-between gap-4">
-                        <div>
-                            <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text">OBS Overlay Access Key</h2>
-                            <p className="text-small text-gray-600 dark:text-kick-text-secondary mt-1">
-                                Use this key in OBS Browser Sources for the raffle wheel overlay.
-                            </p>
-                        </div>
-                        <button
-                            onClick={fetchOverlayKey}
-                            className="px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-dark transition-colors text-sm font-medium disabled:opacity-50"
-                            disabled={overlayKeyLoading}
-                        >
-                            {overlayKeyLoading ? 'Refreshing…' : 'Refresh'}
-                        </button>
-                    </div>
-
-                    <div className="mt-4 space-y-4">
-                        <div>
-                            <p className="text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-2">Overlay Key</p>
-                            <div className="flex items-center gap-2">
-                                <code className="flex-1 px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-sm font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border">
-                                    {overlayKeyLoading ? (
-                                        <span className="text-gray-500 dark:text-kick-text-muted">Loading...</span>
-                                    ) : showOverlayKey && overlayKey ? (
-                                        overlayKey
-                                    ) : overlayKey ? (
-                                        '•'.repeat(64)
-                                    ) : (
-                                        <span className="text-gray-500 dark:text-kick-text-muted">Not available</span>
-                                    )}
-                                </code>
-                                {overlayKey && (
-                                    <>
-                                        <button
-                                            onClick={() => setShowOverlayKey(!showOverlayKey)}
-                                            className="px-4 py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-border transition-colors text-sm font-medium"
-                                        >
-                                            {showOverlayKey ? 'Hide' : 'Show'}
-                                        </button>
-                                        <button
-                                            onClick={() => navigator.clipboard.writeText(overlayKey)}
-                                            className="px-4 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 transition-colors text-sm font-medium"
-                                        >
-                                            Copy
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        {(overlayKey && overlayExamples) && (
-                            <div>
-                                <p className="text-sm font-medium text-gray-700 dark:text-kick-text-secondary mb-2">Example OBS Browser Source URLs</p>
-                                <div className="space-y-2">
-                                    <div>
-                                        <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-1">Per-raffle overlay:</p>
-                                        {raffles.length > 0 ? (
-                                            <div className="space-y-2">
-                                                <div className="flex items-center gap-2">
-                                                    <select
-                                                        value={selectedOverlayRaffleId}
-                                                        onChange={(e) => setSelectedOverlayRaffleId(e.target.value)}
-                                                        className="px-3 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border"
-                                                    >
-                                                        {raffles.map((r) => (
-                                                            <option key={r.id} value={r.id}>
-                                                                {r.title}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    <button
-                                                        onClick={() => copyText(buildRaffleOverlayUrl(selectedOverlayRaffleId), 'Copied per-raffle OBS URL')}
-                                                        className="px-3 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 transition-colors text-xs font-medium"
-                                                    >
-                                                        Copy
-                                                    </button>
-                                                </div>
-                                                <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
-                                                    {buildRaffleOverlayUrl(selectedOverlayRaffleId)}
-                                                </code>
-                                            </div>
-                                        ) : (
-                                            <code className="block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
-                                                {overlayExamples.raffleOverlayUrlTemplate}
-                                            </code>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500 dark:text-kick-text-muted mb-1">Global wheel overlay:</p>
-                                        <div className="flex items-center gap-2">
-                                            <code className="flex-1 block px-4 py-2 bg-gray-100 dark:bg-kick-surface-hover rounded-lg text-xs font-mono text-gray-900 dark:text-kick-text border border-gray-200 dark:border-kick-border break-all">
-                                                {buildGlobalOverlayUrl() || overlayExamples.globalOverlayUrlTemplate}
-                                            </code>
-                                            <button
-                                                onClick={() => copyText(buildGlobalOverlayUrl() || overlayExamples.globalOverlayUrlTemplate, 'Copied global OBS URL')}
-                                                className="px-3 py-2 bg-kick-purple text-white rounded-lg hover:bg-kick-purple/90 transition-colors text-xs font-medium"
-                                            >
-                                                Copy
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
                 </div>
 
                 {/* Filters */}
@@ -598,15 +322,6 @@ export default function AdminRafflesPage() {
                                                 >
                                                     Edit
                                                 </button>
-                                                {overlayKey && (
-                                                    <button
-                                                        onClick={() => copyText(buildRaffleOverlayUrl(raffle.id), 'Copied per-raffle OBS URL')}
-                                                        className="px-3 py-1 text-xs bg-kick-purple text-white rounded hover:bg-kick-purple/90"
-                                                        title="Copy OBS Browser Source URL for this raffle overlay"
-                                                    >
-                                                        Copy OBS URL
-                                                    </button>
-                                                )}
                                                 {(raffle.status === 'active' || raffle.status === 'upcoming') && (
                                                     <button
                                                         onClick={() => handleEndRaffle(raffle.id)}
@@ -624,15 +339,6 @@ export default function AdminRafflesPage() {
                                                     </button>
                                                 )}
                                                 {raffle.status === 'completed' && raffle.drawn_at && (
-                                                    <button
-                                                        onClick={() => handleViewWinners(raffle)}
-                                                        disabled={loadingWinners}
-                                                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                                                    >
-                                                        {loadingWinners ? 'Loading...' : 'View Winners'}
-                                                    </button>
-                                                )}
-                                                    {raffle.status === 'completed' && raffle.drawn_at && (
                                                         <button onClick={() => handleResetDraw(raffle.id)} className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">Reset Draw</button>
                                                     )}
                                                 {(raffle.status === 'completed' || raffle.status === 'cancelled') && (
@@ -670,88 +376,6 @@ export default function AdminRafflesPage() {
                 />
             )}
 
-            {/* View Winners Modal */}
-            {viewingWinners && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-kick-surface rounded-xl max-w-lg w-full max-h-[80vh] overflow-hidden">
-                        <div className="p-6 border-b border-gray-200 dark:border-kick-border">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h2 className="text-h3 font-semibold text-gray-900 dark:text-kick-text">
-                                        🎉 Raffle Winners
-                                    </h2>
-                                    <p className="text-small text-gray-600 dark:text-kick-text-secondary mt-1">
-                                        {viewingWinners.raffle.title}
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={() => setViewingWinners(null)}
-                                    className="text-gray-500 hover:text-gray-700 dark:text-kick-text-secondary dark:hover:text-kick-text"
-                                >
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                        <div className="p-6 overflow-y-auto max-h-[60vh]">
-                            {entriesForWheel.length > 0 && (
-                                <div className="mb-4 flex justify-center">
-                                    <RaffleWheel entries={entriesForWheel as any} totalTickets={entriesForWheel?.length > 0 ? entriesForWheel[entriesForWheel.length - 1].range_end : 0} targetIndex={viewingWinners?.winners?.[0]?.selected_ticket_index ?? null} backgroundImageUrl={viewingWinners?.raffle?.wheel_background_url || null} centerLogoUrl={viewingWinners?.raffle?.center_logo_url || null} sliceOpacity={Number(viewingWinners?.raffle?.slice_opacity || 0.5)} />
-                                </div>
-                            )}
-                            {viewingWinners.winners.length === 0 ? (
-                                <p className="text-center text-gray-500 dark:text-kick-text-secondary py-8">
-                                    No winners have been drawn yet.
-                                </p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {viewingWinners.winners.map((winner, index) => (
-                                        <div
-                                            key={winner.id}
-                                            className="flex items-center justify-between p-4 bg-gray-50 dark:bg-kick-surface-hover rounded-lg"
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-2xl">
-                                                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏆'}
-                                                </span>
-                                                <div>
-                                                    <p className="font-semibold text-gray-900 dark:text-kick-text">
-                                                        {winner.username}
-                                                    </p>
-                                                    <p className="text-small text-gray-500 dark:text-kick-text-secondary">
-                                                        {winner.tickets} ticket{winner.tickets !== 1 ? 's' : ''}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-2">
-												<button onClick={() => handleRemoveTicketInstance(viewingWinners.raffle.id, winner.entry_id || winner.id)} className="px-3 py-1 text-xs bg-gray-200 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text rounded hover:bg-gray-300 dark:hover:bg-kick-dark">Remove</button>
-												<button onClick={() => handleRemoveAllInstances(viewingWinners.raffle.id, winner.entry_id || winner.id)} className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Remove all instances</button>
-                                            </div>
-                                            <span className="text-small text-gray-500 dark:text-kick-text-secondary">
-                                                #{index + 1}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            {viewingWinners.raffle.drawn_at && (
-                                <p className="text-center text-small text-gray-500 dark:text-kick-text-secondary mt-4">
-                                    Drawn on {new Date(viewingWinners.raffle.drawn_at).toLocaleString()}
-                                </p>
-                            )}
-                        </div>
-                        <div className="p-4 border-t border-gray-200 dark:border-kick-border">
-                            <button
-                                onClick={() => setViewingWinners(null)}
-                                className="w-full py-2 bg-gray-200 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text rounded-lg hover:bg-gray-300 dark:hover:bg-kick-dark transition-colors"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }

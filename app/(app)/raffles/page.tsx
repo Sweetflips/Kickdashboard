@@ -494,12 +494,7 @@ export default function RafflesPage() {
                                                     {raffle.total_entries.toLocaleString()}
                                                 </td>
                                                 <td className="px-6 py-4 text-body text-gray-900 dark:text-kick-text">
-                                                    {raffle.winners.length > 0
-                                                        ? raffle.winners
-                                                              .slice(0, 3)
-                                                              .map((w) => w.username)
-                                                              .join(', ') + (raffle.winners.length > 3 ? '...' : '')
-                                                        : 'No winners'}
+                                                    {raffle.drawn_at ? 'Drawn' : 'Pending'}
                                                 </td>
                                             </tr>
                                         ))}

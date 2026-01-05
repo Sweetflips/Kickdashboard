@@ -21,15 +21,6 @@ export async function GET(request: Request) {
             include: {
                 raffle: {
                     include: {
-                        winners: {
-                            include: {
-                                entry: {
-                                    select: {
-                                        id: true,
-                                    },
-                                },
-                            },
-                        },
                         _count: {
                             select: {
                                 entries: true,
@@ -51,7 +42,7 @@ export async function GET(request: Request) {
                 })
 
                 const totalTickets = totalTicketsResult._sum.tickets || 0
-                const isWinner = entry.raffle.winners.some(w => w.entry.id === entry.id)
+                const isWinner = false // Winner tracking removed
 
                 return {
                     id: entry.id.toString(),
