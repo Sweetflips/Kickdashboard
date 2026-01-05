@@ -167,18 +167,8 @@ export async function GET(request: NextRequest) {
       raffles.map(r => [r.id.toString(), { status: r.status, end_at: r.end_at, drawn_at: r.drawn_at }])
     )
 
-    const adventDays = [...new Set([...groupsMap.values()].filter(g => g.advent_item_id).map(g => {
-      const item = ADVENT_ITEMS.find(i => i.id === g.advent_item_id)
-      return item?.day
-    }).filter((d): d is number => typeof d === 'number'))]
-
-    const drawnDays = adventDays.length
-      ? await db.adventDayStatus.findMany({
-          where: { day: { in: adventDays }, drawn: true },
-          select: { day: true },
-        }).catch(() => [])
-      : []
-    const drawnSet = new Set(drawnDays.map(d => d.day))
+    // Advent day status table removed - treat no days as drawn
+    const drawnSet = new Set<number>()
 
     for (const g of groupsMap.values()) {
       if (g.raffle_id) {

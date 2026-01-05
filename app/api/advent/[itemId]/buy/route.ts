@@ -71,19 +71,6 @@ export async function POST(
       )
     }
 
-    // Check if day is drawn by admin
-    const dayStatus = await db.adventDayStatus.findUnique({
-      where: { day: item.day },
-      select: { drawn: true },
-    })
-
-    if (dayStatus?.drawn) {
-      return NextResponse.json(
-        { error: `Day ${item.day} has been drawn and is closed` },
-        { status: 400 }
-      )
-    }
-
     // Check if day is past (next day has started)
     if (isDayPast(item.day)) {
       return NextResponse.json(

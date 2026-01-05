@@ -13,10 +13,10 @@ export async function POST(
         if (!adminCheck) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         const raffleId = BigInt(params.id)
 
-        // Delete winners and reset draw fields
-        await db.$transaction(async (tx) => {
-            await tx.raffleWinner.deleteMany({ where: { raffle_id: raffleId } })
-            await tx.raffle.update({ where: { id: raffleId }, data: { draw_seed: null, drawn_at: null, status: 'active' } })
+        // Reset draw fields
+        await db.raffle.update({ 
+            where: { id: raffleId }, 
+            data: { draw_seed: null, drawn_at: null, status: 'active' } 
         })
 
         return NextResponse.json({ success: true })

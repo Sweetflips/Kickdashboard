@@ -116,10 +116,8 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
   }
 
   // Raffle achievements
-  const [rafflesEntered, rafflesWon] = await Promise.all([
-    db.raffleEntry.count({ where: { user_id: auth.userId } }),
-    db.raffleWinner.count({ where: { entry: { user_id: auth.userId } } }),
-  ])
+  const rafflesEntered = await db.raffleEntry.count({ where: { user_id: auth.userId } })
+  const rafflesWon = 0 // Winner tracking table removed
 
   // Global/top-based achievements
   const [topUsersByPoints, monthlyPointAggs] = await Promise.all([

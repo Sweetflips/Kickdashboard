@@ -81,7 +81,6 @@ model User {
   raffle_entries               RaffleEntry[]
   advent_purchases             AdventPurchase[]
   purchase_transactions        PurchaseTransaction[]
-  advent_days_drawn            AdventDayStatus[]
   promo_codes_created          PromoCode[]           @relation("PromoCodeCreator")
   promo_code_redemptions       PromoCodeRedemption[] @relation("PromoCodeRedemptions")
   // Referral relations
@@ -260,10 +259,6 @@ model Raffle {
   hidden               Boolean   @default(false) // Hidden from public view by admin
   draw_seed            String? // For transparency
   number_of_winners    Int       @default(1)
-  rigging_enabled      Boolean   @default(false)
-  wheel_background_url String?
-  center_logo_url      String?
-  slice_opacity        Float?    @default(0.5)
   drawn_at             DateTime?
   claim_message        String?   @db.Text // Custom instructions for winners to claim prize
   created_by           BigInt
@@ -272,9 +267,6 @@ model Raffle {
 
   creator        User                 @relation(fields: [created_by], references: [id])
   entries        RaffleEntry[]
-  winners        RaffleWinner[]
-  rigged_winners RaffleRiggedWinner[]
-  wheel_overlays WheelOverlayState[]
 
   @@map("raffles")
 }
@@ -289,40 +281,9 @@ model RaffleEntry {
 
   raffle      Raffle               @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
   user        User                 @relation(fields: [user_id], references: [id])
-  wins        RaffleWinner[]
-  riggedSlots RaffleRiggedWinner[]
 
   @@unique([raffle_id, user_id])
   @@map("raffle_entries")
-}
-
-model RaffleWinner {
-  id                    BigInt   @id @default(autoincrement())
-  raffle_id             BigInt
-  entry_id              BigInt
-  selected_at           DateTime @default(now())
-  // Optional metadata
-  selected_ticket_index BigInt?
-  spin_number           Int?
-  is_rigged             Boolean? @default(false)
-
-  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
-  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
-
-  @@map("raffle_winners")
-}
-
-model RaffleRiggedWinner {
-  id        BigInt @id @default(autoincrement())
-  raffle_id BigInt
-  entry_id  BigInt
-  position  Int // 1-based position in rigging order
-
-  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
-  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
-
-  @@unique([raffle_id, position])
-  @@map("raffle_rigged_winners")
 }
 
 model UserSession {
@@ -445,19 +406,6 @@ model AdventPurchase {
   @@map("advent_purchases")
 }
 
-model AdventDayStatus {
-  day        Int       @id // December day (1-31)
-  drawn      Boolean   @default(false)
-  drawn_at   DateTime?
-  drawn_by   BigInt? // Admin user ID who marked it as drawn
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-
-  drawn_by_user User? @relation(fields: [drawn_by], references: [id])
-
-  @@map("advent_day_status")
-}
-
 model Referral {
   id               BigInt   @id @default(autoincrement())
   referrer_user_id BigInt
@@ -496,60 +444,6 @@ model ReferralReward {
   @@index([referrer_user_id])
   @@index([awarded_at])
   @@map("referral_rewards")
-}
-
-// OBS Wheel Overlay (singleton state + custom entrants + spin events)
-model WheelOverlayState {
-  key                  String   @id @default("default")
-  mode                 String   @default("raffle") // raffle | custom
-  raffle_id            BigInt?
-  title                String?
-  locked               Boolean  @default(false)
-  locked_entries       Json?
-  locked_total_tickets Int?
-  wheel_background_url String?
-  center_logo_url      String?
-  slice_opacity        Float?   @default(0.5)
-  updated_at           DateTime @updatedAt
-  created_at           DateTime @default(now())
-
-  raffle   Raffle?               @relation(fields: [raffle_id], references: [id], onDelete: SetNull)
-  entrants WheelOverlayEntrant[]
-  spins    WheelOverlaySpin[]
-
-  @@map("wheel_overlay_state")
-}
-
-model WheelOverlayEntrant {
-  id          BigInt   @id @default(autoincrement())
-  overlay_key String
-  label       String
-  weight      Int      @default(1)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-
-  overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
-
-  @@index([overlay_key])
-  @@map("wheel_overlay_entrants")
-}
-
-model WheelOverlaySpin {
-  id                  BigInt   @id @default(autoincrement())
-  overlay_key         String
-  version             Int
-  mode                String // raffle | custom
-  raffle_id           BigInt?
-  target_ticket_index Int
-  winner_label        String
-  winner_user_id      BigInt?
-  winner_entry_id     BigInt?
-  created_at          DateTime @default(now())
-
-  overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
-
-  @@index([overlay_key, version])
-  @@map("wheel_overlay_spins")
 }
 
 model AppSetting {

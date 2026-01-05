@@ -290,7 +290,7 @@ export async function DELETE(request: Request) {
 
         return NextResponse.json({
             success: true,
-            message: hasUses 
+            message: hasUses
                 ? `Promo code deleted successfully (had ${promoCode.current_uses} redemption(s))`
                 : 'Promo code deleted successfully',
         })

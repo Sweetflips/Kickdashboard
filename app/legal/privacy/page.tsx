@@ -203,7 +203,10 @@ export default function PrivacyPolicy() {
                         </h3>
                         <ol className="list-decimal pl-6 text-gray-600 dark:text-kick-text-secondary space-y-3 mb-6">
                             <li>
-                                <strong>Email us directly:</strong> Send a deletion request through our official Discord or Telegram channels
+                                <strong>Email us directly:</strong> Send a deletion request to{' '}
+                                <a href="mailto:info@sweetflips.gg" className="text-kick-green hover:underline font-medium">
+                                    info@sweetflips.gg
+                                </a>{' '}
                                 with the subject line "Data Deletion Request"
                             </li>
                             <li>
