@@ -43,8 +43,48 @@ function startWebServer() {
       PATH: `${binPath}:${process.env.PATH || ''}`
     };
 
+    // Declare process variables early
+    let nextProcess = null;
+    let razedWorkerProcess = null;
+    let shuttingDown = false;
+    let shutdownSignal = null;
+    let nextProcessExited = false;
+    let razedWorkerExited = false;
+
+    const checkAllExited = () => {
+      if (nextProcessExited && razedWorkerExited) {
+        const exitCode = nextProcessExited === 0 ? 0 : 1;
+        process.exit(exitCode);
+      }
+    };
+
     process.stdout.write('🚀 Starting Next.js on port ' + port + '...\n');
     process.stdout.write('📂 PATH includes: ' + binPath + '\n');
+
+    // Start Razed worker alongside web server (always runs with frontend)
+    // Start it early so it runs even if Next.js fails to start
+    process.stdout.write('🎮 Starting Razed worker alongside web server...\n');
+    razedWorkerProcess = spawn('npx', ['tsx', 'scripts/razed-worker.ts'], {
+      stdio: 'inherit',
+      env: envWithPath,
+      cwd: process.cwd(),
+    });
+
+    razedWorkerProcess.on('exit', (code) => {
+      razedWorkerExited = code !== null ? code : 0;
+      if (code !== 0 && code !== null) {
+        process.stdout.write(`⚠️  Razed worker exited with code: ${code}\n`);
+      } else {
+        process.stdout.write('✅ Razed worker exited\n');
+      }
+      checkAllExited();
+    });
+
+    razedWorkerProcess.on('error', (err) => {
+      process.stdout.write('⚠️  Failed to start Razed worker: ' + err.message + '\n');
+      razedWorkerExited = true;
+      checkAllExited();
+    });
 
     const ensureStandaloneAssets = (standaloneDir) => {
       try {
@@ -171,10 +211,6 @@ function startWebServer() {
         cwd: process.cwd(),
       });
 
-    let nextProcess = null;
-    let shuttingDown = false;
-    let shutdownSignal = null;
-
     if (hasFullNextServer) {
       // Normal Next.js runtime
       process.stdout.write('🚀 Using next start (full .next build detected)\n');
@@ -209,19 +245,23 @@ function startWebServer() {
     }
 
     nextProcess.on('exit', (code, signal) => {
+      nextProcessExited = code !== null ? code : (signal ? 1 : 0);
+      
       // IMPORTANT:
       // - When a child is terminated by a signal, Node reports `code === null` and provides `signal`.
       // - Treat SIGTERM/SIGINT as a graceful shutdown so the platform doesn't restart-loop the service.
       if (signal) {
         process.stdout.write(`ℹ️  Next.js stopped by signal: ${signal}\n`);
         if (shuttingDown && (signal === 'SIGTERM' || signal === 'SIGINT')) {
-          process.exit(0);
+          // Wait for Razed worker to exit before exiting
+          checkAllExited();
           return;
         }
 
         // Unexpected signal: exit non-zero so restartPolicyType=ON_FAILURE can recover.
         const sigNum = (os.constants && os.constants.signals && os.constants.signals[signal]) || 0;
-        process.exit(sigNum ? 128 + sigNum : 1);
+        // Still wait for Razed worker
+        checkAllExited();
         return;
       }
 
@@ -231,12 +271,15 @@ function startWebServer() {
         process.stdout.write('⚠️  Next.js exited with code: ' + code + '\n');
       }
 
-      process.exit(code);
+      // Wait for Razed worker to exit before exiting
+      checkAllExited();
     });
 
     nextProcess.on('error', (err) => {
       process.stdout.write('❌ Spawn error: ' + err.message + '\n');
-      process.exit(1);
+      // Don't exit immediately - let Razed worker continue running
+      nextProcessExited = 1;
+      checkAllExited();
     });
 
     // Handle graceful shutdown
@@ -244,7 +287,8 @@ function startWebServer() {
       process.stdout.write('\n' + signal + ' received, shutting down...\n');
       shuttingDown = true;
       shutdownSignal = signal;
-      nextProcess.kill(signal);
+      if (nextProcess) nextProcess.kill(signal);
+      if (razedWorkerProcess) razedWorkerProcess.kill(signal);
     };
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
