@@ -251,7 +251,7 @@ export async function GET(request: Request) {
         const uniqueChatters = messageCounts.length
 
         // Get kick_user_ids from message counts to fetch user details
-        const kickUserIds = messageCounts.map(m => m.sender_user_id)
+        const kickUserIds = (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).map(m => m.sender_user_id)
 
         // Also get user IDs from Redis leaderboard
         const redisUserIds = redisLeaderboard.map(entry => entry.userId)
@@ -362,7 +362,7 @@ export async function GET(request: Request) {
         }>()
 
         // Process message counts
-        messageCounts.forEach((count) => {
+        (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count) => {
             const kickUserId = Number(count.sender_user_id)
             const user = kickUserIdToUser.get(kickUserId)
             if (!user) return
@@ -379,7 +379,7 @@ export async function GET(request: Request) {
         })
 
         // Add users with points but no messages (shouldn't happen, but be safe)
-        pointsByUser.forEach((pt) => {
+        (pointsByUser as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>).forEach((pt) => {
             const userId = Number(pt.user_id)
             const user = users.find(u => Number(u.id) === userId)
             if (!user) return

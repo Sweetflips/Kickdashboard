@@ -59,7 +59,7 @@ async function getClaimedAchievementCounts(userIds: bigint[]): Promise<Map<strin
         _count: { _all: true },
     })
 
-    return new Map(rows.map((r) => [r.user_id.toString(), r._count._all]))
+    return new Map((rows as Array<{ user_id: bigint; _count: { _all: number } }>).map((r) => [r.user_id.toString(), r._count._all]))
 }
 
 function parseSortBy(value: string | null): SortBy {
@@ -433,7 +433,9 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
     ])
 
     const earnedMap = new Map<bigint, number>()
-    for (const r of earnedAgg) earnedMap.set(r.user_id, r._sum.sweet_coins_earned || 0)
+    for (const r of earnedAgg as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>) {
+        earnedMap.set(r.user_id, r._sum.sweet_coins_earned || 0)
+    }
 
     const spentMap = new Map<bigint, number>()
     for (const r of spentAgg as any[]) {
@@ -496,12 +498,12 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
     ])
 
     const messagesMap = new Map<bigint, number>()
-    messageCounts.forEach((row) => {
+    (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((row) => {
         messagesMap.set(row.sender_user_id, Number(row._count.id))
     })
 
     const streamsMap = new Map<bigint, number>()
-    streamPairs.forEach((row) => {
+    (streamPairs as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((row) => {
         streamsMap.set(row.sender_user_id, (streamsMap.get(row.sender_user_id) || 0) + 1)
     })
 
@@ -647,7 +649,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
 
     const messagesMap = new Map<bigint, number>()
     if (messageResult.status === 'fulfilled') {
-        messageResult.value.forEach((row) => {
+        (messageResult.value as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((row) => {
             messagesMap.set(row.sender_user_id, Number(row._count.id))
         })
     } else {
@@ -656,7 +658,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
 
     const streamsMap = new Map<bigint, number>()
     if (streamResult.status === 'fulfilled') {
-        streamResult.value.forEach((row) => {
+        (streamResult.value as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((row) => {
             streamsMap.set(row.sender_user_id, (streamsMap.get(row.sender_user_id) || 0) + 1)
         })
     } else {
@@ -665,7 +667,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
 
     const emotesMap = new Map<bigint, number>()
     if (emoteResult.status === 'fulfilled') {
-        emoteResult.value.forEach((row) => {
+        (emoteResult.value as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((row) => {
             emotesMap.set(row.sender_user_id, Number(row._count.id))
         })
     } else {
@@ -752,13 +754,13 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
 
     // Build maps
     const messagesMap = new Map<number, number>()
-    messageCounts.forEach((count) => {
+    (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count) => {
         messagesMap.set(Number(count.sender_user_id), Number(count._count.id))
     })
 
     const streamsMap = new Map<number, number>()
     const streamsByUser = new Map<number, Set<number>>()
-    streamsWatched.forEach((stream) => {
+    (streamsWatched as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((stream) => {
         const kickUserId = Number(stream.sender_user_id)
         const sessionId = stream.stream_session_id ? Number(stream.stream_session_id) : null
         if (sessionId) {
@@ -916,7 +918,7 @@ async function fetchDateFilteredLeaderboard(
     })
 
     const messagesMap = new Map<number, number>()
-    messageCounts.forEach((count) => {
+    (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count) => {
         messagesMap.set(Number(count.sender_user_id), Number(count._count.id))
     })
 
@@ -931,7 +933,7 @@ async function fetchDateFilteredLeaderboard(
 
     const streamsMap = new Map<number, number>()
     const streamsByUser = new Map<number, Set<number>>()
-    streamsWatched.forEach((stream) => {
+    (streamsWatched as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((stream) => {
         const kickUserId = Number(stream.sender_user_id)
         const sessionId = stream.stream_session_id ? Number(stream.stream_session_id) : null
         if (sessionId) {

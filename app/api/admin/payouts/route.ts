@@ -93,7 +93,7 @@ export async function GET(request: Request) {
         }
 
         // Get user details for all participants
-        const userIds = sweetCoinsByUser.map(p => p.user_id)
+        const userIds = (sweetCoinsByUser as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>).map(p => p.user_id)
         const users = await db.user.findMany({
             where: {
                 id: { in: userIds },
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
         }
 
         // Build initial sorted list by Sweet Coins
-        const sortedBySweetCoins = sweetCoinsByUser
+        const sortedBySweetCoins = (sweetCoinsByUser as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>)
             .map(p => ({
                 user_id: p.user_id,
                 sweet_coins: p._sum.sweet_coins_earned || 0,
