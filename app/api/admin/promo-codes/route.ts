@@ -46,9 +46,31 @@ export async function GET(request: Request) {
             },
         })
 
+        type PromoCodeWithRelations = {
+            id: bigint
+            code: string
+            sweet_coins_value: number
+            max_uses: number | null
+            current_uses: number
+            expires_at: Date | null
+            is_active: boolean
+            created_at: Date
+            creator: {
+                username: string
+                profile_picture_url: string | null
+            }
+            redemptions: Array<{
+                id: bigint
+                redeemed_at: Date
+                user: {
+                    username: string
+                }
+            }>
+        }
+
         return NextResponse.json({
             success: true,
-            codes: promoCodes.map(code => ({
+            codes: (promoCodes as unknown as PromoCodeWithRelations[]).map(code => ({
                 id: code.id.toString(),
                 code: code.code,
                 sweet_coins_value: code.sweet_coins_value,
@@ -281,7 +303,7 @@ export async function DELETE(request: Request) {
             )
         }
 
-        const hasUses = promoCode.current_uses > 0 || promoCode.redemptions.length > 0
+        const hasUses = promoCode.current_uses > 0 || ((promoCode as unknown as { redemptions: any[] }).redemptions.length > 0)
 
         // Delete the promo code (even if it has been used)
         await db.promoCode.delete({
