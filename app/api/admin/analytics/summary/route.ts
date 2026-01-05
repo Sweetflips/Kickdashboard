@@ -71,7 +71,7 @@ export async function GET(request: Request) {
                 date_trunc('day', created_at) AS day,
                 COUNT(*)::bigint AS messages,
                 SUM(
-                    CASE 
+                    CASE
                         WHEN has_emotes = true THEN 1
                         WHEN emotes IS NOT NULL AND emotes::text != 'null' AND emotes::text != '[]' THEN 1
                         WHEN content ~ '\\[emote:\\d+:[^\\]]+\\]' THEN 1
@@ -137,7 +137,7 @@ export async function GET(request: Request) {
             },
         })
 
-        const kickUserIds = topUsers.map(u => u.user.kick_user_id)
+        const kickUserIds = topUsers.map((u: any) => u.user.kick_user_id)
 
         const [msgCounts, msgWithEmotesCounts, engagementByUserType, lenAggByUser, streamsByUserSession] = await Promise.all([
             db.chatMessage.groupBy({
