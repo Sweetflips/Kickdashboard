@@ -56,7 +56,7 @@ export async function GET(request: Request) {
         ])
 
         const engagement_types: Record<string, number> = {}
-        for (const row of engagementCounts) {
+        for (const row of engagementCounts as Array<{ engagement_type: string; _count: { _all: number } }>) {
             engagement_types[row.engagement_type] = row._count._all
         }
 
