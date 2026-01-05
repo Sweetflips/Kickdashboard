@@ -1,5 +1,16 @@
 #!/usr/bin/env node
 
+// Startup validation: fail fast on missing required config
+function validateConfig() {
+  const required = ['DATABASE_URL'];
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    console.error('❌ FATAL: Missing required environment variables:', missing.join(', '));
+    process.exit(1);
+  }
+}
+validateConfig();
+
 // Start HTTP health check server IMMEDIATELY (before ANY other code)
 // This ensures Railway can verify the service is up within seconds
 const http = require('http');

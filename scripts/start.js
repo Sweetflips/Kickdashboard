@@ -3,7 +3,19 @@
 // Force immediate output
 process.stdout.write('🔧 start.js: Script starting...\n');
 
+// Startup validation: fail fast on missing required config
+function validateConfig() {
+  const required = ['DATABASE_URL'];
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    process.stdout.write('❌ FATAL: Missing required environment variables: ' + missing.join(', ') + '\n');
+    process.exit(1);
+  }
+}
+
 try {
+  validateConfig();
+
   const { spawn, exec } = require('child_process');
   const path = require('path');
 
