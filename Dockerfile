@@ -1,5 +1,5 @@
-# Use Node.js 20 LTS (Debian slim for better native module compatibility)
-FROM node:20-bookworm-slim AS base
+# Use Node.js 22 LTS (required for Prisma Accelerate extension)
+FROM node:22-bookworm-slim AS base
 
 # Install dependencies only when needed
 FROM base AS deps
