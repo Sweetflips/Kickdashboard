@@ -34,7 +34,12 @@ function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
             // Load custom profile picture from database
             const loadCustomPicture = async () => {
                 try {
-                    const response = await fetch(`/api/user/preferences?kick_user_id=${user.id}`)
+                    const token = localStorage.getItem('kick_access_token')
+                    const headers: HeadersInit = {}
+                    if (token) {
+                        headers['Authorization'] = `Bearer ${token}`
+                    }
+                    const response = await fetch(`/api/user/preferences?kick_user_id=${user.id}`, { headers })
                     if (response.ok) {
                         const prefs = await response.json()
                         setCustomProfilePicture(prefs.custom_profile_picture_url || null)

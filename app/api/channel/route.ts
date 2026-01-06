@@ -157,6 +157,9 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
     isLive: boolean
     startedAt?: string | null
     thumbnailUrl?: string | null
+    viewerCount?: number
+    sessionTitle?: string | null
+    category?: { id: number; name: string; slug: string } | null
 }> {
 
     try {
@@ -242,7 +245,7 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                         }) as any | undefined
 
                         if (livestream) {
-                            // Extract started_at and thumbnail from authoritative source
+                            // Extract all available data from authoritative source
                             const startedAt = livestream.started_at || null
                             let thumbnailUrl: string | null = null
                             if (livestream.thumbnail) {
@@ -250,8 +253,28 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                                     ? livestream.thumbnail
                                     : livestream.thumbnail.url || null
                             }
-                            console.log(`[Channel API] Found matching livestream for ${slug} (broadcaster: ${broadcasterUserId})`)
-                            return { isLive: true, startedAt, thumbnailUrl }
+                            
+                            // Extract viewer count, title, and category from livestream data
+                            const viewerCount = livestream.viewer_count || livestream.viewers || 0
+                            const sessionTitle = livestream.session_title || livestream.stream_title || livestream.title || null
+                            let category: { id: number; name: string; slug: string } | null = null
+                            if (livestream.category) {
+                                category = {
+                                    id: livestream.category.id || 0,
+                                    name: livestream.category.name || livestream.category.title || '',
+                                    slug: livestream.category.slug || '',
+                                }
+                            } else if (livestream.categories && livestream.categories.length > 0) {
+                                const cat = livestream.categories[0]
+                                category = {
+                                    id: cat.id || 0,
+                                    name: cat.name || cat.title || '',
+                                    slug: cat.slug || '',
+                                }
+                            }
+                            
+                            console.log(`[Channel API] Found matching livestream for ${slug} (broadcaster: ${broadcasterUserId}, viewers: ${viewerCount})`)
+                            return { isLive: true, startedAt, thumbnailUrl, viewerCount, sessionTitle, category }
                         }
 
                         // Filter mismatch: don't assume live. Fall back to /channels to avoid false-positive LIVE state.
@@ -792,77 +815,108 @@ export async function GET(request: Request) {
         }
 
         // Get live status.
-        // For SweetFlips we intentionally bypass the official Kick API (/livestreams, /channels) because
-        // the /livestreams filter is unreliable and creates noisy fallbacks. We rely on kick.com v2.
-        const forceKickV2ForSlug = slug.toLowerCase() === 'sweetflips'
+        // Strategy: Use official API as primary (authenticated, reliable), v2 API for supplementary metadata
+        // v2 API (kick.com/api/v2) is blocked by Cloudflare on some server IPs, so we can't rely on it alone
 
         let isLive = false
         let authoritativeStartedAt: string | null = null
         let authoritativeThumbnail: string | null = null
+        let authoritativeViewerCount: number | undefined = undefined
+        let authoritativeTitle: string | null = null
+        let authoritativeCategory: { id: number; name: string; slug: string } | null = null
         
         // Track if we got a definitive API response (vs API failure)
         let apiResponseReceived = false
 
-        if (forceKickV2ForSlug) {
-            if (v2Data && v2Data.is_live !== undefined) {
-                isLive = v2Data.is_live
-                apiResponseReceived = true
-                if (v2Data.started_at) authoritativeStartedAt = v2Data.started_at
-                if (v2Data.thumbnail) authoritativeThumbnail = v2Data.thumbnail
-            } else {
-                // v2 API failed - DON'T assume offline yet, we'll check for active session below
-                console.log(`[Channel API] v2 API returned no data for ${slug} - will check for active session`)
-                isLive = false
-                apiResponseReceived = false
-            }
-        } else if (broadcasterUserId) {
-            // Use authoritative /livestreams endpoint
+        // Primary: Use official authenticated /livestreams API (most reliable)
+        if (broadcasterUserId) {
             const apiStatus = await checkLiveStatusFromAPI(slug, broadcasterUserId)
             isLive = apiStatus.isLive
-            apiResponseReceived = true // API responded (even if offline)
+            apiResponseReceived = true
             if (apiStatus.startedAt) authoritativeStartedAt = apiStatus.startedAt
             if (apiStatus.thumbnailUrl) authoritativeThumbnail = apiStatus.thumbnailUrl
+            if (apiStatus.viewerCount !== undefined) authoritativeViewerCount = apiStatus.viewerCount
+            if (apiStatus.sessionTitle) authoritativeTitle = apiStatus.sessionTitle
+            if (apiStatus.category) authoritativeCategory = apiStatus.category
+            console.log(`[Channel API] Official API for ${slug}: is_live=${isLive}, viewers=${authoritativeViewerCount}`)
         } else if (v2Data && v2Data.is_live !== undefined) {
-            // Fallback to v2 API if we don't have broadcasterUserId yet
+            // Fallback to v2 API only if we don't have broadcasterUserId
             isLive = v2Data.is_live
             apiResponseReceived = true
+            if (v2Data.started_at) authoritativeStartedAt = v2Data.started_at
+            if (v2Data.thumbnail) authoritativeThumbnail = v2Data.thumbnail
+            console.log(`[Channel API] v2 API fallback for ${slug}: is_live=${isLive}`)
+        } else {
+            // No API data available - will check for active session below
+            console.log(`[Channel API] No API data for ${slug} - will check for active session`)
+            apiResponseReceived = false
         }
 
-        // v2 API is PRIMARY source for metadata (most complete and accurate)
-        // But /livestreams is authoritative for isLive and started_at
+        // Metadata priority:
+        // 1. v2 API (most complete - has viewer count, category, title)
+        // 2. Official /livestreams API (reliable but less metadata)
+        // 3. channelData from /channels endpoint
         let viewerCount = 0
         let streamTitle = ''
         let streamStartedAt: string | null = null
         let category: { id: number; name: string } | null = null
         let followerCount = 0
 
-        // Prefer authoritative started_at and thumbnail from /livestreams if available
+        // Start with authoritative data from /livestreams
         if (authoritativeStartedAt) {
             streamStartedAt = authoritativeStartedAt
         }
         if (authoritativeThumbnail) {
             thumbnailUrl = authoritativeThumbnail
         }
+        if (authoritativeViewerCount !== undefined) {
+            viewerCount = authoritativeViewerCount
+        }
+        if (authoritativeTitle) {
+            streamTitle = authoritativeTitle
+        }
+        if (authoritativeCategory) {
+            category = { id: authoritativeCategory.id, name: authoritativeCategory.name }
+        }
 
-        // Use v2 data if available (more complete metadata)
+        // Supplement with v2 data if available (may have more complete info)
         if (v2Data) {
-            viewerCount = v2Data.viewer_count
-            streamTitle = v2Data.stream_title
-            category = v2Data.category
-            followerCount = v2Data.followers_count
-            // Only use v2 thumbnail/started_at if authoritative source didn't provide them
-            if (!thumbnailUrl && v2Data.thumbnail) thumbnailUrl = v2Data.thumbnail
-            if (!streamStartedAt && v2Data.started_at) streamStartedAt = v2Data.started_at
-        } else if (channelData && !v2Data) {
-            // If we didn't fetch v2 data separately, use what we have from channelData
-            viewerCount = livestream?.viewer_count || 0
-            streamTitle = livestream?.session_title || livestream?.stream_title || ''
-            followerCount = channelData.followers_count || 0
-            if (livestream?.started_at) streamStartedAt = livestream.started_at
-        } else {
-            // v2 API unavailable - use minimal fallback from channelData
-            streamTitle = livestream?.session_title || livestream?.stream_title || ''
-            if (livestream?.thumbnail) {
+            // Only override if we don't have data from official API or v2 has better data
+            if (viewerCount === 0 && v2Data.viewer_count > 0) {
+                viewerCount = v2Data.viewer_count
+            }
+            if (!streamTitle && v2Data.stream_title) {
+                streamTitle = v2Data.stream_title
+            }
+            if (!category && v2Data.category) {
+                category = v2Data.category
+            }
+            if (followerCount === 0 && v2Data.followers_count > 0) {
+                followerCount = v2Data.followers_count
+            }
+            if (!thumbnailUrl && v2Data.thumbnail) {
+                thumbnailUrl = v2Data.thumbnail
+            }
+            if (!streamStartedAt && v2Data.started_at) {
+                streamStartedAt = v2Data.started_at
+            }
+        }
+        
+        // Final fallback to channelData/livestream
+        if (channelData) {
+            if (viewerCount === 0 && livestream?.viewer_count) {
+                viewerCount = livestream.viewer_count
+            }
+            if (!streamTitle) {
+                streamTitle = livestream?.session_title || livestream?.stream_title || ''
+            }
+            if (followerCount === 0 && channelData.followers_count) {
+                followerCount = channelData.followers_count
+            }
+            if (!streamStartedAt && livestream?.started_at) {
+                streamStartedAt = livestream.started_at
+            }
+            if (!thumbnailUrl && livestream?.thumbnail) {
                 if (typeof livestream.thumbnail === 'string') {
                     thumbnailUrl = livestream.thumbnail
                 } else if (typeof livestream.thumbnail === 'object' && livestream.thumbnail.url) {

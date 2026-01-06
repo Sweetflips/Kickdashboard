@@ -21,7 +21,12 @@ export default function ChatSettings({ onClose, isOpen, userId }: ChatSettingsPr
         const loadSettings = async () => {
             if (userId) {
                 try {
-                    const response = await fetch(`/api/user/preferences?kick_user_id=${userId}`)
+                    const token = localStorage.getItem('kick_access_token')
+                    const headers: HeadersInit = {}
+                    if (token) {
+                        headers['Authorization'] = `Bearer ${token}`
+                    }
+                    const response = await fetch(`/api/user/preferences?kick_user_id=${userId}`, { headers })
                     if (response.ok) {
                         const prefs = await response.json()
                         setFontSize(prefs.chat_font_size || '14px')
@@ -68,9 +73,14 @@ export default function ChatSettings({ onClose, isOpen, userId }: ChatSettingsPr
         // Save to database if userId available
         if (userId) {
             try {
+                const token = localStorage.getItem('kick_access_token')
+                const headers: HeadersInit = { 'Content-Type': 'application/json' }
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`
+                }
                 await fetch('/api/user/preferences', {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({
                         kick_user_id: userId,
                         chat_font_size: size,
@@ -94,9 +104,14 @@ export default function ChatSettings({ onClose, isOpen, userId }: ChatSettingsPr
         // Save to database if userId available
         if (userId) {
             try {
+                const token = localStorage.getItem('kick_access_token')
+                const headers: HeadersInit = { 'Content-Type': 'application/json' }
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`
+                }
                 await fetch('/api/user/preferences', {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({
                         kick_user_id: userId,
                         chat_show_timestamps: checked,
