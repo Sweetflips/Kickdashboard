@@ -97,7 +97,7 @@ export default function PrivacyPolicy() {
                         <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2">
                             <li>Provide, maintain, and improve the Service</li>
                             <li>Track and award points for community participation</li>
-                            <li>Operate raffles and giveaways</li>
+                            <li>Operate achievements and giveaways</li>
                             <li>Display leaderboards and analytics</li>
                             <li>Contact winners about prizes</li>
                             <li>Prevent fraud, abuse, and enforce our Terms of Service</li>

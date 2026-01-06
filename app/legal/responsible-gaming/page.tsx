@@ -2,7 +2,7 @@ import { Metadata } from 'next'
 
 export const metadata: Metadata = {
     title: 'Responsible Gaming | SweetFlips',
-    description: 'Responsible gaming guidelines for SweetFlips raffle and rewards system',
+    description: 'Responsible gaming guidelines for SweetFlips rewards system',
 }
 
 export default function ResponsibleGaming() {
@@ -26,7 +26,7 @@ export default function ResponsibleGaming() {
                             <div>
                                 <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-1">Important Notice</h3>
                                 <p className="text-sm text-amber-700 dark:text-amber-300">
-                                    SweetFlips raffles and giveaways are for entertainment purposes only. Sweet Coins are earned
+                                    SweetFlips achievements and rewards are for entertainment purposes only. Sweet Coins are earned
                                     through community participation and have no monetary value. No real money is wagered or
                                     can be won through our Sweet Coins system.
                                 </p>
@@ -40,7 +40,7 @@ export default function ResponsibleGaming() {
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
                             SweetFlips is committed to providing a fun and safe entertainment experience for our
-                            community. While our raffle system uses virtual Sweet Coins (not real money), we believe
+                            community. While our rewards system uses virtual Sweet Coins (not real money), we believe
                             in promoting responsible participation in all gaming-like activities.
                         </p>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
@@ -114,7 +114,7 @@ export default function ResponsibleGaming() {
                                 <div>
                                     <h3 className="font-medium text-green-800 dark:text-green-200">Participate for Fun</h3>
                                     <p className="text-sm text-green-700 dark:text-green-300">
-                                        Remember that raffles are meant to be entertaining. Don't participate if it causes stress or anxiety.
+                                        Remember that achievements and rewards are meant to be entertaining. Don't participate if it causes stress or anxiety.
                                     </p>
                                 </div>
                             </div>
@@ -145,7 +145,7 @@ export default function ResponsibleGaming() {
                                 <li>Spending more time on the platform than intended</li>
                                 <li>Feeling anxious or irritable when not participating</li>
                                 <li>Neglecting responsibilities or relationships due to platform use</li>
-                                <li>Constantly thinking about upcoming raffles</li>
+                                <li>Constantly thinking about platform rewards</li>
                                 <li>Feeling upset or frustrated after not winning</li>
                                 <li>Using the platform to escape problems or negative emotions</li>
                             </ul>
@@ -172,8 +172,8 @@ export default function ResponsibleGaming() {
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             Users must be 18 years or older to use SweetFlips. This age requirement exists because
-                            our platform includes raffle features that, while not involving real money, simulate
-                            chance-based activities that should only be accessible to adults.
+                            our platform includes gamified features that, while not involving real money, provide
+                            an engagement experience that should only be accessible to adults.
                         </p>
                     </section>
 

@@ -101,7 +101,7 @@ export default function TermsOfService() {
                             6. Raffles and Giveaways
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
-                            The Service may offer raffles and giveaways where users can use Sweet Coins to purchase entries.
+                            The Service may offer achievements and giveaways where users can earn Sweet Coins through participation.
                             By participating:
                         </p>
                         <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2 mb-4">
@@ -126,7 +126,7 @@ export default function TermsOfService() {
                         </p>
                         <ul className="list-disc pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2">
                             <li>Use bots, scripts, or automated tools to earn points or interact with the Service</li>
-                            <li>Create multiple accounts to abuse the points or raffle systems</li>
+                            <li>Create multiple accounts to abuse the points or rewards systems</li>
                             <li>Attempt to exploit bugs or vulnerabilities in the Service</li>
                             <li>Harass, abuse, or threaten other users</li>
                             <li>Impersonate others or misrepresent your identity</li>
