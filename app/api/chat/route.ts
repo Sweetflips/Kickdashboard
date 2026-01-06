@@ -40,6 +40,40 @@ type OfflineMessageWithRelations = {
     isOffline?: boolean
 }
 
+// Type for online message with relations
+type OnlineMessageWithRelations = {
+    id: bigint
+    message_id: string
+    stream_session_id: bigint | null
+    sender_user_id: bigint
+    sender_username: string
+    broadcaster_user_id: bigint
+    content: string
+    emotes: JsonValue
+    timestamp: bigint
+    sender_username_color: string | null
+    sender_badges: JsonValue
+    sender_is_verified: boolean
+    sender_is_anonymous: boolean
+    sweet_coins_earned: number
+    sweet_coins_reason: string | null
+    sent_when_offline: boolean
+    sender: {
+        username: string
+        profile_picture_url: string | null
+        kick_user_id: bigint
+    }
+    broadcaster: {
+        username: string
+        profile_picture_url: string | null
+        kick_user_id: bigint
+    }
+    stream_session: {
+        channel_slug: string
+    } | null
+    isOffline?: boolean
+}
+
 // Helper function to check if a user should be verified
 function isVerifiedUser(username: string, badges: Array<{ type: string }> = []): boolean {
     const verifiedUsernames = ['botrix', 'kickbot', 'sweetflips']
@@ -237,7 +271,7 @@ export async function GET(request: Request) {
                 }
             } else {
                 // Format online message
-                const onlineMsg = msg as typeof onlineMessages[0] & { isOffline: false }
+                const onlineMsg = msg as OnlineMessageWithRelations
                 return {
                     message_id: onlineMsg.message_id,
                     broadcaster: {
