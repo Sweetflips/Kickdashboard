@@ -34,7 +34,19 @@ export async function GET(request: NextRequest) {
             orderBy: {
                 created_at: 'desc',
             },
-        })
+        }) as Array<{
+            id: bigint
+            user_id: bigint
+            item_id: string
+            tickets: number
+            created_at: Date
+            user: {
+                id: bigint
+                username: string
+                kick_user_id: bigint
+                profile_picture_url: string | null
+            }
+        }>
 
         // Group by user
         const userPurchases: Record<string, {
