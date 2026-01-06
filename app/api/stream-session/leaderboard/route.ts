@@ -88,6 +88,26 @@ export async function GET(request: Request) {
             }))
 
             if (!session) {
+                // Log why we're returning empty - helps diagnose session issues
+                const recentSession = await findSessionWithRetry(() => db.streamSession.findFirst({
+                    where: {
+                        broadcaster_user_id: BigInt(broadcasterUserId),
+                    },
+                    orderBy: { started_at: 'desc' },
+                    select: {
+                        id: true,
+                        ended_at: true,
+                        started_at: true,
+                        session_title: true,
+                    },
+                }))
+                
+                if (recentSession) {
+                    console.log(`[Leaderboard] No active session for broadcaster ${broadcasterUserId}. Most recent session: id=${recentSession.id}, ended_at=${recentSession.ended_at?.toISOString() || 'null'}, started_at=${recentSession.started_at.toISOString()}`)
+                } else {
+                    console.log(`[Leaderboard] No sessions found for broadcaster ${broadcasterUserId}`)
+                }
+                
                 return NextResponse.json({
                     leaderboard: [],
                     session_id: null,
@@ -197,6 +217,11 @@ export async function GET(request: Request) {
         if (isActiveSession) {
             try {
                 redisLeaderboard = await getSessionLeaderboard(session.id, 500) // Get top 500
+                if (redisLeaderboard.length === 0) {
+                    console.log(`[Leaderboard] Redis leaderboard empty for active session ${session.id}`)
+                } else {
+                    console.log(`[Leaderboard] Got ${redisLeaderboard.length} entries from Redis for session ${session.id}`)
+                }
             } catch (err) {
                 console.warn('[leaderboard] Failed to get Redis leaderboard, falling back to DB:', err)
             }

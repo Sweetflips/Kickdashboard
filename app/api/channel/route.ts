@@ -799,24 +799,33 @@ export async function GET(request: Request) {
         let isLive = false
         let authoritativeStartedAt: string | null = null
         let authoritativeThumbnail: string | null = null
+        
+        // Track if we got a definitive API response (vs API failure)
+        let apiResponseReceived = false
 
         if (forceKickV2ForSlug) {
             if (v2Data && v2Data.is_live !== undefined) {
                 isLive = v2Data.is_live
+                apiResponseReceived = true
                 if (v2Data.started_at) authoritativeStartedAt = v2Data.started_at
                 if (v2Data.thumbnail) authoritativeThumbnail = v2Data.thumbnail
             } else {
+                // v2 API failed - DON'T assume offline yet, we'll check for active session below
+                console.log(`[Channel API] v2 API returned no data for ${slug} - will check for active session`)
                 isLive = false
+                apiResponseReceived = false
             }
         } else if (broadcasterUserId) {
             // Use authoritative /livestreams endpoint
             const apiStatus = await checkLiveStatusFromAPI(slug, broadcasterUserId)
             isLive = apiStatus.isLive
+            apiResponseReceived = true // API responded (even if offline)
             if (apiStatus.startedAt) authoritativeStartedAt = apiStatus.startedAt
             if (apiStatus.thumbnailUrl) authoritativeThumbnail = apiStatus.thumbnailUrl
         } else if (v2Data && v2Data.is_live !== undefined) {
             // Fallback to v2 API if we don't have broadcasterUserId yet
             isLive = v2Data.is_live
+            apiResponseReceived = true
         }
 
         // v2 API is PRIMARY source for metadata (most complete and accurate)
@@ -915,10 +924,32 @@ export async function GET(request: Request) {
             }
         }
 
-        // NOTE: Removed the 10-minute "trust window" fallback that would override Kick API's offline status.
-        // The Kick v2 API (kick.com/api/v2/channels/:slug) is reliable - if livestream is null, stream is offline.
-        // The old fallback was causing the dashboard to show LIVE for up to 10 minutes after the stream ended.
-        // Session ending is handled by trackStreamSession() below which has its own 5-minute grace period.
+        // FALLBACK: If API failed to respond (not an explicit offline), check for active session
+        // This prevents session termination due to transient API failures
+        if (!apiResponseReceived && activeSession && !activeSession.ended_at) {
+            // We have an active session but API didn't respond - trust the session
+            // Only keep the session alive if it was recently verified (within 5 minutes)
+            const lastCheckTime = activeSession.last_live_check_at?.getTime() || 0
+            const timeSinceLastCheck = Date.now() - lastCheckTime
+            const GRACE_PERIOD_MS = 5 * 60 * 1000 // 5 minutes
+            
+            if (timeSinceLastCheck < GRACE_PERIOD_MS) {
+                console.log(`[Channel API] API failed but active session exists (last check ${Math.round(timeSinceLastCheck/1000)}s ago) - treating as LIVE`)
+                isLive = true
+                // Use session data for stream info
+                if (activeSession.started_at) {
+                    streamStartedAt = activeSession.started_at.toISOString()
+                }
+                if (activeSession.session_title) {
+                    streamTitle = activeSession.session_title
+                }
+                if (activeSession.thumbnail_url) {
+                    thumbnailUrl = activeSession.thumbnail_url
+                }
+            } else {
+                console.log(`[Channel API] API failed and session is stale (${Math.round(timeSinceLastCheck/1000)}s since last check) - treating as OFFLINE`)
+            }
+        }
 
         // Fallback: If API didn't provide started_at but stream is live, use database session time
         if (isLive && !streamStartedAt && activeSession) {
@@ -974,7 +1005,13 @@ export async function GET(request: Request) {
         }
 
         // Track stream sessions (this is the ONLY place sessions are created/ended)
-        await trackStreamSession(slug, broadcasterUserId, isLive, viewerCount, streamTitle, thumbnailUrl, null, streamStartedAt)
+        // Only update session state if we got a definitive API response
+        // This prevents ending sessions due to transient API failures
+        if (apiResponseReceived || isLive) {
+            await trackStreamSession(slug, broadcasterUserId, isLive, viewerCount, streamTitle, thumbnailUrl, null, streamStartedAt)
+        } else {
+            console.log(`[Channel API] Skipping session tracking - API didn't respond and isLive=${isLive}`)
+        }
 
         // Ensure channelData exists before spreading
         if (!channelData) {

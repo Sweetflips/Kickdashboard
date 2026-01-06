@@ -375,6 +375,11 @@ export async function POST(request: Request) {
 
         try {
             resolvedSession = await resolveSessionForChat(broadcasterUserId, messageTimestampMs)
+            if (!resolvedSession) {
+                console.log(`[webhook] No session found for broadcaster ${broadcasterUserId} at timestamp ${messageTimestampMs}`)
+            } else {
+                console.log(`[webhook] Resolved session ${resolvedSession.sessionId} (active: ${resolvedSession.isActive}) for broadcaster ${broadcasterUserId}`)
+            }
         } catch (error: any) {
             // Non-critical - continue without session info
             const isConnectionError = error?.code === 'P1001' ||
@@ -446,8 +451,8 @@ export async function POST(request: Request) {
         // Actual DB sync happens in redis-sync worker
 
         if (sessionIsActive && jobPayload.stream_session_id) {
+            console.log(`[webhook] Awarding coins to @${jobPayload.sender.username} for session ${jobPayload.stream_session_id}`)
             // Award coins instantly via Redis (non-blocking)
-            const senderKickUserId = BigInt(jobPayload.sender.kick_user_id)
             const sessionId = jobPayload.stream_session_id
 
             // Upsert user to ensure they exist (fixes first-time chatters missing coins)
@@ -502,6 +507,13 @@ export async function POST(request: Request) {
                         error: err instanceof Error ? err.message : 'Unknown error',
                     })
                 }
+            }
+        } else {
+            // Log why coins weren't awarded - helps diagnose issues
+            if (!sessionIsActive) {
+                console.log(`[webhook] Not awarding coins to @${jobPayload.sender.username} - no active session`)
+            } else if (!jobPayload.stream_session_id) {
+                console.log(`[webhook] Not awarding coins to @${jobPayload.sender.username} - no stream_session_id`)
             }
         }
 
