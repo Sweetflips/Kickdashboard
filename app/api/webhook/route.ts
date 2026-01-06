@@ -453,6 +453,7 @@ export async function POST(request: Request) {
         if (sessionIsActive && jobPayload.stream_session_id) {
             console.log(`[webhook] Awarding coins to @${jobPayload.sender.username} for session ${jobPayload.stream_session_id}`)
             // Award coins instantly via Redis (non-blocking)
+            const senderKickUserId = BigInt(jobPayload.sender.kick_user_id)
             const sessionId = jobPayload.stream_session_id
 
             // Upsert user to ensure they exist (fixes first-time chatters missing coins)
