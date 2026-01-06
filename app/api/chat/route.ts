@@ -151,9 +151,9 @@ export async function GET(request: Request) {
 
         // Combine and sort messages by timestamp
         const allMessages = [
-            ...onlineMessages.map(msg => ({ ...msg, isOffline: false })),
-            ...offlineMessages.map(msg => ({ ...msg, isOffline: true })),
-        ].sort((a, b) => {
+            ...(onlineMessages as any[]).map((msg: any) => ({ ...msg, isOffline: false })),
+            ...(offlineMessages as any[]).map((msg: any) => ({ ...msg, isOffline: true })),
+        ].sort((a: any, b: any) => {
             const aTime = Number(a.timestamp)
             const bTime = Number(b.timestamp)
             return bTime - aTime // Descending order

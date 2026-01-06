@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       db.botReplyLog.count({ where }),
     ])
 
-    const serializedLogs = logs.map(log => ({
+    const serializedLogs = (logs as any[]).map((log: any) => ({
       ...log,
       id: log.id.toString(),
       broadcaster_user_id: log.broadcaster_user_id.toString(),

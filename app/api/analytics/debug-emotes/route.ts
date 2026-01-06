@@ -21,7 +21,7 @@ export async function GET(request: Request) {
         })
 
         // Analyze emotes structure
-        const analysis = messages.map((msg) => {
+        const analysis = (messages as any[]).map((msg: any) => {
             const emotes = msg.emotes
             const analysis: any = {
                 message_id: msg.message_id,

@@ -65,7 +65,7 @@ await test('User model has razed_connected field', async () => {
             AND table_name = 'users' 
             AND column_name IN ('razed_connected', 'razed_username', 'razed_user_id')
         `
-        const columns = result.map(r => r.column_name)
+        const columns = result.map((r: { column_name: string }) => r.column_name)
         return columns.includes('razed_connected') && 
                columns.includes('razed_username') && 
                columns.includes('razed_user_id')

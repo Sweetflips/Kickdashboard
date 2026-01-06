@@ -20,7 +20,20 @@ export async function GET(request: NextRequest) {
         const sortBy = searchParams.get('sort') || 'recent'
 
         // Fetch all purchases with user info
-        const purchases = await db.adventPurchase.findMany({
+        type PurchaseWithUser = {
+            id: bigint
+            user_id: bigint
+            item_id: string
+            tickets: number
+            created_at: Date
+            user: {
+                id: bigint
+                username: string
+                kick_user_id: bigint
+                profile_picture_url: string | null
+            }
+        }
+        const purchasesRaw = await db.adventPurchase.findMany({
             include: {
                 user: {
                     select: {
@@ -34,19 +47,8 @@ export async function GET(request: NextRequest) {
             orderBy: {
                 created_at: 'desc',
             },
-        }) as Array<{
-            id: bigint
-            user_id: bigint
-            item_id: string
-            tickets: number
-            created_at: Date
-            user: {
-                id: bigint
-                username: string
-                kick_user_id: bigint
-                profile_picture_url: string | null
-            }
-        }>
+        })
+        const purchases = purchasesRaw as unknown as PurchaseWithUser[]
 
         // Group by user
         const userPurchases: Record<string, {

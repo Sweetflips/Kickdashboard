@@ -89,7 +89,7 @@ export async function GET(
         })
 
         // Format messages
-        const formattedMessages = messages.map(msg => ({
+        const formattedMessages = messages.map((msg: typeof messages[number]) => ({
             message_id: msg.message_id,
             sender: {
                 is_anonymous: msg.sender_is_anonymous || false,

@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     ])
 
     // Convert BigInt to string for JSON serialization
-    const serializedLogs = logs.map(log => ({
+    const serializedLogs = (logs as any[]).map((log: any) => ({
       ...log,
       id: log.id.toString(),
       broadcaster_user_id: log.broadcaster_user_id.toString(),

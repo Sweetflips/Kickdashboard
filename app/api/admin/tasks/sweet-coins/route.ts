@@ -56,7 +56,7 @@ export async function GET(request: Request) {
           select: { kick_user_id: true, username: true },
           take: 50,
         })
-        const ids = matchingUsers.map(u => u.kick_user_id)
+        const ids = (matchingUsers as any[]).map((u: any) => u.kick_user_id)
         if (ids.length > 0) {
           or.push({ kick_user_id: { in: ids } })
         }
@@ -76,21 +76,21 @@ export async function GET(request: Request) {
     ])
 
     // Best-effort username map (no FK relation in schema)
-    const kickIds = Array.from(new Set(rows.map(r => r.kick_user_id.toString()))).slice(0, 200)
+    const kickIds = Array.from(new Set((rows as any[]).map((r: any) => r.kick_user_id.toString()))).slice(0, 200)
     const users = kickIds.length
       ? await db.user.findMany({
-          where: { kick_user_id: { in: kickIds.map(id => BigInt(id)) } },
+          where: { kick_user_id: { in: kickIds.map((id: any) => BigInt(id)) } },
           select: { kick_user_id: true, username: true },
         })
       : []
-    const usernameByKickId = new Map(users.map(u => [u.kick_user_id.toString(), u.username]))
+    const usernameByKickId = new Map((users as any[]).map((u: any) => [u.kick_user_id.toString(), u.username]))
 
     return NextResponse.json({
       success: true,
       total,
       limit,
       offset,
-      jobs: rows.map(r => ({
+      jobs: (rows as any[]).map((r: any) => ({
         type: 'sweet_coins' as const,
         id: r.id.toString(),
         status: r.status,

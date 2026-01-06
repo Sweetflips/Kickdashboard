@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     const drawnDaysSet = new Set<number>()
 
     const purchaseMap = new Map(
-      purchases.map(p => [p.item_id, p.tickets])
+      (purchases as any[]).map((p: any) => [p.item_id, p.tickets])
     )
 
     // Build response with unlock status and purchase counts

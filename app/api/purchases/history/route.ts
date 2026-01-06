@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       return null
     })()
 
-    const { rows } = await db.$transaction(async (tx) => {
+    const { rows } = await db.$transaction(async (tx: any) => {
       await backfillMissingPurchaseTransactions(tx as any, auth.userId)
       const rows = await tx.$queryRaw<TxRow[]>`
         SELECT id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, created_at
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
         })
       : []
     const raffleById = new Map<string, { status: string; end_at: Date; drawn_at: Date | null }>(
-      raffles.map(r => [r.id.toString(), { status: r.status, end_at: r.end_at, drawn_at: r.drawn_at }])
+      raffles.map((r: { id: bigint; status: string; end_at: Date; drawn_at: Date | null }) => [r.id.toString(), { status: r.status, end_at: r.end_at, drawn_at: r.drawn_at }])
     )
 
     // Advent day status table removed - treat no days as drawn

@@ -13,6 +13,21 @@
 
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+
+// Define types locally since Prisma Accelerate doesn't export input types
+type StreamSessionUpdateData = {
+    session_title?: string | null
+    thumbnail_url?: string | null
+    kick_stream_id?: string | null
+    peak_viewer_count?: number
+    last_live_check_at?: Date
+    updated_at?: Date
+    ended_at?: Date
+    total_messages?: number
+    duration_seconds?: number
+    started_at?: Date
+}
 
 // Grace period before ending a session (prevents flapping due to brief disconnects)
 // Reduced to 30 seconds for faster response when stream actually ends
@@ -96,7 +111,7 @@ export async function getOrCreateActiveSession(
 
             if (existing) {
                 // Update existing session with new metadata
-                const updateData: Prisma.StreamSessionUpdateInput = {
+                const updateData: StreamSessionUpdateData = {
                     last_live_check_at: new Date(),
                     updated_at: new Date(),
                 }
@@ -151,7 +166,7 @@ export async function getOrCreateActiveSession(
 
         } catch (error: any) {
             // Handle unique constraint violation (race condition - another request created session)
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
                 console.log(`[SessionManager] Unique constraint hit, fetching existing session (attempt ${attempt + 1})`)
 
                 // Another process created the session - fetch it
@@ -288,7 +303,7 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
                 console.log(`[SessionManager] Backfilling ${offlineMessages.length} offline message(s) into session ${sessionId}`)
 
                 // Convert offline messages to chat messages
-                const chatMessagesToCreate = offlineMessages.map(offlineMsg => ({
+                const chatMessagesToCreate = offlineMessages.map((offlineMsg: any) => ({
                     message_id: offlineMsg.message_id,
                     stream_session_id: sessionId,
                     sender_user_id: offlineMsg.sender_user_id,
@@ -322,7 +337,7 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
                 await db.offlineChatMessage.deleteMany({
                     where: {
                         message_id: {
-                            in: offlineMessages.map(m => m.message_id),
+                            in: offlineMessages.map((m: any) => m.message_id),
                         },
                     },
                 })
@@ -451,7 +466,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
             if (offlineMessages.length > 0) {
                 console.log(`[SessionManager] Backfilling ${offlineMessages.length} offline message(s) into session ${sessionId}`)
 
-                const chatMessagesToCreate = offlineMessages.map(offlineMsg => ({
+                const chatMessagesToCreate = offlineMessages.map((offlineMsg: any) => ({
                     message_id: offlineMsg.message_id,
                     stream_session_id: sessionId,
                     sender_user_id: offlineMsg.sender_user_id,
@@ -481,7 +496,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
                 await db.offlineChatMessage.deleteMany({
                     where: {
                         message_id: {
-                            in: offlineMessages.map(m => m.message_id),
+                            in: offlineMessages.map((m: any) => m.message_id),
                         },
                     },
                 })
@@ -535,7 +550,7 @@ export async function updateSessionMetadata(
     metadata: SessionMetadata
 ): Promise<boolean> {
     try {
-        const updateData: Prisma.StreamSessionUpdateInput = {
+        const updateData: StreamSessionUpdateData = {
             updated_at: new Date(),
         }
 
@@ -808,7 +823,7 @@ export async function mergeLikelyDuplicateSessions(anchorSessionId: bigint): Pro
         const mergedIds = group.map(s => s.id)
         const deletedIds: bigint[] = []
 
-        await db.$transaction(async (tx) => {
+        await db.$transaction(async (tx: any) => {
             // Move related records
             for (const dup of toMerge) {
                 await tx.chatMessage.updateMany({

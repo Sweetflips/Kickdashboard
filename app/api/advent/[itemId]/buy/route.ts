@@ -2,7 +2,7 @@ import { ADVENT_ITEMS, isDayPast, isDayUnlocked } from '@/lib/advent-calendar'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { backfillPurchaseTransactionsIfEmpty, ensurePurchaseTransactionsTable } from '@/lib/purchases-ledger'
-import { Prisma } from '@prisma/client'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -88,7 +88,7 @@ export async function POST(
     }
 
     // Use transaction to ensure atomicity
-    const result = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: any) => {
       await backfillPurchaseTransactionsIfEmpty(tx as any, auth.userId)
       await ensurePurchaseTransactionsTable(tx as any)
 
@@ -202,7 +202,7 @@ export async function POST(
     }, {
       maxWait: 20000,
       timeout: 30000,
-      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+      isolationLevel: 'ReadCommitted',
     })
 
     return NextResponse.json({
@@ -233,7 +233,7 @@ export async function POST(
     }
 
     // Handle unique constraint violation (shouldn't happen with transaction, but handle gracefully)
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json(
         { error: 'Purchase already exists. Please try again.' },
         { status: 400 }

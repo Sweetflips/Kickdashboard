@@ -50,7 +50,13 @@ export async function GET(request: Request) {
             }
         }
 
-        let session
+        let session: {
+            id: bigint
+            ended_at: Date | null
+            session_title: string | null
+            started_at: Date
+            broadcaster_user_id: bigint
+        } | null | undefined
 
         // Helper function for session queries with retry logic
         const findSessionWithRetry = async <T>(queryFn: () => Promise<T>, maxRetries = 3): Promise<T | null> => {
@@ -246,9 +252,9 @@ export async function GET(request: Request) {
         // Calculate total points from Redis or DB
         const totalPoints = isActiveSession && redisLeaderboard.length > 0
             ? redisLeaderboard.reduce((sum, entry) => sum + entry.coins, 0)
-            : (totalPointsResult._sum.sweet_coins_earned || 0)
+            : ((totalPointsResult as any)._sum.sweet_coins_earned || 0)
         const totalMessages = totalMessagesResult
-        const uniqueChatters = messageCounts.length
+        const uniqueChatters = (messageCounts as any[]).length
 
         // Get kick_user_ids from message counts to fetch user details
         const kickUserIds = (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).map(m => m.sender_user_id)
@@ -291,16 +297,16 @@ export async function GET(request: Request) {
             )
         }
 
-        const usersResults = await Promise.all(usersPromises)
-        const allUsers = [...usersResults[0], ...(usersResults[1] || [])]
+        const usersResults = await Promise.all(usersPromises) as any[][]
+        const allUsers = [...(usersResults[0] || []), ...(usersResults[1] || [])]
 
         // Deduplicate users by id
-        const usersMap = new Map(allUsers.map(u => [u.id.toString(), u]))
-        const users = Array.from(usersMap.values())
+        const usersMap = new Map((allUsers as any[]).map((u: any) => [u.id.toString(), u]))
+        const users = Array.from(usersMap.values()) as any[]
 
         // Create maps for lookups
-        const kickUserIdToUser = new Map(users.map(u => [Number(u.kick_user_id), u]))
-        const userIdToUser = new Map(users.map(u => [u.id.toString(), u]))
+        const kickUserIdToUser = new Map(users.map((u: any) => [Number(u.kick_user_id), u]))
+        const userIdToUser = new Map(users.map((u: any) => [u.id.toString(), u]))
 
         // Points map - use Redis for active sessions, DB for ended sessions
         const userIdToPoints = new Map<number, number>()
@@ -310,7 +316,7 @@ export async function GET(request: Request) {
                 userIdToPoints.set(Number(entry.userId), entry.coins)
             })
         } else {
-            pointsByUser.forEach(p => {
+            (pointsByUser as any[]).forEach((p: any) => {
                 userIdToPoints.set(Number(p.user_id), p._sum.sweet_coins_earned || 0)
             })
         }
@@ -332,7 +338,7 @@ export async function GET(request: Request) {
 
         // Count emotes per user
         const emotesMap = new Map<number, number>()
-        messagesWithEmotes.forEach((msg) => {
+        ;(messagesWithEmotes as any[]).forEach((msg: any) => {
             const kickUserId = Number(msg.sender_user_id)
             const emotes = msg.emotes
             if (emotes && Array.isArray(emotes) && emotes.length > 0) {
@@ -362,7 +368,7 @@ export async function GET(request: Request) {
         }>()
 
         // Process message counts
-        (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count) => {
+        ;(messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count: any) => {
             const kickUserId = Number(count.sender_user_id)
             const user = kickUserIdToUser.get(kickUserId)
             if (!user) return
@@ -379,7 +385,7 @@ export async function GET(request: Request) {
         })
 
         // Add users with points but no messages (shouldn't happen, but be safe)
-        (pointsByUser as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>).forEach((pt) => {
+        ;(pointsByUser as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>).forEach((pt: any) => {
             const userId = Number(pt.user_id)
             const user = users.find(u => Number(u.id) === userId)
             if (!user) return
@@ -396,13 +402,13 @@ export async function GET(request: Request) {
         })
 
         // Convert to array and sort
-        const userStatsArray = Array.from(userStatsMap.values())
-            .sort((a, b) => {
-                if (b.points !== a.points) {
-                    return b.points - a.points
-                }
-                return b.messages - a.messages
-            })
+        const userStatsArray = Array.from(userStatsMap.values()) as Array<{ points: number; messages: number; emotes: number; userId: bigint }>
+        userStatsArray.sort((a: { points: number; messages: number }, b: { points: number; messages: number }) => {
+            if (b.points !== a.points) {
+                return b.points - a.points
+            }
+            return b.messages - a.messages
+        })
 
         // Calculate ranks
         const ranksArray: number[] = []
@@ -411,8 +417,8 @@ export async function GET(request: Request) {
             if (i === 0) {
                 ranksArray.push(currentRank)
             } else {
-                const prevEntry = userStatsArray[i - 1]
-                const currEntry = userStatsArray[i]
+                const prevEntry = userStatsArray[i - 1] as { points: number }
+                const currEntry = userStatsArray[i] as { points: number }
                 if (currEntry.points === prevEntry.points) {
                     ranksArray.push(ranksArray[i - 1])
                 } else {
@@ -429,9 +435,9 @@ export async function GET(request: Request) {
             userIdToKickUserId.set(u.id, Number(u.kick_user_id))
         })
 
-        const leaderboard = userStatsArray.map((stats, index) => {
+        const leaderboard = userStatsArray.map((stats: { points: number; messages: number; emotes: number; userId: bigint }, index: number) => {
             const kickUserId = userIdToKickUserId.get(stats.userId)
-            const user = kickUserId ? kickUserIdToUser.get(kickUserId) : null
+            const user = kickUserId ? kickUserIdToUser.get(kickUserId) as any : null
 
             return {
                 rank: ranksArray[index],

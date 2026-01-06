@@ -1,7 +1,24 @@
 import { isAdmin, canViewPayouts } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
+
+// Define types locally since Prisma Accelerate doesn't export input types
+type StreamSessionWhereInput = {
+    ended_at?: { not: null } | null
+    broadcaster_user_id?: bigint
+}
+
+type StreamSessionUpdateData = {
+    thumbnail_last_refreshed_at?: Date
+    thumbnail_source?: string
+    thumbnail_url?: string
+    thumbnail_captured_at?: Date
+    kick_stream_id?: string
+    session_title?: string
+    ended_at?: Date
+    started_at?: Date
+    duration_seconds?: number
+}
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { fetchKickV2ChannelVideos } from '@/lib/kick-videos'
 
@@ -24,7 +41,7 @@ export async function GET(request: Request) {
         const broadcasterUserId = searchParams.get('broadcaster_user_id')
         const skipDeduplication = searchParams.get('skip_deduplication') === 'true'
 
-        const where: Prisma.StreamSessionWhereInput = {
+        const where: StreamSessionWhereInput = {
             ended_at: { not: null }, // Only show ended streams for Past Streams
         }
 
@@ -64,12 +81,12 @@ export async function GET(request: Request) {
         let deduplicatedSessions = allSessions
 
         if (!skipDeduplication) {
-            deduplicatedSessions = allSessions.reduce((acc, session) => {
+            deduplicatedSessions = (allSessions as any[]).reduce((acc: any[], session: any) => {
                 // First, try to find duplicate by kick_stream_id (most reliable)
                 let existingIndex = -1
 
                 if (session.kick_stream_id) {
-                    existingIndex = acc.findIndex(s =>
+                    existingIndex = acc.findIndex((s: any) =>
                         s.broadcaster_user_id === session.broadcaster_user_id &&
                         s.kick_stream_id === session.kick_stream_id &&
                         s.kick_stream_id !== null
@@ -78,7 +95,7 @@ export async function GET(request: Request) {
 
                 // If no match by kick_stream_id, fallback to started_at window
                 if (existingIndex === -1) {
-                    existingIndex = acc.findIndex(s =>
+                    existingIndex = acc.findIndex((s: any) =>
                         s.broadcaster_user_id === session.broadcaster_user_id &&
                         Math.abs(s.started_at.getTime() - session.started_at.getTime()) < 60000 // Within 1 minute
                     )
@@ -174,7 +191,7 @@ export async function GET(request: Request) {
                         }
                         if (!best || bestDiff > maxDiffMs) continue
 
-                        const updateData: Prisma.StreamSessionUpdateInput = {
+                        const updateData: StreamSessionUpdateData = {
                             thumbnail_last_refreshed_at: new Date(),
                             thumbnail_source: 'kick_vod_auto',
                         }
@@ -255,7 +272,7 @@ export async function GET(request: Request) {
         }
 
         // Calculate duration for completed streams with null safety
-        const sessionsWithDuration = paginatedSessions.map(session => {
+        const sessionsWithDuration = (paginatedSessions as any[]).map((session: any) => {
             let duration: number | null = null
             if (session.ended_at && session.started_at) {
                 try {
@@ -400,10 +417,10 @@ export async function DELETE(request: Request) {
             select: { id: true },
         })
 
-        const allSessionIds = duplicateSessions.map(s => s.id)
+        const allSessionIds = (duplicateSessions as any[]).map((s: any) => s.id)
         const deletedCount = allSessionIds.length
 
-        console.log(`[DELETE] Deleting ${deletedCount} session(s) (primary: ${sessionIdBigInt}, duplicates: ${allSessionIds.filter(id => id !== sessionIdBigInt).map(id => id.toString()).join(', ') || 'none'})`)
+        console.log(`[DELETE] Deleting ${deletedCount} session(s) (primary: ${sessionIdBigInt}, duplicates: ${allSessionIds.filter((id: any) => id !== sessionIdBigInt).map((id: any) => id.toString()).join(', ') || 'none'})`)
 
         // Delete related records first (chat messages, Sweet Coins history, jobs)
         // This prevents foreign key constraint errors

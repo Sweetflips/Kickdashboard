@@ -82,7 +82,7 @@ export async function GET(request: Request) {
       }>
     }
 
-    const [usersRaw, total] = await Promise.all([
+    const [usersRawResult, total] = await Promise.all([
       db.user.findMany({
         where,
         include: {
@@ -109,9 +109,10 @@ export async function GET(request: Request) {
             },
           },
         },
-      }) as Promise<UserWithRelations[]>,
+      }),
       db.user.count({ where }),
     ])
+    const usersRaw = usersRawResult as unknown as UserWithRelations[]
 
     // Sort by Sweet Coins descending, then by created_at descending
     const sortedUsers = usersRaw.sort((a, b) => {
@@ -170,7 +171,7 @@ export async function GET(request: Request) {
 
     // Group users by session IP hash
     const sessionIPMap = new Map<string, bigint[]>()
-    allSessions.forEach(session => {
+    ;(allSessions as any[]).forEach((session: any) => {
       if (session.ip_hash) {
         if (!sessionIPMap.has(session.ip_hash)) {
           sessionIPMap.set(session.ip_hash, [])

@@ -82,8 +82,8 @@ export async function GET(request: Request) {
             WHERE created_at >= NOW() - INTERVAL '30 days'
             GROUP BY 1
             ORDER BY 1 ASC
-        `.then(rows =>
-            rows.map(r => ({
+        `.then((rows: any) =>
+            rows.map((r: any) => ({
                 date: r.day.toISOString().slice(0, 10),
                 messages: Number(r.messages),
                 emotes: Number(r.emotes),
@@ -103,8 +103,8 @@ export async function GET(request: Request) {
             },
         })
 
-        const streamsTotalMessages = recentStreams.reduce((sum, s) => sum + (s.total_messages || 0), 0)
-        const streamsTotalViewers = recentStreams.reduce((sum, s) => sum + (s.peak_viewer_count || 0), 0)
+        const streamsTotalMessages = (recentStreams as any[]).reduce((sum: number, s: any) => sum + (s.total_messages || 0), 0)
+        const streamsTotalViewers = (recentStreams as any[]).reduce((sum: number, s: any) => sum + (s.peak_viewer_count || 0), 0)
         const avg_messages_per_stream = recentStreams.length ? Number((streamsTotalMessages / recentStreams.length).toFixed(2)) : 0
         const avg_viewers_per_stream = recentStreams.length ? Number((streamsTotalViewers / recentStreams.length).toFixed(2)) : 0
         const engagement_rate = streamsTotalViewers > 0 ? Number((totalMessages / streamsTotalViewers).toFixed(2)) : 0

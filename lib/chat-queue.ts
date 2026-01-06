@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 
 const verboseQueueLogging = process.env.CHAT_QUEUE_VERBOSE_LOGS === 'true'
@@ -69,7 +70,7 @@ export async function enqueueChatJob(payload: ChatJobPayload): Promise<{ success
             return { success: true }
         } catch (error: any) {
             // Check if it's a table missing error (P2021)
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2021') {
                 console.error(`[enqueueChatJob] Table 'chat_jobs' does not exist. Run migration.`)
                 return { success: false, error: 'Table missing' }
             }
@@ -122,7 +123,7 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            const jobs = await db.$transaction(async (tx) => {
+            const jobs = await db.$transaction(async (tx: any) => {
                 // Unlock stale locks
                 await tx.$executeRaw`
                     UPDATE chat_jobs

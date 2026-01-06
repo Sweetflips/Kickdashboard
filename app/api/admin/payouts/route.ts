@@ -108,7 +108,7 @@ export async function GET(request: Request) {
             },
         })
 
-        const userMap = new Map(users.map(u => [u.id.toString(), u]))
+        const userMap = new Map((users as any[]).map((u: any) => [u.id.toString(), u]))
 
         // Rank bonus multipliers (top 3 bonuses; everyone else is even)
         const RANK_MULTIPLIERS: Record<number, number> = {
@@ -192,7 +192,7 @@ export async function GET(request: Request) {
 
         // Build payouts array for eligible users only
         const payouts = usersWithWeightedPoints.map(p => {
-            const user = userMap.get(p.user_id.toString())
+            const user = userMap.get(p.user_id.toString()) as any
             const rawPayout = p.weightedSweetCoins * dollarPerWeightedSweetCoin
             const payout = roundTo >= 0 ? Number(rawPayout.toFixed(roundTo)) : rawPayout
             const percentage = (p.weightedSweetCoins / totalWeightedSweetCoins) * 100

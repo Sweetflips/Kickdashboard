@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { awardSweetCoins, awardEmotes } from '@/lib/sweet-coins'
 import { Prisma } from '@prisma/client'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 
 const verboseQueueLogging = process.env.POINT_QUEUE_VERBOSE_LOGS === 'true'
@@ -53,7 +54,7 @@ export async function enqueueSweetCoinJob(params: EnqueueSweetCoinJobParams): Pr
             return // Success
         } catch (error: any) {
             // Check if it's a table missing error (P2021)
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2021') {
                 // Table doesn't exist - log a clear error message
                 console.error(`[enqueueSweetCoinJob] Table 'sweet_coin_award_jobs' does not exist. Run migration: npx prisma migrate deploy`)
                 return // Don't retry for missing table
@@ -109,7 +110,7 @@ export async function claimJobs(batchSize: number = 10, lockTimeoutSeconds: numb
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
             // Use a single transaction to atomically unlock stale locks and claim new jobs
-            const jobs = await db.$transaction(async (tx) => {
+            const jobs = await db.$transaction(async (tx: any) => {
                 // First, unlock any stale locks (jobs locked too long ago)
                 await tx.$executeRaw`
                     UPDATE sweet_coin_award_jobs

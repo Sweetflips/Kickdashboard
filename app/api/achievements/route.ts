@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       },
       select: { message_id: true },
     })
-    const claimedSet = new Set(claimedRows.map((r) => r.message_id).filter(Boolean) as string[])
+    const claimedSet = new Set((claimedRows as any[]).map((r: any) => r.message_id).filter(Boolean) as string[])
 
     const statuses: AchievementStatus[] = ACHIEVEMENTS.map((a) => ({
       id: a.id,

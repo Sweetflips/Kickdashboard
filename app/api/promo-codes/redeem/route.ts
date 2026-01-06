@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         const authUser = auth
 
         // Use transaction to ensure atomicity
-        const result = await db.$transaction(async (tx) => {
+        const result = await db.$transaction(async (tx: any) => {
             // Look up promo code in database
             const promoCode = await tx.promoCode.findUnique({
                 where: { code: normalizedCode },

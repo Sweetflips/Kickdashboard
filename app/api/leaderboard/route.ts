@@ -3,7 +3,7 @@ import { memoryCache } from '@/lib/memory-cache'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { ensurePurchaseTransactionsTable } from '@/lib/purchases-ledger'
 import { NextResponse } from 'next/server'
-import { Prisma } from '@prisma/client'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 // Allow caching but revalidate frequently for fresh data
 export const dynamic = 'force-dynamic'
@@ -307,7 +307,7 @@ async function withRetry<T>(
             return await fn()
         } catch (error: any) {
             const isRetryableError =
-                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error instanceof PrismaClientKnownRequestError &&
                 (error.code === 'P2024' || error.code === 'P2034' || error.code === 'P4001' || error.code === 'P2028') ||
                 (error instanceof Error && (
                     error.message.includes('could not serialize access') ||
@@ -318,7 +318,7 @@ async function withRetry<T>(
 
             if (isRetryableError && attempt < maxRetries - 1) {
                 const delay = Math.min(100 * Math.pow(2, attempt), 1000) // Exponential backoff: 100ms, 200ms, 400ms max
-                const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined
+                const code = error instanceof PrismaClientKnownRequestError ? error.code : undefined
                 console.warn(`[${operation}] Retryable error (attempt ${attempt + 1}/${maxRetries}), retrying after ${delay}ms...`, code || error.message)
                 await new Promise(resolve => setTimeout(resolve, delay))
                 continue
@@ -397,11 +397,17 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
         }),
         3,
         'buildOverallRowsV2: fetch userSweetCoins'
-    )
+    ) as Array<{
+        user_id: bigint
+        total_sweet_coins: number
+        total_emotes: number
+        last_sweet_coin_earned_at: Date | null
+        user: any
+    }>
 
     if (userPoints.length === 0) return []
 
-    const userIds = userPoints.map(up => up.user_id)
+    const userIds = userPoints.map((up: any) => up.user_id)
 
     // Earned/Spent totals
     const [earnedAgg, spentAgg] = await Promise.all([
@@ -498,12 +504,12 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
     ])
 
     const messagesMap = new Map<bigint, number>()
-    (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((row) => {
+    ;(messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((row: any) => {
         messagesMap.set(row.sender_user_id, Number(row._count.id))
     })
 
     const streamsMap = new Map<bigint, number>()
-    (streamPairs as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((row) => {
+    ;(streamPairs as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((row: any) => {
         streamsMap.set(row.sender_user_id, (streamsMap.get(row.sender_user_id) || 0) + 1)
     })
 
@@ -533,11 +539,11 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
         }),
         3,
         'buildDateFilteredRowsV2: sweetCoinHistory groupBy'
-    )
+    ) as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null }; _max: { earned_at: Date | null } }>
 
     if (pointAgg.length === 0) return []
 
-    const userIds = pointAgg.map(a => a.user_id)
+    const userIds = pointAgg.map((a: any) => a.user_id)
 
     // Fetch users first
     const users = await withRetry(
@@ -556,10 +562,10 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
         }),
         3,
         'buildDateFilteredRowsV2: fetch users'
-    )
+    ) as any[]
 
     const userById = new Map<bigint, UserSummaryV2>()
-    users.forEach((u) => userById.set(u.id, u as unknown as UserSummaryV2))
+    users.forEach((u: any) => userById.set(u.id, u as unknown as UserSummaryV2))
 
     // Fetch balances
     const balances = await withRetry(
@@ -569,8 +575,8 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
         }),
         3,
         'buildDateFilteredRowsV2: balances findMany'
-    ).catch(() => [] as Array<{ user_id: bigint; total_sweet_coins: number }>)
-    const balanceByUserId = new Map<bigint, number>(balances.map(b => [b.user_id, b.total_sweet_coins]))
+    ).catch(() => [] as Array<{ user_id: bigint; total_sweet_coins: number }>) as Array<{ user_id: bigint; total_sweet_coins: number }>
+    const balanceByUserId = new Map<bigint, number>(balances.map((b: any) => [b.user_id, b.total_sweet_coins]))
 
     // Spent in range
     await safeEnsurePurchaseTransactionsTable()
@@ -592,7 +598,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
     for (const r of spentAgg) spentByUserId.set(r.user_id as bigint, r._sum?.sweet_coins_spent || 0)
 
     // Derive kick_user_ids to scope queries (keep as BigInt for Prisma compatibility)
-    const kickUserIds = users.map(u => {
+    const kickUserIds = users.map((u: any) => {
         const kickId = u.kick_user_id
         return typeof kickId === 'bigint' ? kickId : BigInt(kickId)
     }).filter(Boolean)
@@ -675,7 +681,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
     }
 
     return pointAgg
-        .map((agg) => {
+        .map((agg: any) => {
             const user = userById.get(agg.user_id)
             if (!user) return null
 
@@ -727,8 +733,8 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
     })
 
     // Get kick_user_ids for batch message/stream queries
-    const kickUserIds = userPoints.map(up => Number(up.user.kick_user_id))
-    const userIds = userPoints.map(up => Number(up.user_id))
+    const kickUserIds = (userPoints as any[]).map((up: any) => Number(up.user.kick_user_id))
+    const userIds = (userPoints as any[]).map((up: any) => Number(up.user_id))
 
     // Batch fetch message counts and streams watched
     const [messageCounts, streamsWatched] = await Promise.all([
@@ -754,13 +760,13 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
 
     // Build maps
     const messagesMap = new Map<number, number>()
-    (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count) => {
+    ;(messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count: any) => {
         messagesMap.set(Number(count.sender_user_id), Number(count._count.id))
     })
 
     const streamsMap = new Map<number, number>()
     const streamsByUser = new Map<number, Set<number>>()
-    (streamsWatched as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((stream) => {
+    ;(streamsWatched as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((stream: any) => {
         const kickUserId = Number(stream.sender_user_id)
         const sessionId = stream.stream_session_id ? Number(stream.stream_session_id) : null
         if (sessionId) {
@@ -770,12 +776,12 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
             streamsByUser.get(kickUserId)!.add(sessionId)
         }
     })
-    streamsByUser.forEach((sessionSet, kickUserId) => {
+    streamsByUser.forEach((sessionSet: Set<number>, kickUserId: number) => {
         streamsMap.set(kickUserId, sessionSet.size)
     })
 
     // Build leaderboard entries
-    const leaderboard = userPoints.map((up, index) => {
+    const leaderboard = (userPoints as any[]).map((up: any, index: number) => {
         const user = up.user
         const kickUserId = Number(user.kick_user_id)
         const userId = Number(user.id)
@@ -829,7 +835,7 @@ async function fetchDateFilteredLeaderboard(
     // Note: Prisma groupBy doesn't support orderBy on aggregated fields directly
     // So we need to fetch more and sort in memory, or use raw SQL
     // For now, fetch all aggregates, sort, then paginate
-    const pointAggregates = await db.sweetCoinHistory.groupBy({
+    const pointAggregatesRaw = await db.sweetCoinHistory.groupBy({
         by: ['user_id'],
         where: {
             earned_at: dateFilter,
@@ -840,18 +846,18 @@ async function fetchDateFilteredLeaderboard(
         _max: {
             earned_at: true,
         },
-    })
+    }) as any[]
 
     // Sort by points descending
-    pointAggregates.sort((a, b) => {
+    pointAggregatesRaw.sort((a: any, b: any) => {
         const aPoints = a._sum.sweet_coins_earned || 0
         const bPoints = b._sum.sweet_coins_earned || 0
         return bPoints - aPoints
     })
 
     // Paginate
-    const paginatedAggregates = pointAggregates.slice(offset, offset + limit)
-    const userIds = paginatedAggregates.map(agg => Number(agg.user_id))
+    const paginatedAggregates = pointAggregatesRaw.slice(offset, offset + limit)
+    const userIds = paginatedAggregates.map((agg: any) => Number(agg.user_id))
 
     // Get user details
     const users = await db.user.findMany({
@@ -870,8 +876,8 @@ async function fetchDateFilteredLeaderboard(
         },
     })
 
-    const userMap = new Map(users.map(u => [Number(u.id), u]))
-    const kickUserIds = users.map(u => Number(u.kick_user_id))
+    const userMap = new Map((users as any[]).map((u: any) => [Number(u.id), u]))
+    const kickUserIds = (users as any[]).map((u: any) => Number(u.kick_user_id))
 
     // Batch fetch stats for these users
     const [messageCounts, streamsWatched, emotesQuery] = await Promise.all([
@@ -911,19 +917,19 @@ async function fetchDateFilteredLeaderboard(
     // Build maps
     const pointsMap = new Map<number, number>()
     const lastPointEarnedMap = new Map<number, Date | null>()
-    paginatedAggregates.forEach((agg) => {
+    paginatedAggregates.forEach((agg: any) => {
         const userId = Number(agg.user_id)
         pointsMap.set(userId, agg._sum.sweet_coins_earned || 0)
         lastPointEarnedMap.set(userId, agg._max.earned_at || null)
     })
 
     const messagesMap = new Map<number, number>()
-    (messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count) => {
+    ;(messageCounts as Array<{ sender_user_id: bigint; _count: { id: number } }>).forEach((count: any) => {
         messagesMap.set(Number(count.sender_user_id), Number(count._count.id))
     })
 
     const emotesMap = new Map<number, number>()
-    emotesQuery.forEach((msg) => {
+    ;(emotesQuery as any[]).forEach((msg: any) => {
         const kickUserId = Number(msg.sender_user_id)
         const emotes = msg.emotes
         if (emotes && Array.isArray(emotes) && emotes.length > 0) {
@@ -933,7 +939,7 @@ async function fetchDateFilteredLeaderboard(
 
     const streamsMap = new Map<number, number>()
     const streamsByUser = new Map<number, Set<number>>()
-    (streamsWatched as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((stream) => {
+    ;(streamsWatched as Array<{ sender_user_id: bigint; stream_session_id: bigint | null }>).forEach((stream: any) => {
         const kickUserId = Number(stream.sender_user_id)
         const sessionId = stream.stream_session_id ? Number(stream.stream_session_id) : null
         if (sessionId) {
@@ -943,14 +949,14 @@ async function fetchDateFilteredLeaderboard(
             streamsByUser.get(kickUserId)!.add(sessionId)
         }
     })
-    streamsByUser.forEach((sessionSet, kickUserId) => {
+    streamsByUser.forEach((sessionSet: Set<number>, kickUserId: number) => {
         streamsMap.set(kickUserId, sessionSet.size)
     })
 
     // Build leaderboard entries maintaining sort order
-    const leaderboard = paginatedAggregates.map((agg, index) => {
+    const leaderboard = paginatedAggregates.map((agg: any, index: number) => {
         const userId = Number(agg.user_id)
-        const user = userMap.get(userId)
+        const user = userMap.get(userId) as any
         if (!user) {
             // User not found, skip
             return null

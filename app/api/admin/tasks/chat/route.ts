@@ -76,7 +76,7 @@ export async function GET(request: Request) {
 
     const loweredQ = q.toLowerCase()
     const filtered = q
-      ? rows.filter(r => {
+      ? (rows as any[]).filter((r: any) => {
           const p = r.payload as any
           const prev = getPayloadPreview(p)
           if (prev.sender?.toLowerCase().includes(loweredQ)) return true
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       total,
       limit,
       offset,
-      jobs: filtered.map(r => {
+      jobs: (filtered as any[]).map((r: any) => {
         const p = r.payload as any
         const prev = getPayloadPreview(p)
         return {

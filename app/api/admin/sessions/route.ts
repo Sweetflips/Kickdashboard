@@ -80,7 +80,7 @@ export async function GET(request: Request) {
                 total_messages: activeSession.total_messages,
                 peak_viewer_count: activeSession.peak_viewer_count,
             } : null,
-            recent_sessions: recentSessions.map(s => ({
+            recent_sessions: (recentSessions as any[]).map((s: any) => ({
                 id: s.id.toString(),
                 session_title: s.session_title,
                 started_at: s.started_at.toISOString(),
@@ -177,7 +177,7 @@ export async function POST(request: Request) {
             const targetSessionId = BigInt(String(body.target_session_id))
 
             // Move all chat messages and history from source to target
-            await db.$transaction(async (tx) => {
+            await db.$transaction(async (tx: any) => {
                 await tx.chatMessage.updateMany({
                     where: { stream_session_id: sourceSessionId },
                     data: { stream_session_id: targetSessionId },

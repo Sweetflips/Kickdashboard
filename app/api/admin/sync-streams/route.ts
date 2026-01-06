@@ -1,8 +1,20 @@
 import { db } from '@/lib/db'
 import { getChannelWithLivestream } from '@/lib/kick-api'
 import { getActiveSession, updateSessionMetadata, mergeLikelyDuplicateSessions } from '@/lib/stream-session-manager'
-import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
+
+// Define types locally since Prisma Accelerate doesn't export input types
+type StreamSessionUpdateData = {
+    session_title?: string | null
+    thumbnail_url?: string | null
+    thumbnail_source?: string
+    thumbnail_captured_at?: Date
+    thumbnail_last_refreshed_at?: Date
+    kick_stream_id?: string | null
+    ended_at?: Date | null
+    started_at?: Date
+    duration_seconds?: number
+}
 import { fetchKickV2ChannelVideos } from '@/lib/kick-videos'
 import { isAdmin } from '@/lib/auth'
 
@@ -279,9 +291,9 @@ export async function POST(request: Request) {
                     candidateSessions = await findCandidates(extendedWindow)
                 }
 
-                const matchingSession = candidateSessions
-                    .filter(s => !s.session_title?.startsWith('[TEST]'))
-                    .sort((a, b) => {
+                const matchingSession = (candidateSessions as any[])
+                    .filter((s: any) => !s.session_title?.startsWith('[TEST]'))
+                    .sort((a: any, b: any) => {
                         const aDiff = Math.abs(a.started_at.getTime() - videoStartedAt.getTime())
                         const bDiff = Math.abs(b.started_at.getTime() - videoStartedAt.getTime())
 
@@ -301,7 +313,7 @@ export async function POST(request: Request) {
                     stats.matched++
 
                     // Prepare update data
-                    const updateData: Prisma.StreamSessionUpdateInput = {}
+                    const updateData: StreamSessionUpdateData = {}
                     let needsUpdate = false
 
                     // Update thumbnail if missing or different

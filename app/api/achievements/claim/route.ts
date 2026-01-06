@@ -2,7 +2,7 @@ import { ACHIEVEMENT_BY_ID, isValidAchievementId } from '@/lib/achievements'
 import { computeAchievementUnlocks, makeAchievementClaimKey } from '@/lib/achievements-engine'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { Prisma } from '@prisma/client'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const now = new Date()
 
     try {
-      await db.$transaction(async (tx) => {
+      await db.$transaction(async (tx: any) => {
         // Create history entry first (idempotency is enforced by unique message_id)
         await tx.sweetCoinHistory.create({
           data: {
@@ -63,8 +63,8 @@ export async function POST(request: Request) {
           },
         })
       })
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+    } catch (e: unknown) {
+      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
         return NextResponse.json({ claimed: true, alreadyClaimed: true, sweetCoinsAwarded: 0 })
       }
       throw e

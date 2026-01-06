@@ -80,7 +80,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
       },
     })
 
-    totalWatchSeconds = sessions.reduce((sum, session) => {
+    totalWatchSeconds = (sessions as any[]).reduce((sum: number, session: any) => {
       let duration = session.duration_seconds
       if (duration == null) {
         const end = session.ended_at ?? now
@@ -147,7 +147,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
     })(),
   ])
 
-  const isTopGChatter = topUsersByPoints.some((u) => u.user_id === auth.userId)
+  const isTopGChatter = (topUsersByPoints as any[]).some((u: any) => u.user_id === auth.userId)
 
   let isMonthlyLegend = false
   if (monthlyPointAggs.length > 0) {

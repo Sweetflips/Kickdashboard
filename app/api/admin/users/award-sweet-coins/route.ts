@@ -57,7 +57,7 @@ export async function POST(request: Request) {
         }
 
         // Use transaction to ensure atomicity
-        const result = await db.$transaction(async (tx) => {
+        const result = await db.$transaction(async (tx: any) => {
             // Update or create user sweet coins
             const userSweetCoins = await tx.userSweetCoins.upsert({
                 where: { user_id: user.id },

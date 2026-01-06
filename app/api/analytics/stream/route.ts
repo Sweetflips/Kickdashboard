@@ -264,7 +264,7 @@ export async function GET(request: Request) {
             }
 
             const type = analyzeEngagementType(msg.content, msgHasEmotes)
-            userStats.engagement_types[type] = (userStats.engagement_types[type] || 0) + 1
+            ;(userStats.engagement_types as Record<string, number>)[type] = ((userStats.engagement_types as Record<string, number>)[type] || 0) + 1
 
             userActivityMap.set(userId, userStats)
         }

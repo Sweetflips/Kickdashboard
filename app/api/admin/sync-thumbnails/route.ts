@@ -33,9 +33,9 @@ export async function POST(request: Request) {
             })
         }
 
-        const channelSlugs = activeSessions
-            .map(s => s.channel_slug)
-            .filter((slug): slug is string => Boolean(slug))
+        const channelSlugs = (activeSessions as any[])
+            .map((s: any) => s.channel_slug)
+            .filter((slug: any): slug is string => Boolean(slug))
 
         console.log(`Syncing thumbnails for ${channelSlugs.length} active channels`)
 

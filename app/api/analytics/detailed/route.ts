@@ -193,7 +193,7 @@ export async function GET(request: Request) {
 
         // Get detailed stats for each user
         const detailedUsers = await Promise.all(
-            topUsers.map(async (entry, index) => {
+            (topUsers as any[]).map(async (entry: any, index: number) => {
                 const kickUserId = entry.user.kick_user_id
 
                 // Get total messages sent
@@ -340,7 +340,7 @@ export async function GET(request: Request) {
             messages_with_text_only: totalMessages - messagesWithEmotesCount,
             emotes: await db.userSweetCoins.aggregate({
                 _sum: { total_emotes: true },
-            }).then(result => result._sum.total_emotes || 0),
+            }).then((result: any) => result._sum.total_emotes || 0),
         }
 
         // Get overall engagement breakdown
@@ -432,15 +432,15 @@ export async function GET(request: Request) {
         })
 
         const avgMessagesPerStream = streams.length > 0
-            ? streams.reduce((sum, s) => sum + s.total_messages, 0) / streams.length
+            ? (streams as any[]).reduce((sum: number, s: any) => sum + s.total_messages, 0) / streams.length
             : 0
 
         const avgViewersPerStream = streams.length > 0
-            ? streams.reduce((sum, s) => sum + s.peak_viewer_count, 0) / streams.length
+            ? (streams as any[]).reduce((sum: number, s: any) => sum + s.peak_viewer_count, 0) / streams.length
             : 0
 
         // Calculate engagement rate (messages per viewer) - not a percentage
-        const totalViewers = streams.reduce((sum, s) => sum + s.peak_viewer_count, 0)
+        const totalViewers = (streams as any[]).reduce((sum: number, s: any) => sum + s.peak_viewer_count, 0)
         const engagementRate = totalViewers > 0
             ? (totalMessages / totalViewers).toFixed(2)
             : '0'
@@ -451,10 +451,10 @@ export async function GET(request: Request) {
             : '0'
 
         // Get top streams by messages
-        const topStreams = streams
-            .sort((a, b) => b.total_messages - a.total_messages)
+        const topStreams = (streams as any[])
+            .sort((a: any, b: any) => b.total_messages - a.total_messages)
             .slice(0, 5)
-            .map((s, idx) => ({
+            .map((s: any, idx: number) => ({
                 rank: idx + 1,
                 messages: s.total_messages,
                 viewers: s.peak_viewer_count,

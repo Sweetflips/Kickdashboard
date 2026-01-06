@@ -59,7 +59,7 @@ async function backfillChatMessages(startId: bigint) {
         if (batch.length === 0) break
 
         await Promise.all(
-            batch.map(row =>
+            batch.map((row: typeof batch[number]) =>
                 limit(async () => {
                     const derivedHasEmotes = hasEmotes(row.emotes, row.content)
                     const derivedEngagementType = analyzeEngagementType(row.content, derivedHasEmotes)
@@ -107,7 +107,7 @@ async function backfillOfflineChatMessages(startId: bigint) {
         if (batch.length === 0) break
 
         await Promise.all(
-            batch.map(row =>
+            batch.map((row: typeof batch[number]) =>
                 limit(async () => {
                     const derivedHasEmotes = hasEmotes(row.emotes, row.content)
                     const derivedEngagementType = analyzeEngagementType(row.content, derivedHasEmotes)
