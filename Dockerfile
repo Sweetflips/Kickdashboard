@@ -24,6 +24,9 @@ WORKDIR /app
 # Copy source code
 COPY . .
 
+# Dummy DATABASE_URL for prisma generate (no actual connection made at build time)
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
 # Build Next.js app
 RUN npm run build
 
