@@ -3,8 +3,42 @@ import { db } from '@/lib/db'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { validateApiKey } from '@/lib/api-key-auth'
+import type { JsonValue } from '@prisma/client/runtime/library'
 
 export const dynamic = 'force-dynamic'
+
+// Type for offline message with relations
+type OfflineMessageWithRelations = {
+    id: bigint
+    message_id: string
+    content: string
+    emotes: JsonValue
+    has_emotes: boolean
+    timestamp: bigint
+    created_at: Date
+    sender_user_id: bigint
+    sender_username: string
+    sender_username_color: string | null
+    sender_badges: JsonValue
+    sender_is_verified: boolean
+    sender_is_anonymous: boolean
+    broadcaster_user_id: bigint
+    engagement_type: string | null
+    message_length: number | null
+    exclamation_count: number | null
+    sentence_count: number | null
+    sender: {
+        username: string
+        profile_picture_url: string | null
+        kick_user_id: bigint
+    }
+    broadcaster: {
+        username: string
+        profile_picture_url: string | null
+        kick_user_id: bigint
+    }
+    isOffline?: boolean
+}
 
 // Helper function to check if a user should be verified
 function isVerifiedUser(username: string, badges: Array<{ type: string }> = []): boolean {
@@ -168,7 +202,7 @@ export async function GET(request: Request) {
         const formattedMessages = allMessages.map(msg => {
             if (msg.isOffline) {
                 // Format offline message
-                const offlineMsg = msg as typeof offlineMessages[0] & { isOffline: true }
+                const offlineMsg = msg as OfflineMessageWithRelations
                 return {
                     message_id: offlineMsg.message_id,
                     broadcaster: {
