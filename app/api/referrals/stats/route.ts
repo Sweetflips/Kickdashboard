@@ -78,7 +78,7 @@ export async function GET(request: Request) {
 
         // Calculate pending rewards (next unclaimed milestone)
         let pendingRewards = 0
-        for (const ref of referrals) {
+        for (const ref of referrals as any[]) {
             const refereeSweetCoins = ref.referee.sweet_coins?.total_sweet_coins || 0
             const earnedTiers = rewards
                 .filter((r: any) => r.referee_user_id === ref.referee_user_id)
