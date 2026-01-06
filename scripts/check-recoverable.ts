@@ -27,16 +27,17 @@ async function checkRecoverable() {
       stream_session_id: { not: null }
     },
     _count: true
-  }) as Array<{ stream_session_id: bigint | null; _count: number }>;
+  });
   
   console.log('\nBreakdown by session:');
   for (const s of sessionBreakdown) {
-    if (!s.stream_session_id) continue;
+    const sessionId = (s as any).stream_session_id as bigint | null;
+    if (!sessionId) continue;
     const session = await db.streamSession.findUnique({
-      where: { id: s.stream_session_id },
+      where: { id: sessionId },
       select: { id: true, started_at: true, ended_at: true, session_title: true }
     });
-    console.log(`  Session ${s.stream_session_id}: ${s._count} jobs`);
+    console.log(`  Session ${sessionId}: ${(s as any)._count} jobs`);
     if (session) {
       console.log(`    Title: ${session.session_title || 'N/A'}`);
       console.log(`    Started: ${session.started_at.toISOString()}`);

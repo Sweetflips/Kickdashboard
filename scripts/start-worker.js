@@ -90,7 +90,7 @@ async function ensureTables() {
     console.log('🔄 Verifying database tables...');
 
     // Check for chat_jobs table
-    const chatJobsCheck = await prisma.$queryRaw`
+    let chatJobsCheck = await prisma.$queryRaw`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public' AND table_name = 'chat_jobs'
@@ -100,32 +100,49 @@ async function ensureTables() {
       console.log('✅ chat_jobs table exists');
     } else {
       console.log('⚠️ chat_jobs table missing, creating it...');
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE IF NOT EXISTS "chat_jobs" (
-          "id" BIGSERIAL NOT NULL,
-          "message_id" TEXT NOT NULL,
-          "payload" JSONB NOT NULL,
-          "sender_user_id" BIGINT NOT NULL,
-          "broadcaster_user_id" BIGINT NOT NULL,
-          "stream_session_id" BIGINT,
-          "status" TEXT NOT NULL DEFAULT 'pending',
-          "attempts" INTEGER NOT NULL DEFAULT 0,
-          "locked_at" TIMESTAMP(3),
-          "processed_at" TIMESTAMP(3),
-          "last_error" TEXT,
-          "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "chat_jobs_pkey" PRIMARY KEY ("id")
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS "chat_jobs_message_id_key" ON "chat_jobs"("message_id");
-        CREATE INDEX IF NOT EXISTS "chat_jobs_status_created_at_idx" ON "chat_jobs"("status", "created_at");
-        CREATE INDEX IF NOT EXISTS "chat_jobs_status_locked_at_idx" ON "chat_jobs"("status", "locked_at");
-      `);
-      console.log('✅ Created chat_jobs table');
+      try {
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "chat_jobs" (
+            "id" BIGSERIAL NOT NULL,
+            "message_id" TEXT NOT NULL,
+            "payload" JSONB NOT NULL,
+            "sender_user_id" BIGINT NOT NULL,
+            "broadcaster_user_id" BIGINT NOT NULL,
+            "stream_session_id" BIGINT,
+            "status" TEXT NOT NULL DEFAULT 'pending',
+            "attempts" INTEGER NOT NULL DEFAULT 0,
+            "locked_at" TIMESTAMP(3),
+            "processed_at" TIMESTAMP(3),
+            "last_error" TEXT,
+            "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "chat_jobs_pkey" PRIMARY KEY ("id")
+          );
+        `);
+        await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "chat_jobs_message_id_key" ON "chat_jobs"("message_id");`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_jobs_status_created_at_idx" ON "chat_jobs"("status", "created_at");`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_jobs_status_locked_at_idx" ON "chat_jobs"("status", "locked_at");`);
+        
+        // Verify table was created
+        chatJobsCheck = await prisma.$queryRaw`
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'chat_jobs'
+        `;
+        
+        if (Array.isArray(chatJobsCheck) && chatJobsCheck.length > 0) {
+          console.log('✅ Created chat_jobs table successfully');
+        } else {
+          throw new Error('Failed to verify chat_jobs table creation');
+        }
+      } catch (createError) {
+        console.error('❌ Failed to create chat_jobs table:', createError.message);
+        throw createError;
+      }
     }
 
     // Also create sweet_coin_award_jobs if missing (for schema compatibility, even though worker is removed)
-    const sweetCoinJobsCheck = await prisma.$queryRaw`
+    let sweetCoinJobsCheck = await prisma.$queryRaw`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public' AND table_name = 'sweet_coin_award_jobs'
@@ -135,32 +152,51 @@ async function ensureTables() {
       console.log('✅ sweet_coin_award_jobs table exists');
     } else {
       console.log('⚠️ sweet_coin_award_jobs table missing, creating it...');
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE IF NOT EXISTS "sweet_coin_award_jobs" (
-          "id" BIGSERIAL NOT NULL,
-          "kick_user_id" BIGINT NOT NULL,
-          "stream_session_id" BIGINT,
-          "message_id" TEXT NOT NULL,
-          "badges" JSONB,
-          "emotes" JSONB,
-          "status" TEXT NOT NULL DEFAULT 'pending',
-          "attempts" INTEGER NOT NULL DEFAULT 0,
-          "locked_at" TIMESTAMP(3),
-          "processed_at" TIMESTAMP(3),
-          "last_error" TEXT,
-          "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "sweet_coin_award_jobs_pkey" PRIMARY KEY ("id")
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS "sweet_coin_award_jobs_message_id_key" ON "sweet_coin_award_jobs"("message_id");
-        CREATE INDEX IF NOT EXISTS "sweet_coin_award_jobs_status_created_at_idx" ON "sweet_coin_award_jobs"("status", "created_at");
-        CREATE INDEX IF NOT EXISTS "sweet_coin_award_jobs_status_locked_at_idx" ON "sweet_coin_award_jobs"("status", "locked_at");
-      `);
-      console.log('✅ Created sweet_coin_award_jobs table');
+      try {
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "sweet_coin_award_jobs" (
+            "id" BIGSERIAL NOT NULL,
+            "kick_user_id" BIGINT NOT NULL,
+            "stream_session_id" BIGINT,
+            "message_id" TEXT NOT NULL,
+            "badges" JSONB,
+            "emotes" JSONB,
+            "status" TEXT NOT NULL DEFAULT 'pending',
+            "attempts" INTEGER NOT NULL DEFAULT 0,
+            "locked_at" TIMESTAMP(3),
+            "processed_at" TIMESTAMP(3),
+            "last_error" TEXT,
+            "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "sweet_coin_award_jobs_pkey" PRIMARY KEY ("id")
+          );
+        `);
+        await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "sweet_coin_award_jobs_message_id_key" ON "sweet_coin_award_jobs"("message_id");`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "sweet_coin_award_jobs_status_created_at_idx" ON "sweet_coin_award_jobs"("status", "created_at");`);
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "sweet_coin_award_jobs_status_locked_at_idx" ON "sweet_coin_award_jobs"("status", "locked_at");`);
+        
+        // Verify table was created
+        sweetCoinJobsCheck = await prisma.$queryRaw`
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'sweet_coin_award_jobs'
+        `;
+        
+        if (Array.isArray(sweetCoinJobsCheck) && sweetCoinJobsCheck.length > 0) {
+          console.log('✅ Created sweet_coin_award_jobs table successfully');
+        } else {
+          console.warn('⚠️ Could not verify sweet_coin_award_jobs table creation (non-critical)');
+        }
+      } catch (createError) {
+        console.warn('⚠️ Failed to create sweet_coin_award_jobs table (non-critical):', createError.message);
+      }
     }
 
+    console.log('✅ All required tables verified');
   } catch (error) {
-    console.error('⚠️ Table check failed (continuing anyway):', error.message);
+    console.error('❌ Table check failed:', error.message);
+    console.error('Full error:', error);
+    throw error; // Re-throw to prevent worker from starting
   } finally {
     await prisma.$disconnect();
   }
