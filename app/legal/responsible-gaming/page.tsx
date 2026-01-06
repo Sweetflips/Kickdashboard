@@ -90,7 +90,7 @@ export default function ResponsibleGaming() {
                                 <div>
                                     <h3 className="font-medium text-green-800 dark:text-green-200">Set Time Limits</h3>
                                     <p className="text-sm text-green-700 dark:text-green-300">
-                                        Decide in advance how much time you'll spend on the platform each day and stick to it.
+                                        Decide in advance how much time you&apos;ll spend on the platform each day and stick to it.
                                     </p>
                                 </div>
                             </div>
@@ -102,7 +102,7 @@ export default function ResponsibleGaming() {
                                 <div>
                                     <h3 className="font-medium text-green-800 dark:text-green-200">Balance Your Activities</h3>
                                     <p className="text-sm text-green-700 dark:text-green-300">
-                                        Ensure platform participation doesn't interfere with work, school, relationships, or other responsibilities.
+                                        Ensure platform participation doesn&apos;t interfere with work, school, relationships, or other responsibilities.
                                     </p>
                                 </div>
                             </div>
@@ -114,7 +114,7 @@ export default function ResponsibleGaming() {
                                 <div>
                                     <h3 className="font-medium text-green-800 dark:text-green-200">Participate for Fun</h3>
                                     <p className="text-sm text-green-700 dark:text-green-300">
-                                        Remember that achievements and rewards are meant to be entertaining. Don't participate if it causes stress or anxiety.
+                                        Remember that achievements and rewards are meant to be entertaining. Don&apos;t participate if it causes stress or anxiety.
                                     </p>
                                 </div>
                             </div>
@@ -126,7 +126,7 @@ export default function ResponsibleGaming() {
                                 <div>
                                     <h3 className="font-medium text-green-800 dark:text-green-200">Accept Outcomes</h3>
                                     <p className="text-sm text-green-700 dark:text-green-300">
-                                        Understand that losing is part of any random-chance system. Don't chase losses or feel entitled to win.
+                                        Understand that losing is part of any random-chance system. Don&apos;t chase losses or feel entitled to win.
                                     </p>
                                 </div>
                             </div>
@@ -192,13 +192,13 @@ export default function ResponsibleGaming() {
                                 <div>
                                     <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-1">Netherlands</h4>
                                     <p className="text-sm text-blue-600 dark:text-blue-400">
-                                        We comply with Dutch gambling laws and regulations. The Service is not intended to promote gambling activities to residents of the Netherlands where such activities may be restricted. We respect the Netherlands' strict gambling regulations and do not target Dutch residents with promotional content.
+                                        We comply with Dutch gambling laws and regulations. The Service is not intended to promote gambling activities to residents of the Netherlands where such activities may be restricted.                                          We respect the Netherlands&apos; strict gambling regulations and do not target Dutch residents with promotional content.
                                     </p>
                                 </div>
                                 <div>
                                     <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-1">United Arab Emirates (UAE)</h4>
                                     <p className="text-sm text-blue-600 dark:text-blue-400">
-                                        We comply with UAE laws regarding gambling and similar activities. The Service is not intended to promote gambling activities to residents of the UAE where gambling is prohibited. We respect UAE's prohibition on gambling and do not target UAE residents with promotional content.
+                                        We comply with UAE laws regarding gambling and similar activities. The Service is not intended to promote gambling activities to residents of the UAE where gambling is prohibited.                                          We respect UAE&apos;s prohibition on gambling and do not target UAE residents with promotional content.
                                     </p>
                                 </div>
                             </div>
@@ -249,7 +249,7 @@ export default function ResponsibleGaming() {
                         <div className="text-gray-600 dark:text-kick-text-secondary space-y-2">
                             <p><strong>Email:</strong> <a href="mailto:info@sweetflips.gg" className="text-kick-green hover:underline">info@sweetflips.gg</a></p>
                             <p className="mt-4">
-                                You may also reach out through our official Discord or Telegram channels. We're here to help.
+                                 You may also reach out through our official Discord or Telegram channels. We&apos;re here to help.
                             </p>
                         </div>
                     </section>

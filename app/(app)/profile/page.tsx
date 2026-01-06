@@ -2004,7 +2004,7 @@ export default function ProfilePage() {
                         {!razedVerificationCode ? (
                             <div className="space-y-4">
                                 <p className="text-sm text-gray-600 dark:text-kick-text-secondary">
-                                    Enter your Razed username to receive a verification code. You'll need to send this code in Razed chat to verify your account.
+                                    Enter your Razed username to receive a verification code. You&apos;ll need to send this code in Razed chat to verify your account.
                                 </p>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-kick-text mb-2">

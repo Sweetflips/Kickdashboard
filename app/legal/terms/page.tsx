@@ -22,7 +22,7 @@ export default function TermsOfService() {
                             1. Acceptance of Terms
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
-                            By accessing or using the Service available at www.kickdashboard.com ("the Service"), operated by Sweetflips Holdings Limited, a company registered in Malta ("we," "our," or "us"), you agree to be bound by these Terms of Service.
+                            By accessing or using the Service available at www.kickdashboard.com (&quot;the Service&quot;), operated by Sweetflips Holdings Limited, a company registered in Malta (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;), you agree to be bound by these Terms of Service.
                             If you do not agree to these terms, please do not use the Service.
                         </p>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
@@ -42,7 +42,7 @@ export default function TermsOfService() {
                         </p>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             Users must have a valid Kick.com account to access the Service. Your use of the Service
-                            is also subject to Kick.com's Terms of Service.
+                            is also subject to Kick.com&apos;s Terms of Service.
                         </p>
                     </section>
 
@@ -130,7 +130,7 @@ export default function TermsOfService() {
                             <li>Attempt to exploit bugs or vulnerabilities in the Service</li>
                             <li>Harass, abuse, or threaten other users</li>
                             <li>Impersonate others or misrepresent your identity</li>
-                            <li>Violate any applicable laws or Kick.com's Terms of Service</li>
+                            <li>Violate any applicable laws or Kick.com&apos;s Terms of Service</li>
                             <li>Share, sell, or transfer your account</li>
                         </ul>
                     </section>
@@ -151,7 +151,7 @@ export default function TermsOfService() {
                             9. Disclaimer of Warranties
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
-                            THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND,
+                            THE SERVICE IS PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot; WITHOUT WARRANTIES OF ANY KIND,
                             EITHER EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED,
                             ERROR-FREE, OR SECURE.
                         </p>
