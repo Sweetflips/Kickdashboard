@@ -1,5 +1,5 @@
 import { ACHIEVEMENT_BY_ID, isValidAchievementId } from '@/lib/achievements'
-import { computeAchievementUnlocks, makeAchievementClaimKey } from '@/lib/achievements-engine'
+import { computeAchievementUnlocks, makeAchievementClaimKey, normalizeAchievementId } from '@/lib/achievements-engine'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
@@ -32,10 +32,11 @@ export async function POST(request: Request) {
     }
 
     if (unlockedById[achievementId] !== true) {
-      return NextResponse.json({ error: 'Achievement not unlocked yet' }, { status: 400 })
+      return NextResponse.json({ error: 'Achievement not unlocked yet' }, { status: 409 })
     }
 
     const claimKey = makeAchievementClaimKey(achievementId, auth.userId)
+    const normalizedId = normalizeAchievementId(achievementId)
     const now = new Date()
 
     try {
@@ -62,6 +63,27 @@ export async function POST(request: Request) {
             total_emotes: 0,
           },
         })
+
+        // Update UserAchievement status to CLAIMED
+        await tx.userAchievement.upsert({
+          where: {
+            user_id_achievement_id: {
+              user_id: auth.userId,
+              achievement_id: normalizedId,
+            },
+          },
+          update: {
+            status: 'CLAIMED',
+            claimed_at: now,
+          },
+          create: {
+            user_id: auth.userId,
+            achievement_id: normalizedId,
+            status: 'CLAIMED',
+            unlocked_at: now,
+            claimed_at: now,
+          },
+        })
       })
     } catch (e: unknown) {
       if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -70,7 +92,18 @@ export async function POST(request: Request) {
       throw e
     }
 
-    return NextResponse.json({ claimed: true, alreadyClaimed: false, sweetCoinsAwarded: def.reward })
+    // Get updated balance
+    const updatedBalance = await db.userSweetCoins.findUnique({
+      where: { user_id: auth.userId },
+      select: { total_sweet_coins: true },
+    })
+
+    return NextResponse.json({
+      claimed: true,
+      alreadyClaimed: false,
+      sweetCoinsAwarded: def.reward,
+      balance: updatedBalance?.total_sweet_coins || 0,
+    })
   } catch (error) {
     console.error('Error claiming achievement:', error)
     return NextResponse.json(

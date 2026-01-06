@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { evaluateAchievementsForUser } from '@/lib/achievements-engine'
 
 // Telegram Bot API types
 interface TelegramUpdate {
@@ -50,14 +51,25 @@ export async function POST(request: Request) {
 
                     // Save Telegram connection to database
                     const kickUserIdBigInt = BigInt(kick_user_id)
-                    await db.user.update({
+                    const updatedUser = await db.user.update({
                         where: { kick_user_id: kickUserIdBigInt },
                         data: {
                             telegram_connected: true,
                             telegram_user_id: from.id.toString(),
                             telegram_username: from.username || from.first_name,
                         },
+                        select: { id: true, kick_user_id: true },
                     })
+
+                    // Trigger achievement evaluation to unlock TELEGRAM_CONNECTED
+                    try {
+                        await evaluateAchievementsForUser({
+                            userId: updatedUser.id,
+                            kickUserId: updatedUser.kick_user_id,
+                        })
+                    } catch (evalError) {
+                        console.error('Failed to evaluate achievements after Telegram connect:', evalError)
+                    }
 
                     // Send confirmation message to user
                     const chatId = update.message.chat.id

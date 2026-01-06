@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { evaluateAchievementsForUser } from '@/lib/achievements-engine'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
 
@@ -132,7 +133,7 @@ export async function GET(request: Request) {
         const kickUserIdBigInt = BigInt(kickUserId)
 
         // Update with Twitter connection data
-        await db.user.update({
+        const updatedUser = await db.user.update({
             where: { kick_user_id: kickUserIdBigInt },
             data: {
                 twitter_connected: true,
@@ -140,7 +141,18 @@ export async function GET(request: Request) {
                 twitter_username: twitterUser.username,
                 twitter_access_token_hash: hashToken(accessToken),
             },
+            select: { id: true, kick_user_id: true },
         })
+
+        // Trigger achievement evaluation to unlock TWITTER_CONNECTED
+        try {
+            await evaluateAchievementsForUser({
+                userId: updatedUser.id,
+                kickUserId: updatedUser.kick_user_id,
+            })
+        } catch (evalError) {
+            console.error('Failed to evaluate achievements after Twitter connect:', evalError)
+        }
 
         // Clear cookies
         const response = NextResponse.redirect(

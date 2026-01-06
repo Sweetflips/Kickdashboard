@@ -1,19 +1,19 @@
 import { ACHIEVEMENTS } from '@/lib/achievements'
-import { computeAchievementUnlocks, makeAchievementClaimKey } from '@/lib/achievements-engine'
+import { getAchievementStatuses } from '@/lib/achievements-engine'
 import { getAuthenticatedUser } from '@/lib/auth'
-import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-interface AchievementStatus {
+interface AchievementStatusResponse {
   id: string
   unlocked: boolean
   claimed: boolean
+  status: 'LOCKED' | 'UNLOCKED' | 'CLAIMED'
 }
 
 interface AchievementsResponse {
-  achievements: AchievementStatus[]
+  achievements: AchievementStatusResponse[]
 }
 
 export async function GET(request: Request) {
@@ -23,25 +23,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
-    const { user, unlockedById } = await computeAchievementUnlocks(auth)
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+    const { achievements } = await getAchievementStatuses(auth)
 
-    const claimKeys = ACHIEVEMENTS.map((a) => makeAchievementClaimKey(a.id, auth.userId))
-    const claimedRows = await db.sweetCoinHistory.findMany({
-      where: {
-        user_id: auth.userId,
-        message_id: { in: claimKeys },
-      },
-      select: { message_id: true },
-    })
-    const claimedSet = new Set((claimedRows as any[]).map((r: any) => r.message_id).filter(Boolean) as string[])
-
-    const statuses: AchievementStatus[] = ACHIEVEMENTS.map((a) => ({
+    const statuses: AchievementStatusResponse[] = achievements.map((a) => ({
       id: a.id,
-      unlocked: unlockedById[a.id] === true,
-      claimed: claimedSet.has(makeAchievementClaimKey(a.id, auth.userId)),
+      unlocked: a.status === 'UNLOCKED' || a.status === 'CLAIMED',
+      claimed: a.status === 'CLAIMED',
+      status: a.status,
     }))
 
     const response: AchievementsResponse = {

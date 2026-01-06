@@ -162,11 +162,15 @@ export async function GET(request: Request) {
                     // Admin status is verified server-side via isAdmin() in lib/auth.ts
                     const kickUserId = BigInt(userData.user_id)
 
+                    // Generate referral code from username
+                    const referralCode = userData.name ? userData.name.toUpperCase() : null
+
                     const extractedData = {
                         id: userData.user_id,
                         username: userData.name, // Kick uses "name" not "username"
                         email: userData.email,
                         profile_picture: rewriteApiMediaUrlToCdn(profilePictureUrl),
+                        referral_code: referralCode,
                         // NOTE: is_admin intentionally NOT included - prevents client-side spoofing
                         ...userData // Include all other fields from Kick API
                     }

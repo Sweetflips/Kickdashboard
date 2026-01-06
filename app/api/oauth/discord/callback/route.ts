@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { evaluateAchievementsForUser } from '@/lib/achievements-engine'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
         const kickUserIdBigInt = BigInt(kickUserId)
 
         // Update with Discord connection data
-        await db.user.update({
+        const updatedUser = await db.user.update({
             where: { kick_user_id: kickUserIdBigInt },
             data: {
                 discord_connected: true,
@@ -101,7 +102,19 @@ export async function GET(request: Request) {
                 discord_username: discordUser.username,
                 discord_access_token_hash: hashToken(accessToken),
             },
+            select: { id: true, kick_user_id: true },
         })
+
+        // Trigger achievement evaluation to unlock DISCORD_CONNECTED
+        try {
+            await evaluateAchievementsForUser({
+                userId: updatedUser.id,
+                kickUserId: updatedUser.kick_user_id,
+            })
+        } catch (evalError) {
+            console.error('Failed to evaluate achievements after Discord connect:', evalError)
+            // Don't fail the OAuth flow for achievement evaluation errors
+        }
 
         return NextResponse.redirect(
             `${APP_URL}/profile?tab=connected&success=discord_connected`

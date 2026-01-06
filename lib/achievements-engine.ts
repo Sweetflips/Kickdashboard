@@ -1,11 +1,201 @@
-import { ACHIEVEMENTS } from '@/lib/achievements';
-import { db } from '@/lib/db';
+import { ACHIEVEMENTS, type AchievementDefinition } from '@/lib/achievements'
+import { db } from '@/lib/db'
+import type { AchievementStatus } from '@prisma/client'
 
-export function makeAchievementClaimKey(achievementId: string, userId: bigint) {
-  return `achievement:${achievementId}:${userId.toString()}`
+// Map old kebab-case IDs to new SCREAMING_SNAKE_CASE IDs
+const ID_MAP: Record<string, string> = {
+  'stream-starter': 'STREAM_STARTER',
+  'getting-cozy': 'GETTING_COZY',
+  'dedicated-viewer': 'DEDICATED_VIEWER',
+  'stream-veteran': 'STREAM_VETERAN',
+  'ride-or-die': 'RIDE_OR_DIE',
+  'multi-stream-hopper': 'MULTI_STREAM_HOPPER',
+  'dashboard-addict': 'DASHBOARD_ADDICT',
+  'discord-connected': 'DISCORD_CONNECTED',
+  'telegram-connected': 'TELEGRAM_CONNECTED',
+  'twitter-connected': 'TWITTER_CONNECTED',
+  'instagram-connected': 'INSTAGRAM_CONNECTED',
+  'custom-profile-picture': 'CUSTOM_PROFILE_PICTURE',
+  'first-words': 'FIRST_WORDS',
+  'chatterbox': 'CHATTERBOX',
+  'emote-master': 'EMOTE_MASTER',
+  'super-social': 'SUPER_SOCIAL',
+  'daily-chatter': 'DAILY_CHATTER',
+  'top-g-chatter': 'TOP_G_CHATTER',
+  'og-dash': 'OG_DASH',
+  'sf-legend-of-the-month': 'SF_LEGEND_OF_THE_MONTH',
 }
 
-export async function computeAchievementUnlocks(auth: { userId: bigint; kickUserId: bigint }) {
+// Reverse map for backward compatibility
+const REVERSE_ID_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(ID_MAP).map(([k, v]) => [v, k])
+)
+
+export function normalizeAchievementId(id: string): string {
+  return ID_MAP[id] || id
+}
+
+export function toKebabCaseId(id: string): string {
+  return REVERSE_ID_MAP[id] || id
+}
+
+export function makeAchievementClaimKey(achievementId: string, userId: bigint): string {
+  const normalizedId = normalizeAchievementId(achievementId)
+  return `achievement:${normalizedId}:${userId.toString()}`
+}
+
+interface UnlockContext {
+  userId: bigint
+  kickUserId: bigint
+  user: {
+    id: bigint
+    created_at: Date
+    discord_connected: boolean
+    telegram_connected: boolean
+    twitter_connected: boolean
+    instagram_connected: boolean
+    custom_profile_picture_url: string | null
+  }
+  totalWatchMinutes: number
+  recentSessionCount: number // distinct sessions in last 24h
+  loginDaysThisMonth: number
+  totalMessages: number
+  totalEmotes: number
+  dailyChatDaysCount: number
+  isTopGChatter: boolean
+  isMonthlyLegend: boolean
+  isOgDash: boolean
+}
+
+/**
+ * Compute which achievements should be unlocked based on user's current state.
+ * Returns a map of achievement ID -> whether it should be unlocked.
+ */
+function computeUnlockStates(ctx: UnlockContext): Record<string, boolean> {
+  const unlocks: Record<string, boolean> = {}
+
+  // Stream time thresholds
+  unlocks['STREAM_STARTER'] = ctx.totalWatchMinutes >= 30
+  unlocks['GETTING_COZY'] = ctx.totalWatchMinutes >= 120
+  unlocks['DEDICATED_VIEWER'] = ctx.totalWatchMinutes >= 600
+  unlocks['STREAM_VETERAN'] = ctx.totalWatchMinutes >= 3000
+  unlocks['RIDE_OR_DIE'] = ctx.totalWatchMinutes >= 12000
+
+  // Multi-Stream Hopper
+  unlocks['MULTI_STREAM_HOPPER'] = ctx.recentSessionCount >= 2
+
+  // Dashboard Addict
+  unlocks['DASHBOARD_ADDICT'] = ctx.loginDaysThisMonth >= 7
+
+  // Social connected
+  unlocks['DISCORD_CONNECTED'] = ctx.user.discord_connected === true
+  unlocks['TELEGRAM_CONNECTED'] = ctx.user.telegram_connected === true
+  unlocks['TWITTER_CONNECTED'] = ctx.user.twitter_connected === true
+  unlocks['INSTAGRAM_CONNECTED'] = ctx.user.instagram_connected === true
+  unlocks['CUSTOM_PROFILE_PICTURE'] =
+    !!ctx.user.custom_profile_picture_url &&
+    ctx.user.custom_profile_picture_url.trim().length > 0
+
+  // Chat achievements
+  unlocks['FIRST_WORDS'] = ctx.totalMessages >= 1
+  unlocks['CHATTERBOX'] = ctx.totalMessages >= 1000
+  unlocks['EMOTE_MASTER'] = ctx.totalEmotes >= 1500
+  unlocks['SUPER_SOCIAL'] = ctx.totalMessages >= 4000
+  unlocks['DAILY_CHATTER'] = ctx.dailyChatDaysCount >= 7
+
+  // Leaderboard / special achievements
+  unlocks['TOP_G_CHATTER'] = ctx.isTopGChatter
+  unlocks['OG_DASH'] = ctx.isOgDash
+  unlocks['SF_LEGEND_OF_THE_MONTH'] = ctx.isMonthlyLegend
+
+  return unlocks
+}
+
+/**
+ * Evaluate achievements for a user and persist unlocks to UserAchievement table.
+ * Does NOT claim achievements - user must explicitly claim.
+ * Never downgrades UNLOCKED/CLAIMED back to LOCKED.
+ */
+export async function evaluateAchievementsForUser(
+  auth: { userId: bigint; kickUserId: bigint }
+): Promise<{ unlocked: string[]; newlyUnlocked: string[] }> {
+  const ctx = await gatherUnlockContext(auth)
+  if (!ctx) {
+    return { unlocked: [], newlyUnlocked: [] }
+  }
+
+  const shouldUnlock = computeUnlockStates(ctx)
+  const now = new Date()
+
+  // Get existing UserAchievement rows
+  const existing = await db.userAchievement.findMany({
+    where: { user_id: auth.userId },
+    select: { achievement_id: true, status: true },
+  })
+
+  const existingMap = new Map(existing.map((e) => [e.achievement_id, e.status]))
+
+  const unlocked: string[] = []
+  const newlyUnlocked: string[] = []
+
+  for (const [achievementId, shouldBe] of Object.entries(shouldUnlock)) {
+    const currentStatus = existingMap.get(achievementId)
+
+    if (shouldBe) {
+      unlocked.push(achievementId)
+
+      if (!currentStatus) {
+        // Create as UNLOCKED
+        await db.userAchievement.create({
+          data: {
+            user_id: auth.userId,
+            achievement_id: achievementId,
+            status: 'UNLOCKED',
+            unlocked_at: now,
+          },
+        })
+        newlyUnlocked.push(achievementId)
+      } else if (currentStatus === 'LOCKED') {
+        // Upgrade to UNLOCKED
+        await db.userAchievement.update({
+          where: {
+            user_id_achievement_id: {
+              user_id: auth.userId,
+              achievement_id: achievementId,
+            },
+          },
+          data: {
+            status: 'UNLOCKED',
+            unlocked_at: now,
+          },
+        })
+        newlyUnlocked.push(achievementId)
+      }
+      // If already UNLOCKED or CLAIMED, do nothing
+    } else {
+      // Achievement not unlocked - create LOCKED row if doesn't exist
+      // Never downgrade existing UNLOCKED/CLAIMED
+      if (!currentStatus) {
+        await db.userAchievement.create({
+          data: {
+            user_id: auth.userId,
+            achievement_id: achievementId,
+            status: 'LOCKED',
+          },
+        })
+      }
+    }
+  }
+
+  return { unlocked, newlyUnlocked }
+}
+
+/**
+ * Gather all context needed to evaluate achievement unlocks.
+ */
+async function gatherUnlockContext(
+  auth: { userId: bigint; kickUserId: bigint }
+): Promise<UnlockContext | null> {
   const [user, userSweetCoins] = await Promise.all([
     db.user.findUnique({
       where: { id: auth.userId },
@@ -29,10 +219,10 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
   ])
 
   if (!user) {
-    return { user: null, unlockedById: {} as Record<string, boolean> }
+    return null
   }
 
-  // Fetch all chat messages for this user (online only) for message-based achievements
+  // Fetch all chat messages for this user (online only)
   const messages = await db.chatMessage.findMany({
     where: {
       sender_user_id: auth.kickUserId,
@@ -67,7 +257,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
     }
   }
 
-  // Calculate approximate watch time: sum durations of sessions where user chatted
+  // Calculate approximate watch time
   let totalWatchSeconds = 0
   if (sessionIdSet.size > 0) {
     const sessions = await db.streamSession.findMany({
@@ -80,7 +270,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
       },
     })
 
-    totalWatchSeconds = (sessions as any[]).reduce((sum: number, session: any) => {
+    totalWatchSeconds = sessions.reduce((sum, session) => {
       let duration = session.duration_seconds
       if (duration == null) {
         const end = session.ended_at ?? now
@@ -92,7 +282,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
 
   const totalWatchMinutes = totalWatchSeconds / 60
 
-  // Dashboard Addict: days logged into dashboard this month (via UserSession)
+  // Dashboard Addict: days logged into dashboard this month
   const monthNow = new Date()
   const monthStart = new Date(Date.UTC(monthNow.getUTCFullYear(), monthNow.getUTCMonth(), 1, 0, 0, 0, 0))
   const monthEnd = new Date(Date.UTC(monthNow.getUTCFullYear(), monthNow.getUTCMonth() + 1, 0, 23, 59, 59, 999))
@@ -115,12 +305,8 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
     loginDaysThisMonth.add(s.created_at.toISOString().slice(0, 10))
   }
 
-  // Raffle achievements
-  const rafflesEntered = await db.raffleEntry.count({ where: { user_id: auth.userId } })
-  const rafflesWon = 0 // Winner tracking table removed
-
   // Global/top-based achievements
-  const [topUsersByPoints, monthlyPointAggs] = await Promise.all([
+  const [topUsersByPoints, monthlyPointAggsRaw] = await Promise.all([
     db.userSweetCoins.findMany({
       take: 3,
       orderBy: {
@@ -128,35 +314,35 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
       },
       select: { user_id: true },
     }),
-    (async () => {
-      // SF Legend of the month: most Sweet Coins earned in current month
-      const start = monthStart
-      const end = monthEnd
-      return db.sweetCoinHistory.groupBy({
-        by: ['user_id'],
-        where: {
-          earned_at: {
-            gte: start,
-            lte: end,
-          },
+    db.sweetCoinHistory.groupBy({
+      by: ['user_id'],
+      where: {
+        earned_at: {
+          gte: monthStart,
+          lte: monthEnd,
         },
-        _sum: {
-          sweet_coins_earned: true,
-        },
-      })
-    })(),
+      },
+      _sum: {
+        sweet_coins_earned: true,
+      },
+    }),
   ])
 
-  const isTopGChatter = (topUsersByPoints as any[]).some((u: any) => u.user_id === auth.userId)
+  type MonthlyAgg = { user_id: bigint; _sum: { sweet_coins_earned: number | null } }
+  const monthlyPointAggs = monthlyPointAggsRaw as MonthlyAgg[]
+
+  const isTopGChatter = topUsersByPoints.some((u) => u.user_id === auth.userId)
 
   let isMonthlyLegend = false
   if (monthlyPointAggs.length > 0) {
     let maxSweetCoins = 0
-    for (const agg of monthlyPointAggs as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>) {
+    for (const agg of monthlyPointAggs) {
       const coins = agg._sum.sweet_coins_earned || 0
       if (coins > maxSweetCoins) maxSweetCoins = coins
     }
-    const topUsers = (monthlyPointAggs as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>).filter((agg) => (agg._sum.sweet_coins_earned || 0) === maxSweetCoins)
+    const topUsers = monthlyPointAggs.filter(
+      (agg) => (agg._sum.sweet_coins_earned || 0) === maxSweetCoins
+    )
     isMonthlyLegend = topUsers.some((agg) => agg.user_id === auth.userId)
   }
 
@@ -175,55 +361,46 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
 
   const totalEmotes = userSweetCoins?.total_emotes || 0
 
-  const unlockedById: Record<string, boolean> = {}
-
-  // Ensure we always return entries for every known achievement id
-  for (const a of ACHIEVEMENTS) {
-    unlockedById[a.id] = false
+  return {
+    userId: auth.userId,
+    kickUserId: auth.kickUserId,
+    user,
+    totalWatchMinutes,
+    recentSessionCount: recentSessionIdSet.size,
+    loginDaysThisMonth: loginDaysThisMonth.size,
+    totalMessages,
+    totalEmotes,
+    dailyChatDaysCount: dailyChatDays.size,
+    isTopGChatter,
+    isMonthlyLegend,
+    isOgDash,
   }
-
-  // Stream time thresholds based on total watch minutes
-  unlockedById['stream-starter'] = totalWatchMinutes >= 30
-  unlockedById['getting-cozy'] = totalWatchMinutes >= 120
-  unlockedById['dedicated-viewer'] = totalWatchMinutes >= 600
-  unlockedById['stream-veteran'] = totalWatchMinutes >= 3000
-  unlockedById['ride-or-die'] = totalWatchMinutes >= 12000
-
-  // Multi-Stream Hopper: 2+ different sessions in last 24 hours
-  unlockedById['multi-stream-hopper'] = recentSessionIdSet.size >= 2
-
-  // Dashboard Addict
-  unlockedById['dashboard-addict'] = loginDaysThisMonth.size >= 7
-
-  // Social connected
-  unlockedById['discord-connected'] = user.discord_connected === true
-  unlockedById['telegram-connected'] = user.telegram_connected === true
-  unlockedById['twitter-connected'] = user.twitter_connected === true
-  unlockedById['instagram-connected'] = user.instagram_connected === true
-  unlockedById['custom-profile-picture'] = !!user.custom_profile_picture_url && user.custom_profile_picture_url.trim().length > 0
-
-  // Raffle achievements
-  unlockedById['raffle-participant'] = rafflesEntered >= 1
-  unlockedById['lucky-winner'] = rafflesWon >= 1
-
-  // Chat achievements
-  unlockedById['first-words'] = totalMessages >= 1
-  unlockedById['chatterbox'] = totalMessages >= 1000
-  unlockedById['emote-master'] = totalEmotes >= 1500
-  unlockedById['super-social'] = totalMessages >= 4000
-  unlockedById['daily-chatter'] = dailyChatDays.size >= 7
-
-  // Leaderboard / special achievements
-  unlockedById['top-g-chatter'] = isTopGChatter
-  unlockedById['og-dash'] = isOgDash
-  unlockedById['sf-legend-of-the-month'] = isMonthlyLegend
-
-  return { user, unlockedById }
 }
 
 /**
- * Get the count of unlocked achievements for a user
- * This is a simplified version that computes achievements and returns the count
+ * Compute achievement unlocks for display purposes (backward compatible).
+ * Returns computed unlock states without persisting.
+ */
+export async function computeAchievementUnlocks(auth: { userId: bigint; kickUserId: bigint }) {
+  const ctx = await gatherUnlockContext(auth)
+  if (!ctx) {
+    return { user: null, unlockedById: {} as Record<string, boolean> }
+  }
+
+  const unlocks = computeUnlockStates(ctx)
+
+  // Convert to kebab-case IDs for backward compatibility with existing frontend
+  const unlockedById: Record<string, boolean> = {}
+  for (const a of ACHIEVEMENTS) {
+    const normalizedId = normalizeAchievementId(a.id)
+    unlockedById[a.id] = unlocks[normalizedId] === true
+  }
+
+  return { user: ctx.user, unlockedById }
+}
+
+/**
+ * Get the count of unlocked achievements for a user.
  */
 export async function getAchievementCount(userId: bigint, kickUserId: bigint): Promise<number> {
   try {
@@ -233,4 +410,78 @@ export async function getAchievementCount(userId: bigint, kickUserId: bigint): P
     console.error(`[getAchievementCount] Error computing achievements for user ${userId}:`, error)
     return 0
   }
+}
+
+/**
+ * Get all achievement statuses for a user.
+ * Returns both computed unlocks and claimed status from DB.
+ */
+export async function getAchievementStatuses(auth: { userId: bigint; kickUserId: bigint }): Promise<{
+  achievements: Array<{
+    id: string
+    status: 'LOCKED' | 'UNLOCKED' | 'CLAIMED'
+    unlocked_at: Date | null
+    claimed_at: Date | null
+  }>
+}> {
+  // First evaluate and persist any new unlocks
+  await evaluateAchievementsForUser(auth)
+
+  // Get current status from DB
+  const userAchievements = await db.userAchievement.findMany({
+    where: { user_id: auth.userId },
+    select: {
+      achievement_id: true,
+      status: true,
+      unlocked_at: true,
+      claimed_at: true,
+    },
+  })
+
+  const statusMap = new Map(
+    userAchievements.map((ua) => [
+      ua.achievement_id,
+      {
+        status: ua.status as 'LOCKED' | 'UNLOCKED' | 'CLAIMED',
+        unlocked_at: ua.unlocked_at,
+        claimed_at: ua.claimed_at,
+      },
+    ])
+  )
+
+  // Also check SweetCoinHistory for claims made before migration
+  const claimKeys = ACHIEVEMENTS.map((a) => makeAchievementClaimKey(a.id, auth.userId))
+  const legacyClaims = await db.sweetCoinHistory.findMany({
+    where: {
+      user_id: auth.userId,
+      message_id: { in: claimKeys },
+    },
+    select: { message_id: true },
+  })
+  const legacyClaimSet = new Set(legacyClaims.map((c) => c.message_id).filter(Boolean))
+
+  const achievements = ACHIEVEMENTS.map((a) => {
+    const normalizedId = normalizeAchievementId(a.id)
+    const dbStatus = statusMap.get(normalizedId)
+    const claimKey = makeAchievementClaimKey(a.id, auth.userId)
+    const hasLegacyClaim = legacyClaimSet.has(claimKey)
+
+    if (hasLegacyClaim || dbStatus?.status === 'CLAIMED') {
+      return {
+        id: a.id,
+        status: 'CLAIMED' as const,
+        unlocked_at: dbStatus?.unlocked_at || null,
+        claimed_at: dbStatus?.claimed_at || null,
+      }
+    }
+
+    return {
+      id: a.id,
+      status: dbStatus?.status || 'LOCKED',
+      unlocked_at: dbStatus?.unlocked_at || null,
+      claimed_at: null,
+    }
+  })
+
+  return { achievements }
 }

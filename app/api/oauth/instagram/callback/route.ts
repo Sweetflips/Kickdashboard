@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { evaluateAchievementsForUser } from '@/lib/achievements-engine'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
         // since this is what the user initiated from the Instagram connect button
         const kickUserIdBigInt = BigInt(kickUserId)
 
-        await db.user.update({
+        const updatedUser = await db.user.update({
             where: { kick_user_id: kickUserIdBigInt },
             data: {
                 instagram_connected: true,
@@ -113,7 +114,18 @@ export async function GET(request: Request) {
                 instagram_username: fbUser.name || 'Facebook User',
                 instagram_access_token_hash: hashToken(accessToken),
             },
+            select: { id: true, kick_user_id: true },
         })
+
+        // Trigger achievement evaluation to unlock INSTAGRAM_CONNECTED
+        try {
+            await evaluateAchievementsForUser({
+                userId: updatedUser.id,
+                kickUserId: updatedUser.kick_user_id,
+            })
+        } catch (evalError) {
+            console.error('Failed to evaluate achievements after Instagram connect:', evalError)
+        }
 
         return NextResponse.redirect(
             `${APP_URL}/profile?tab=connected&success=instagram_connected`

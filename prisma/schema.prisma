@@ -88,6 +88,15 @@ model User {
   referrals_as_referrer        Referral[]            @relation("Referrer")
   referrals_as_referee         Referral[]            @relation("Referee")
   referral_rewards_earned      ReferralReward[]
+  // Achievement system relations
+  user_achievements            UserAchievement[]
+  coin_ledger_entries          CoinLedger[]
+  dashboard_login_days         DashboardLoginDay[]
+  chat_counter                 ChatCounter?
+  chat_days                    ChatDay[]
+  leaderboard_period_results   LeaderboardPeriodResult[]
+  monthly_wins                 MonthlyWinner[]
+  watch_time_aggregate         WatchTimeAggregate?
 
   @@map("users")
 }
@@ -519,4 +528,152 @@ model RazedVerification {
   @@index([verification_code])
   @@index([status, expires_at])
   @@map("razed_verifications")
+}
+
+// Achievement system tables
+enum AchievementCategory {
+  STREAMS
+  COMMUNITY
+  CHAT
+  LEADERBOARD
+  SPECIAL
+}
+
+enum AchievementStatus {
+  LOCKED
+  UNLOCKED
+  CLAIMED
+}
+
+model AchievementDefinition {
+  id           String               @id // e.g. "DISCORD_CONNECTED"
+  category     AchievementCategory
+  title        String
+  description  String
+  reward_coins Int
+  claimable    Boolean              @default(true)
+  sort_order   Int                  @default(0)
+  created_at   DateTime             @default(now())
+  updated_at   DateTime             @updatedAt
+
+  user_achievements UserAchievement[]
+
+  @@map("achievement_definitions")
+}
+
+model UserAchievement {
+  id             BigInt            @id @default(autoincrement())
+  user_id        BigInt
+  achievement_id String
+  status         AchievementStatus @default(LOCKED)
+  unlocked_at    DateTime?
+  claimed_at     DateTime?
+  created_at     DateTime          @default(now())
+  updated_at     DateTime          @updatedAt
+
+  user        User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  achievement AchievementDefinition @relation(fields: [achievement_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, achievement_id])
+  @@index([user_id])
+  @@index([achievement_id])
+  @@index([status])
+  @@map("user_achievements")
+}
+
+model CoinLedger {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  amount     Int      // positive for credits, negative for debits
+  reason     String   // e.g. "achievement_claim", "chat_message", "promo_code"
+  ref_id     String?  // idempotency key, e.g. "achievement:DISCORD_CONNECTED:123"
+  metadata   Json?    // optional extra data
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, ref_id])
+  @@index([user_id, created_at])
+  @@index([reason])
+  @@map("coin_ledger")
+}
+
+model DashboardLoginDay {
+  id        BigInt   @id @default(autoincrement())
+  user_id   BigInt
+  day       DateTime @db.Date
+  month_key String   // YYYY-MM format for quick monthly queries
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, day])
+  @@index([user_id, month_key])
+  @@map("dashboard_login_days")
+}
+
+model ChatCounter {
+  id            BigInt   @id @default(autoincrement())
+  user_id       BigInt   @unique
+  message_count Int      @default(0)
+  emote_count   Int      @default(0)
+  updated_at    DateTime @updatedAt
+  created_at    DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("chat_counters")
+}
+
+model ChatDay {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  day        DateTime @db.Date
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, day])
+  @@index([user_id])
+  @@map("chat_days")
+}
+
+model LeaderboardPeriodResult {
+  id         BigInt   @id @default(autoincrement())
+  period_key String   // e.g. "2026-01-W01" or "2026-01"
+  user_id    BigInt
+  rank       Int
+  points     Int
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([period_key, user_id])
+  @@index([period_key, rank])
+  @@map("leaderboard_period_results")
+}
+
+model MonthlyWinner {
+  id         BigInt   @id @default(autoincrement())
+  month_key  String   @unique // YYYY-MM format
+  user_id    BigInt
+  points     Int
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("monthly_winners")
+}
+
+model WatchTimeAggregate {
+  id               BigInt   @id @default(autoincrement())
+  user_id          BigInt   @unique
+  total_minutes    Int      @default(0)
+  last_updated_at  DateTime @updatedAt
+  created_at       DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("watch_time_aggregates")
 }
