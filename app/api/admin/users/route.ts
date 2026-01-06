@@ -47,6 +47,41 @@ export async function GET(request: Request) {
 
     // Get users with session diagnostics
     // We'll sort by Sweet Coins in JavaScript since Prisma relation ordering is unreliable with optional relations
+    type UserWithRelations = {
+      id: bigint
+      kick_user_id: bigint
+      username: string
+      email: string | null
+      profile_picture_url: string | null
+      custom_profile_picture_url: string | null
+      is_admin: boolean
+      is_excluded: boolean
+      moderator_override: boolean | null
+      created_at: Date
+      last_login_at: Date | null
+      kick_connected: boolean
+      discord_connected: boolean
+      discord_username: string | null
+      telegram_connected: boolean
+      telegram_username: string | null
+      last_ip_address: string | null
+      signup_ip_address: string | null
+      sweet_coins: {
+        total_sweet_coins: number
+        total_emotes: number
+      } | null
+      user_sessions: Array<{
+        session_id: string
+        region: string | null
+        country: string | null
+        client_type: string | null
+        user_agent: string | null
+        ip_hash: string | null
+        last_seen_at: Date
+        created_at: Date
+      }>
+    }
+
     const [usersRaw, total] = await Promise.all([
       db.user.findMany({
         where,
@@ -74,7 +109,7 @@ export async function GET(request: Request) {
             },
           },
         },
-      }),
+      }) as Promise<UserWithRelations[]>,
       db.user.count({ where }),
     ])
 
