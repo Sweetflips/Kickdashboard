@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       return null
     })()
 
-    const { rows } = await db.$transaction(async (tx: any) => {
+    const { rows } = await (db as any).$transaction(async (tx: any) => {
       await backfillMissingPurchaseTransactions(tx as any, auth.userId)
       const rows = await tx.$queryRaw<TxRow[]>`
         SELECT id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, created_at

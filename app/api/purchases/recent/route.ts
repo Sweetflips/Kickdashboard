@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const limitRaw = sp.get('limit')
     const limit = Math.max(1, Math.min(50, limitRaw ? parseInt(limitRaw, 10) : 10))
 
-    const { rows } = await db.$transaction(async (tx: typeof db) => {
+    const { rows } = await (db as any).$transaction(async (tx: any) => {
       await backfillMissingPurchaseTransactions(tx as any, auth.userId)
       const rows = await tx.$queryRaw<Row[]>`
         SELECT id, type, quantity, sweet_coins_spent, item_name, advent_item_id, raffle_id, created_at
