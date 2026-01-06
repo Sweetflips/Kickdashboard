@@ -2,6 +2,30 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
+import type { JsonValue } from '@prisma/client/runtime/library'
+
+type MessageWithRelations = {
+    message_id: string
+    sender_is_anonymous: boolean
+    sender_username: string
+    sender_is_verified: boolean
+    sender_username_color: string | null
+    sender_badges: JsonValue
+    content: string
+    emotes: JsonValue
+    timestamp: bigint
+    sweet_coins_earned: number
+    sender: {
+        kick_user_id: bigint
+        username: string
+        profile_picture_url: string | null
+        custom_profile_picture_url: string | null
+    }
+    broadcaster: {
+        kick_user_id: bigint
+        username: string
+    }
+}
 
 /**
  * Get all chat messages for a specific stream session
@@ -89,34 +113,36 @@ export async function GET(
         })
 
         // Format messages
-        const formattedMessages = messages.map((msg: typeof messages[number]) => ({
-            message_id: msg.message_id,
+        const formattedMessages = messages.map((msg: any) => {
+            const m = msg as MessageWithRelations
+            return {
+            message_id: m.message_id,
             sender: {
-                is_anonymous: msg.sender_is_anonymous || false,
-                user_id: Number(msg.sender.kick_user_id),
-                username: msg.sender_username,
-                is_verified: msg.sender_is_verified || false,
-                profile_picture: rewriteApiMediaUrlToCdn(msg.sender.custom_profile_picture_url || msg.sender.profile_picture_url) || undefined,
+                is_anonymous: m.sender_is_anonymous || false,
+                user_id: Number(m.sender.kick_user_id),
+                username: m.sender_username,
+                is_verified: m.sender_is_verified || false,
+                profile_picture: rewriteApiMediaUrlToCdn(m.sender.custom_profile_picture_url || m.sender.profile_picture_url) || undefined,
                 channel_slug: '',
                 identity: {
-                    username_color: msg.sender_username_color || '#FFFFFF',
-                    badges: (msg.sender_badges as any) || [],
+                    username_color: m.sender_username_color || '#FFFFFF',
+                    badges: (m.sender_badges as any) || [],
                 },
             },
             broadcaster: {
                 is_anonymous: false,
-                user_id: Number(msg.broadcaster.kick_user_id),
-                username: msg.broadcaster.username,
+                user_id: Number(m.broadcaster.kick_user_id),
+                username: m.broadcaster.username,
                 is_verified: false,
                 profile_picture: undefined,
                 channel_slug: '',
                 identity: null,
             },
-            content: msg.content,
-            emotes: (msg.emotes as any) || [],
-            timestamp: Number(msg.timestamp),
-            sweet_coins_earned: msg.sweet_coins_earned || 0,
-        }))
+            content: m.content,
+            emotes: (m.emotes as any) || [],
+            timestamp: Number(m.timestamp),
+            sweet_coins_earned: m.sweet_coins_earned || 0,
+        }})
 
         return NextResponse.json({
             messages: formattedMessages,
