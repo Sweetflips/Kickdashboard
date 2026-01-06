@@ -124,15 +124,39 @@ async function ensureTables() {
       console.log('✅ Created chat_jobs table');
     }
 
-    // Also check point_award_jobs for backward compatibility
-    const pointJobsCheck = await prisma.$queryRaw`
+    // Also create sweet_coin_award_jobs if missing (for schema compatibility, even though worker is removed)
+    const sweetCoinJobsCheck = await prisma.$queryRaw`
       SELECT table_name
       FROM information_schema.tables
-      WHERE table_schema = 'public' AND table_name = 'point_award_jobs'
+      WHERE table_schema = 'public' AND table_name = 'sweet_coin_award_jobs'
     `;
 
-    if (Array.isArray(pointJobsCheck) && pointJobsCheck.length > 0) {
-      console.log('✅ point_award_jobs table exists');
+    if (Array.isArray(sweetCoinJobsCheck) && sweetCoinJobsCheck.length > 0) {
+      console.log('✅ sweet_coin_award_jobs table exists');
+    } else {
+      console.log('⚠️ sweet_coin_award_jobs table missing, creating it...');
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "sweet_coin_award_jobs" (
+          "id" BIGSERIAL NOT NULL,
+          "kick_user_id" BIGINT NOT NULL,
+          "stream_session_id" BIGINT,
+          "message_id" TEXT NOT NULL,
+          "badges" JSONB,
+          "emotes" JSONB,
+          "status" TEXT NOT NULL DEFAULT 'pending',
+          "attempts" INTEGER NOT NULL DEFAULT 0,
+          "locked_at" TIMESTAMP(3),
+          "processed_at" TIMESTAMP(3),
+          "last_error" TEXT,
+          "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "sweet_coin_award_jobs_pkey" PRIMARY KEY ("id")
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "sweet_coin_award_jobs_message_id_key" ON "sweet_coin_award_jobs"("message_id");
+        CREATE INDEX IF NOT EXISTS "sweet_coin_award_jobs_status_created_at_idx" ON "sweet_coin_award_jobs"("status", "created_at");
+        CREATE INDEX IF NOT EXISTS "sweet_coin_award_jobs_status_locked_at_idx" ON "sweet_coin_award_jobs"("status", "locked_at");
+      `);
+      console.log('✅ Created sweet_coin_award_jobs table');
     }
 
   } catch (error) {
@@ -205,17 +229,26 @@ async function ensureTables() {
   }
 
   // Normal mode - start all workers
-  // Start chat worker (handles all writes: users, messages, points)
+  // Chat worker is optional (disabled if CHAT_WORKER_DISABLED=true)
+  // This allows running only redis-sync and razed-worker if chat_jobs table doesn't exist
+  const chatWorkerDisabled = String(process.env.CHAT_WORKER_DISABLED || '').toLowerCase() === 'true';
+  
   console.log('');
   console.log('========================================');
   console.log('🚀 STARTING WORKERS');
   console.log('========================================');
   console.log('');
-  console.log('📝 Chat Worker: Starting (handles users, messages, points)...');
-  const chatWorkerProcess = spawn('npx', ['tsx', 'scripts/chat-worker.ts'], {
-    stdio: 'inherit',
-    env: process.env
-  });
+  
+  let chatWorkerProcess = null;
+  if (chatWorkerDisabled) {
+    console.log('📝 Chat Worker: Disabled (CHAT_WORKER_DISABLED=true)');
+  } else {
+    console.log('📝 Chat Worker: Starting (handles users, messages, points)...');
+    chatWorkerProcess = spawn('npx', ['tsx', 'scripts/chat-worker.ts'], {
+      stdio: 'inherit',
+      env: process.env
+    });
+  }
 
   // Session tracker (polling) is optional. For true event-driven tracking,
   // rely on Kick webhook events (livestream.status.updated).
@@ -229,14 +262,9 @@ async function ensureTables() {
     console.log('📝 Session Tracker: Disabled (webhook-driven mode)');
   }
 
-  // Start point worker (processes point_award_jobs queue)
-  // NOTE: Currently idle - nothing enqueues to point_award_jobs anymore.
-  // Chat-worker handles points inline. Keeping this worker for potential future use.
-  console.log('📝 Point Worker: Starting (currently idle - no jobs enqueued)...');
-  const pointWorkerProcess = spawn('npx', ['tsx', 'scripts/point-worker.ts'], {
-    stdio: 'inherit',
-    env: process.env
-  });
+  // NOTE: Point worker removed - it was unused (nothing enqueues to sweet_coin_award_jobs).
+  // Chat-worker handles points inline. The table/model can be removed in a future cleanup.
+  console.log('📝 Point Worker: Removed (chat-worker handles points inline)');
 
   // Start Redis sync worker (syncs Redis buffer to PostgreSQL)
   console.log('📝 Redis Sync Worker: Starting (syncs Redis to PostgreSQL)...');
@@ -257,14 +285,13 @@ async function ensureTables() {
   console.log('   Waiting for database connections...');
   console.log('');
 
-  let chatWorkerExited = false;
+  let chatWorkerExited = chatWorkerDisabled; // Already "exited" if disabled
   let sessionTrackerExited = !sessionTrackerEnabled;
-  let pointWorkerExited = false;
   let redisSyncExited = false;
   let razedWorkerExited = false;
 
   const checkExit = () => {
-    if (chatWorkerExited && sessionTrackerExited && pointWorkerExited && redisSyncExited && razedWorkerExited) {
+    if (chatWorkerExited && sessionTrackerExited && redisSyncExited && razedWorkerExited) {
       healthServer.close(() => {
         console.log('✅ Health check server closed');
         process.exit(0);
@@ -272,43 +299,33 @@ async function ensureTables() {
     }
   };
 
-  chatWorkerProcess.on('exit', (code) => {
-    chatWorkerExited = true;
-    if (code !== 0 && code !== null) {
-      console.error(`⚠️ Chat worker exited with code ${code}`);
-      // Don't exit immediately - let point worker continue
-    }
-    checkExit();
-  });
+  if (chatWorkerProcess) {
+    chatWorkerProcess.on('exit', (code) => {
+      chatWorkerExited = true;
+      if (code !== 0 && code !== null) {
+        console.error(`⚠️ Chat worker exited with code ${code}`);
+      }
+      checkExit();
+    });
+  }
 
   if (sessionTrackerProcess) {
     sessionTrackerProcess.on('exit', (code) => {
       sessionTrackerExited = true;
       if (code !== 0 && code !== null) {
         console.error(`⚠️ Session tracker exited with code ${code}`);
-        // Don't exit immediately - let other workers continue
       }
       checkExit();
     });
   }
-
-  pointWorkerProcess.on('exit', (code) => {
-    pointWorkerExited = true;
-    if (code !== 0 && code !== null) {
-      console.error(`⚠️ Point worker exited with code ${code}`);
-      // Don't exit immediately - let chat worker continue
-    }
-    checkExit();
-  });
 
   redisSyncProcess.on('exit', (code) => {
     redisSyncExited = true;
     if (code !== 0 && code !== null) {
       console.error(`⚠️ Redis sync worker exited with code ${code}`);
       // Critical worker - exit if it fails
-      chatWorkerProcess.kill('SIGTERM');
+      if (chatWorkerProcess) chatWorkerProcess.kill('SIGTERM');
       if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
-      pointWorkerProcess.kill('SIGTERM');
       razedWorkerProcess.kill('SIGTERM');
       healthServer.close();
       process.exit(1);
@@ -320,26 +337,14 @@ async function ensureTables() {
     razedWorkerExited = true;
     if (code !== 0 && code !== null) {
       console.error(`⚠️ Razed worker exited with code ${code}`);
-      // Don't exit immediately - let other workers continue
     }
     checkExit();
   });
 
-  chatWorkerProcess.on('error', (err) => {
-    console.error('❌ Failed to start chat worker:', err.message);
-    if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
-    pointWorkerProcess.kill('SIGTERM');
-    redisSyncProcess.kill('SIGTERM');
-    razedWorkerProcess.kill('SIGTERM');
-    healthServer.close();
-    process.exit(1);
-  });
-
-  if (sessionTrackerProcess) {
-    sessionTrackerProcess.on('error', (err) => {
-      console.error('❌ Failed to start session tracker:', err.message);
-      chatWorkerProcess.kill('SIGTERM');
-      pointWorkerProcess.kill('SIGTERM');
+  if (chatWorkerProcess) {
+    chatWorkerProcess.on('error', (err) => {
+      console.error('❌ Failed to start chat worker:', err.message);
+      if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
       redisSyncProcess.kill('SIGTERM');
       razedWorkerProcess.kill('SIGTERM');
       healthServer.close();
@@ -347,21 +352,21 @@ async function ensureTables() {
     });
   }
 
-  pointWorkerProcess.on('error', (err) => {
-    console.error('❌ Failed to start point worker:', err.message);
-    chatWorkerProcess.kill('SIGTERM');
-    if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
-    redisSyncProcess.kill('SIGTERM');
-    razedWorkerProcess.kill('SIGTERM');
-    healthServer.close();
-    process.exit(1);
-  });
+  if (sessionTrackerProcess) {
+    sessionTrackerProcess.on('error', (err) => {
+      console.error('❌ Failed to start session tracker:', err.message);
+      if (chatWorkerProcess) chatWorkerProcess.kill('SIGTERM');
+      redisSyncProcess.kill('SIGTERM');
+      razedWorkerProcess.kill('SIGTERM');
+      healthServer.close();
+      process.exit(1);
+    });
+  }
 
   redisSyncProcess.on('error', (err) => {
     console.error('❌ Failed to start Redis sync worker:', err.message);
-    chatWorkerProcess.kill('SIGTERM');
+    if (chatWorkerProcess) chatWorkerProcess.kill('SIGTERM');
     if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
-    pointWorkerProcess.kill('SIGTERM');
     razedWorkerProcess.kill('SIGTERM');
     healthServer.close();
     process.exit(1);
@@ -369,9 +374,8 @@ async function ensureTables() {
 
   razedWorkerProcess.on('error', (err) => {
     console.error('❌ Failed to start Razed worker:', err.message);
-    chatWorkerProcess.kill('SIGTERM');
+    if (chatWorkerProcess) chatWorkerProcess.kill('SIGTERM');
     if (sessionTrackerProcess) sessionTrackerProcess.kill('SIGTERM');
-    pointWorkerProcess.kill('SIGTERM');
     redisSyncProcess.kill('SIGTERM');
     healthServer.close();
     process.exit(1);
@@ -383,9 +387,8 @@ async function ensureTables() {
     healthServer.close(() => {
       console.log('✅ Health check server closed');
     });
-    chatWorkerProcess.kill(signal);
+    if (chatWorkerProcess) chatWorkerProcess.kill(signal);
     if (sessionTrackerProcess) sessionTrackerProcess.kill(signal);
-    pointWorkerProcess.kill(signal);
     redisSyncProcess.kill(signal);
     razedWorkerProcess.kill(signal);
   };

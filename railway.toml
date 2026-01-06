@@ -1,0 +1,15 @@
+# Railway configuration
+# This file defines build settings for different services
+# Each service in Railway can override these settings via the dashboard
+
+[build]
+# Default build uses the main Dockerfile for the web service
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+# Worker service should be configured in Railway dashboard:
+# - Create a new service from the same repo
+# - Set environment variable: RUN_AS_WORKER=true
+# OR
+# - Set Dockerfile path to: Dockerfile.worker
+
