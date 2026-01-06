@@ -220,8 +220,14 @@ export default function Dashboard() {
 
         const fetchStreamLeaderboard = async () => {
             try {
+                // Get auth token for authenticated requests
+                const token = localStorage.getItem('kick_access_token')
+                const headers: HeadersInit = {}
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`
+                }
                 // Always fetch fresh data from database - add timestamp to prevent caching
-                const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}&_t=${Date.now()}`)
+                const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}&_t=${Date.now()}`, { headers })
                 if (!response.ok) {
                     throw new Error('Failed to fetch stream leaderboard')
                 }
@@ -307,7 +313,13 @@ export default function Dashboard() {
             if (!isLive) return
 
             try {
-                const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}&_t=${Date.now()}`)
+                // Get auth token for authenticated requests
+                const token = localStorage.getItem('kick_access_token')
+                const headers: HeadersInit = {}
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`
+                }
+                const response = await fetch(`/api/stream-session/leaderboard?broadcaster_user_id=${channelData.broadcaster_user_id}&_t=${Date.now()}`, { headers })
                 if (!response.ok) return
 
                 const data = await response.json()

@@ -21,6 +21,7 @@ console.log('')
 import { db } from '../lib/db'
 import { claimChatJobs, completeChatJob, failChatJob, getChatQueueStats, type ClaimedChatJob, type ChatJobPayload } from '../lib/chat-queue'
 import { awardSweetCoins, awardEmotes, isBot } from '../lib/sweet-coins'
+import { awardCoins as awardCoinsRedis, storeMessageCoinAward } from '../lib/sweet-coins-redis'
 import { detectBotMessage } from '../lib/bot-detection'
 import { queueUserEnrichment } from '../lib/user-enrichment'
 import { analyzeEngagementType, countExclamations, countSentences, hasEmotes, messageLength } from '../lib/analytics-classifier'
@@ -332,7 +333,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                 if (botDetection.isBot) {
                     pointsReason = 'Bot detected'
                 } else if (streamSessionId) {
-                    // Award points
+                    // Award points (PostgreSQL - authoritative)
                     const pointResult = await awardSweetCoins(
                         senderUserId,
                         streamSessionId,
@@ -342,6 +343,21 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
 
                     pointsEarned = pointResult.sweetCoinsEarned || 0
                     pointsReason = pointResult.reason || null
+
+                    // Also update Redis for real-time leaderboard (non-blocking)
+                    // Redis is used for instant UI updates, PostgreSQL is authoritative
+                    if (pointsEarned > 0) {
+                        try {
+                            // We need the internal user ID for Redis
+                            await awardCoinsRedis(senderResult.id, pointsEarned, streamSessionId)
+                            await storeMessageCoinAward(payload.message_id, pointsEarned)
+                        } catch (redisErr) {
+                            // Non-critical - Redis is for UI speed, PostgreSQL is authoritative
+                            if (VERBOSE_LOGS) {
+                                console.warn(`[chat-worker] Failed to update Redis leaderboard:`, redisErr)
+                            }
+                        }
+                    }
 
                     // Award emotes
                     if (payload.emotes && Array.isArray(payload.emotes) && payload.emotes.length > 0) {
