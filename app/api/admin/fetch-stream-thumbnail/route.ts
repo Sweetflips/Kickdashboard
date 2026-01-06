@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { getChannelWithLivestream } from '@/lib/kick-api'
 import { NextResponse } from 'next/server'
 
+export const runtime = 'nodejs'
+
 /**
  * POST /api/admin/fetch-stream-thumbnail
  * Fetch and update thumbnail for a specific stream session

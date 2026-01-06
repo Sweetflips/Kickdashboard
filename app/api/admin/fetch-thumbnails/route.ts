@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
 
+export const runtime = 'nodejs'
+
 /**
  * POST /api/admin/fetch-thumbnails
  * Fetch thumbnails for past streams that don't have them

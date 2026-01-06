@@ -33,18 +33,13 @@ const getDatabaseUrl = () => {
 }
 
 // Create Prisma Client with Accelerate extension
-// Prisma 7: Must explicitly pass accelerateUrl when using Accelerate
+// The extension works as a no-op for direct PostgreSQL connections
 function createPrismaClient() {
-  const databaseUrl = process.env.DATABASE_URL || ''
+  // Defer DATABASE_URL check to runtime - during build, module evaluation
+  // happens without env vars and we must not throw
+  const databaseUrl = getDatabaseUrl()
 
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL environment variable is not set')
-  }
-
-  // Prisma 7: Check if using Accelerate or direct connection
-  const isAccelerate = databaseUrl.startsWith('prisma://') || databaseUrl.startsWith('prisma+postgres://')
-
-  const clientConfig: any = {
+  const clientConfig: ConstructorParameters<typeof PrismaClient>[0] = {
     log: [], // Disable all Prisma logging - we handle errors with rate-limited logger
     transactionOptions: {
       maxWait: 5000, // Wait up to 5 seconds for transaction to start
@@ -52,21 +47,8 @@ function createPrismaClient() {
     },
   }
 
-  // Prisma 7 with engine type "client" REQUIRES either accelerateUrl or adapter
-  if (isAccelerate) {
-    // For Accelerate: must pass accelerateUrl explicitly
-    clientConfig.accelerateUrl = databaseUrl
-  } else {
-    // For direct PostgreSQL connections with Prisma 7 engine type "client",
-    // you need to install @prisma/adapter-pg and pass an adapter instance
-    // For now, throw a helpful error
-    throw new Error(
-      'Direct PostgreSQL connections require @prisma/adapter-pg. ' +
-      'Install it with: npm install @prisma/adapter-pg pg\n' +
-      'Or use Prisma Accelerate (prisma+postgres:// URL) instead.'
-    )
-  }
-
+  // Always apply Accelerate extension for consistent typing
+  // Extension is no-op for standard postgresql:// URLs
   return new PrismaClient(clientConfig).$extends(withAccelerate())
 }
 
