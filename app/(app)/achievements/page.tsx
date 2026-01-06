@@ -494,7 +494,7 @@ export default function AchievementsPage() {
                         How achievements work
                     </h3>
                     <p className="text-body text-gray-600 dark:text-kick-text-secondary mb-4">
-                        Earn Sweet Coins by watching streams, chatting, joining raffles and being active in the community. More achievements will be added over time.
+                        Earn Sweet Coins by watching streams, chatting, completing achievements, and being active in the community. More achievements will be added over time.
                     </p>
                     <a
                         href="https://kick.com/sweetflips"

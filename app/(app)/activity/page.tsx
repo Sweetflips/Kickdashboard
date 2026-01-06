@@ -14,19 +14,11 @@ type RecentPurchase = {
   created_at: string
 }
 
-type TicketEntry = {
-  tickets: number
-  raffle: {
-    title: string
-    status: string
-  }
-}
 
 export default function MyActivityPage() {
   const [kickUserId, setKickUserId] = useState<number | null>(null)
   const [kickUsername, setKickUsername] = useState<string | null>(null)
   const [points, setPoints] = useState<number | null>(null)
-  const [tickets, setTickets] = useState<TicketEntry[]>([])
   const [purchases, setPurchases] = useState<RecentPurchase[]>([])
   const [accounts, setAccounts] = useState<Array<{ provider: string; connected: boolean; username?: string }>>([])
 
@@ -52,9 +44,8 @@ export default function MyActivityPage() {
         setKickUserId(user.id)
         setKickUsername(user.username || user.name || null)
 
-        const [pointsRes, ticketsRes, purchasesRes, accountsRes] = await Promise.all([
+        const [pointsRes, purchasesRes, accountsRes] = await Promise.all([
           fetch(`/api/sweet-coins?kick_user_id=${encodeURIComponent(String(user.id))}`),
-          fetch(`/api/raffles/my-tickets`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`/api/purchases/recent?limit=25`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`/api/connected-accounts?kick_user_id=${encodeURIComponent(String(user.id))}`),
         ])
@@ -62,17 +53,6 @@ export default function MyActivityPage() {
         if (pointsRes.ok) {
           const data = await pointsRes.json()
           setPoints(typeof data?.total_sweet_coins === 'number' ? data.total_sweet_coins : 0)
-        }
-
-        if (ticketsRes.ok) {
-          const data = await ticketsRes.json()
-          const entries: TicketEntry[] = Array.isArray(data?.entries)
-            ? data.entries.map((e: any) => ({
-                tickets: e.tickets,
-                raffle: { title: e.raffle?.title ?? 'Raffle', status: e.raffle?.status ?? 'unknown' },
-              }))
-            : []
-          setTickets(entries)
         }
 
         if (purchasesRes.ok) {
@@ -111,11 +91,6 @@ export default function MyActivityPage() {
     run()
   }, [])
 
-  const activeRaffleTickets = useMemo(() => {
-    return tickets
-      .filter(t => t.raffle.status === 'active' && t.tickets > 0)
-      .slice(0, 8)
-  }, [tickets])
 
   const purchasePreviewLines = useMemo(() => {
     const byItem = new Map<string, { item: string; qty: number; points: number; tx: number; latest: string }>()
@@ -147,7 +122,7 @@ export default function MyActivityPage() {
         <div className="mb-6">
           <h1 className="text-h2 font-semibold text-gray-900 dark:text-kick-text">My Activity</h1>
           <p className="text-body text-gray-600 dark:text-kick-text-secondary">
-            Your personal dashboard across Sweet Coins, raffles, purchases, and connected accounts.
+            Your personal dashboard across Sweet Coins, achievements, purchases, and connected accounts.
           </p>
         </div>
 
@@ -176,35 +151,27 @@ export default function MyActivityPage() {
             </div>
           </div>
 
-          {/* Your Raffle Tickets */}
+          {/* Your Achievements */}
           <div className="rounded-xl border border-gray-200 dark:border-kick-border bg-white dark:bg-kick-surface p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-medium text-gray-900 dark:text-kick-text">Your Raffle Tickets</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-kick-text">Your Achievements</div>
                 <div className="text-xs text-gray-600 dark:text-kick-text-secondary">
-                  Active raffles where you own tickets
+                  Track your progress and earn rewards
                 </div>
               </div>
               <Link
-                href="/raffles"
+                href="/achievements"
                 className="text-sm font-medium text-kick-purple hover:text-kick-purple-dark"
               >
-                View All Raffles
+                View Achievements
               </Link>
             </div>
 
             <div className="mt-4 space-y-2">
-              {loading ? (
-                <div className="text-sm text-gray-600 dark:text-kick-text-secondary">Loading…</div>
-              ) : activeRaffleTickets.length === 0 ? (
-                <div className="text-sm text-gray-600 dark:text-kick-text-secondary">No active raffle tickets yet.</div>
-              ) : (
-                activeRaffleTickets.map((t, idx) => (
-                  <div key={idx} className="text-sm text-gray-900 dark:text-kick-text">
-                    {t.raffle.title} → <span className="font-semibold tabular-nums">{t.tickets}</span> tickets
-                  </div>
-                ))
-              )}
+              <div className="text-sm text-gray-600 dark:text-kick-text-secondary">
+                Complete challenges to earn Sweet Coins. Check your achievements page for details!
+              </div>
             </div>
           </div>
 

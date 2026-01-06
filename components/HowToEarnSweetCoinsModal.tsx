@@ -44,7 +44,7 @@ export default function HowToEarnSweetCoinsModal({ isOpen, onClose }: HowToEarnS
                         </li>
                         <li className="flex items-start">
                             <span className="mr-2">•</span>
-                            <span>Join raffles and community events</span>
+                            <span>Complete achievements and community events</span>
                         </li>
                         <li className="flex items-start">
                             <span className="mr-2">•</span>

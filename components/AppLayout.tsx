@@ -485,30 +485,6 @@ export default function AppLayout({ children }: LayoutProps) {
                             </div>
                         </li>
                         <li>
-                            <Link href="/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                    setSidebarOpen(false)
-                                }
-                            }}>
-                                <span className="w-5 h-5 flex items-center justify-center text-[18px] leading-none" aria-hidden="true">
-                                    🎟
-                                </span>
-                                <span className="ml-3 text-body font-medium">Raffles</span>
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="/challenges" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/challenges' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                    setSidebarOpen(false)
-                                }
-                            }}>
-                                <span className="w-5 h-5 flex items-center justify-center text-[18px] leading-none" aria-hidden="true">
-                                    🎯
-                                </span>
-                                <span className="ml-3 text-body font-medium">Challenges</span>
-                            </Link>
-                        </li>
-                        <li>
                             <Link href="/achievements" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/achievements' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
                                 if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                                     setSidebarOpen(false)
@@ -577,19 +553,6 @@ export default function AppLayout({ children }: LayoutProps) {
                                                     <path fillRule="evenodd" d="M11.983 1.043a1 1 0 00-1.966 0l-.148.74a7.03 7.03 0 00-1.608.668l-.653-.44a1 1 0 00-1.387.277l-1 1.5a1 1 0 00.277 1.387l.653.44a7.1 7.1 0 000 1.336l-.653.44a1 1 0 00-.277 1.387l1 1.5a1 1 0 001.387.277l.653-.44c.512.28 1.05.507 1.608.668l.148.74a1 1 0 001.966 0l.148-.74a7.03 7.03 0 001.608-.668l.653.44a1 1 0 001.387-.277l1-1.5a1 1 0 00-.277-1.387l-.653-.44a7.1 7.1 0 000-1.336l.653-.44a1 1 0 00.277-1.387l-1-1.5a1 1 0 00-1.387-.277l-.653.44a7.03 7.03 0 00-1.608-.668l-.148-.74zM10 8a2 2 0 100 4 2 2 0 000-4z" clipRule="evenodd" />
                                                 </svg>
                                                 <span className="ml-3 text-body font-medium">AI Moderator</span>
-                                            </Link>
-                                        </li>
-                                        <li>
-                                            <Link href="/admin/raffles" className={`group flex items-center px-3 py-2.5 rounded-xl border transition-colors duration-150 ${pathname === '/admin/raffles' ? 'bg-gray-100/90 dark:bg-kick-surface-hover text-gray-900 dark:text-kick-text border-gray-200 dark:border-kick-border shadow-sm' : 'text-gray-600 dark:text-kick-text-secondary border-transparent hover:bg-gray-50 dark:hover:bg-kick-surface-hover hover:border-gray-200/80 dark:hover:border-kick-border hover:text-gray-900 dark:hover:text-kick-text'}`} onClick={() => {
-                                                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                                    setSidebarOpen(false)
-                                                }
-                                            }}>
-                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                </svg>
-                                                <span className="ml-3 text-body font-medium">Raffles</span>
                                             </Link>
                                         </li>
                                         <li>

@@ -121,24 +121,6 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: 'community',
   },
 
-  // Raffle Achievements
-  {
-    id: 'raffle-participant',
-    name: 'Raffle Participant',
-    requirement: 'Enter one of the raffles.',
-    icon: '🎟️',
-    reward: 25,
-    category: 'community',
-  },
-  {
-    id: 'lucky-winner',
-    name: 'Lucky Winner',
-    requirement: 'Win a raffle.',
-    icon: '🍀',
-    reward: 200,
-    category: 'community',
-  },
-
   // Chat Achievements
   {
     id: 'first-words',

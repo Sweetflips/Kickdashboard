@@ -1667,7 +1667,7 @@ export default function ProfilePage() {
                                                         <div className="p-6 bg-gray-50 dark:bg-kick-surface-hover rounded-lg border border-gray-200 dark:border-kick-border text-center">
                                                             <p className="text-sm font-medium text-gray-900 dark:text-kick-text">No unlocked achievements yet</p>
                                                             <p className="text-xs text-gray-600 dark:text-kick-text-secondary mt-1">
-                                                                Watch streams, chat, join raffles, and connect accounts to unlock achievements.
+                                                                Watch streams, chat, complete achievements, and connect accounts to unlock more rewards.
                                                             </p>
                                                         </div>
                                                     ) : (
