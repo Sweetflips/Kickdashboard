@@ -16,11 +16,12 @@ export async function GET(request: Request) {
   const reply_type = searchParams.get('reply_type') || undefined
 
   try {
+    const prisma = db as any
     const where: any = {}
     if (reply_type) where.reply_type = reply_type
 
     const [logs, total] = await Promise.all([
-      db.botReplyLog.findMany({
+      prisma.botReplyLog.findMany({
         where,
         orderBy: { created_at: 'desc' },
         take: limit,
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
           created_at: true,
         },
       }),
-      db.botReplyLog.count({ where }),
+      prisma.botReplyLog.count({ where }),
     ])
 
     const serializedLogs = (logs as any[]).map((log: any) => ({
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const prisma = db as any
     const body = await request.json()
     const { action } = body
 
@@ -79,22 +81,22 @@ export async function POST(request: Request) {
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
       const [total, last24h, lastWeek, byType, successRate] = await Promise.all([
-        db.botReplyLog.count(),
-        db.botReplyLog.count({ where: { created_at: { gte: oneDayAgo } } }),
-        db.botReplyLog.count({ where: { created_at: { gte: oneWeekAgo } } }),
-        db.botReplyLog.groupBy({
+        prisma.botReplyLog.count(),
+        prisma.botReplyLog.count({ where: { created_at: { gte: oneDayAgo } } }),
+        prisma.botReplyLog.count({ where: { created_at: { gte: oneWeekAgo } } }),
+        prisma.botReplyLog.groupBy({
           by: ['reply_type'],
           _count: true,
           where: { created_at: { gte: oneWeekAgo } },
         }),
-        db.botReplyLog.groupBy({
+        prisma.botReplyLog.groupBy({
           by: ['success'],
           _count: true,
           where: { created_at: { gte: oneWeekAgo } },
         }),
       ])
 
-      const avgLatency = await db.botReplyLog.aggregate({
+      const avgLatency = await prisma.botReplyLog.aggregate({
         _avg: { latency_ms: true },
         where: { created_at: { gte: oneWeekAgo }, success: true },
       })
