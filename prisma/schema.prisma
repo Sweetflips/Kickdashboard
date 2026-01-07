@@ -2,9 +2,10 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
-  // Using --no-engine flag: Accelerate handles the query engine
-  // No binaryTargets needed when using Accelerate
+  provider   = "prisma-client-js"
+  engineType = "library"
+  // Using library engine for direct PostgreSQL connections
+  // This works with both direct connections and Accelerate
 }
 
 datasource db {
