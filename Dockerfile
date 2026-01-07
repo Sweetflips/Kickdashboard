@@ -10,9 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package files and prisma schema (needed for postinstall)
+# Copy package files and prisma schema/config (needed for postinstall)
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 
 # Install dependencies (this runs postinstall which generates Prisma client)
 RUN npm ci
@@ -24,8 +25,10 @@ WORKDIR /app
 # Copy source code
 COPY . .
 
-# Dummy DATABASE_URL for prisma generate (no actual connection made at build time)
-ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
+# Allow DATABASE_URL to be passed as build arg (optional, use provided URL if not set)
+# Note: Prisma generate doesn't actually connect during build, just needs valid URL format
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL:-postgresql://postgres:TGlahexkFWDUIbBOxJKxmTyPPvnSdrIj@shuttle.proxy.rlwy.net:41247/railway}
 
 # Build Next.js app
 RUN npm run build

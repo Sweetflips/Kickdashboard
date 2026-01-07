@@ -3,15 +3,13 @@
 
 generator client {
   provider = "prisma-client-js"
-  // Railway/Docker runs on Debian with OpenSSL 3.x (bookworm-slim). Include this
-  // target so Prisma ships the correct query engine at runtime.
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  // Using --no-engine flag: Accelerate handles the query engine
+  // No binaryTargets needed when using Accelerate
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  // Connection URLs are configured in prisma.config.ts (Prisma 7)
 }
 
 model User {
@@ -98,7 +96,7 @@ model User {
   monthly_wins                 MonthlyWinner[]
   watch_time_aggregate         WatchTimeAggregate?
 
-  @@map("users")
+  @@map("platform_users")
 }
 
 model PurchaseTransaction {
@@ -119,7 +117,7 @@ model PurchaseTransaction {
   @@index([type, created_at])
   @@index([raffle_id])
   @@index([advent_item_id])
-  @@map("purchase_transactions")
+  @@map("platform_purchase_transactions")
 }
 
 model StreamSession {
@@ -149,7 +147,7 @@ model StreamSession {
   // Partial unique index enforced at database level via migration
   // Ensures only one active session per broadcaster
   @@index([broadcaster_user_id, ended_at])
-  @@map("stream_sessions")
+  @@map("platform_stream_sessions")
 }
 
 model ChatMessage {
@@ -186,7 +184,7 @@ model ChatMessage {
   @@index([sender_user_id, stream_session_id])
   @@index([broadcaster_user_id, created_at])
   @@index([has_emotes])
-  @@map("chat_messages")
+  @@map("platform_chat_messages")
 }
 
 model OfflineChatMessage {
@@ -214,7 +212,7 @@ model OfflineChatMessage {
   sender      User @relation("OfflineSenderMessages", fields: [sender_user_id], references: [kick_user_id])
   broadcaster User @relation("OfflineBroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
 
-  @@map("offline_chat_messages")
+  @@map("platform_offline_chat_messages")
 }
 
 model UserSweetCoins {
@@ -230,7 +228,7 @@ model UserSweetCoins {
   // Relations
   user User @relation(fields: [user_id], references: [id])
 
-  @@map("user_sweet_coins")
+  @@map("platform_user_sweet_coins")
 }
 
 model SweetCoinHistory {
@@ -249,7 +247,7 @@ model SweetCoinHistory {
   @@index([stream_session_id])
   @@index([user_id, earned_at])
   @@index([earned_at])
-  @@map("sweet_coin_history")
+  @@map("platform_sweet_coin_history")
 }
 
 model Raffle {
@@ -278,7 +276,7 @@ model Raffle {
   creator        User                 @relation(fields: [created_by], references: [id])
   entries        RaffleEntry[]
 
-  @@map("raffles")
+  @@map("platform_raffles")
 }
 
 model RaffleEntry {
@@ -293,7 +291,7 @@ model RaffleEntry {
   user        User                 @relation(fields: [user_id], references: [id])
 
   @@unique([raffle_id, user_id])
-  @@map("raffle_entries")
+  @@map("platform_raffle_entries")
 }
 
 model UserSession {
@@ -314,7 +312,7 @@ model UserSession {
 
   @@index([user_id])
   @@index([last_seen_at])
-  @@map("user_sessions")
+  @@map("platform_user_sessions")
 }
 
 model PromoCode {
@@ -336,7 +334,7 @@ model PromoCode {
   @@index([code])
   @@index([expires_at])
   @@index([is_active])
-  @@map("promo_codes")
+  @@map("platform_promo_codes")
 }
 
 model PromoCodeRedemption {
@@ -353,7 +351,7 @@ model PromoCodeRedemption {
   @@unique([promo_code_id, user_id])
   @@index([user_id])
   @@index([redeemed_at])
-  @@map("promo_code_redemptions")
+  @@map("platform_promo_code_redemptions")
 }
 
 model SweetCoinAwardJob {
@@ -373,7 +371,7 @@ model SweetCoinAwardJob {
 
   @@index([status, created_at])
   @@index([status, locked_at])
-  @@map("sweet_coin_award_jobs")
+  @@map("platform_sweet_coin_award_jobs")
 }
 
 // Full chat message job queue - worker handles ALL writes
@@ -400,7 +398,7 @@ model ChatJob {
 
   @@index([status, created_at])
   @@index([status, locked_at])
-  @@map("chat_jobs")
+  @@map("platform_chat_jobs")
 }
 
 model AdventPurchase {
@@ -413,7 +411,7 @@ model AdventPurchase {
   user User @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, item_id])
-  @@map("advent_purchases")
+  @@map("platform_advent_purchases")
 }
 
 model Referral {
@@ -433,7 +431,7 @@ model Referral {
   @@index([referrer_user_id])
   @@index([referral_code])
   @@index([created_at])
-  @@map("referrals")
+  @@map("platform_referrals")
 }
 
 model ReferralReward {
@@ -453,7 +451,7 @@ model ReferralReward {
   @@unique([referrer_user_id, referee_user_id, tier_id])
   @@index([referrer_user_id])
   @@index([awarded_at])
-  @@map("referral_rewards")
+  @@map("platform_referral_rewards")
 }
 
 model AppSetting {
@@ -462,7 +460,7 @@ model AppSetting {
   updated_at  DateTime @updatedAt
   created_at  DateTime @default(now())
 
-  @@map("app_settings")
+  @@map("platform_app_settings")
 }
 
 // AI Moderation Action Log - tracks every moderation action taken
@@ -491,7 +489,7 @@ model ModerationActionLog {
   @@index([action_type, created_at])
   @@index([rule_id, created_at])
   @@index([ai_flagged, created_at])
-  @@map("moderation_action_logs")
+  @@map("platform_moderation_action_logs")
 }
 
 // Bot Reply Log - tracks bot replies for analysis
@@ -511,7 +509,7 @@ model BotReplyLog {
 
   @@index([broadcaster_user_id, created_at])
   @@index([reply_type, created_at])
-  @@map("bot_reply_logs")
+  @@map("platform_bot_reply_logs")
 }
 
 // Razed Account Verification - tracks chat-based verification codes
@@ -527,7 +525,7 @@ model RazedVerification {
 
   @@index([verification_code])
   @@index([status, expires_at])
-  @@map("razed_verifications")
+  @@map("platform_razed_verifications")
 }
 
 // Achievement system tables
@@ -558,7 +556,7 @@ model AchievementDefinition {
 
   user_achievements UserAchievement[]
 
-  @@map("achievement_definitions")
+  @@map("platform_achievement_definitions")
 }
 
 model UserAchievement {
@@ -578,7 +576,7 @@ model UserAchievement {
   @@index([user_id])
   @@index([achievement_id])
   @@index([status])
-  @@map("user_achievements")
+  @@map("platform_user_achievements")
 }
 
 model CoinLedger {
@@ -595,7 +593,7 @@ model CoinLedger {
   @@unique([user_id, ref_id])
   @@index([user_id, created_at])
   @@index([reason])
-  @@map("coin_ledger")
+  @@map("platform_coin_ledger")
 }
 
 model DashboardLoginDay {
@@ -609,7 +607,7 @@ model DashboardLoginDay {
 
   @@unique([user_id, day])
   @@index([user_id, month_key])
-  @@map("dashboard_login_days")
+  @@map("platform_dashboard_login_days")
 }
 
 model ChatCounter {
@@ -622,7 +620,7 @@ model ChatCounter {
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@map("chat_counters")
+  @@map("platform_chat_counters")
 }
 
 model ChatDay {
@@ -635,7 +633,7 @@ model ChatDay {
 
   @@unique([user_id, day])
   @@index([user_id])
-  @@map("chat_days")
+  @@map("platform_chat_days")
 }
 
 model LeaderboardPeriodResult {
@@ -650,7 +648,7 @@ model LeaderboardPeriodResult {
 
   @@unique([period_key, user_id])
   @@index([period_key, rank])
-  @@map("leaderboard_period_results")
+  @@map("platform_leaderboard_period_results")
 }
 
 model MonthlyWinner {
@@ -663,7 +661,7 @@ model MonthlyWinner {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
-  @@map("monthly_winners")
+  @@map("platform_monthly_winners")
 }
 
 model WatchTimeAggregate {
@@ -675,5 +673,5 @@ model WatchTimeAggregate {
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@map("watch_time_aggregates")
+  @@map("platform_watch_time_aggregates")
 }

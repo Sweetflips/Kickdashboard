@@ -1,9 +1,10 @@
 import 'dotenv/config'
 import { defineConfig } from 'prisma/config'
 
-// Use a placeholder URL if DATABASE_URL is not set (e.g., during build)
-// Prisma generate does not connect to the database, it only needs the schema
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://placeholder:placeholder@localhost:5432/placeholder'
+// During Docker build, DATABASE_URL may not be available
+// Prisma generate doesn't need a real connection, just the schema
+// Use provided database URL or fallback to actual database URL if not set
+const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:TGlahexkFWDUIbBOxJKxmTyPPvnSdrIj@shuttle.proxy.rlwy.net:41247/railway'
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
