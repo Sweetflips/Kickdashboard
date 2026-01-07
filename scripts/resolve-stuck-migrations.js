@@ -7,6 +7,7 @@
 const { execSync } = require('child_process');
 
 const MIGRATIONS_TO_RESOLVE = [
+  '20250101000000_init',
   '20251216000000_add_meeting_notes',
 ];
 
@@ -16,9 +17,10 @@ async function main() {
   for (const migration of MIGRATIONS_TO_RESOLVE) {
     try {
       console.log(`  → Marking ${migration} as applied...`);
-      execSync(`npx prisma migrate resolve --applied ${migration}`, {
+      execSync(`npx prisma migrate resolve --applied ${migration} --config=./prisma.config.js`, {
         stdio: 'pipe',
         timeout: 30000,
+        env: process.env,
       });
       console.log(`  ✅ ${migration} marked as applied`);
     } catch (error) {
