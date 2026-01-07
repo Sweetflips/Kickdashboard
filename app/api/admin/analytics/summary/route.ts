@@ -17,6 +17,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const topUsersLimit = Math.max(1, Math.min(100, parseInt(searchParams.get('topUsersLimit') || '50', 10) || 50))
 
+        const prisma = db as any
         const [
             totalMessages,
             totalUsers,
@@ -26,13 +27,13 @@ export async function GET(request: Request) {
             endedStreamsCount,
             endedStreamsViewsAgg,
         ] = await Promise.all([
-            db.chatMessage.count(),
-            db.user.count(),
-            db.userSweetCoins.aggregate({ _sum: { total_sweet_coins: true } }),
-            db.userSweetCoins.aggregate({ _sum: { total_emotes: true } }),
-            db.chatMessage.count({ where: { has_emotes: true } }),
-            db.streamSession.count({ where: { ended_at: { not: null } } }),
-            db.streamSession.aggregate({ where: { ended_at: { not: null } }, _sum: { peak_viewer_count: true } }),
+            prisma.chatMessage.count(),
+            prisma.user.count(),
+            prisma.userSweetCoins.aggregate({ _sum: { total_sweet_coins: true } }),
+            prisma.userSweetCoins.aggregate({ _sum: { total_emotes: true } }),
+            prisma.chatMessage.count({ where: { has_emotes: true } }),
+            prisma.streamSession.count({ where: { ended_at: { not: null } } }),
+            prisma.streamSession.aggregate({ where: { ended_at: { not: null } }, _sum: { peak_viewer_count: true } }),
         ])
 
         const activity_types = {
@@ -44,11 +45,11 @@ export async function GET(request: Request) {
 
         // Engagement breakdown (all messages)
         const [engagementCounts, engagementLenAgg] = await Promise.all([
-            db.chatMessage.groupBy({
+            prisma.chatMessage.groupBy({
                 by: ['engagement_type'],
                 _count: { _all: true },
             }),
-            db.chatMessage.aggregate({
+            prisma.chatMessage.aggregate({
                 _avg: { message_length: true },
                 _max: { message_length: true },
                 _count: { _all: true },
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
 
         // Daily activity (last 30 days) via SQL aggregation (avoid fetching rows)
         // Check both has_emotes field AND emotes JSON field to catch cases where has_emotes wasn't set
-        const daily_activity: DailyActivity[] = await db.$queryRaw<
+        const daily_activity: DailyActivity[] = await prisma.$queryRaw<
             Array<{ day: Date; messages: bigint; emotes: bigint }>
         >`
             SELECT
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
         )
 
         // Stream performance (recent ended streams)
-        const recentStreams = await db.streamSession.findMany({
+        const recentStreams = await prisma.streamSession.findMany({
             where: { ended_at: { not: null } },
             orderBy: { started_at: 'desc' },
             take: 100,
@@ -122,7 +123,7 @@ export async function GET(request: Request) {
             }))
 
         // Top users (fast, no per-user full scans)
-        const topUsers = await db.userSweetCoins.findMany({
+        const topUsers = await prisma.userSweetCoins.findMany({
             orderBy: { total_sweet_coins: 'desc' },
             take: topUsersLimit,
             include: {
@@ -140,29 +141,29 @@ export async function GET(request: Request) {
         const kickUserIds = (topUsers as unknown as Array<{ user: { kick_user_id: bigint } }>).map(u => u.user.kick_user_id)
 
         const [msgCounts, msgWithEmotesCounts, engagementByUserType, lenAggByUser, streamsByUserSession] = await Promise.all([
-            db.chatMessage.groupBy({
+            prisma.chatMessage.groupBy({
                 by: ['sender_user_id'],
                 where: { sender_user_id: { in: kickUserIds }, sent_when_offline: false },
                 _count: { _all: true },
             }),
-            db.chatMessage.groupBy({
+            prisma.chatMessage.groupBy({
                 by: ['sender_user_id'],
                 where: { sender_user_id: { in: kickUserIds }, sent_when_offline: false, has_emotes: true },
                 _count: { _all: true },
             }),
-            db.chatMessage.groupBy({
+            prisma.chatMessage.groupBy({
                 by: ['sender_user_id', 'engagement_type'],
                 where: { sender_user_id: { in: kickUserIds }, sent_when_offline: false },
                 _count: { _all: true },
             }),
-            db.chatMessage.groupBy({
+            prisma.chatMessage.groupBy({
                 by: ['sender_user_id'],
                 where: { sender_user_id: { in: kickUserIds }, sent_when_offline: false },
                 _avg: { message_length: true },
                 _max: { message_length: true },
                 _count: { _all: true },
             }),
-            db.chatMessage.groupBy({
+            prisma.chatMessage.groupBy({
                 by: ['sender_user_id', 'stream_session_id'],
                 where: { sender_user_id: { in: kickUserIds }, sent_when_offline: false, stream_session_id: { not: null } },
             }),
