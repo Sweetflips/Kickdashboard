@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
 
     try {
+        const prisma = db as any
         // SECURITY: Require authentication - derive user from session, not client input
         const auth = await getAuthenticatedUser(request)
         if (!auth) {
@@ -121,12 +122,13 @@ export async function POST(request: Request) {
         // Save to database
         console.log('🗄️  [DATABASE] Saving profile picture to database...')
         try {
+            const prisma = db as any
             // Use authenticated user's ID (already validated above)
             const kickUserId = auth.kickUserId
 
             // Check if user exists first
             console.log(`   ├─ Checking if user exists (kick_user_id: ${userId})...`)
-            const existingUser = await db.user.findUnique({
+            const existingUser = await prisma.user.findUnique({
                 where: { kick_user_id: kickUserId },
                 select: {
                     id: true,
@@ -139,7 +141,7 @@ export async function POST(request: Request) {
                 console.log(`   ├─ User found: ${existingUser.username || 'Unknown'} (DB ID: ${existingUser.id})`)
                 console.log(`   ├─ Previous custom profile picture: ${existingUser.custom_profile_picture_url ? 'Exists' : 'None'}`)
 
-                await db.user.update({
+                await prisma.user.update({
                     where: { kick_user_id: kickUserId },
                     data: { custom_profile_picture_url: serveUrl },
                 })

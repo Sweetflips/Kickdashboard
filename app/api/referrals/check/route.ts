@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         // Get authenticated user
         const auth = await getAuthenticatedUser(request)
         if (!auth) {
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
         }
 
         // Check if user has a referral (is a referee)
-        const referral = await db.referral.findUnique({
+        const referral = await prisma.referral.findUnique({
             where: { referee_user_id: auth.userId },
             include: {
                 referrer: {
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
         })
 
         // Get user's account creation date
-        const user = await db.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { id: auth.userId },
             select: { created_at: true },
         })

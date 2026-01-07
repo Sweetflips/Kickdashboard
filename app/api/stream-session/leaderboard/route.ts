@@ -21,6 +21,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         const { searchParams } = new URL(request.url)
         const broadcasterUserId = searchParams.get('broadcaster_user_id')
         const sessionId = searchParams.get('session_id')
@@ -75,11 +76,11 @@ export async function GET(request: Request) {
         }
 
         if (sessionId) {
-            session = await findSessionWithRetry(() => db.streamSession.findUnique({
+            session = await findSessionWithRetry(() => prisma.streamSession.findUnique({
                 where: { id: BigInt(sessionId) },
             }))
         } else if (broadcasterUserId) {
-            session = await findSessionWithRetry(() => db.streamSession.findFirst({
+            session = await findSessionWithRetry(() => prisma.streamSession.findFirst({
                 where: {
                     broadcaster_user_id: BigInt(broadcasterUserId),
                     ended_at: null,
@@ -89,7 +90,7 @@ export async function GET(request: Request) {
 
             if (!session) {
                 // Log why we're returning empty - helps diagnose session issues
-                const recentSession = await findSessionWithRetry(() => db.streamSession.findFirst({
+                const recentSession = await findSessionWithRetry(() => prisma.streamSession.findFirst({
                     where: {
                         broadcaster_user_id: BigInt(broadcasterUserId),
                     },
@@ -103,7 +104,8 @@ export async function GET(request: Request) {
                 }))
                 
                 if (recentSession) {
-                    console.log(`[Leaderboard] No active session for broadcaster ${broadcasterUserId}. Most recent session: id=${recentSession.id}, ended_at=${recentSession.ended_at?.toISOString() || 'null'}, started_at=${recentSession.started_at.toISOString()}`)
+                    const rs = recentSession as any
+                    console.log(`[Leaderboard] No active session for broadcaster ${broadcasterUserId}. Most recent session: id=${rs.id}, ended_at=${rs.ended_at?.toISOString() || 'null'}, started_at=${rs.started_at.toISOString()}`)
                 } else {
                     console.log(`[Leaderboard] No sessions found for broadcaster ${broadcasterUserId}`)
                 }
@@ -230,7 +232,7 @@ export async function GET(request: Request) {
         // Use groupBy/aggregate instead of fetching all messages
         const [messageCounts, pointsByUser, totalPointsResult, totalMessagesResult] = await Promise.all([
             // Message counts per user (using kick_user_id from sender_user_id)
-            executeQueryWithRetry(() => db.chatMessage.groupBy({
+            executeQueryWithRetry(() => prisma.chatMessage.groupBy({
                 by: ['sender_user_id'],
                 where: {
                     stream_session_id: session.id,
@@ -244,7 +246,7 @@ export async function GET(request: Request) {
             // Points aggregated by user (internal user_id) - only used for ended sessions
             isActiveSession && redisLeaderboard.length > 0
                 ? Promise.resolve([]) // Skip DB query for active sessions with Redis data
-                : executeQueryWithRetry(() => db.sweetCoinHistory.groupBy({
+                : executeQueryWithRetry(() => prisma.sweetCoinHistory.groupBy({
                     by: ['user_id'],
                     where: {
                         stream_session_id: session.id,
@@ -256,7 +258,7 @@ export async function GET(request: Request) {
             // Total points for stats - only used for ended sessions
             isActiveSession && redisLeaderboard.length > 0
                 ? Promise.resolve({ _sum: { sweet_coins_earned: null } })
-                : executeQueryWithRetry(() => db.sweetCoinHistory.aggregate({
+                : executeQueryWithRetry(() => prisma.sweetCoinHistory.aggregate({
                     where: {
                         stream_session_id: session.id,
                     },
@@ -265,7 +267,7 @@ export async function GET(request: Request) {
                     },
                 })),
             // Total messages for stats
-            executeQueryWithRetry(() => db.chatMessage.count({
+            executeQueryWithRetry(() => prisma.chatMessage.count({
                 where: {
                     stream_session_id: session.id,
                     sent_when_offline: false,
@@ -290,7 +292,7 @@ export async function GET(request: Request) {
         // Batch fetch user details (no N+1)
         // Need to fetch both by kick_user_id (for message counts) and by id (for Redis leaderboard)
         const usersPromises = [
-            executeQueryWithRetry(() => db.user.findMany({
+            executeQueryWithRetry(() => prisma.user.findMany({
                 where: {
                     kick_user_id: { in: kickUserIds },
                 },
@@ -307,7 +309,7 @@ export async function GET(request: Request) {
         // If we have Redis data, also fetch those users by internal ID
         if (redisUserIds.length > 0) {
             usersPromises.push(
-                executeQueryWithRetry(() => db.user.findMany({
+                executeQueryWithRetry(() => prisma.user.findMany({
                     where: {
                         id: { in: redisUserIds },
                     },
@@ -348,7 +350,7 @@ export async function GET(request: Request) {
 
         // Get emotes count - need to query messages with emotes
         // Since we can't filter JSON in groupBy, fetch messages with emotes only
-        const messagesWithEmotes = await executeQueryWithRetry(() => db.chatMessage.findMany({
+        const messagesWithEmotes = await executeQueryWithRetry(() => prisma.chatMessage.findMany({
             where: {
                 stream_session_id: session.id,
                 sent_when_offline: false,

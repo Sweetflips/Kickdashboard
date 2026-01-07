@@ -194,8 +194,9 @@ export async function GET(request: Request) {
                     // Extract referral code from cookie (set during auth flow)
                     const finalReferralCode = referralCode?.toUpperCase().trim() || null
 
+                    const prisma = db as any
                     // Check if user already exists to determine if this is a signup
-                    const existingUser = await db.user.findUnique({
+                    const existingUser = await prisma.user.findUnique({
                         where: { kick_user_id: kickUserId },
                         select: { id: true, signup_ip_address: true },
                     })
@@ -303,7 +304,7 @@ export async function GET(request: Request) {
                     if (twitterUrl !== null) createData.twitter_url = twitterUrl
 
                     // Save or update user in database
-                    const savedUser = await db.user.upsert({
+                    const savedUser = await prisma.user.upsert({
                         where: { kick_user_id: kickUserId },
                         update: updateData,
                         create: createData,
@@ -313,7 +314,7 @@ export async function GET(request: Request) {
                     if (finalReferralCode) {
                         try {
                             // Check if user already has a referral
-                            const existingReferral = await db.referral.findUnique({
+                            const existingReferral = await prisma.referral.findUnique({
                                 where: { referee_user_id: savedUser.id },
                             })
 
@@ -326,7 +327,7 @@ export async function GET(request: Request) {
 
                             if ((isNewSignup || (isWithin24Hours && !existingReferral))) {
                                 // Find the referrer by username (referral code is uppercase username)
-                                const referrer = await db.user.findFirst({
+                                const referrer = await prisma.user.findFirst({
                                     where: {
                                         username: {
                                             equals: finalReferralCode,
@@ -338,7 +339,7 @@ export async function GET(request: Request) {
 
                                 if (referrer && referrer.id !== savedUser.id) {
                                     // Create referral relationship
-                                    await db.referral.create({
+                                    await prisma.referral.create({
                                         data: {
                                             referrer_user_id: referrer.id,
                                             referee_user_id: savedUser.id,
@@ -384,7 +385,7 @@ export async function GET(request: Request) {
 
                         // Find existing recent session for this user with same client type and IP hash (within last 24 hours)
                         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-                        const existingSession = await db.userSession.findFirst({
+                        const existingSession = await prisma.userSession.findFirst({
                             where: {
                                 user_id: savedUser.id,
                                 client_type: clientType,
@@ -400,7 +401,7 @@ export async function GET(request: Request) {
 
                         if (existingSession) {
                             // Update existing session
-                            await db.userSession.update({
+                            await prisma.userSession.update({
                                 where: { id: existingSession.id },
                                 data: {
                                     last_seen_at: new Date(),
@@ -410,7 +411,7 @@ export async function GET(request: Request) {
                         } else {
                             // Create new session
                             const sessionId = crypto.randomUUID()
-                            await db.userSession.create({
+                            await prisma.userSession.create({
                                 data: {
                                     user_id: savedUser.id,
                                     session_id: sessionId,

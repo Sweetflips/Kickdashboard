@@ -24,6 +24,7 @@ interface TelegramUpdate {
 
 export async function POST(request: Request) {
     try {
+        const prisma = db as any
         const update: TelegramUpdate = await request.json()
 
         // Verify webhook secret (optional but recommended)
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
                 const authToken = text.split('/start ')[1]
 
                 try {
+                    const prisma = db as any
                     // Decode auth token
                     const authData = JSON.parse(Buffer.from(authToken, 'base64').toString())
                     const { kick_user_id } = authData
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
 
                     // Save Telegram connection to database
                     const kickUserIdBigInt = BigInt(kick_user_id)
-                    const updatedUser = await db.user.update({
+                    const updatedUser = await prisma.user.update({
                         where: { kick_user_id: kickUserIdBigInt },
                         data: {
                             telegram_connected: true,
@@ -63,6 +65,7 @@ export async function POST(request: Request) {
 
                     // Trigger achievement evaluation to unlock TELEGRAM_CONNECTED
                     try {
+                        const prisma = db as any
                         await evaluateAchievementsForUser({
                             userId: updatedUser.id,
                             kickUserId: updatedUser.kick_user_id,

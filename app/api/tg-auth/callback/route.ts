@@ -17,6 +17,7 @@ function getTelegramBotToken(): string {
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         const botToken = getTelegramBotToken()
         console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
         console.log('📱 [TELEGRAM AUTH CALLBACK] Received callback request')
@@ -108,12 +109,13 @@ export async function GET(request: Request) {
         if (kickUserIdParam) {
             // Linking flow: update existing user's Telegram info
             try {
+                const prisma = db as any
                 console.log(`🔗 [TELEGRAM LINK] Linking Telegram account for Kick user: ${kickUserIdParam}`)
                 console.log(`   ├─ Telegram ID: ${telegramId}`)
                 console.log(`   ├─ Telegram Username: ${username || firstName || 'N/A'}`)
 
                 const kickUserIdBigInt = BigInt(kickUserIdParam)
-                await db.user.update({
+                await prisma.user.update({
                     where: { kick_user_id: kickUserIdBigInt },
                     data: {
                         telegram_user_id: telegramId,

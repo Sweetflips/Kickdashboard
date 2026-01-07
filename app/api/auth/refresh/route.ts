@@ -87,10 +87,11 @@ export async function POST(request: Request) {
             )
         }
 
+        const prisma = db as any
         // If kick_user_id is provided, verify refresh token hash matches database
         if (kickUserId) {
             const refreshTokenHash = hashToken(refreshToken)
-            const user = await db.user.findUnique({
+            const user = await prisma.user.findUnique({
                 where: { kick_user_id: kickUserId },
                 select: { refresh_token_hash: true },
             })
@@ -188,7 +189,7 @@ export async function POST(request: Request) {
                     console.warn('⚠️ Could not encrypt tokens during refresh:', encryptError instanceof Error ? encryptError.message : 'Unknown error')
                 }
 
-                await db.user.update({
+                await prisma.user.update({
                     where: { kick_user_id: kickUserId },
                     data: {
                         access_token_hash: hashToken(tokenData.access_token),

@@ -43,6 +43,7 @@ function isRetryableDbError(error: any) {
  */
 export async function POST(request: Request) {
     try {
+        const prisma = db as any
         // If DB is unhealthy, fail soft to avoid flooding the origin.
         if (isDbCircuitOpen()) {
             return NextResponse.json({
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
 
         let body
         try {
+            const prisma = db as any
             body = await request.json()
         } catch (parseError) {
             return NextResponse.json(
@@ -95,7 +97,8 @@ export async function POST(request: Request) {
             let messages: { message_id: string; sweet_coins_earned: number; sweet_coins_reason: string | null }[] = []
             for (let attempt = 0; attempt < 3; attempt++) {
                 try {
-                    messages = await db.chatMessage.findMany({
+                    const prisma = db as any
+                    messages = await prisma.chatMessage.findMany({
                         where: {
                             message_id: { in: missingFromRedis },
                         },

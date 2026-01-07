@@ -102,6 +102,7 @@ function isVerifiedUser(username: string, badges: Array<{ type: string }> = []):
  */
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         // Allow external tools with API key
         const hasValidApiKey = validateApiKey(request, 'chat')
 
@@ -151,7 +152,7 @@ export async function GET(request: Request) {
 
         // Fetch messages from both tables (no COUNT queries - much faster)
         const [onlineMessages, offlineMessages] = await Promise.all([
-            db.chatMessage.findMany({
+            prisma.chatMessage.findMany({
                 where: onlineWhere,
                 orderBy: { timestamp: 'desc' },
                 take: useCursor ? limit : limit * 2, // Less overhead with cursor
@@ -193,7 +194,7 @@ export async function GET(request: Request) {
                     },
                 },
             }),
-            broadcasterUserId ? db.offlineChatMessage.findMany({
+            broadcasterUserId ? prisma.offlineChatMessage.findMany({
                 where: offlineWhereWithCursor,
                 orderBy: { timestamp: 'desc' },
                 take: useCursor ? limit : limit * 2,

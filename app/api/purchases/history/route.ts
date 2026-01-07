@@ -65,6 +65,7 @@ function typeLabel(t: string) {
 
 export async function GET(request: NextRequest) {
   try {
+    const prisma = db as any
     const auth = await getAuthenticatedUser(request)
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
     const raffleIds = [...new Set([...groupsMap.values()].map(g => g.raffle_id).filter(Boolean) as string[])]
     const raffleIdBigints = raffleIds.map(id => BigInt(id))
     const raffles = raffleIdBigints.length
-      ? await db.raffle.findMany({
+      ? await prisma.raffle.findMany({
           where: { id: { in: raffleIdBigints } },
           select: { id: true, status: true, end_at: true, drawn_at: true },
         })

@@ -13,6 +13,7 @@ function hashToken(token: string): string {
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         const { searchParams } = new URL(request.url)
         const code = searchParams.get('code')
         const state = searchParams.get('state')
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
         // Decode state to get kick_user_id
         let kickUserId: string
         try {
+            const prisma = db as any
             const stateData = JSON.parse(Buffer.from(state, 'base64').toString())
             kickUserId = stateData.kick_user_id
         } catch {
@@ -106,7 +108,7 @@ export async function GET(request: Request) {
         // since this is what the user initiated from the Instagram connect button
         const kickUserIdBigInt = BigInt(kickUserId)
 
-        const updatedUser = await db.user.update({
+        const updatedUser = await prisma.user.update({
             where: { kick_user_id: kickUserIdBigInt },
             data: {
                 instagram_connected: true,
@@ -119,6 +121,7 @@ export async function GET(request: Request) {
 
         // Trigger achievement evaluation to unlock INSTAGRAM_CONNECTED
         try {
+            const prisma = db as any
             await evaluateAchievementsForUser({
                 userId: updatedUser.id,
                 kickUserId: updatedUser.kick_user_id,

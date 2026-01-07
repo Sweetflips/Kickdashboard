@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
     try {
+        const prisma = db as any
         const body = await request.json()
         const { kick_user_id, razed_username } = body
 
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
         const kickUserIdBigInt = BigInt(kick_user_id)
 
         // Check if user exists
-        const user = await db.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { kick_user_id: kickUserIdBigInt },
             select: { id: true }
         })
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
         }
 
         // Cancel any existing pending verifications for this user
-        await db.razedVerification.updateMany({
+        await prisma.razedVerification.updateMany({
             where: {
                 kick_user_id: kickUserIdBigInt,
                 status: 'pending'
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
         const expiresAt = getVerificationExpiry()
 
         // Create verification record
-        const verification = await db.razedVerification.create({
+        const verification = await prisma.razedVerification.create({
             data: {
                 kick_user_id: kickUserIdBigInt,
                 razed_username: trimmedUsername.toLowerCase(),

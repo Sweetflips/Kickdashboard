@@ -62,6 +62,7 @@ async function getCachedResolvedSession(broadcasterUserId: bigint, messageTimest
     }
 
     try {
+        const prisma = db as any
         const value = await resolveSessionForChat(broadcasterUserId, messageTimestampMs)
         sessionCache.set(key, { value, expiresAt: now + 5000 })
         return value
@@ -125,6 +126,7 @@ function toFiniteInt(value: any): number | null {
 export async function POST(request: Request) {
     const startTime = Date.now()
     try {
+        const prisma = db as any
         // SECURITY: Allow authenticated users (frontend) OR internal webhook secret (server-to-server)
         const providedSecret = request.headers.get('x-internal-secret')
         const auth = await getAuthenticatedUser(request)
@@ -140,6 +142,7 @@ export async function POST(request: Request) {
 
         let body: any
         try {
+            const prisma = db as any
             body = await request.json()
         } catch {
             return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
@@ -281,7 +284,8 @@ export async function POST(request: Request) {
         // ═══════════════════════════════════════════════════════════════
         let createdCount = 0
         try {
-            const result = await db.chatJob.createMany({
+            const prisma = db as any
+            const result = await prisma.chatJob.createMany({
                 data: jobsToCreate,
                 skipDuplicates: true,
             })

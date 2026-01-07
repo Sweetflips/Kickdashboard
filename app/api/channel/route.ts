@@ -75,6 +75,7 @@ function parseV2ChannelData(data: any): {
     chatroom_id?: number
 } | null {
     try {
+        const prisma = db as any
         const livestream = data.livestream
         const chatroom = data.chatroom
         let category: { id: number; name: string } | null = null
@@ -163,6 +164,7 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
 }> {
 
     try {
+        const prisma = db as any
         // First, try the official /livestreams endpoint if we have broadcaster_user_id
         // This is the authoritative source for live status
         // Note: The API filter is unreliable, so we fetch all livestreams and filter client-side
@@ -173,6 +175,7 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
             // Acquire rate limit slot before making request
             const releaseSlot = await acquireRateLimitSlot()
             try {
+                const prisma = db as any
                 // Try without auth first
                 let livestreamsResponse = await fetch(livestreamsUrl, {
                     headers: {
@@ -185,6 +188,7 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                 // If 401, retry with authentication
                 if (livestreamsResponse.status === 401) {
                     try {
+                        const prisma = db as any
                         const token = await getBroadcasterToken()
                         const clientId = process.env.KICK_CLIENT_ID
 
@@ -329,9 +333,11 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
         const channelsUrl = `${KICK_API_BASE}/channels?slug[]=${encodeURIComponent(slug)}`
 
         try {
+            const prisma = db as any
             // Acquire rate limit slot before making request
             const releaseSlot = await acquireRateLimitSlot()
             try {
+                const prisma = db as any
                 const token = await getBroadcasterToken()
                 const clientId = process.env.KICK_CLIENT_ID
 
@@ -424,9 +430,11 @@ async function fetchV2ChannelDataWithDedup(slug: string): Promise<{
     // Create new request promise
     const requestPromise = (async () => {
         try {
+            const prisma = db as any
             const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
             const releaseSlot = await acquireRateLimitSlot()
             try {
+                const prisma = db as any
                 const controller = new AbortController()
                 const timeoutId = setTimeout(() => controller.abort(), 10000) // Increased to 10s
 
@@ -514,6 +522,7 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
     for (let attempt = 0; attempt < retries; attempt++) {
         const releaseSlot = await acquireRateLimitSlot()
         try {
+            const prisma = db as any
             const controller = new AbortController()
             const timeoutId = setTimeout(() => controller.abort(), 8000)
 
@@ -531,6 +540,7 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
             // If 401, try with auth
             if (response.status === 401) {
                 try {
+                    const prisma = db as any
                     let token = await getBroadcasterToken()
                     const clientId = process.env.KICK_CLIENT_ID
 
@@ -635,6 +645,7 @@ async function trackStreamSession(
     }
 
     try {
+        const prisma = db as any
         const broadcasterIdBigInt = BigInt(broadcasterUserId)
 
         if (isLive) {
@@ -710,6 +721,7 @@ export async function GET(request: Request) {
     const slug = searchParams.get('slug') || 'sweetflips'
 
     try {
+        const prisma = db as any
         // Check cache first
         const cachedData = getCachedChannelData(slug)
         if (cachedData) {
@@ -941,8 +953,9 @@ export async function GET(request: Request) {
         } | null = null
         if (broadcasterUserId) {
             try {
+                const prisma = db as any
                 const broadcasterIdBigInt = BigInt(broadcasterUserId)
-                activeSession = await db.streamSession.findFirst({
+                activeSession = await prisma.streamSession.findFirst({
                     where: {
                         broadcaster_user_id: broadcasterIdBigInt,
                         ended_at: null,
@@ -1017,6 +1030,7 @@ export async function GET(request: Request) {
         let lastLiveTime: Date | null = null
 
         try {
+            const prisma = db as any
             // If v2 data didn't provide follower count, try from channelData
             if (followerCount === 0) {
                 followerCount = channelData.followers_count ||
@@ -1037,7 +1051,7 @@ export async function GET(request: Request) {
 
             // Get last live time from database
             if (broadcasterUserId) {
-                const lastSession = await db.streamSession.findFirst({
+                const lastSession = await prisma.streamSession.findFirst({
                     where: {
                         broadcaster_user_id: BigInt(broadcasterUserId),
                     },

@@ -54,6 +54,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const prisma = db as any
         const eventType = request.headers.get('Kick-Event-Type')
         const eventVersion = request.headers.get('Kick-Event-Version')
 
@@ -76,6 +77,7 @@ export async function POST(request: Request) {
 
         let payload: any = null
         try {
+            const prisma = db as any
             payload = rawBody ? JSON.parse(rawBody) : null
         } catch (e) {
             console.warn('[webhook] ⚠️ Could not parse JSON payload')
@@ -110,6 +112,7 @@ export async function POST(request: Request) {
 
         // Forward to external webhook
         try {
+            const prisma = db as any
             const forwardResponse = await fetch(EXTERNAL_WEBHOOK_URL, {
                 method: 'POST',
                 headers: {
@@ -161,6 +164,7 @@ export async function POST(request: Request) {
 
             if (raw === null || raw === undefined) return null
             try {
+                const prisma = db as any
                 return BigInt(raw)
             } catch {
                 return null
@@ -179,7 +183,7 @@ export async function POST(request: Request) {
             if (typeof raw === 'string' && raw.trim()) return raw.trim().toLowerCase()
 
             if (broadcasterUserId) {
-                const user = await db.user.findFirst({
+                const user = await prisma.user.findFirst({
                     where: { kick_user_id: broadcasterUserId },
                     select: { username: true },
                 })
@@ -374,6 +378,7 @@ export async function POST(request: Request) {
         let resolvedSession: { sessionId: bigint; isActive: boolean } | null = null
 
         try {
+            const prisma = db as any
             resolvedSession = await resolveSessionForChat(broadcasterUserId, messageTimestampMs)
             if (!resolvedSession) {
                 console.log(`[webhook] No session found for broadcaster ${broadcasterUserId} at timestamp ${messageTimestampMs}`)
@@ -457,7 +462,7 @@ export async function POST(request: Request) {
             const sessionId = jobPayload.stream_session_id
 
             // Upsert user to ensure they exist (fixes first-time chatters missing coins)
-            const user = await db.user.upsert({
+            const user = await prisma.user.upsert({
                 where: { kick_user_id: senderKickUserId },
                 update: {
                     username: jobPayload.sender.username,
@@ -484,6 +489,7 @@ export async function POST(request: Request) {
                 const coinsToAward = isSub ? 1 : 1 // Same for now, can be configured later
 
                 try {
+                    const prisma = db as any
                     const coinResult = await awardCoins(user.id, coinsToAward, sessionId)
 
                     if (coinResult.awarded) {

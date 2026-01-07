@@ -18,6 +18,7 @@ const REFERRAL_TIERS = [
  */
 export async function POST(request: Request) {
     try {
+        const prisma = db as any
         // Verify internal request (could add a secret token check here)
         const body = await request.json()
         const { refereeUserId } = body
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
         }
 
         // Find the referral relationship
-        const referral = await db.referral.findUnique({
+        const referral = await prisma.referral.findUnique({
             where: { referee_user_id: refereeUserId },
             include: {
                 referee: {
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
         for (const tier of REFERRAL_TIERS) {
             if (refereePoints >= tier.requiredPoints) {
                 // Check if this tier was already awarded
-                const existingReward = await db.referralReward.findFirst({
+                const existingReward = await prisma.referralReward.findFirst({
                     where: {
                         referrer_user_id: referrerId,
                         referee_user_id: refereeUserId,
@@ -68,7 +69,8 @@ export async function POST(request: Request) {
                 if (!existingReward) {
                     // Award this tier
                     try {
-                        const reward = await db.referralReward.create({
+                        const prisma = db as any
+                        const reward = await prisma.referralReward.create({
                             data: {
                                 referrer_user_id: referrerId,
                                 referee_user_id: refereeUserId,
@@ -79,12 +81,12 @@ export async function POST(request: Request) {
                         })
 
                         // Add Sweet Coins to referrer
-                        const referrerPoints = await db.userSweetCoins.findUnique({
+                        const referrerPoints = await prisma.userSweetCoins.findUnique({
                             where: { user_id: referrerId }
                         })
 
                         if (referrerPoints) {
-                            await db.userSweetCoins.update({
+                            await prisma.userSweetCoins.update({
                                 where: { user_id: referrerId },
                                 data: {
                                     total_sweet_coins: {
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
                         }
 
                         // Log the Sweet Coins award
-                        await db.sweetCoinHistory.create({
+                        await prisma.sweetCoinHistory.create({
                             data: {
                                 user_id: referrerId,
                                 sweet_coins_earned: tier.yourReward,

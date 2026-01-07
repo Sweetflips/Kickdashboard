@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         // Allow external tools with API key
         const hasValidApiKey = validateApiKey(request, 'sweet-coins')
         
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
         // Parse kick_user_id as BigInt
         let kickUserIdBigInt: bigint
         try {
+            const prisma = db as any
             kickUserIdBigInt = BigInt(kickUserId)
         } catch (e) {
             return NextResponse.json(
@@ -74,7 +76,7 @@ export async function GET(request: Request) {
             cacheKey,
             async () => {
                 // Get user with sweet_coins relation in a single query
-                const user = await db.user.findUnique({
+                const user = await prisma.user.findUnique({
                     where: { kick_user_id: kickUserIdBigInt },
                     include: {
                         sweet_coins: {

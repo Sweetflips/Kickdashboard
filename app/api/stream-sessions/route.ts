@@ -26,6 +26,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         // Check access - Past Streams accessible to admins and moderators (for payouts)
         const accessCheck = await canViewPayouts(request)
         if (!accessCheck) {
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
         // Safely convert broadcasterUserId to BigInt if provided
         if (broadcasterUserId) {
             try {
+                const prisma = db as any
                 const userId = BigInt(broadcasterUserId)
                 where.broadcaster_user_id = userId
             } catch (error) {
@@ -59,7 +61,7 @@ export async function GET(request: Request) {
         }
 
         // Fetch all sessions (or a reasonable limit) to deduplicate properly
-        const allSessions = await db.streamSession.findMany({
+        const allSessions = await prisma.streamSession.findMany({
             where,
             orderBy: { started_at: 'desc' },
             take: 1000, // Reasonable limit for deduplication
@@ -138,6 +140,7 @@ export async function GET(request: Request) {
         // Auto-refresh VOD thumbnails for recent ended sessions (keeps "green placeholder" thumbnails from sticking).
         // This uses Kick's v2 /videos endpoint and updates thumbnail_url/kick_stream_id/title when it finds a better match.
         try {
+            const prisma = db as any
             const now = Date.now()
             const refreshWindowMs = 7 * 24 * 60 * 60 * 1000 // last 7 days only
             const refreshIntervalMs = 2 * 60 * 60 * 1000 // refresh at most every 2 hours
@@ -249,7 +252,7 @@ export async function GET(request: Request) {
                         }
 
                         if (changed) {
-                            const updated = await db.streamSession.update({
+                            const updated = await prisma.streamSession.update({
                                 where: { id: session.id },
                                 data: updateData,
                             })
@@ -276,6 +279,7 @@ export async function GET(request: Request) {
             let duration: number | null = null
             if (session.ended_at && session.started_at) {
                 try {
+                    const prisma = db as any
                     duration = Math.floor((session.ended_at.getTime() - session.started_at.getTime()) / 1000)
                     // Ensure duration is non-negative
                     if (duration < 0) duration = 0
@@ -357,6 +361,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
     try {
+        const prisma = db as any
         // Check admin access - Only admins can delete streams
         const adminCheck = await isAdmin(request)
         if (!adminCheck) {
@@ -379,6 +384,7 @@ export async function DELETE(request: Request) {
         // Convert to BigInt
         let sessionIdBigInt: bigint
         try {
+            const prisma = db as any
             sessionIdBigInt = BigInt(sessionId)
         } catch (error) {
             return NextResponse.json(
@@ -388,7 +394,7 @@ export async function DELETE(request: Request) {
         }
 
         // Check if session exists and get its details for duplicate detection
-        const session = await db.streamSession.findUnique({
+        const session = await prisma.streamSession.findUnique({
             where: { id: sessionIdBigInt },
             select: {
                 id: true,
@@ -406,7 +412,7 @@ export async function DELETE(request: Request) {
 
         // Find duplicate sessions (same broadcaster, started within 1 minute)
         const timeWindow = 60 * 1000 // 1 minute
-        const duplicateSessions = await db.streamSession.findMany({
+        const duplicateSessions = await prisma.streamSession.findMany({
             where: {
                 broadcaster_user_id: session.broadcaster_user_id,
                 started_at: {
@@ -425,29 +431,30 @@ export async function DELETE(request: Request) {
         // Delete related records first (chat messages, Sweet Coins history, jobs)
         // This prevents foreign key constraint errors
         try {
+            const prisma = db as any
             for (const sid of allSessionIds) {
                 // Delete chat messages associated with this session
-                await db.chatMessage.deleteMany({
+                await prisma.chatMessage.deleteMany({
                     where: { stream_session_id: sid },
                 })
 
                 // Delete Sweet Coins history associated with this session
-                await db.sweetCoinHistory.deleteMany({
+                await prisma.sweetCoinHistory.deleteMany({
                     where: { stream_session_id: sid },
                 })
 
                 // Delete Sweet Coins award jobs associated with this session
-                await db.sweetCoinAwardJob.deleteMany({
+                await prisma.sweetCoinAwardJob.deleteMany({
                     where: { stream_session_id: sid },
                 })
 
                 // Delete chat jobs associated with this session
-                await db.chatJob.deleteMany({
+                await prisma.chatJob.deleteMany({
                     where: { stream_session_id: sid },
                 })
 
                 // Delete the session itself
-                await db.streamSession.delete({
+                await prisma.streamSession.delete({
                     where: { id: sid },
                 })
             }

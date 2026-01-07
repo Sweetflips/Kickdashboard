@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         const { searchParams } = new URL(request.url)
         const verificationCode = searchParams.get('code')
 
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
         }
 
         // Find verification record
-        const verification = await db.razedVerification.findUnique({
+        const verification = await prisma.razedVerification.findUnique({
             where: { verification_code: verificationCode },
             select: {
                 status: true,
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
         // Check if expired
         if (verification.status === 'pending' && isVerificationExpired(verification.expires_at)) {
             // Update status to expired
-            await db.razedVerification.update({
+            await prisma.razedVerification.update({
                 where: { verification_code: verificationCode },
                 data: { status: 'expired' }
             })

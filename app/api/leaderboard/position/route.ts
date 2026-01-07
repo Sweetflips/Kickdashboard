@@ -12,6 +12,7 @@ interface PositionResponse {
 
 export async function GET(request: Request) {
   try {
+    const prisma = db as any
     const auth = await getAuthenticatedUser(request)
     if (!auth) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     const period = searchParams.get('period') || 'all-time'
 
     // Get the user's current Sweet Coins balance
-    const userSweetCoins = await db.userSweetCoins.findUnique({
+    const userSweetCoins = await prisma.userSweetCoins.findUnique({
       where: { user_id: auth.userId },
       select: { total_sweet_coins: true },
     })
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
     if (period === 'all-time') {
       // Calculate rank based on total_sweet_coins
       // Count users with more points
-      const usersAhead = await db.userSweetCoins.count({
+      const usersAhead = await prisma.userSweetCoins.count({
         where: {
           total_sweet_coins: { gt: points },
         },
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
     const monthEnd = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999))
 
     // Get points earned in this period
-    const periodPoints = await db.sweetCoinHistory.aggregate({
+    const periodPoints = await prisma.sweetCoinHistory.aggregate({
       where: {
         user_id: auth.userId,
         earned_at: {
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
     const monthlyPoints = periodPoints._sum.sweet_coins_earned || 0
 
     // Get all users' points for this period to calculate rank
-    const allPeriodPointsRaw = await db.sweetCoinHistory.groupBy({
+    const allPeriodPointsRaw = await prisma.sweetCoinHistory.groupBy({
       by: ['user_id'],
       where: {
         earned_at: {

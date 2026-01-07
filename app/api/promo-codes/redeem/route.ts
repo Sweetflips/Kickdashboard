@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     let originalCode: string | undefined = undefined
 
     try {
+        const prisma = db as any
         body = await request.json()
         const code = body?.code
 
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
         const authUser = auth
 
         // Use transaction to ensure atomicity
-        const result = await db.$transaction(async (tx: any) => {
+        const result = await prisma.$transaction(async (tx: any) => {
             // Look up promo code in database
             const promoCode = await tx.promoCode.findUnique({
                 where: { code: normalizedCode },

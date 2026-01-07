@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
     try {
+        const prisma = db as any
         // Get authenticated user
         const auth = await getAuthenticatedUser(request)
         if (!auth) {
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
         }
 
         // Check if user already has a referral
-        const existingReferral = await db.referral.findUnique({
+        const existingReferral = await prisma.referral.findUnique({
             where: { referee_user_id: auth.userId },
         })
 
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
         }
 
         // Get user's account creation date
-        const user = await db.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { id: auth.userId },
             select: { created_at: true },
         })
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
         }
 
         // Find the referrer by username (case-insensitive)
-        const referrer = await db.user.findFirst({
+        const referrer = await prisma.user.findFirst({
             where: {
                 username: {
                     equals: normalizedCode,
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
         }
 
         // Create referral relationship
-        await db.referral.create({
+        await prisma.referral.create({
             data: {
                 referrer_user_id: referrer.id,
                 referee_user_id: auth.userId,

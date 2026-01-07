@@ -9,6 +9,7 @@ const KICK_API_BASE = 'https://api.kick.com/public/v1'
 // Decode JWT token without verification (just to get user info)
 function decodeToken(token: string): any {
     try {
+        const prisma = db as any
         const parts = token.split('.')
         if (parts.length !== 3) {
             console.warn('⚠️ Token does not have 3 parts (not a JWT)')
@@ -30,6 +31,7 @@ function decodeToken(token: string): any {
         console.error('❌ Token decoding error:', error instanceof Error ? error.message : 'Unknown error')
         // Try regular base64 as fallback
         try {
+            const prisma = db as any
             const parts = token.split('.')
             if (parts.length !== 3) return null
             const payload = parts[1]
@@ -43,6 +45,7 @@ function decodeToken(token: string): any {
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         const { searchParams } = new URL(request.url)
         const accessToken = searchParams.get('access_token')
 
@@ -72,6 +75,7 @@ export async function GET(request: Request) {
         // Only log if KICK_INTROSPECTION_LOGS env var is set to '1'
         if (process.env.KICK_INTROSPECTION_LOGS === '1') {
             try {
+                const prisma = db as any
                 const introspectResponse = await fetch(`${KICK_API_BASE}/token/introspect`, {
                     method: 'POST',
                     headers: {
@@ -123,6 +127,7 @@ export async function GET(request: Request) {
         let lastError: string | null = null
 
         try {
+            const prisma = db as any
             response = await fetch(endpoint, {
                 method: 'GET',
                 headers: {
@@ -180,10 +185,11 @@ export async function GET(request: Request) {
                         // Save profile picture to database if user exists
                         if (extractedData.id) {
                             try {
+                                const prisma = db as any
                                 const kickUserId = BigInt(extractedData.id)
 
                                 // Check if user exists first
-                                const existingUserForUpdate = await db.user.findUnique({
+                                const existingUserForUpdate = await prisma.user.findUnique({
                                     where: { kick_user_id: kickUserId },
                                     select: {
                                         id: true,
@@ -194,7 +200,7 @@ export async function GET(request: Request) {
                                 })
 
                                 if (existingUserForUpdate) {
-                                    await db.user.update({
+                                    await prisma.user.update({
                                         where: { kick_user_id: kickUserId },
                                         data: {
                                             profile_picture_url: profilePictureUrl,
@@ -203,7 +209,7 @@ export async function GET(request: Request) {
                                         },
                                     })
                                 } else {
-                                    await db.user.create({
+                                    await prisma.user.create({
                                         data: {
                                             kick_user_id: kickUserId,
                                             username: extractedData.username,

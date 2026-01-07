@@ -5,6 +5,7 @@ import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         // SECURITY: Require authentication
         const auth = await getAuthenticatedUser(request)
         if (!auth) {
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
         }
 
         // Only fetch preferences for the authenticated user
-        const user = await db.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { kick_user_id: auth.kickUserId },
             select: {
                 kick_user_id: true,
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
     try {
+        const prisma = db as any
         // SECURITY: Require authentication
         const auth = await getAuthenticatedUser(request)
         if (!auth) {
@@ -93,7 +95,7 @@ export async function PATCH(request: Request) {
         if (chat_show_timestamps !== undefined) updateData.chat_show_timestamps = chat_show_timestamps
 
         // Only update the authenticated user's preferences
-        const user = await db.user.update({
+        const user = await prisma.user.update({
             where: { kick_user_id: auth.kickUserId },
             data: updateData,
             select: {

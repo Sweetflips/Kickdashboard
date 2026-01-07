@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 
 export async function POST(request: Request) {
     try {
+        const prisma = db as any
         const body = await request.json()
         const { kick_user_id, provider } = body
 
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
             updateData.razed_username = null
         }
 
-        await db.user.update({
+        await prisma.user.update({
             where: { kick_user_id: kickUserIdBigInt },
             data: updateData,
         })

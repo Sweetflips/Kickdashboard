@@ -7,6 +7,7 @@ const DEBUG_CONNECTED_ACCOUNTS = String(process.env.DEBUG_CONNECTED_ACCOUNTS || 
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         const { searchParams } = new URL(request.url)
         const kickUserId = searchParams.get('kick_user_id')
 
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
 
         const kickUserIdBigInt = BigInt(kickUserId)
 
-        const user = await db.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { kick_user_id: kickUserIdBigInt },
             select: {
                 kick_user_id: true,

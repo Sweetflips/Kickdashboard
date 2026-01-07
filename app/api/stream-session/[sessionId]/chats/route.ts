@@ -37,6 +37,7 @@ export async function GET(
     { params }: { params: Promise<{ sessionId: string }> }
 ) {
     try {
+        const prisma = db as any
         // Check admin access - Past Streams are admin-only
         const adminCheck = await isAdmin(request)
         if (!adminCheck) {
@@ -60,7 +61,7 @@ export async function GET(
         }
 
         // Verify session exists
-        const session = await db.streamSession.findUnique({
+        const session = await prisma.streamSession.findUnique({
             where: { id: BigInt(sessionId) },
             select: {
                 id: true,
@@ -78,14 +79,14 @@ export async function GET(
         }
 
         // Get total count
-        const total = await db.chatMessage.count({
+        const total = await prisma.chatMessage.count({
             where: {
                 stream_session_id: BigInt(sessionId),
             },
         })
 
         // Get messages
-        const messages = await db.chatMessage.findMany({
+        const messages = await prisma.chatMessage.findMany({
             where: {
                 stream_session_id: BigInt(sessionId),
             },

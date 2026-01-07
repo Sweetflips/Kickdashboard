@@ -15,6 +15,7 @@ const REFERRAL_TIERS = [
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         // Get authenticated user
         const auth = await getAuthenticatedUser(request)
         if (!auth) {
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
         }
 
         // Get all referrals for this user
-        const referrals = await db.referral.findMany({
+        const referrals = await prisma.referral.findMany({
             where: { referrer_user_id: auth.userId },
             include: {
                 referee: {
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
         })
 
         // Get all rewards earned by this user
-        const rewards = await db.referralReward.findMany({
+        const rewards = await prisma.referralReward.findMany({
             where: { referrer_user_id: auth.userId },
             orderBy: { awarded_at: 'desc' }
         })

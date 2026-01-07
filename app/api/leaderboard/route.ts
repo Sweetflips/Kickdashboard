@@ -50,7 +50,8 @@ type CachedLeaderboard = { rows: LeaderboardEntry[] }
 async function getClaimedAchievementCounts(userIds: bigint[]): Promise<Map<string, number>> {
     if (userIds.length === 0) return new Map()
 
-    const rows = await db.sweetCoinHistory.groupBy({
+    const prisma = db as any
+    const rows = await prisma.sweetCoinHistory.groupBy({
         by: ['user_id'],
         where: {
             user_id: { in: userIds },
@@ -80,6 +81,7 @@ function parseViewerKickUserId(value: string | null): string | null {
     if (!trimmed) return null
     if (!/^\d+$/.test(trimmed)) return null
     try {
+        const prisma = db as any
         return BigInt(trimmed).toString()
     } catch {
         return null
@@ -96,6 +98,7 @@ function normalizeQuery(value: string | null): string | null {
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         const { searchParams } = new URL(request.url)
         const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '50', 10) || 50))
         const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0)
@@ -304,6 +307,7 @@ async function withRetry<T>(
 ): Promise<T> {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
+            const prisma = db as any
             return await fn()
         } catch (error: any) {
             const isRetryableError =
@@ -330,6 +334,7 @@ async function withRetry<T>(
 }
 
 function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
+    const prisma = db as any
     const user = row.user
     const hasKickLogin = !!user.last_login_at
     const hasDiscord = user.discord_connected || false
@@ -361,6 +366,7 @@ function formatEntryV2(row: RowV2, rank: number): LeaderboardEntry {
 
 async function safeEnsurePurchaseTransactionsTable(): Promise<void> {
     try {
+        const prisma = db as any
         await ensurePurchaseTransactionsTable(db as any)
     } catch {
         // If DB user can't create tables, we'll just treat spend as 0.
@@ -377,9 +383,10 @@ async function buildLeaderboardRowsV2(sortBy: SortBy, dateFilter: DateRangeFilte
 }
 
 async function buildOverallRowsV2(): Promise<RowV2[]> {
+    const prisma = db as any
     // Fetch users with sweet coins first
     const userPoints = await withRetry(
-        () => db.userSweetCoins.findMany({
+        () => prisma.userSweetCoins.findMany({
             include: {
                 user: {
                     select: {
@@ -412,7 +419,7 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
     // Earned/Spent totals
     const [earnedAgg, spentAgg] = await Promise.all([
         withRetry(
-            () => db.sweetCoinHistory.groupBy({
+            () => prisma.sweetCoinHistory.groupBy({
                 by: ['user_id'],
                 where: { user_id: { in: userIds } },
                 _sum: { sweet_coins_earned: true },
@@ -423,8 +430,9 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
         (async () => {
             await safeEnsurePurchaseTransactionsTable()
             try {
+                const prisma = db as any
                 return await withRetry(
-                    () => db.purchaseTransaction.groupBy({
+                    () => prisma.purchaseTransaction.groupBy({
                         by: ['user_id'],
                         where: { user_id: { in: userIds } },
                         _sum: { sweet_coins_spent: true },
@@ -478,7 +486,7 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
     // Scope groupBy queries to these specific users
     const [messageCounts, streamPairs] = await Promise.all([
         withRetry(
-            () => db.chatMessage.groupBy({
+            () => prisma.chatMessage.groupBy({
                 by: ['sender_user_id'],
                 where: {
                     sent_when_offline: false,
@@ -490,7 +498,7 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
             'buildOverallRowsV2: messageCounts groupBy'
         ),
         withRetry(
-            () => db.chatMessage.groupBy({
+            () => prisma.chatMessage.groupBy({
                 by: ['sender_user_id', 'stream_session_id'],
                 where: {
                     sent_when_offline: false,
@@ -530,9 +538,10 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
 }
 
 async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<RowV2[]> {
+    const prisma = db as any
     const pointAgg = await withRetry(
         async () => {
-            const result = await db.sweetCoinHistory.groupBy({
+            const result = await prisma.sweetCoinHistory.groupBy({
                 by: ['user_id'] as const,
                 where: { earned_at: dateFilter },
                 _sum: { sweet_coins_earned: true },
@@ -550,7 +559,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
 
     // Fetch users first
     const users = await withRetry(
-        () => db.user.findMany({
+        () => prisma.user.findMany({
             where: { id: { in: userIds } },
             select: {
                 id: true,
@@ -572,7 +581,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
 
     // Fetch balances
     const balances = await withRetry(
-        () => db.userSweetCoins.findMany({
+        () => prisma.userSweetCoins.findMany({
             where: { user_id: { in: userIds } },
             select: { user_id: true, total_sweet_coins: true },
         }),
@@ -585,8 +594,9 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
     await safeEnsurePurchaseTransactionsTable()
     let spentAgg: any[] = []
     try {
+        const prisma = db as any
         spentAgg = await withRetry(
-            () => db.purchaseTransaction.groupBy({
+            () => prisma.purchaseTransaction.groupBy({
                 by: ['user_id'],
                 where: { user_id: { in: userIds }, created_at: dateFilter },
                 _sum: { sweet_coins_spent: true },
@@ -610,7 +620,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
     const [messageResult, streamResult, emoteResult] = await Promise.allSettled([
         kickUserIds.length > 0
             ? withRetry(
-                () => db.chatMessage.groupBy({
+                () => prisma.chatMessage.groupBy({
                     by: ['sender_user_id'],
                     where: {
                         created_at: dateFilter,
@@ -625,7 +635,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
             : Promise.resolve([]),
         kickUserIds.length > 0
             ? withRetry(
-                () => db.chatMessage.groupBy({
+                () => prisma.chatMessage.groupBy({
                     by: ['sender_user_id', 'stream_session_id'],
                     where: {
                         created_at: dateFilter,
@@ -640,7 +650,7 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
             : Promise.resolve([]),
         kickUserIds.length > 0
             ? withRetry(
-                () => db.chatMessage.groupBy({
+                () => prisma.chatMessage.groupBy({
                     by: ['sender_user_id'],
                     where: {
                         created_at: dateFilter,
@@ -708,12 +718,13 @@ async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<Row
  * Fetch overall leaderboard (no date filter) - use UserPoints table
  */
 async function fetchOverallLeaderboard(limit: number, offset: number) {
+    const prisma = db as any
     // Get total count
-    const total = await db.userSweetCoins.count()
+    const total = await prisma.userSweetCoins.count()
 
     // Get paginated users ordered by total_points DESC
     // Join with User table to get user details
-    const userPoints = await db.userSweetCoins.findMany({
+    const userPoints = await prisma.userSweetCoins.findMany({
         orderBy: {
             total_sweet_coins: 'desc',
         },
@@ -741,7 +752,7 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
 
     // Batch fetch message counts and streams watched
     const [messageCounts, streamsWatched] = await Promise.all([
-        db.chatMessage.groupBy({
+        prisma.chatMessage.groupBy({
             by: ['sender_user_id'],
             where: {
                 sender_user_id: { in: kickUserIds },
@@ -751,7 +762,7 @@ async function fetchOverallLeaderboard(limit: number, offset: number) {
                 id: true,
             },
         }),
-        db.chatMessage.groupBy({
+        prisma.chatMessage.groupBy({
             by: ['sender_user_id', 'stream_session_id'],
             where: {
                 sender_user_id: { in: kickUserIds },
@@ -825,8 +836,9 @@ async function fetchDateFilteredLeaderboard(
     offset: number,
     dateFilter: { gte: Date; lte: Date }
 ) {
+    const prisma = db as any
     // Get total users who earned points in this period
-    const totalAggregates = await db.sweetCoinHistory.groupBy({
+    const totalAggregates = await prisma.sweetCoinHistory.groupBy({
         by: ['user_id'],
         where: {
             earned_at: dateFilter,
@@ -838,7 +850,7 @@ async function fetchDateFilteredLeaderboard(
     // Note: Prisma groupBy doesn't support orderBy on aggregated fields directly
     // So we need to fetch more and sort in memory, or use raw SQL
     // For now, fetch all aggregates, sort, then paginate
-    const pointAggregatesRaw = await db.sweetCoinHistory.groupBy({
+    const pointAggregatesRaw = await prisma.sweetCoinHistory.groupBy({
         by: ['user_id'],
         where: {
             earned_at: dateFilter,
@@ -863,7 +875,7 @@ async function fetchDateFilteredLeaderboard(
     const userIds = paginatedAggregates.map((agg: any) => Number(agg.user_id))
 
     // Get user details
-    const users = await db.user.findMany({
+    const users = await prisma.user.findMany({
         where: {
             id: { in: userIds },
         },
@@ -884,7 +896,7 @@ async function fetchDateFilteredLeaderboard(
 
     // Batch fetch stats for these users
     const [messageCounts, streamsWatched, emotesQuery] = await Promise.all([
-        db.chatMessage.groupBy({
+        prisma.chatMessage.groupBy({
             by: ['sender_user_id'],
             where: {
                 sender_user_id: { in: kickUserIds },
@@ -895,7 +907,7 @@ async function fetchDateFilteredLeaderboard(
                 id: true,
             },
         }),
-        db.chatMessage.groupBy({
+        prisma.chatMessage.groupBy({
             by: ['sender_user_id', 'stream_session_id'],
             where: {
                 sender_user_id: { in: kickUserIds },
@@ -904,7 +916,7 @@ async function fetchDateFilteredLeaderboard(
                 sent_when_offline: false,
             },
         }),
-        db.chatMessage.findMany({
+        prisma.chatMessage.findMany({
             where: {
                 sender_user_id: { in: kickUserIds },
                 created_at: dateFilter,
