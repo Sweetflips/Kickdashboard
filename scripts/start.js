@@ -258,7 +258,7 @@ function startWebServer() {
 
     nextProcess.on('exit', (code, signal) => {
       nextProcessExited = code !== null ? code : (signal ? 1 : 0);
-      
+
       // IMPORTANT:
       // - When a child is terminated by a signal, Node reports `code === null` and provides `signal`.
       // - Treat SIGTERM/SIGINT as a graceful shutdown so the platform doesn't restart-loop the service.
@@ -311,29 +311,30 @@ function startWebServer() {
       // Get the direct PostgreSQL URL for migrations (can't use Accelerate URLs)
       const directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || '';
       const isAccelerateUrl = directUrl.startsWith('prisma://') || directUrl.startsWith('prisma+postgres://');
-      
+
       if (isAccelerateUrl) {
         process.stdout.write('⚠️ Cannot run migrations: DATABASE_URL is Accelerate URL and DIRECT_URL not set\n');
         return;
       }
-      
+
       if (!directUrl) {
         process.stdout.write('⚠️ Cannot run migrations: No database URL configured\n');
         return;
       }
 
       process.stdout.write('🔄 Resolving stuck migrations...\n');
-      
+
       // First resolve any stuck migrations
       exec('node scripts/resolve-stuck-migrations.js', { env: envWithPath, timeout: 60000 }, (resolveError) => {
         if (resolveError) {
           process.stdout.write('⚠️ Migration resolution warning: ' + resolveError.message + '\n');
         }
-        
-        // Then run migrate deploy with explicit datasource URL
+
+        // Then run migrate deploy with DATABASE_URL set to direct URL
         process.stdout.write('🔄 Running database migrations...\n');
-        const migrateCmd = `npx prisma migrate deploy --datasource-url="${directUrl}"`;
-        exec(migrateCmd, { env: envWithPath, timeout: 60000 }, (error) => {
+        // Override DATABASE_URL with the direct URL for migrations only
+        const migrateEnv = { ...envWithPath, DATABASE_URL: directUrl };
+        exec('npx prisma migrate deploy', { env: migrateEnv, timeout: 60000 }, (error) => {
           if (error) {
             process.stdout.write('⚠️ Migration failed: ' + error.message + '\n');
           } else {
