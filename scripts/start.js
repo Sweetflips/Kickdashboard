@@ -347,6 +347,18 @@ function startWebServer() {
           } else {
             process.stdout.write('✅ Migrations completed\n');
           }
+          
+          // Seed achievement definitions after migrations
+          process.stdout.write('🏆 Seeding achievement definitions...\n');
+          exec('npx tsx scripts/seed-achievements.ts', { env: migrateEnv, timeout: 30000 }, (seedError, seedStdout, seedStderr) => {
+            if (seedStdout) process.stdout.write(seedStdout);
+            if (seedStderr) process.stderr.write(seedStderr);
+            if (seedError) {
+              process.stdout.write('⚠️ Achievement seeding warning: ' + seedError.message + '\n');
+            } else {
+              process.stdout.write('✅ Achievements seeded\n');
+            }
+          });
         });
       });
     }, 5000);
