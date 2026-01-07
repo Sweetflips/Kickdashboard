@@ -34,7 +34,8 @@ export async function POST(request: Request) {
         }
 
         // Get the session
-        const session = await db.streamSession.findUnique({
+        const prisma = db as any
+        const session = await prisma.streamSession.findUnique({
             where: { id: BigInt(sessionId) },
             select: {
                 id: true,
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
         }
 
         // Update the session with new thumbnail and store the kick_stream_id if available
-        await db.streamSession.update({
+        await prisma.streamSession.update({
             where: { id: session.id },
             data: {
                 thumbnail_url: thumbnailUrl,
