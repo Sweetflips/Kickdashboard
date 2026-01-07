@@ -11,10 +11,10 @@ function createClient() {
   // Use DIRECT_URL for direct PostgreSQL connection (preferred)
   // Fall back to DATABASE_URL if it's a direct postgres:// URL
   const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || ''
-  
+
   // Skip Accelerate URLs - use direct connection only
   const isAccelerateUrl = databaseUrl.startsWith('prisma://') || databaseUrl.startsWith('prisma+postgres://')
-  
+
   if (isAccelerateUrl) {
     console.error('[Prisma] ERROR: Accelerate URL detected but we need a direct PostgreSQL URL')
     console.error('[Prisma] Set DIRECT_URL to your PostgreSQL connection string')
@@ -26,11 +26,11 @@ function createClient() {
   }
 
   console.log('[Prisma] Using direct PostgreSQL connection')
-  
+
   // Create pg Pool for the adapter
   const pool = new pg.Pool({ connectionString: databaseUrl })
   const adapter = new PrismaPg(pool)
-  
+
   return new PrismaClient({ adapter })
 }
 

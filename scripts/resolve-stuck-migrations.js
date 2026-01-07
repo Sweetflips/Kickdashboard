@@ -120,18 +120,21 @@ async function main() {
   // Step 3: Drop problematic triggers if they exist
   try {
     console.log('🔧 Dropping problematic trigger if exists...');
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
+    const { Client } = require('pg');
+    const client = new Client({
+      connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
+    });
+    await client.connect();
 
-    await prisma.$executeRawUnsafe(`
-      DROP TRIGGER IF EXISTS chat_messages_points_sweet_coins_sync_trg ON "chat_messages";
+    await client.query(`
+      DROP TRIGGER IF EXISTS chat_messages_points_sweet_coins_sync_trg ON "platform_chat_messages";
     `);
-    await prisma.$executeRawUnsafe(`
+    await client.query(`
       DROP FUNCTION IF EXISTS chat_messages_points_sweet_coins_sync();
     `);
 
     console.log('  ✅ Trigger cleanup completed');
-    await prisma.$disconnect();
+    await client.end();
   } catch (error) {
     console.log(`  ⚠️ Trigger cleanup failed: ${error.message}`);
   }

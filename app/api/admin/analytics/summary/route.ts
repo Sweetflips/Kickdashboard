@@ -79,7 +79,7 @@ export async function GET(request: Request) {
                         ELSE 0
                     END
                 )::bigint AS emotes
-            FROM chat_messages
+            FROM platform_chat_messages
             WHERE created_at >= NOW() - INTERVAL '30 days'
             GROUP BY 1
             ORDER BY 1 ASC

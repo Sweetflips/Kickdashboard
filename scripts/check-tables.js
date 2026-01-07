@@ -24,16 +24,16 @@ async function main() {
 
     // Check columns in users table
     const usersColumns = await prisma.$queryRaw`
-      SELECT column_name FROM information_schema.columns 
+      SELECT column_name FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'users'
       ORDER BY ordinal_position
     `;
     console.log('\n"users" table columns:');
     usersColumns.forEach(c => console.log('  -', c.column_name));
-    
+
     // Check columns in platform_users table
     const platformUsersColumns = await prisma.$queryRaw`
-      SELECT column_name FROM information_schema.columns 
+      SELECT column_name FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'platform_users'
       ORDER BY ordinal_position
     `;

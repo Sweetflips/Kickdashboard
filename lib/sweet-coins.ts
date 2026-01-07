@@ -202,7 +202,7 @@ export async function awardSweetCoins(
                         total_sweet_coins: number
                     }>>`
                         SELECT id, user_id, last_sweet_coin_earned_at, total_sweet_coins
-                        FROM user_sweet_coins
+                        FROM platform_user_sweet_coins
                         WHERE user_id = ${userId}
                         FOR UPDATE
                     `

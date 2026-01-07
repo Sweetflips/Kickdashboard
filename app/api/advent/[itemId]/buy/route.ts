@@ -121,7 +121,7 @@ export async function POST(
         total_sweet_coins: number
       }>>`
         SELECT id, user_id, total_sweet_coins
-        FROM user_sweet_coins
+        FROM platform_user_sweet_coins
         WHERE user_id = ${auth.userId}
         FOR UPDATE
       `
