@@ -308,6 +308,20 @@ function startWebServer() {
 
     // Run migrations in background after 5 seconds
     setTimeout(async () => {
+      // Get the direct PostgreSQL URL for migrations (can't use Accelerate URLs)
+      const directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || '';
+      const isAccelerateUrl = directUrl.startsWith('prisma://') || directUrl.startsWith('prisma+postgres://');
+      
+      if (isAccelerateUrl) {
+        process.stdout.write('⚠️ Cannot run migrations: DATABASE_URL is Accelerate URL and DIRECT_URL not set\n');
+        return;
+      }
+      
+      if (!directUrl) {
+        process.stdout.write('⚠️ Cannot run migrations: No database URL configured\n');
+        return;
+      }
+
       process.stdout.write('🔄 Resolving stuck migrations...\n');
       
       // First resolve any stuck migrations
@@ -316,9 +330,10 @@ function startWebServer() {
           process.stdout.write('⚠️ Migration resolution warning: ' + resolveError.message + '\n');
         }
         
-        // Then run migrate deploy
+        // Then run migrate deploy with explicit datasource URL
         process.stdout.write('🔄 Running database migrations...\n');
-        exec('npx prisma migrate deploy', { env: envWithPath, timeout: 60000 }, (error) => {
+        const migrateCmd = `npx prisma migrate deploy --datasource-url="${directUrl}"`;
+        exec(migrateCmd, { env: envWithPath, timeout: 60000 }, (error) => {
           if (error) {
             process.stdout.write('⚠️ Migration failed: ' + error.message + '\n');
           } else {
