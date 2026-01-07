@@ -361,6 +361,8 @@ async function gatherUnlockContext(
 
   const totalEmotes = userSweetCoins?.total_emotes || 0
 
+  console.log(`[Achievements] Context for kickUserId=${auth.kickUserId}: messages=${totalMessages}, watchMinutes=${Math.round(totalWatchMinutes)}, emotes=${totalEmotes}, loginDays=${loginDaysThisMonth.size}, chatDays=${dailyChatDays.size}`)
+
   return {
     userId: auth.userId,
     kickUserId: auth.kickUserId,

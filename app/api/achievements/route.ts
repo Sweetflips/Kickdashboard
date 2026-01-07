@@ -23,7 +23,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
+    console.log(`[Achievements API] Evaluating for userId=${auth.userId}, kickUserId=${auth.kickUserId}`)
+    
     const { achievements } = await getAchievementStatuses(auth)
+    
+    const unlockedCount = achievements.filter(a => a.status !== 'LOCKED').length
+    console.log(`[Achievements API] Result: ${unlockedCount}/${achievements.length} unlocked`)
 
     const statuses: AchievementStatusResponse[] = achievements.map((a) => ({
       id: a.id,
