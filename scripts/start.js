@@ -332,9 +332,13 @@ function startWebServer() {
 
         // Then run migrate deploy with DATABASE_URL set to direct URL
         process.stdout.write('🔄 Running database migrations...\n');
+        process.stdout.write('🔄 Using direct URL: ' + (directUrl ? 'YES (starts with ' + directUrl.substring(0, 15) + '...)' : 'NO') + '\n');
         // Override DATABASE_URL with the direct URL for migrations only
         const migrateEnv = { ...envWithPath, DATABASE_URL: directUrl };
-        exec('npx prisma migrate deploy', { env: migrateEnv, timeout: 60000 }, (error) => {
+        // Use --config to explicitly point to the config file
+        exec('npx prisma migrate deploy --config=./prisma.config.js', { env: migrateEnv, timeout: 60000 }, (error, stdout, stderr) => {
+          if (stdout) process.stdout.write(stdout);
+          if (stderr) process.stderr.write(stderr);
           if (error) {
             process.stdout.write('⚠️ Migration failed: ' + error.message + '\n');
           } else {
