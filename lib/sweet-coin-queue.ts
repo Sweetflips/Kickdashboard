@@ -1,7 +1,6 @@
 import { db } from '@/lib/db'
 import { awardSweetCoins, awardEmotes } from '@/lib/sweet-coins'
 import { Prisma } from '@prisma/client'
-import { Prisma } from '@prisma/client'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 
 const verboseQueueLogging = process.env.POINT_QUEUE_VERBOSE_LOGS === 'true'

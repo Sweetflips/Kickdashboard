@@ -13,7 +13,6 @@
 
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
-import { Prisma } from '@prisma/client'
 
 // Define types locally since Prisma Accelerate doesn't export input types
 type StreamSessionUpdateData = {

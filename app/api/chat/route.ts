@@ -95,7 +95,7 @@ function isVerifiedUser(username: string, badges: Array<{ type: string }> = []):
 /**
  * GET /api/chat
  * Fetch chat messages
- * 
+ *
  * Authentication: Requires API key (?api_key=) OR authenticated session
  * External tools: Use ?api_key=YOUR_API_SECRET_KEY
  * Internal dashboard: Uses session cookies automatically
@@ -104,10 +104,10 @@ export async function GET(request: Request) {
     try {
         // Allow external tools with API key
         const hasValidApiKey = validateApiKey(request, 'chat')
-        
+
         // Allow authenticated users (internal dashboard)
         const auth = await getAuthenticatedUser(request)
-        
+
         if (!hasValidApiKey && !auth) {
             return NextResponse.json(
                 { error: 'Authentication required. Use api_key parameter or login.' },
