@@ -14,11 +14,7 @@ const globalForPrisma = globalThis as unknown as {
 // Create Prisma Client with Accelerate extension (for Accelerate URLs)
 function createAccelerateClient() {
   return new PrismaClient({
-    log: [],
-    transactionOptions: {
-      maxWait: 5000,
-      timeout: 15000,
-    },
+    accelerateUrl: process.env.DATABASE_URL,
   }).$extends(withAccelerate())
 }
 
