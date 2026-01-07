@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const now = new Date()
 
     try {
-      await db.$transaction(async (tx: any) => {
+      await (db as any).$transaction(async (tx: any) => {
         // Create history entry first (idempotency is enforced by unique message_id)
         await tx.sweetCoinHistory.create({
           data: {
