@@ -1,11 +1,18 @@
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import { withAccelerate } from '@prisma/extension-accelerate'
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createClient> | undefined
+// Check if URL is a Prisma Accelerate URL
+const isAccelerateUrl = (url: string) => {
+  return url.startsWith('prisma://') || url.startsWith('prisma+postgres://')
 }
 
-function createClient() {
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | ReturnType<typeof createAccelerateClient> | undefined
+}
+
+// Create Prisma Client with Accelerate extension (for Accelerate URLs)
+function createAccelerateClient() {
   return new PrismaClient({
     log: [],
     transactionOptions: {
@@ -13,6 +20,25 @@ function createClient() {
       timeout: 15000,
     },
   }).$extends(withAccelerate())
+}
+
+// Create standard Prisma Client (for direct PostgreSQL URLs)
+function createStandardClient() {
+  return new PrismaClient({
+    log: [],
+    transactionOptions: {
+      maxWait: 5000,
+      timeout: 15000,
+    },
+  })
+}
+
+function createClient() {
+  const databaseUrl = process.env.DATABASE_URL || ''
+  if (isAccelerateUrl(databaseUrl)) {
+    return createAccelerateClient()
+  }
+  return createStandardClient()
 }
 
 export const db = globalForPrisma.prisma ?? (globalForPrisma.prisma = createClient())
