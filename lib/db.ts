@@ -9,7 +9,7 @@ const isAccelerateUrl = (url: string) => {
   if (!url) return false
   // Accelerate URLs start with prisma:// or prisma+postgres://
   // They also contain 'accelerate' in the hostname typically
-  return url.startsWith('prisma://') || 
+  return url.startsWith('prisma://') ||
          url.startsWith('prisma+postgres://') ||
          url.includes('accelerate.prisma-data.net')
 }
@@ -59,18 +59,18 @@ function createStandardClient() {
 function createClient() {
   const databaseUrl = process.env.DATABASE_URL || ''
   const directUrl = process.env.DIRECT_URL || ''
-  
+
   // Log environment for debugging
   console.log('[Prisma] Environment check:')
   console.log('[Prisma]   DATABASE_URL set:', !!databaseUrl)
   console.log('[Prisma]   DATABASE_URL is Accelerate:', isAccelerateUrl(databaseUrl))
   console.log('[Prisma]   DIRECT_URL set:', !!directUrl)
-  
+
   // If DATABASE_URL is an Accelerate URL, use Accelerate client
   if (isAccelerateUrl(databaseUrl)) {
     return createAccelerateClient()
   }
-  
+
   // Otherwise, use direct PostgreSQL connection with pg adapter
   return createStandardClient()
 }
