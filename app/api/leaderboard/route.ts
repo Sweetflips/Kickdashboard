@@ -3,7 +3,7 @@ import { memoryCache } from '@/lib/memory-cache'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { ensurePurchaseTransactionsTable } from '@/lib/purchases-ledger'
 import { NextResponse } from 'next/server'
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+import { Prisma } from '@prisma/client'
 
 // Allow caching but revalidate frequently for fresh data
 export const dynamic = 'force-dynamic'
@@ -307,7 +307,7 @@ async function withRetry<T>(
             return await fn()
         } catch (error: any) {
             const isRetryableError =
-                error instanceof PrismaClientKnownRequestError &&
+                error instanceof Prisma.PrismaClientKnownRequestError &&
                 (error.code === 'P2024' || error.code === 'P2034' || error.code === 'P4001' || error.code === 'P2028') ||
                 (error instanceof Error && (
                     error.message.includes('could not serialize access') ||

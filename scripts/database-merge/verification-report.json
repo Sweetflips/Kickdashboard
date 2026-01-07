@@ -1,0 +1,95 @@
+{
+  "timestamp": "2026-01-05T20:40:56.822Z",
+  "tableCounts": {
+    "platform_users": {
+      "source": 22135,
+      "target": 22135,
+      "diff": 0
+    },
+    "platform_user_sweet_coins": {
+      "source": 21460,
+      "target": 21460,
+      "diff": 0
+    },
+    "platform_sweet_coin_history": {
+      "source": 320809,
+      "target": 320809,
+      "diff": 0
+    },
+    "platform_stream_sessions": {
+      "source": 134,
+      "target": 134,
+      "diff": 0
+    },
+    "platform_chat_messages": {
+      "source": 1898783,
+      "target": 1898783,
+      "diff": 0
+    },
+    "platform_offline_chat_messages": {
+      "source": 38743,
+      "target": 38743,
+      "diff": 0
+    },
+    "platform_user_sessions": {
+      "source": 1223,
+      "target": 1223,
+      "diff": 0
+    },
+    "platform_raffles": {
+      "source": 1,
+      "target": 1,
+      "diff": 0
+    },
+    "platform_raffle_entries": {
+      "source": 14,
+      "target": 14,
+      "diff": 0
+    },
+    "platform_promo_codes": {
+      "source": 3,
+      "target": 3,
+      "diff": 0
+    },
+    "platform_promo_code_redemptions": {
+      "source": 85,
+      "target": 85,
+      "diff": 0
+    },
+    "platform_purchase_transactions": {
+      "source": 982,
+      "target": 982,
+      "diff": 0
+    },
+    "platform_advent_purchases": {
+      "source": 632,
+      "target": 632,
+      "diff": 0
+    },
+    "platform_referrals": {
+      "source": 13,
+      "target": 13,
+      "diff": 0
+    },
+    "platform_razed_verifications": {
+      "source": 5,
+      "target": 5,
+      "diff": 0
+    },
+    "platform_app_settings": {
+      "source": 3,
+      "target": 3,
+      "diff": 0
+    }
+  },
+  "foreignKeyChecks": [
+    {
+      "table": "platform_user_sweet_coins",
+      "orphans": 0,
+      "status": "OK"
+    }
+  ],
+  "dataIntegrity": [],
+  "warnings": [],
+  "errors": []
+}

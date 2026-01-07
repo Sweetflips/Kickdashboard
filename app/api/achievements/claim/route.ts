@@ -2,7 +2,7 @@ import { ACHIEVEMENT_BY_ID, isValidAchievementId } from '@/lib/achievements'
 import { computeAchievementUnlocks, makeAchievementClaimKey, normalizeAchievementId } from '@/lib/achievements-engine'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
         })
       })
     } catch (e: unknown) {
-      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         return NextResponse.json({ claimed: true, alreadyClaimed: true, sweetCoinsAwarded: 0 })
       }
       throw e

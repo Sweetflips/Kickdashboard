@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
-import type { JsonValue } from '@prisma/client/runtime/library'
+import { Prisma } from '@prisma/client'
 
 type MessageWithRelations = {
     message_id: string
@@ -10,9 +10,9 @@ type MessageWithRelations = {
     sender_username: string
     sender_is_verified: boolean
     sender_username_color: string | null
-    sender_badges: JsonValue
+    sender_badges: Prisma.JsonValue
     content: string
-    emotes: JsonValue
+    emotes: Prisma.JsonValue
     timestamp: bigint
     sweet_coins_earned: number
     sender: {

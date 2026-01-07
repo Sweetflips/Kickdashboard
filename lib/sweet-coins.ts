@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+import { Prisma } from '@prisma/client'
 
 const verboseSweetCoinsLogging = process.env.CHAT_SAVE_VERBOSE_LOGS === 'true'
 
@@ -111,7 +111,7 @@ export async function awardSweetCoins(
             }))
         } catch (error) {
             // Handle race condition where multiple requests try to create the same record
-            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 // Record already exists, fetch it
                 userSweetCoins = await dbQueryWithRetry(() => db.userSweetCoins.findUnique({
                     where: { user_id: userId },
@@ -292,7 +292,7 @@ export async function awardSweetCoins(
                 const attemptDuration = Date.now() - attemptStartTime
 
                 // Handle unique constraint violation (race condition on message_id)
-                if (transactionError instanceof PrismaClientKnownRequestError && transactionError.code === 'P2002') {
+                if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2002') {
                     logDebug(`[awardSweetCoins] Unique constraint violation (race condition): userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}, duration=${attemptDuration}ms`)
                     logDebug(`⏸️ Sweet Coins not awarded to ${user.username}: Message already processed for sweet coins (race condition)`)
                     return {
@@ -303,7 +303,7 @@ export async function awardSweetCoins(
                 }
 
                 // Handle transaction timeout - retry with exponential backoff
-                if (transactionError instanceof PrismaClientKnownRequestError && transactionError.code === 'P2028') {
+                if (transactionError instanceof Prisma.PrismaClientKnownRequestError && transactionError.code === 'P2028') {
                     logDebug(`[awardSweetCoins] Transaction timeout: userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}/${maxRetries}, duration=${attemptDuration}ms`)
                     if (attempt < maxRetries - 1) {
                         const delay = Math.min(100 * Math.pow(2, attempt), 1000) // 100ms, 200ms, 400ms max
@@ -321,7 +321,7 @@ export async function awardSweetCoins(
                 }
 
                 // Handle connection pool (P2024), serialization (P4001), deadlock (P2034), concurrent update (P2010) - retry
-                const isSerializationError = transactionError instanceof PrismaClientKnownRequestError &&
+                const isSerializationError = transactionError instanceof Prisma.PrismaClientKnownRequestError &&
                     (transactionError.code === 'P2024' || transactionError.code === 'P4001' || transactionError.code === 'P2034' || transactionError.code === 'P2010') ||
                     (transactionError instanceof Error && (
                         transactionError.message.includes('could not serialize access') ||
@@ -330,7 +330,7 @@ export async function awardSweetCoins(
                     ))
 
                 if (isSerializationError) {
-                    const errorCode = transactionError instanceof PrismaClientKnownRequestError ? transactionError.code : 'UNKNOWN'
+                    const errorCode = transactionError instanceof Prisma.PrismaClientKnownRequestError ? transactionError.code : 'UNKNOWN'
                     const errorType = errorCode === 'P4001' ? 'serialization' : errorCode === 'P2034' ? 'deadlock' : 'concurrent update'
                     logDebug(`[awardSweetCoins] Serialization failure (${errorType}): userId=${userId}, messageId=${messageId}, attempt=${attempt + 1}/${maxRetries}, duration=${attemptDuration}ms`)
                     if (attempt < maxRetries - 1) {
@@ -436,7 +436,7 @@ export async function awardEmotes(
             }))
         } catch (error) {
             // Handle race condition where multiple requests try to create the same record
-            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 // Record already exists, fetch it
                 userSweetCoins = await dbQueryWithRetry(() => db.userSweetCoins.findUnique({
                     where: { user_id: userId },
