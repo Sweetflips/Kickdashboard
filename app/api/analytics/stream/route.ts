@@ -131,9 +131,10 @@ export async function GET(request: Request) {
         }
 
         const sessionIdBigInt = BigInt(sessionId)
+        const prisma = db as any
 
         // Get stream session info
-        const streamSession = await db.streamSession.findUnique({
+        const streamSession = await prisma.streamSession.findUnique({
             where: { id: sessionIdBigInt },
             select: {
                 id: true,
@@ -153,7 +154,7 @@ export async function GET(request: Request) {
 
         // Get all messages for this stream
         // Filter out offline messages and invalid user IDs
-        const allMessages = await db.chatMessage.findMany({
+        const allMessages = await prisma.chatMessage.findMany({
             where: {
                 stream_session_id: sessionIdBigInt,
                 sent_when_offline: false,
@@ -181,7 +182,7 @@ export async function GET(request: Request) {
         }
 
         // Get unique users - filter out invalid user IDs
-        const uniqueUsers = await db.chatMessage.groupBy({
+        const uniqueUsers = await prisma.chatMessage.groupBy({
             by: ['sender_user_id'],
             where: {
                 stream_session_id: sessionIdBigInt,
@@ -195,7 +196,7 @@ export async function GET(request: Request) {
         const totalUsers = uniqueUsers.length
 
         // Get total Sweet Coins for this stream
-        const totalSweetCoins = await db.sweetCoinHistory.aggregate({
+        const totalSweetCoins = await prisma.sweetCoinHistory.aggregate({
             where: {
                 stream_session_id: sessionIdBigInt,
             },
@@ -270,7 +271,7 @@ export async function GET(request: Request) {
         }
 
         // Get Sweet Coins for each user in this stream
-        const sweetCoinHistory = await db.sweetCoinHistory.findMany({
+        const sweetCoinHistory = await prisma.sweetCoinHistory.findMany({
             where: {
                 stream_session_id: sessionIdBigInt,
             },

@@ -111,7 +111,8 @@ function analyzeEngagementType(content: string, hasEmotes: boolean): string {
 
 // Helper function to get engagement breakdown for a user
 async function getUserEngagementBreakdown(kickUserId: bigint) {
-    const userMessages = await db.chatMessage.findMany({
+    const prisma = db as any
+    const userMessages = await prisma.chatMessage.findMany({
         where: {
             sender_user_id: kickUserId,
         },
@@ -174,8 +175,9 @@ export async function GET(request: Request) {
         const limit = parseInt(searchParams.get('limit') || '50')
         const offset = parseInt(searchParams.get('offset') || '0')
 
+        const prisma = db as any
         // Get top users by Sweet Coins
-        const topUsers = await db.userSweetCoins.findMany({
+        const topUsers = await prisma.userSweetCoins.findMany({
             orderBy: { total_sweet_coins: 'desc' },
             take: limit,
             skip: offset,
@@ -197,14 +199,14 @@ export async function GET(request: Request) {
                 const kickUserId = entry.user.kick_user_id
 
                 // Get total messages sent
-                const totalMessages = await db.chatMessage.count({
+                const totalMessages = await prisma.chatMessage.count({
                     where: {
                         sender_user_id: kickUserId,
                     },
                 })
 
                 // Get messages with emotes - check both emotes field and content
-                const userMessagesForEmoteCheck = await db.chatMessage.findMany({
+                const userMessagesForEmoteCheck = await prisma.chatMessage.findMany({
                     where: {
                         sender_user_id: kickUserId,
                     },
@@ -249,7 +251,7 @@ export async function GET(request: Request) {
                 }
 
                 // Get unique stream sessions watched
-                const streamsWatchedResult = await db.chatMessage.groupBy({
+                const streamsWatchedResult = await prisma.chatMessage.groupBy({
                     by: ['stream_session_id'],
                     where: {
                         sender_user_id: kickUserId,
@@ -312,14 +314,14 @@ export async function GET(request: Request) {
         })
 
         // Get overall stats
-        const totalUsers = await db.userSweetCoins.count()
-        const totalMessages = await db.chatMessage.count()
-        const totalSweetCoins = await db.userSweetCoins.aggregate({
+        const totalUsers = await prisma.userSweetCoins.count()
+        const totalMessages = await prisma.chatMessage.count()
+        const totalSweetCoins = await prisma.userSweetCoins.aggregate({
             _sum: { total_sweet_coins: true },
         })
 
         // Get messages with emotes count - check both emotes field and content
-        const allMessagesForEmoteCheck = await db.chatMessage.findMany({
+        const allMessagesForEmoteCheck = await prisma.chatMessage.findMany({
             select: {
                 emotes: true,
                 content: true,
@@ -338,13 +340,13 @@ export async function GET(request: Request) {
             messages: totalMessages,
             messages_with_emotes: messagesWithEmotesCount,
             messages_with_text_only: totalMessages - messagesWithEmotesCount,
-            emotes: await db.userSweetCoins.aggregate({
+            emotes: await prisma.userSweetCoins.aggregate({
                 _sum: { total_emotes: true },
             }).then((result: any) => result._sum.total_emotes || 0),
         }
 
         // Get overall engagement breakdown
-        const allMessages = await db.chatMessage.findMany({
+        const allMessages = await prisma.chatMessage.findMany({
             select: {
                 content: true,
                 emotes: true,
@@ -378,7 +380,7 @@ export async function GET(request: Request) {
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-        const dailyMessages = await db.chatMessage.findMany({
+        const dailyMessages = await prisma.chatMessage.findMany({
             where: {
                 created_at: {
                     gte: thirtyDaysAgo,
@@ -414,7 +416,7 @@ export async function GET(request: Request) {
         )
 
         // Get stream performance metrics
-        const streams = await db.streamSession.findMany({
+        const streams = await prisma.streamSession.findMany({
             where: {
                 ended_at: { not: null },
             },
