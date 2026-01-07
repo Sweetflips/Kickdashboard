@@ -39,11 +39,11 @@ const globalForPrisma = globalThis as unknown as {
 // Create appropriate client based on DATABASE_URL
 function createClient(): DbClient {
   const url = process.env.DATABASE_URL || ''
-  
+
   if (isAccelerateUrl(url)) {
     return createAccelerateClient()
   }
-  
+
   // Standard PrismaClient is compatible with the Accelerate type
   // (Accelerate extension only adds cacheStrategy option which is optional)
   return createStandardClient() as unknown as DbClient

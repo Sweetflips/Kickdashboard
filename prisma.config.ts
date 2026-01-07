@@ -1,10 +1,23 @@
 import 'dotenv/config'
 import { defineConfig } from 'prisma/config'
 
-// During Docker build, DATABASE_URL may not be available
-// Prisma generate doesn't need a real connection, just the schema
-// Use provided database URL or fallback to actual database URL if not set
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:TGlahexkFWDUIbBOxJKxmTyPPvnSdrIj@shuttle.proxy.rlwy.net:41247/railway'
+// For migrations, use DIRECT_URL (actual PostgreSQL connection)
+// Prisma Accelerate URLs (prisma+postgres://) cannot be used for migrations
+// Fallback chain: DIRECT_URL -> DATABASE_URL (if not Accelerate) -> hardcoded fallback
+const getDirectUrl = () => {
+  if (process.env.DIRECT_URL) {
+    return process.env.DIRECT_URL
+  }
+  
+  const dbUrl = process.env.DATABASE_URL || ''
+  // If DATABASE_URL is an Accelerate URL, we can't use it for migrations
+  if (dbUrl.startsWith('prisma://') || dbUrl.startsWith('prisma+postgres://')) {
+    // Return fallback direct connection
+    return 'postgresql://postgres:TGlahexkFWDUIbBOxJKxmTyPPvnSdrIj@shuttle.proxy.rlwy.net:41247/railway'
+  }
+  
+  return dbUrl || 'postgresql://postgres:TGlahexkFWDUIbBOxJKxmTyPPvnSdrIj@shuttle.proxy.rlwy.net:41247/railway'
+}
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
@@ -12,6 +25,6 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    url: databaseUrl,
+    url: getDirectUrl(),
   },
 })
