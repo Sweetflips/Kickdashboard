@@ -318,7 +318,7 @@ async function withRetry<T>(
 
             if (isRetryableError && attempt < maxRetries - 1) {
                 const delay = Math.min(100 * Math.pow(2, attempt), 1000) // Exponential backoff: 100ms, 200ms, 400ms max
-                const code = error instanceof PrismaClientKnownRequestError ? error.code : undefined
+                const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined
                 console.warn(`[${operation}] Retryable error (attempt ${attempt + 1}/${maxRetries}), retrying after ${delay}ms...`, code || error.message)
                 await new Promise(resolve => setTimeout(resolve, delay))
                 continue
