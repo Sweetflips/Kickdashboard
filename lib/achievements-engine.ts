@@ -222,17 +222,22 @@ async function gatherUnlockContext(
     return null
   }
 
-  // Fetch all chat messages for this user (online only)
+  // Fetch all chat messages for this user (count ALL, not just online)
+  // Chat achievements should count all messages regardless of stream status
   const messages = await (db as any).chatMessage.findMany({
     where: {
       sender_user_id: auth.kickUserId,
-      sent_when_offline: false,
+      // Removed sent_when_offline filter - count all messages for achievements
     },
     select: {
       created_at: true,
       stream_session_id: true,
     },
   })
+  
+  if (messages.length === 0) {
+    console.log(`[Achievements] No chat messages found for kickUserId=${auth.kickUserId}`)
+  }
 
   const totalMessages = messages.length
 
