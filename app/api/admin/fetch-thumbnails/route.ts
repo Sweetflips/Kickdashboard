@@ -25,7 +25,8 @@ export async function POST(request: Request) {
         const limit = parseInt(searchParams.get('limit') || '50', 10)
 
         // Find past streams without thumbnails
-        const sessionsWithoutThumbnails = await db.streamSession.findMany({
+        const prisma = db as any
+        const sessionsWithoutThumbnails = await prisma.streamSession.findMany({
             where: {
                 channel_slug: slug,
                 ended_at: { not: null }, // Only past streams
