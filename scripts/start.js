@@ -324,7 +324,7 @@ function startWebServer() {
 
       process.stdout.write('🔄 Resolving stuck migrations...\n');
       process.stdout.write('🔄 Using direct URL: ' + (directUrl ? 'YES (starts with ' + directUrl.substring(0, 15) + '...)' : 'NO') + '\n');
-      
+
       // Override DATABASE_URL with the direct URL for migrations only
       const migrateEnv = { ...envWithPath, DATABASE_URL: directUrl };
 
