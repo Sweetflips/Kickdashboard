@@ -1,6 +1,5 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
-import { Prisma } from '@prisma/client'
 
 const verboseSweetCoinsLogging = process.env.CHAT_SAVE_VERBOSE_LOGS === 'true'
 

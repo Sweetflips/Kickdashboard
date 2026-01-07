@@ -1,6 +1,5 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
-import { Prisma } from '@prisma/client'
 import { logErrorRateLimited } from '@/lib/rate-limited-logger'
 
 const verboseQueueLogging = process.env.CHAT_QUEUE_VERBOSE_LOGS === 'true'
