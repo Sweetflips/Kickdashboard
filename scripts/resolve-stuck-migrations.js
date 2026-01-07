@@ -6,15 +6,43 @@
 
 const { execSync } = require('child_process');
 
-// Migrations to mark as applied (already exist in DB)
+// Migrations to mark as applied (platform_* tables already have all columns)
 const MIGRATIONS_TO_APPLY = [
   '20250101000000_init',
+  '20250101000001_add_user_preferences',
+  '20250101000002_add_chat_message_styling',
+  '20250101000003_add_points_earned',
+  '20250101000004_add_total_emotes',
+  '20250101000005_add_giveaway_system',
+  '20250101000006_add_thumbnail_url_to_stream_session',
+  '20250101000007_add_stream_session_to_giveaway',
+  '20250101000008_simplify_giveaway',
+  '20250101000012_add_unique_message_id_to_point_history',
+  '20251209215000_create_raffle_tables',
+  '20251209215830_add_referral_system',
+  '20251209220000_raffle_wheel_rigging',
+  '20251209230000_raffle_appearance',
+  '20251211100604_add_kick_stream_id',
+  '20251211180921_add_kick_video_id',
+  '20251211184641_add_advent_purchase_user_relation',
+  '20251211200000_add_unique_active_session_constraint',
+  '20251211210000_wheel_overlay',
+  '20251212000100_add_chat_analytics_fields',
+  '20251212120000_purchase_transactions',
+  '20251212130000_point_award_jobs_compat_view',
+  '20251212134000_chat_messages_points_columns_compat',
+  '20251214134340_add_moderator_override',
+  '20251215000000_add_app_settings',
   '20251216000000_add_meeting_notes',
+  '20251219000000_rename_points_to_sweet_coins',
+  '20251219000100_add_moderation_logs',
+  'add_connected_accounts',
 ];
 
 // Migrations that failed and need to be rolled back first, then marked as applied
 const FAILED_MIGRATIONS_TO_FIX = [
   '20250101000002_add_chat_message_styling',
+  '20250101000003_add_points_earned',
 ];
 
 async function main() {
