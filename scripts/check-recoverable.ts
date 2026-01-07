@@ -2,14 +2,14 @@ import { db } from '../lib/db';
 
 async function checkRecoverable() {
   // Count jobs by session status
-  const withSession = await db.chatJob.count({
+  const withSession = await (db as any).chatJob.count({
     where: { 
       status: 'pending',
       stream_session_id: { not: null }
     }
   });
   
-  const withoutSession = await db.chatJob.count({
+  const withoutSession = await (db as any).chatJob.count({
     where: { 
       status: 'pending',
       stream_session_id: null
@@ -20,7 +20,7 @@ async function checkRecoverable() {
   console.log('Pending jobs without session (saved as offline, NO coins):', withoutSession);
   
   // Check which sessions the valid jobs belong to
-  const sessionBreakdown = await db.chatJob.groupBy({
+  const sessionBreakdown = await (db as any).chatJob.groupBy({
     by: ['stream_session_id'],
     where: { 
       status: 'pending',
@@ -33,7 +33,7 @@ async function checkRecoverable() {
   for (const s of sessionBreakdown) {
     const sessionId = (s as any).stream_session_id as bigint | null;
     if (!sessionId) continue;
-    const session = await db.streamSession.findUnique({
+    const session = await (db as any).streamSession.findUnique({
       where: { id: sessionId },
       select: { id: true, started_at: true, ended_at: true, session_title: true }
     });
@@ -46,7 +46,7 @@ async function checkRecoverable() {
   }
   
   // Check current active session
-  const activeSession = await db.streamSession.findFirst({
+  const activeSession = await (db as any).streamSession.findFirst({
     where: { ended_at: null },
     orderBy: { started_at: 'desc' }
   });
@@ -56,7 +56,7 @@ async function checkRecoverable() {
     console.log('  Started:', activeSession.started_at.toISOString());
   }
   
-  await db.$disconnect();
+  await (db as any).$disconnect();
 }
 
 checkRecoverable().catch(console.error);

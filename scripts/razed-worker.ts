@@ -98,7 +98,7 @@ async function handleChatMessage(message: RazedMessage): Promise<void> {
         console.log(`[razed-worker] Found verification code "${verificationCode}" from user "${username}"`)
         
         // Find pending verification
-        const verification = await db.razedVerification.findUnique({
+        const verification = await (db as any).razedVerification.findUnique({
             where: { verification_code: verificationCode },
             select: {
                 id: true,
@@ -123,7 +123,7 @@ async function handleChatMessage(message: RazedMessage): Promise<void> {
         const now = new Date()
         if (now > verification.expires_at) {
             console.log(`[razed-worker] Verification "${verificationCode}" expired`)
-            await db.razedVerification.update({
+            await (db as any).razedVerification.update({
                 where: { id: verification.id },
                 data: { status: 'expired' }
             })
@@ -137,7 +137,7 @@ async function handleChatMessage(message: RazedMessage): Promise<void> {
         }
         
         // Update verification status
-        await db.razedVerification.update({
+        await (db as any).razedVerification.update({
             where: { id: verification.id },
             data: {
                 status: 'verified',
@@ -146,7 +146,7 @@ async function handleChatMessage(message: RazedMessage): Promise<void> {
         })
         
         // Update user's Razed connection
-        await db.user.update({
+        await (db as any).user.update({
             where: { kick_user_id: verification.kick_user_id },
             data: {
                 razed_connected: true,

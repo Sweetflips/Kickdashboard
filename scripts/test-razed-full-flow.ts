@@ -68,7 +68,7 @@ async function testFullFlow() {
     // Step 2: Verify verification exists in database
     console.log('Step 2: Verifying database record...')
     try {
-        const verification = await db.razedVerification.findUnique({
+        const verification = await (db as any).razedVerification.findUnique({
             where: { verification_code: verificationCode! }
         })
 
@@ -132,7 +132,7 @@ async function testFullFlow() {
                     console.log('')
                     
                     // Verify user account is updated
-                    const user = await db.user.findUnique({
+                    const user = await (db as any).user.findUnique({
                         where: { kick_user_id: BigInt(kickUserId) },
                         select: {
                             razed_connected: true,

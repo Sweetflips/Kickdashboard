@@ -8,7 +8,7 @@ async function mergeSessions() {
   console.log(`\nMerging sessions ${sessionsToMerge.join(', ')} into session ${targetSessionId}...\n`);
 
   // Get target session
-  const target = await db.streamSession.findUnique({
+  const target = await (db).streamSession.findUnique({
     where: { id: targetSessionId },
     select: { id: true, started_at: true, ended_at: true }
   });
@@ -19,7 +19,7 @@ async function mergeSessions() {
   }
 
   // Get earliest start time from all sessions
-  const allSessions = await db.streamSession.findMany({
+  const allSessions = await (db).streamSession.findMany({
     where: { id: { in: [targetSessionId, ...sessionsToMerge] } },
     select: { id: true, started_at: true, total_messages: true }
   });
@@ -35,46 +35,46 @@ async function mergeSessions() {
     console.log(`\nProcessing session ${sourceId}...`);
 
     // Move chat messages
-    const chatResult = await db.chatMessage.updateMany({
+    const chatResult = await (db).chatMessage.updateMany({
       where: { stream_session_id: sourceId },
       data: { stream_session_id: targetSessionId },
     });
     console.log(`  Moved ${chatResult.count} chat messages`);
 
     // Move sweet coin history
-    const coinResult = await db.sweetCoinHistory.updateMany({
+    const coinResult = await (db).sweetCoinHistory.updateMany({
       where: { stream_session_id: sourceId },
       data: { stream_session_id: targetSessionId },
     });
     console.log(`  Moved ${coinResult.count} sweet coin records`);
 
     // Move award jobs
-    const awardResult = await db.sweetCoinAwardJob.updateMany({
+    const awardResult = await (db).sweetCoinAwardJob.updateMany({
       where: { stream_session_id: sourceId },
       data: { stream_session_id: targetSessionId },
     });
     console.log(`  Moved ${awardResult.count} award jobs`);
 
     // Move chat jobs
-    const chatJobResult = await db.chatJob.updateMany({
+    const chatJobResult = await (db).chatJob.updateMany({
       where: { stream_session_id: sourceId },
       data: { stream_session_id: targetSessionId },
     });
     console.log(`  Moved ${chatJobResult.count} chat jobs`);
 
     // Delete the merged session
-    await db.streamSession.delete({ where: { id: sourceId } });
+    await (db).streamSession.delete({ where: { id: sourceId } });
     console.log(`  Deleted session ${sourceId}`);
   }
 
   // Update target session with merged data
-  const totalMessages = await db.chatMessage.count({
+  const totalMessages = await (db).chatMessage.count({
     where: { stream_session_id: targetSessionId }
   });
 
   const peakViewers = Math.max(...allSessions.map(s => s.peak_viewer_count || 0), 0);
 
-  await db.streamSession.update({
+  await (db).streamSession.update({
     where: { id: targetSessionId },
     data: {
       started_at: earliestStart,
@@ -88,7 +88,7 @@ async function mergeSessions() {
   console.log(`Session ${targetSessionId} now has ${totalMessages} messages`);
   console.log(`Started at: ${earliestStart.toISOString()}`);
 
-  await db.$disconnect();
+  await (db).$disconnect();
 }
 
 mergeSessions().catch(e => {

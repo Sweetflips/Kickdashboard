@@ -96,7 +96,7 @@ async function processMessageBatch(messages: ChatJobPayload[]): Promise<void> {
 
   // Batch fetch users and create missing ones
   const allUserIds = Array.from(new Set(Array.from(broadcasterMap.values()).flatMap(s => Array.from(s))))
-  const users = await db.user.findMany({
+  const users = await (db as any).user.findMany({
     where: { kick_user_id: { in: allUserIds } },
     select: { id: true, kick_user_id: true },
   })
@@ -113,7 +113,7 @@ async function processMessageBatch(messages: ChatJobPayload[]): Promise<void> {
 
     if (!userIdMap.has(senderKickId)) {
       try {
-        const newUser = await db.user.upsert({
+        const newUser = await (db as any).user.upsert({
           where: { kick_user_id: senderKickId },
           update: { username: payload.sender.username },
           create: {
@@ -131,7 +131,7 @@ async function processMessageBatch(messages: ChatJobPayload[]): Promise<void> {
 
     if (!userIdMap.has(broadcasterKickId)) {
       try {
-        const newUser = await db.user.upsert({
+        const newUser = await (db as any).user.upsert({
           where: { kick_user_id: broadcasterKickId },
           update: { username: payload.broadcaster.username },
           create: {
@@ -200,14 +200,14 @@ async function processMessageBatch(messages: ChatJobPayload[]): Promise<void> {
 
   // Batch insert using createMany with skipDuplicates
   if (chatMessageInserts.length > 0) {
-    await db.chatMessage.createMany({
+    await (db as any).chatMessage.createMany({
       data: chatMessageInserts,
       skipDuplicates: true,
     })
   }
 
   if (offlineMessageInserts.length > 0) {
-    await db.offlineChatMessage.createMany({
+    await (db as any).offlineChatMessage.createMany({
       data: offlineMessageInserts,
       skipDuplicates: true,
     })
@@ -231,7 +231,7 @@ async function syncCoins(): Promise<void> {
     for (const { userId, balance } of balances) {
       try {
         // Get user's internal ID
-        const user = await db.user.findUnique({
+        const user = await (db as any).user.findUnique({
           where: { id: userId },
           select: { id: true },
         })
@@ -241,7 +241,7 @@ async function syncCoins(): Promise<void> {
         }
 
         // Update or create user_sweet_coins record
-        await db.userSweetCoins.upsert({
+        await (db as any).userSweetCoins.upsert({
           where: { user_id: userId },
           update: {
             total_sweet_coins: balance,

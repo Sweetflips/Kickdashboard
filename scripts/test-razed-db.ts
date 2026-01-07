@@ -9,7 +9,7 @@
  * 4. Query verification record
  * 5. Update verification status
  * 
- * Usage: npx tsx scripts/test-razed-db.ts
+ * Usage: npx tsx scripts/test-razed-(db as any).ts
  */
 
 import { db } from '../lib/db'
@@ -44,7 +44,7 @@ async function runTests() {
 // Test 1: Check if RazedVerification table exists
 await test('RazedVerification table exists', async () => {
     try {
-        const result = await db.$queryRaw<Array<{ table_name: string }>>`
+        const result = await (db as any).$queryRaw<Array<{ table_name: string }>>`
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = 'public' AND table_name = 'razed_verifications'
@@ -58,7 +58,7 @@ await test('RazedVerification table exists', async () => {
 // Test 2: Check if User model has Razed fields
 await test('User model has razed_connected field', async () => {
     try {
-        const result = await db.$queryRaw<Array<{ column_name: string }>>`
+        const result = await (db as any).$queryRaw<Array<{ column_name: string }>>`
             SELECT column_name
             FROM information_schema.columns
             WHERE table_schema = 'public' 
@@ -82,7 +82,7 @@ const testVerificationCode = generateVerificationCode()
 
 await test('Create verification record', async () => {
     try {
-        const verification = await db.razedVerification.create({
+        const verification = await (db as any).razedVerification.create({
             data: {
                 kick_user_id: testKickUserId,
                 razed_username: testRazedUsername,
@@ -102,7 +102,7 @@ await test('Create verification record', async () => {
 // Test 4: Query verification record
 await test('Query verification by code', async () => {
     try {
-        const verification = await db.razedVerification.findUnique({
+        const verification = await (db as any).razedVerification.findUnique({
             where: { verification_code: testVerificationCode }
         })
         return verification !== null && 
@@ -116,7 +116,7 @@ await test('Query verification by code', async () => {
 // Test 5: Update verification status
 await test('Update verification status', async () => {
     try {
-        const updated = await db.razedVerification.update({
+        const updated = await (db as any).razedVerification.update({
             where: { verification_code: testVerificationCode },
             data: {
                 status: 'verified',
@@ -133,7 +133,7 @@ await test('Update verification status', async () => {
 await test('Update user Razed connection', async () => {
     try {
         // First, ensure user exists (or create test user)
-        await db.user.upsert({
+        await (db as any).user.upsert({
             where: { kick_user_id: testKickUserId },
             update: {
                 razed_connected: true,
@@ -149,7 +149,7 @@ await test('Update user Razed connection', async () => {
             }
         })
 
-        const user = await db.user.findUnique({
+        const user = await (db as any).user.findUnique({
             where: { kick_user_id: testKickUserId },
             select: {
                 razed_connected: true,
@@ -171,7 +171,7 @@ await test('Update user Razed connection', async () => {
 // Cleanup: Delete test verification
 if (testVerificationId) {
     try {
-        await db.razedVerification.delete({
+        await (db as any).razedVerification.delete({
             where: { id: testVerificationId }
         })
         console.log('🧹 Cleaned up test verification record')
@@ -182,7 +182,7 @@ if (testVerificationId) {
 
 // Cleanup: Reset test user (optional - comment out if you want to keep it)
 try {
-    await db.user.updateMany({
+    await (db as any).user.updateMany({
         where: { kick_user_id: testKickUserId },
         data: {
             razed_connected: false,

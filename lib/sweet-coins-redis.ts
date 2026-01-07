@@ -284,7 +284,7 @@ export async function getSessionEarningsForSync(sessionId: bigint): Promise<Arra
  */
 export async function initializeBalanceFromDb(userId: bigint): Promise<void> {
   try {
-    const user = await db.user.findUnique({
+    const user = await (db as any).user.findUnique({
       where: { id: userId },
       include: { sweet_coins: true },
     })

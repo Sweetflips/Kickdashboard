@@ -11,7 +11,7 @@ function hashToken(token: string): string {
 
 async function refreshTokenForUser(kickUserId: bigint): Promise<string | null> {
   try {
-    const user = await db.user.findUnique({
+    const user = await (db as any).user.findUnique({
       where: { kick_user_id: kickUserId },
       select: {
         refresh_token_encrypted: true,
@@ -60,7 +60,7 @@ async function refreshTokenForUser(kickUserId: bigint): Promise<string | null> {
       const encryptedAccessToken = encryptToken(tokenData.access_token)
       const encryptedRefreshToken = tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null
 
-      await db.user.update({
+      await (db as any).user.update({
         where: { kick_user_id: kickUserId },
         data: {
           access_token_hash: hashToken(tokenData.access_token),
@@ -125,7 +125,7 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
     if (response.status === 401) {
       // Find user by token hash to get kickUserId for refresh
       const tokenHash = hashToken(accessToken)
-      let user = await db.user.findFirst({
+      let user = await (db as any).user.findFirst({
         where: { access_token_hash: tokenHash },
         select: { kick_user_id: true },
       })
@@ -148,7 +148,7 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
             try {
               const kickUserId = BigInt(kickUserIdFromCookie)
               // Verify user exists in database
-              const dbUser = await db.user.findUnique({
+              const dbUser = await (db as any).user.findUnique({
                 where: { kick_user_id: kickUserId },
                 select: { kick_user_id: true },
               })
@@ -182,7 +182,7 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
               const userData = userDataArray[0]
               const kickUserId = BigInt(userData.user_id)
 
-              const dbUser = await db.user.findUnique({
+              const dbUser = await (db as any).user.findUnique({
                 where: { kick_user_id: kickUserId },
                 select: { id: true },
               })
@@ -216,7 +216,7 @@ export async function getAuthenticatedUser(request: Request): Promise<{ kickUser
     const kickUserId = BigInt(userData.user_id)
 
     // Find user in database
-    const user = await db.user.findUnique({
+    const user = await (db as any).user.findUnique({
       where: { kick_user_id: kickUserId },
       select: { id: true },
     })
@@ -242,7 +242,7 @@ export async function isAdmin(request: Request): Promise<boolean> {
       return false
     }
 
-    const user = await db.user.findUnique({
+    const user = await (db as any).user.findUnique({
       where: { kick_user_id: auth.kickUserId },
       select: { is_admin: true },
     })
@@ -267,7 +267,7 @@ export async function isModerator(request: Request): Promise<boolean> {
       return false
     }
 
-    const user = await db.user.findUnique({
+    const user = await (db as any).user.findUnique({
       where: { kick_user_id: auth.kickUserId },
       select: { moderator_override: true, username: true },
     })

@@ -3,7 +3,7 @@ const db = new PrismaClient();
 
 async function endSession(sessionId) {
     try {
-        const session = await db.streamSession.update({
+        const session = await (db).streamSession.update({
             where: { id: BigInt(sessionId) },
             data: {
                 ended_at: new Date(),
@@ -14,7 +14,7 @@ async function endSession(sessionId) {
     } catch (error) {
         console.error('Error ending session:', error);
     } finally {
-        await db.$disconnect();
+        await (db).$disconnect();
     }
 }
 

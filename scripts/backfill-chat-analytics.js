@@ -135,7 +135,7 @@ async function backfillChatMessages(startId) {
   const limit = pLimit(CONCURRENCY)
 
   while (true) {
-    const batch = await db.chatMessage.findMany({
+    const batch = await (db).chatMessage.findMany({
       where: { id: { gt: lastId } },
       orderBy: { id: 'asc' },
       take: BATCH_SIZE,
@@ -153,7 +153,7 @@ async function backfillChatMessages(startId) {
           const derivedExclamations = countExclamations(row.content)
           const derivedSentences = countSentences(row.content)
 
-          await db.chatMessage.update({
+          await (db).chatMessage.update({
             where: { id: row.id },
             data: {
               has_emotes: derivedHasEmotes,
@@ -183,7 +183,7 @@ async function backfillOfflineChatMessages(startId) {
   const limit = pLimit(CONCURRENCY)
 
   while (true) {
-    const batch = await db.offlineChatMessage.findMany({
+    const batch = await (db).offlineChatMessage.findMany({
       where: { id: { gt: lastId } },
       orderBy: { id: 'asc' },
       take: BATCH_SIZE,
@@ -201,7 +201,7 @@ async function backfillOfflineChatMessages(startId) {
           const derivedExclamations = countExclamations(row.content)
           const derivedSentences = countSentences(row.content)
 
-          await db.offlineChatMessage.update({
+          await (db).offlineChatMessage.update({
             where: { id: row.id },
             data: {
               has_emotes: derivedHasEmotes,
@@ -239,7 +239,7 @@ main()
     process.exitCode = 1
   })
   .finally(async () => {
-    await db.$disconnect().catch(() => {})
+    await (db).$disconnect().catch(() => {})
   })
 
 

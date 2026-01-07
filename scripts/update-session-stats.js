@@ -7,12 +7,12 @@ async function updateSessionStats() {
   console.log(`\nUpdating stats for session ${sessionId}...\n`);
 
   // Count total messages
-  const totalMessages = await db.chatMessage.count({
+  const totalMessages = await (db).chatMessage.count({
     where: { stream_session_id: sessionId }
   });
 
   // Count unique chatters
-  const uniqueChatters = await db.chatMessage.groupBy({
+  const uniqueChatters = await (db).chatMessage.groupBy({
     by: ['sender_user_id'],
     where: {
       stream_session_id: sessionId,
@@ -21,13 +21,13 @@ async function updateSessionStats() {
   });
 
   // Get total sweet coins earned
-  const coinsResult = await db.sweetCoinHistory.aggregate({
+  const coinsResult = await (db).sweetCoinHistory.aggregate({
     where: { stream_session_id: sessionId },
     _sum: { sweet_coins_earned: true }
   });
 
   // Get peak viewer count from session
-  const session = await db.streamSession.findUnique({
+  const session = await (db).streamSession.findUnique({
     where: { id: sessionId },
     select: {
       started_at: true,
@@ -43,7 +43,7 @@ async function updateSessionStats() {
   const minutes = Math.floor((durationSeconds % 3600) / 60);
 
   // Update the session
-  await db.streamSession.update({
+  await (db).streamSession.update({
     where: { id: sessionId },
     data: {
       total_messages: totalMessages,
@@ -62,7 +62,7 @@ async function updateSessionStats() {
   console.log(`Peak Viewers: ${session.peak_viewer_count}`);
   console.log(`\n✅ Session 320 is ACTIVE and tracking!`);
 
-  await db.$disconnect();
+  await (db).$disconnect();
 }
 
 updateSessionStats().catch(e => {

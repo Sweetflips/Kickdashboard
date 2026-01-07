@@ -45,7 +45,7 @@ export async function enqueueChatJob(payload: ChatJobPayload): Promise<{ success
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            await db.chatJob.upsert({
+            await (db as any).chatJob.upsert({
                 where: { message_id: payload.message_id },
                 update: {
                     // If job exists, update it (idempotent)
@@ -122,7 +122,7 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            const jobs = await db.$transaction(async (tx: any) => {
+            const jobs = await (db as any).$transaction(async (tx: any) => {
                 // Unlock stale locks
                 await tx.$executeRaw`
                     UPDATE chat_jobs
@@ -190,7 +190,7 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
  */
 export async function completeChatJob(jobId: bigint): Promise<void> {
     try {
-        await db.chatJob.update({
+        await (db as any).chatJob.update({
             where: { id: jobId },
             data: {
                 status: 'completed',
@@ -216,7 +216,7 @@ export async function completeChatJob(jobId: bigint): Promise<void> {
 export async function failChatJob(jobId: bigint, error: string, attempts: number, maxAttempts: number = 5): Promise<void> {
     const shouldRetry = attempts < maxAttempts
     try {
-        await db.chatJob.update({
+        await (db as any).chatJob.update({
             where: { id: jobId },
             data: {
                 status: shouldRetry ? 'pending' : 'failed',
@@ -249,11 +249,11 @@ export async function getChatQueueStats(): Promise<{
 }> {
     try {
         const [pending, processing, completed, failed, staleLocks] = await Promise.all([
-            db.chatJob.count({ where: { status: 'pending' } }),
-            db.chatJob.count({ where: { status: 'processing' } }),
-            db.chatJob.count({ where: { status: 'completed' } }),
-            db.chatJob.count({ where: { status: 'failed' } }),
-            db.$queryRaw<Array<{ count: bigint }>>`
+            (db as any).chatJob.count({ where: { status: 'pending' } }),
+            (db as any).chatJob.count({ where: { status: 'processing' } }),
+            (db as any).chatJob.count({ where: { status: 'completed' } }),
+            (db as any).chatJob.count({ where: { status: 'failed' } }),
+            (db as any).$queryRaw<Array<{ count: bigint }>>`
                 SELECT COUNT(*)::bigint as count
                 FROM chat_jobs
                 WHERE status = 'processing'

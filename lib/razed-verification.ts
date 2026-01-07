@@ -98,7 +98,7 @@ export function isVerificationExpired(expiresAt: Date): boolean {
 export async function canCreateVerification(kickUserId: BigInt, db: any): Promise<boolean> {
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000)
     
-    const recentVerification = await db.razedVerification.findFirst({
+    const recentVerification = await (db as any).razedVerification.findFirst({
         where: {
             kick_user_id: kickUserId,
             created_at: {

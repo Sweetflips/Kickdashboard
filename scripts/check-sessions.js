@@ -3,7 +3,7 @@ const db = new PrismaClient();
 
 async function checkSessions() {
   // Get all recent sessions
-  const sessions = await db.streamSession.findMany({
+  const sessions = await (db).streamSession.findMany({
     orderBy: { id: 'desc' },
     take: 10,
     select: {
@@ -32,7 +32,7 @@ async function checkSessions() {
   }
 
   // Check for active session
-  const active = await db.streamSession.findFirst({
+  const active = await (db).streamSession.findFirst({
     where: { ended_at: null }
   });
 
@@ -42,7 +42,7 @@ async function checkSessions() {
     console.log('\n❌ No active session found');
   }
 
-  await db.$disconnect();
+  await (db).$disconnect();
 }
 
 checkSessions().catch(console.error);

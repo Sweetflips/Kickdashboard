@@ -31,7 +31,7 @@ export async function appendAdminAuditLog(entry: AdminAuditLogEntry, maxEntries 
   }
 
   // Read-modify-write is okay here: low volume admin writes.
-  const existing = await db.appSetting.findUnique({
+  const existing = await (db as any).appSetting.findUnique({
     where: { key: ADMIN_AUDIT_LOG_KEY },
     select: { value: true },
   })
@@ -40,7 +40,7 @@ export async function appendAdminAuditLog(entry: AdminAuditLogEntry, maxEntries 
   arr.unshift(safeEntry)
   if (arr.length > maxEntries) arr.length = maxEntries
 
-  await db.appSetting.upsert({
+  await (db as any).appSetting.upsert({
     where: { key: ADMIN_AUDIT_LOG_KEY },
     update: { value: JSON.stringify(arr) },
     create: { key: ADMIN_AUDIT_LOG_KEY, value: JSON.stringify(arr) },
@@ -48,7 +48,7 @@ export async function appendAdminAuditLog(entry: AdminAuditLogEntry, maxEntries 
 }
 
 export async function getAdminAuditLog(limit = 100): Promise<AdminAuditLogEntry[]> {
-  const row = await db.appSetting.findUnique({
+  const row = await (db as any).appSetting.findUnique({
     where: { key: ADMIN_AUDIT_LOG_KEY },
     select: { value: true },
   })
@@ -58,7 +58,7 @@ export async function getAdminAuditLog(limit = 100): Promise<AdminAuditLogEntry[
 }
 
 export async function clearAdminAuditLog(): Promise<void> {
-  await db.appSetting.upsert({
+  await (db as any).appSetting.upsert({
     where: { key: ADMIN_AUDIT_LOG_KEY },
     update: { value: JSON.stringify([]) },
     create: { key: ADMIN_AUDIT_LOG_KEY, value: JSON.stringify([]) },

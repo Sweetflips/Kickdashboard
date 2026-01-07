@@ -59,7 +59,7 @@ export async function awardSweetCoins(
 ): Promise<{ awarded: boolean; sweetCoinsEarned?: number; reason?: string }> {
     try {
         // First, find the user by kick_user_id to get the internal id, kick_connected status, last_login_at, and username
-        const user = await dbQueryWithRetry(() => db.user.findUnique({
+        const user = await dbQueryWithRetry(() => (db as any).user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true, kick_connected: true, last_login_at: true, username: true, is_excluded: true },
         })) as { id: bigint; kick_connected: boolean; last_login_at: Date | null; username: string; is_excluded: boolean } | null
@@ -99,7 +99,7 @@ export async function awardSweetCoins(
         // Get or create user sweet coins record (use upsert to handle race conditions)
         let userSweetCoins
         try {
-            userSweetCoins = await dbQueryWithRetry(() => db.userSweetCoins.upsert({
+            userSweetCoins = await dbQueryWithRetry(() => (db as any).userSweetCoins.upsert({
                 where: { user_id: userId },
                 update: {},
                 create: {
@@ -112,7 +112,7 @@ export async function awardSweetCoins(
             // Handle race condition where multiple requests try to create the same record
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 // Record already exists, fetch it
-                userSweetCoins = await dbQueryWithRetry(() => db.userSweetCoins.findUnique({
+                userSweetCoins = await dbQueryWithRetry(() => (db as any).userSweetCoins.findUnique({
                     where: { user_id: userId },
                 }))
                 if (!userSweetCoins) {
@@ -141,7 +141,7 @@ export async function awardSweetCoins(
 
         // Verify the session exists and is actually active (not ended)
         // Fetch fresh from database to avoid race conditions
-        const session = await dbQueryWithRetry(() => db.streamSession.findUnique({
+        const session = await dbQueryWithRetry(() => (db as any).streamSession.findUnique({
             where: { id: streamSessionId },
             select: {
                 ended_at: true,
@@ -161,7 +161,7 @@ export async function awardSweetCoins(
 
         // Early check for message_id uniqueness (quick exit before transaction)
         if (messageId) {
-            const existingSweetCoinHistory = await dbQueryWithRetry(() => db.sweetCoinHistory.findFirst({
+            const existingSweetCoinHistory = await dbQueryWithRetry(() => (db as any).sweetCoinHistory.findFirst({
                 where: { message_id: messageId },
                 select: { sweet_coins_earned: true },
             })) as { sweet_coins_earned: number | null } | null
@@ -190,7 +190,7 @@ export async function awardSweetCoins(
             rateLimitHit = null
             const attemptStartTime = Date.now()
             try {
-                await db.$transaction(async (tx: any) => {
+                await (db as any).$transaction(async (tx: any) => {
                     const transactionNow = new Date()
 
                     // Use row-level locking (SELECT FOR UPDATE) to prevent concurrent modifications
@@ -410,7 +410,7 @@ export async function awardEmotes(
         }
 
         // Find the user by kick_user_id to get the internal id
-        const user = await dbQueryWithRetry(() => db.user.findUnique({
+        const user = await dbQueryWithRetry(() => (db as any).user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true },
         })) as { id: bigint } | null
@@ -424,7 +424,7 @@ export async function awardEmotes(
         // Get or create user sweet coins record (use upsert to handle race conditions)
         let userSweetCoins
         try {
-            userSweetCoins = await dbQueryWithRetry(() => db.userSweetCoins.upsert({
+            userSweetCoins = await dbQueryWithRetry(() => (db as any).userSweetCoins.upsert({
                 where: { user_id: userId },
                 update: {},
                 create: {
@@ -437,7 +437,7 @@ export async function awardEmotes(
             // Handle race condition where multiple requests try to create the same record
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 // Record already exists, fetch it
-                userSweetCoins = await dbQueryWithRetry(() => db.userSweetCoins.findUnique({
+                userSweetCoins = await dbQueryWithRetry(() => (db as any).userSweetCoins.findUnique({
                     where: { user_id: userId },
                 }))
                 if (!userSweetCoins) {
@@ -451,7 +451,7 @@ export async function awardEmotes(
         }
 
         // Update emote count (with retry for connection pool)
-        await dbQueryWithRetry(() => db.userSweetCoins.update({
+        await dbQueryWithRetry(() => (db as any).userSweetCoins.update({
             where: { user_id: userId },
             data: {
                 total_emotes: {
@@ -472,7 +472,7 @@ export async function awardEmotes(
 
 export async function getUserSweetCoins(kickUserId: bigint): Promise<number> {
     try {
-        const user = await dbQueryWithRetry(() => db.user.findUnique({
+        const user = await dbQueryWithRetry(() => (db as any).user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true },
         })) as { id: bigint } | null
@@ -481,7 +481,7 @@ export async function getUserSweetCoins(kickUserId: bigint): Promise<number> {
             return 0
         }
 
-        const userSweetCoins = await dbQueryWithRetry(() => db.userSweetCoins.findUnique({
+        const userSweetCoins = await dbQueryWithRetry(() => (db as any).userSweetCoins.findUnique({
             where: { user_id: user.id },
         })) as { total_sweet_coins: number } | null
         return userSweetCoins?.total_sweet_coins || 0

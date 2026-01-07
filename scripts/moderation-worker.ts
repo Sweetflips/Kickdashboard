@@ -27,7 +27,7 @@ const VERBOSE_LOGS = process.env.MODERATION_WORKER_VERBOSE_LOGS === 'true'
 const MODERATION_ENABLED = process.env.KICK_MODERATION_ENABLED !== 'false'
 const DRY_RUN = process.env.KICK_MODERATION_DRY_RUN === '1'
 const MODERATOR_USERNAME = (process.env.KICK_MODERATOR_USERNAME || 'sweetflipsbot').toLowerCase()
-const ALLOWLIST = (process.env.KICK_MODERATION_ALLOWLIST || '').split(',').map(u => u.trim().toLowerCase()).filter(Boolean)
+const ALLOWLIST = (process.env.KICK_MODERATION_ALLOWLIST || '').split(',').map((u: any) => u.trim().toLowerCase()).filter(Boolean)
 
 // Raid detection thresholds
 const RAIDMODE_TRIGGER_MSGS_5S = parseInt(process.env.KICK_RAIDMODE_TRIGGER_MSGS_5S || '80', 10)
@@ -481,7 +481,7 @@ function checkRaidMode(state: RaidState, broadcasterUserId: bigint, now: number)
         return false
     }
 
-    const uniqueSenders = new Set(recentMessages.map(msg => msg.sender_user_id.toString()))
+    const uniqueSenders = new Set(recentMessages.map((msg: any) => msg.sender_user_id.toString()))
 
     if (uniqueSenders.size >= RAIDMODE_TRIGGER_UNIQUE_5S) {
         state.raidModeUntil = now + RAIDMODE_DURATION_MS
@@ -701,7 +701,7 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
 
 async function acquireAdvisoryLock(): Promise<boolean> {
     try {
-        const result = await db.$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
+        const result = await (db as any).$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
             SELECT pg_try_advisory_lock(${ADVISORY_LOCK_ID}) as pg_try_advisory_lock
         `
         const acquired = result[0]?.pg_try_advisory_lock ?? false
@@ -719,7 +719,7 @@ async function acquireAdvisoryLock(): Promise<boolean> {
 async function releaseAdvisoryLock(): Promise<void> {
     if (!advisoryLockAcquired) return
     try {
-        await db.$queryRaw`SELECT pg_advisory_unlock(${ADVISORY_LOCK_ID})`
+        await (db as any).$queryRaw`SELECT pg_advisory_unlock(${ADVISORY_LOCK_ID})`
         advisoryLockAcquired = false
         console.log(`[moderation-worker] ✅ Advisory lock released`)
     } catch (error) {
@@ -735,7 +735,7 @@ async function sendStartupMessage(): Promise<void> {
         const broadcasterSlug = process.env.KICK_CHANNEL_SLUG || 'sweetflips'
 
         // Try to get broadcaster from database
-        const broadcaster = await db.user.findFirst({
+        const broadcaster = await (db as any).user.findFirst({
             where: {
                 username: {
                     equals: broadcasterSlug,

@@ -7,7 +7,7 @@ async function testEndpoints() {
     // Test 1: Check active stream session in database
     console.log('1. Checking database for active stream session...');
     try {
-        const activeSession = await db.streamSession.findFirst({
+        const activeSession = await (db as any).streamSession.findFirst({
             where: {
                 channel_slug: 'sweetflips',
                 ended_at: null,
@@ -26,7 +26,7 @@ async function testEndpoints() {
             console.log('   ❌ No active session found!');
             
             // Check most recent session
-            const recentSession = await db.streamSession.findFirst({
+            const recentSession = await (db as any).streamSession.findFirst({
                 where: { channel_slug: 'sweetflips' },
                 orderBy: { started_at: 'desc' },
             });
@@ -218,7 +218,7 @@ async function testEndpoints() {
     // Test 6: Check SweetCoinHistory for this session
     console.log('\n7. Checking SweetCoinHistory in database...');
     try {
-        const activeSession = await db.streamSession.findFirst({
+        const activeSession = await (db as any).streamSession.findFirst({
             where: {
                 channel_slug: 'sweetflips',
                 ended_at: null,
@@ -227,12 +227,12 @@ async function testEndpoints() {
         });
         
         if (activeSession) {
-            const coinHistory = await db.sweetCoinHistory.count({
+            const coinHistory = await (db as any).sweetCoinHistory.count({
                 where: { stream_session_id: activeSession.id },
             });
             console.log('   Coins awarded this session:', coinHistory);
             
-            const recentCoins = await db.sweetCoinHistory.findMany({
+            const recentCoins = await (db as any).sweetCoinHistory.findMany({
                 where: { stream_session_id: activeSession.id },
                 orderBy: { earned_at: 'desc' },
                 take: 5,
@@ -252,7 +252,7 @@ async function testEndpoints() {
     // Test 7: Check chat messages for this session
     console.log('\n8. Checking ChatMessages in database...');
     try {
-        const activeSession = await db.streamSession.findFirst({
+        const activeSession = await (db as any).streamSession.findFirst({
             where: {
                 channel_slug: 'sweetflips',
                 ended_at: null,
@@ -261,12 +261,12 @@ async function testEndpoints() {
         });
         
         if (activeSession) {
-            const messageCount = await db.chatMessage.count({
+            const messageCount = await (db as any).chatMessage.count({
                 where: { stream_session_id: activeSession.id },
             });
             console.log('   Messages this session:', messageCount);
             
-            const recentMessages = await db.chatMessage.findMany({
+            const recentMessages = await (db as any).chatMessage.findMany({
                 where: { stream_session_id: activeSession.id },
                 orderBy: { timestamp: 'desc' },
                 take: 5,
@@ -288,7 +288,7 @@ async function testEndpoints() {
         console.log('   ERROR:', e.message);
     }
     
-    await db.$disconnect();
+    await (db as any).$disconnect();
 }
 
 testEndpoints().catch(console.error);

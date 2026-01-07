@@ -33,7 +33,7 @@ const POLL_INTERVAL_MS = parseInt(process.env.SESSION_TRACKER_POLL_INTERVAL_MS |
 const SLUGS_RAW = process.env.SESSION_TRACKER_SLUGS || process.env.KICK_CHANNEL_SLUG || 'sweetflips'
 const SLUGS = SLUGS_RAW
     .split(',')
-    .map(s => s.trim().toLowerCase())
+    .map((s: any) => s.trim().toLowerCase())
     .filter(Boolean)
 
 // Advisory lock ID to ensure only one session tracker runs
@@ -47,7 +47,7 @@ const lastKnownLive = new Map<string, boolean>()
 
 async function acquireAdvisoryLock(): Promise<boolean> {
     try {
-        const result = await db.$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
+        const result = await (db as any).$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
             SELECT pg_try_advisory_lock(${ADVISORY_LOCK_ID}) as pg_try_advisory_lock
         `
         const acquired = result[0]?.pg_try_advisory_lock ?? false
@@ -67,7 +67,7 @@ async function acquireAdvisoryLock(): Promise<boolean> {
 async function releaseAdvisoryLock(): Promise<void> {
     if (!advisoryLockAcquired) return
     try {
-        await db.$queryRaw`SELECT pg_advisory_unlock(${ADVISORY_LOCK_ID})`
+        await (db as any).$queryRaw`SELECT pg_advisory_unlock(${ADVISORY_LOCK_ID})`
         console.log(`[session-tracker] ✅ Advisory lock released`)
     } catch (error) {
         console.error(`[session-tracker] ⚠️ Error releasing advisory lock:`, error)
@@ -90,7 +90,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.on('SIGINT', () => shutdown('SIGINT'))
 
 async function resolveBroadcasterId(slug: string): Promise<bigint | null> {
-    const user = await db.user.findFirst({
+    const user = await (db as any).user.findFirst({
         where: {
             username: { equals: slug, mode: 'insensitive' },
         },

@@ -7,7 +7,7 @@ async function reopenSession() {
   console.log(`Reopening session ${sessionId}...`);
 
   // Reopen the session
-  const result = await db.streamSession.update({
+  const result = await (db).streamSession.update({
     where: { id: BigInt(sessionId) },
     data: {
       ended_at: null,
@@ -20,7 +20,7 @@ async function reopenSession() {
   console.log(`✅ Reopened session ${sessionId}`);
 
   // Check current state
-  const active = await db.streamSession.findFirst({
+  const active = await (db).streamSession.findFirst({
     where: { ended_at: null },
     select: { id: true, session_title: true, started_at: true }
   });
@@ -31,7 +31,7 @@ async function reopenSession() {
     started: active.started_at.toISOString()
   } : 'None');
 
-  await db.$disconnect();
+  await (db).$disconnect();
 }
 
 reopenSession().catch(e => {

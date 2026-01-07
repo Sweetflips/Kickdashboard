@@ -128,12 +128,12 @@ export async function evaluateAchievementsForUser(
   const now = new Date()
 
   // Get existing UserAchievement rows
-  const existing = await db.userAchievement.findMany({
+  const existing = await (db as any).userAchievement.findMany({
     where: { user_id: auth.userId },
     select: { achievement_id: true, status: true },
   })
 
-  const existingMap = new Map(existing.map((e) => [e.achievement_id, e.status]))
+  const existingMap = new Map((existing as any[]).map((e: any) => [e.achievement_id, e.status]))
 
   const unlocked: string[] = []
   const newlyUnlocked: string[] = []
@@ -146,7 +146,7 @@ export async function evaluateAchievementsForUser(
 
       if (!currentStatus) {
         // Create as UNLOCKED
-        await db.userAchievement.create({
+        await (db as any).userAchievement.create({
           data: {
             user_id: auth.userId,
             achievement_id: achievementId,
@@ -157,7 +157,7 @@ export async function evaluateAchievementsForUser(
         newlyUnlocked.push(achievementId)
       } else if (currentStatus === 'LOCKED') {
         // Upgrade to UNLOCKED
-        await db.userAchievement.update({
+        await (db as any).userAchievement.update({
           where: {
             user_id_achievement_id: {
               user_id: auth.userId,
@@ -176,7 +176,7 @@ export async function evaluateAchievementsForUser(
       // Achievement not unlocked - create LOCKED row if doesn't exist
       // Never downgrade existing UNLOCKED/CLAIMED
       if (!currentStatus) {
-        await db.userAchievement.create({
+        await (db as any).userAchievement.create({
           data: {
             user_id: auth.userId,
             achievement_id: achievementId,
@@ -197,7 +197,7 @@ async function gatherUnlockContext(
   auth: { userId: bigint; kickUserId: bigint }
 ): Promise<UnlockContext | null> {
   const [user, userSweetCoins] = await Promise.all([
-    db.user.findUnique({
+    (db as any).user.findUnique({
       where: { id: auth.userId },
       select: {
         id: true,
@@ -209,7 +209,7 @@ async function gatherUnlockContext(
         custom_profile_picture_url: true,
       },
     }),
-    db.userSweetCoins.findUnique({
+    (db as any).userSweetCoins.findUnique({
       where: { user_id: auth.userId },
       select: {
         total_sweet_coins: true,
@@ -223,7 +223,7 @@ async function gatherUnlockContext(
   }
 
   // Fetch all chat messages for this user (online only)
-  const messages = await db.chatMessage.findMany({
+  const messages = await (db as any).chatMessage.findMany({
     where: {
       sender_user_id: auth.kickUserId,
       sent_when_offline: false,
@@ -260,7 +260,7 @@ async function gatherUnlockContext(
   // Calculate approximate watch time
   let totalWatchSeconds = 0
   if (sessionIdSet.size > 0) {
-    const sessions = await db.streamSession.findMany({
+    const sessions = await (db as any).streamSession.findMany({
       where: { id: { in: Array.from(sessionIdSet) } },
       select: {
         id: true,
@@ -270,7 +270,7 @@ async function gatherUnlockContext(
       },
     })
 
-    totalWatchSeconds = sessions.reduce((sum, session) => {
+    totalWatchSeconds = sessions.reduce((sum: number, session: any) => {
       let duration = session.duration_seconds
       if (duration == null) {
         const end = session.ended_at ?? now
@@ -287,7 +287,7 @@ async function gatherUnlockContext(
   const monthStart = new Date(Date.UTC(monthNow.getUTCFullYear(), monthNow.getUTCMonth(), 1, 0, 0, 0, 0))
   const monthEnd = new Date(Date.UTC(monthNow.getUTCFullYear(), monthNow.getUTCMonth() + 1, 0, 23, 59, 59, 999))
 
-  const sessionsThisMonth = await db.userSession.findMany({
+  const sessionsThisMonth = await (db as any).userSession.findMany({
     where: {
       user_id: auth.userId,
       created_at: {
@@ -307,14 +307,14 @@ async function gatherUnlockContext(
 
   // Global/top-based achievements
   const [topUsersByPoints, monthlyPointAggsRaw] = await Promise.all([
-    db.userSweetCoins.findMany({
+    (db as any).userSweetCoins.findMany({
       take: 3,
       orderBy: {
         total_sweet_coins: 'desc',
       },
       select: { user_id: true },
     }),
-    db.sweetCoinHistory.groupBy({
+    (db as any).sweetCoinHistory.groupBy({
       by: ['user_id'],
       where: {
         earned_at: {
@@ -331,7 +331,7 @@ async function gatherUnlockContext(
   type MonthlyAgg = { user_id: bigint; _sum: { sweet_coins_earned: number | null } }
   const monthlyPointAggs = monthlyPointAggsRaw as MonthlyAgg[]
 
-  const isTopGChatter = topUsersByPoints.some((u) => u.user_id === auth.userId)
+  const isTopGChatter = (topUsersByPoints as any[]).some((u: any) => u.user_id === auth.userId)
 
   let isMonthlyLegend = false
   if (monthlyPointAggs.length > 0) {
@@ -349,7 +349,7 @@ async function gatherUnlockContext(
   // OG Dash: one of the first 100 users created
   let isOgDash = false
   if (user.created_at) {
-    const earlierCount = await db.user.count({
+    const earlierCount = await (db as any).user.count({
       where: {
         created_at: {
           lt: user.created_at,
@@ -414,7 +414,7 @@ export async function getAchievementCount(userId: bigint, kickUserId: bigint): P
 
 /**
  * Get all achievement statuses for a user.
- * Returns both computed unlocks and claimed status from DB.
+ * Returns both computed unlocks and claimed status from (db as any).
  */
 export async function getAchievementStatuses(auth: { userId: bigint; kickUserId: bigint }): Promise<{
   achievements: Array<{
@@ -428,7 +428,7 @@ export async function getAchievementStatuses(auth: { userId: bigint; kickUserId:
   await evaluateAchievementsForUser(auth)
 
   // Get current status from DB
-  const userAchievements = await db.userAchievement.findMany({
+  const userAchievements = await (db as any).userAchievement.findMany({
     where: { user_id: auth.userId },
     select: {
       achievement_id: true,
@@ -439,7 +439,7 @@ export async function getAchievementStatuses(auth: { userId: bigint; kickUserId:
   })
 
   const statusMap = new Map(
-    userAchievements.map((ua) => [
+    (userAchievements as any[]).map((ua: any) => [
       ua.achievement_id,
       {
         status: ua.status as 'LOCKED' | 'UNLOCKED' | 'CLAIMED',
@@ -451,14 +451,14 @@ export async function getAchievementStatuses(auth: { userId: bigint; kickUserId:
 
   // Also check SweetCoinHistory for claims made before migration
   const claimKeys = ACHIEVEMENTS.map((a) => makeAchievementClaimKey(a.id, auth.userId))
-  const legacyClaims = await db.sweetCoinHistory.findMany({
+  const legacyClaims = await (db as any).sweetCoinHistory.findMany({
     where: {
       user_id: auth.userId,
       message_id: { in: claimKeys },
     },
     select: { message_id: true },
   })
-  const legacyClaimSet = new Set(legacyClaims.map((c) => c.message_id).filter(Boolean))
+  const legacyClaimSet = new Set((legacyClaims as any[]).map((c: any) => c.message_id).filter(Boolean))
 
   const achievements = ACHIEVEMENTS.map((a) => {
     const normalizedId = normalizeAchievementId(a.id)

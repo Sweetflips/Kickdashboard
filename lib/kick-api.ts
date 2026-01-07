@@ -251,7 +251,7 @@ export async function getBroadcasterToken(): Promise<string> {
     try {
         console.log(`[Kick API] Looking for broadcaster token for: ${BROADCASTER_SLUG}`)
 
-        const broadcaster = await db.user.findFirst({
+        const broadcaster = await (db as any).user.findFirst({
             where: {
                 username: {
                     equals: BROADCASTER_SLUG,
@@ -298,7 +298,7 @@ export async function getBroadcasterToken(): Promise<string> {
  */
 export async function refreshBroadcasterToken(): Promise<string | null> {
     try {
-        const broadcaster = await db.user.findFirst({
+        const broadcaster = await (db as any).user.findFirst({
             where: {
                 username: {
                     equals: BROADCASTER_SLUG,
@@ -350,7 +350,7 @@ export async function refreshBroadcasterToken(): Promise<string | null> {
         const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
 
         // Update tokens in database (both encrypted and hashed)
-        await db.user.update({
+        await (db as any).user.update({
             where: { kick_user_id: broadcaster.kick_user_id },
             data: {
                 access_token_hash: hashToken(data.access_token),
@@ -1344,7 +1344,7 @@ export async function getModeratorToken(): Promise<string | null> {
     try {
         console.log(`[Kick API] Looking for moderator token for: ${MODERATOR_USERNAME}`)
 
-        const moderator = await db.user.findFirst({
+        const moderator = await (db as any).user.findFirst({
             where: {
                 username: {
                     equals: MODERATOR_USERNAME,
@@ -1398,7 +1398,7 @@ export async function getModeratorToken(): Promise<string | null> {
                         const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
                         
                         // Update tokens in database
-                        await db.user.update({
+                        await (db as any).user.update({
                             where: { kick_user_id: moderator.kick_user_id },
                             data: {
                                 access_token_hash: hashToken(data.access_token),

@@ -178,14 +178,14 @@ export async function getModeratorBotSettingsFromDb(): Promise<ModeratorBotSetti
   const base = getDefaultModeratorBotSettings()
   try {
     // Try v2 first, then fall back to v1 for migration
-    let row = await db.appSetting.findUnique({
+    let row = await (db as any).appSetting.findUnique({
       where: { key: MODERATOR_BOT_SETTINGS_KEY },
       select: { value: true },
     })
 
     if (!row?.value) {
       // Try legacy v1 key
-      row = await db.appSetting.findUnique({
+      row = await (db as any).appSetting.findUnique({
         where: { key: 'moderator_bot_settings_v1' },
         select: { value: true },
       })
@@ -200,7 +200,7 @@ export async function getModeratorBotSettingsFromDb(): Promise<ModeratorBotSetti
 }
 
 export async function setModeratorBotSettingsInDb(settings: ModeratorBotSettings): Promise<void> {
-  await db.appSetting.upsert({
+  await (db as any).appSetting.upsert({
     where: { key: MODERATOR_BOT_SETTINGS_KEY },
     update: { value: JSON.stringify(settings) },
     create: { key: MODERATOR_BOT_SETTINGS_KEY, value: JSON.stringify(settings) },
@@ -227,7 +227,7 @@ export async function logModerationAction(data: {
   error_message?: string
 }): Promise<void> {
   try {
-    await db.moderationActionLog.create({
+    await (db as any).moderationActionLog.create({
       data: {
         broadcaster_user_id: data.broadcaster_user_id,
         target_user_id: data.target_user_id,
@@ -266,7 +266,7 @@ export async function logBotReply(data: {
   latency_ms?: number
 }): Promise<void> {
   try {
-    await db.botReplyLog.create({
+    await (db as any).botReplyLog.create({
       data: {
         broadcaster_user_id: data.broadcaster_user_id,
         trigger_user_id: data.trigger_user_id,

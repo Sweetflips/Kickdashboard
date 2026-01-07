@@ -31,7 +31,7 @@ let errorCount = 0
 // Acquire PostgreSQL advisory lock to ensure only one worker instance runs
 async function acquireAdvisoryLock(): Promise<boolean> {
     try {
-        const result = await db.$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
+        const result = await (db as any).$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
             SELECT pg_try_advisory_lock(${ADVISORY_LOCK_ID}) as pg_try_advisory_lock
         `
         const acquired = result[0]?.pg_try_advisory_lock ?? false
@@ -54,7 +54,7 @@ async function releaseAdvisoryLock(): Promise<void> {
         return
     }
     try {
-        await db.$queryRaw`
+        await (db as any).$queryRaw`
             SELECT pg_advisory_unlock(${ADVISORY_LOCK_ID})
         `
         console.log(`[point-worker] ✅ Advisory lock released`)

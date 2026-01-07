@@ -65,7 +65,7 @@ export interface ActiveSession {
  */
 export async function getActiveSession(broadcasterUserId: bigint): Promise<ActiveSession | null> {
     try {
-        const session = await db.streamSession.findFirst({
+        const session = await (db as any).streamSession.findFirst({
             where: {
                 broadcaster_user_id: broadcasterUserId,
                 ended_at: null,
@@ -100,7 +100,7 @@ export async function getOrCreateActiveSession(
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
             // First, check for existing active session
-            const existing = await db.streamSession.findFirst({
+            const existing = await (db as any).streamSession.findFirst({
                 where: {
                     broadcaster_user_id: broadcasterUserId,
                     ended_at: null,
@@ -128,7 +128,7 @@ export async function getOrCreateActiveSession(
                     updateData.peak_viewer_count = Math.max(existing.peak_viewer_count, metadata.viewerCount)
                 }
 
-                const updated = await db.streamSession.update({
+                const updated = await (db as any).streamSession.update({
                     where: { id: existing.id },
                     data: updateData,
                 })
@@ -147,7 +147,7 @@ export async function getOrCreateActiveSession(
                 }
             }
 
-            const newSession = await db.streamSession.create({
+            const newSession = await (db as any).streamSession.create({
                 data: {
                     broadcaster_user_id: broadcasterUserId,
                     channel_slug: channelSlug,
@@ -169,7 +169,7 @@ export async function getOrCreateActiveSession(
                 console.log(`[SessionManager] Unique constraint hit, fetching existing session (attempt ${attempt + 1})`)
 
                 // Another process created the session - fetch it
-                const existing = await db.streamSession.findFirst({
+                const existing = await (db as any).streamSession.findFirst({
                     where: {
                         broadcaster_user_id: broadcasterUserId,
                         ended_at: null,
@@ -214,7 +214,7 @@ export async function getOrCreateActiveSession(
  */
 export async function endSession(sessionId: bigint, force: boolean = false): Promise<boolean> {
     try {
-        const session = await db.streamSession.findUnique({
+        const session = await (db as any).streamSession.findUnique({
             where: { id: sessionId },
             select: {
                 id: true,
@@ -251,7 +251,7 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
         }
 
         // Get broadcaster_user_id for backfill
-        const sessionWithBroadcaster = await db.streamSession.findUnique({
+        const sessionWithBroadcaster = await (db as any).streamSession.findUnique({
             where: { id: sessionId },
             select: { broadcaster_user_id: true },
         })
@@ -262,7 +262,7 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
         }
 
         // Count messages for this session
-        const messageCount = await db.chatMessage.count({
+        const messageCount = await (db as any).chatMessage.count({
             where: { stream_session_id: sessionId },
         })
 
@@ -271,7 +271,7 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
         const durationSeconds = Math.floor((endedAt.getTime() - session.started_at.getTime()) / 1000)
 
         // Update session with ended_at
-        await db.streamSession.update({
+        await (db as any).streamSession.update({
             where: { id: sessionId },
             data: {
                 ended_at: endedAt,
@@ -288,7 +288,7 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
         const backfillEndTimestamp = BigInt(backfillWindowEnd.getTime())
 
         try {
-            const offlineMessages = await db.offlineChatMessage.findMany({
+            const offlineMessages = await (db as any).offlineChatMessage.findMany({
                 where: {
                     broadcaster_user_id: sessionWithBroadcaster.broadcaster_user_id,
                     timestamp: {
@@ -327,13 +327,13 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
                 }))
 
                 // Insert chat messages (skip duplicates)
-                await db.chatMessage.createMany({
+                await (db as any).chatMessage.createMany({
                     data: chatMessagesToCreate,
                     skipDuplicates: true,
                 })
 
                 // Delete the moved offline messages
-                await db.offlineChatMessage.deleteMany({
+                await (db as any).offlineChatMessage.deleteMany({
                     where: {
                         message_id: {
                             in: offlineMessages.map((m: any) => m.message_id),
@@ -374,7 +374,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
             return false
         }
 
-        const session = await db.streamSession.findUnique({
+        const session = await (db as any).streamSession.findUnique({
             where: { id: sessionId },
             select: {
                 id: true,
@@ -417,7 +417,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
         }
 
         // Get broadcaster_user_id for backfill
-        const sessionWithBroadcaster = await db.streamSession.findUnique({
+        const sessionWithBroadcaster = await (db as any).streamSession.findUnique({
             where: { id: sessionId },
             select: { broadcaster_user_id: true },
         })
@@ -428,7 +428,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
         }
 
         // Count messages for this session
-        const messageCount = await db.chatMessage.count({
+        const messageCount = await (db as any).chatMessage.count({
             where: { stream_session_id: sessionId },
         })
 
@@ -436,7 +436,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
         const durationSeconds = Math.floor((endedAt.getTime() - session.started_at.getTime()) / 1000)
 
         // Update session with ended_at
-        await db.streamSession.update({
+        await (db as any).streamSession.update({
             where: { id: sessionId },
             data: {
                 ended_at: endedAt,
@@ -452,7 +452,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
         const backfillEndTimestamp = BigInt(backfillWindowEnd.getTime())
 
         try {
-            const offlineMessages = await db.offlineChatMessage.findMany({
+            const offlineMessages = await (db as any).offlineChatMessage.findMany({
                 where: {
                     broadcaster_user_id: sessionWithBroadcaster.broadcaster_user_id,
                     timestamp: {
@@ -487,12 +487,12 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
                     sent_when_offline: true,
                 }))
 
-                await db.chatMessage.createMany({
+                await (db as any).chatMessage.createMany({
                     data: chatMessagesToCreate,
                     skipDuplicates: true,
                 })
 
-                await db.offlineChatMessage.deleteMany({
+                await (db as any).offlineChatMessage.deleteMany({
                     where: {
                         message_id: {
                             in: offlineMessages.map((m: any) => m.message_id),
@@ -564,7 +564,7 @@ export async function updateSessionMetadata(
         }
         if (metadata.viewerCount !== undefined) {
             // Only update peak if new value is higher
-            const current = await db.streamSession.findUnique({
+            const current = await (db as any).streamSession.findUnique({
                 where: { id: sessionId },
                 select: { peak_viewer_count: true },
             })
@@ -573,7 +573,7 @@ export async function updateSessionMetadata(
             }
         }
 
-        await db.streamSession.update({
+        await (db as any).streamSession.update({
             where: { id: sessionId },
             data: updateData,
         })
@@ -598,7 +598,7 @@ export async function findSessionByStartTime(
         const windowStart = new Date(targetTime.getTime() - START_TIME_MATCH_WINDOW_MS)
         const windowEnd = new Date(targetTime.getTime() + START_TIME_MATCH_WINDOW_MS)
 
-        const session = await db.streamSession.findFirst({
+        const session = await (db as any).streamSession.findFirst({
             where: {
                 broadcaster_user_id: broadcasterUserId,
                 started_at: {
@@ -622,7 +622,7 @@ export async function findSessionByStartTime(
  */
 export async function touchSession(sessionId: bigint): Promise<void> {
     try {
-        await db.streamSession.update({
+        await (db as any).streamSession.update({
             where: { id: sessionId },
             data: { last_live_check_at: new Date() },
         })
@@ -659,7 +659,7 @@ export async function resolveSessionForChat(
         const messageTime = new Date(messageTimestampMs)
         const windowStart = new Date(messageTimestampMs - POST_END_ATTACH_WINDOW_MS)
 
-        const recentSession = await db.streamSession.findFirst({
+        const recentSession = await (db as any).streamSession.findFirst({
             where: {
                 broadcaster_user_id: broadcasterUserId,
                 ended_at: {
@@ -728,7 +728,7 @@ export async function mergeLikelyDuplicateSessions(anchorSessionId: bigint): Pro
     const PHANTOM_DURATION_SECONDS = 30
 
     try {
-        const anchor = await db.streamSession.findUnique({
+        const anchor = await (db as any).streamSession.findUnique({
             where: { id: anchorSessionId },
             select: {
                 id: true,
@@ -755,7 +755,7 @@ export async function mergeLikelyDuplicateSessions(anchorSessionId: bigint): Pro
         const endedMax = new Date(anchor.ended_at.getTime() + TIME_WINDOW_MS)
 
         // Find nearby ended sessions for this broadcaster by either start or end time
-        const candidates = await db.streamSession.findMany({
+        const candidates = await (db as any).streamSession.findMany({
             where: {
                 broadcaster_user_id: anchor.broadcaster_user_id,
                 ended_at: { not: null },
@@ -822,7 +822,7 @@ export async function mergeLikelyDuplicateSessions(anchorSessionId: bigint): Pro
         const mergedIds = group.map(s => s.id)
         const deletedIds: bigint[] = []
 
-        await db.$transaction(async (tx: any) => {
+        await (db as any).$transaction(async (tx: any) => {
             // Move related records
             for (const dup of toMerge) {
                 await tx.chatMessage.updateMany({

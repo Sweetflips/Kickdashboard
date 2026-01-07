@@ -25,7 +25,7 @@ async function migrateAvatars() {
 
   try {
     // Find all users with data URI avatars
-    const users = await db.user.findMany({
+    const users = await (db as any).user.findMany({
       where: {
         custom_profile_picture_url: {
           startsWith: 'data:image/',
@@ -99,7 +99,7 @@ async function migrateAvatars() {
         const serveUrl = buildMediaUrlFromKey(r2Key)
 
         // Update database
-        await db.user.update({
+        await (db as any).user.update({
           where: { kick_user_id: user.kick_user_id },
           data: { custom_profile_picture_url: serveUrl },
         })
@@ -125,7 +125,7 @@ async function migrateAvatars() {
     console.error('\n❌ [FATAL ERROR] Migration failed:', error)
     process.exit(1)
   } finally {
-    await db.$disconnect()
+    await (db as any).$disconnect()
   }
 }
 

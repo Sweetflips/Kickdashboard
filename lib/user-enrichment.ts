@@ -106,7 +106,7 @@ async function processEnrichmentQueue(): Promise<void> {
         const updateWithRetry = async (kickUserId: bigint, data: object, maxRetries = 3) => {
             for (let attempt = 0; attempt < maxRetries; attempt++) {
                 try {
-                    await db.user.update({
+                    await (db as any).user.update({
                         where: { kick_user_id: kickUserId },
                         data,
                     })

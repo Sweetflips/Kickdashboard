@@ -102,14 +102,14 @@ export async function GET(request: Request) {
                         session_title: true,
                     },
                 }))
-                
+
                 if (recentSession) {
                     const rs = recentSession as any
                     console.log(`[Leaderboard] No active session for broadcaster ${broadcasterUserId}. Most recent session: id=${rs.id}, ended_at=${rs.ended_at?.toISOString() || 'null'}, started_at=${rs.started_at.toISOString()}`)
                 } else {
                     console.log(`[Leaderboard] No sessions found for broadcaster ${broadcasterUserId}`)
                 }
-                
+
                 return NextResponse.json({
                     leaderboard: [],
                     session_id: null,

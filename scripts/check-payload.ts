@@ -2,7 +2,7 @@ import { db } from '../lib/db';
 
 async function checkPayload() {
   // Get a few pending jobs with their payloads
-  const jobs = await db.chatJob.findMany({
+  const jobs = await (db as any).chatJob.findMany({
     where: { status: 'pending' },
     select: { 
       id: true,
@@ -20,7 +20,7 @@ async function checkPayload() {
     console.log('');
   }
   
-  await db.$disconnect();
+  await (db as any).$disconnect();
 }
 
 checkPayload().catch(console.error);

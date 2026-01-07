@@ -2,7 +2,7 @@ import { db } from '../lib/db';
 
 async function estimateCoins() {
   // Get all pending jobs with valid sessions
-  const jobs = await db.chatJob.findMany({
+  const jobs = await (db as any).chatJob.findMany({
     where: { 
       status: 'pending',
       stream_session_id: { not: null }
@@ -65,7 +65,7 @@ async function estimateCoins() {
   console.log(`  - Users who already earned coins recently (before these jobs)`);
   console.log(`  - Processing order variations`);
   
-  await db.$disconnect();
+  await (db as any).$disconnect();
 }
 
 estimateCoins().catch(console.error);

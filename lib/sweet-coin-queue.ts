@@ -29,7 +29,7 @@ export async function enqueueSweetCoinJob(params: EnqueueSweetCoinJobParams): Pr
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            await db.sweetCoinAwardJob.upsert({
+            await (db as any).sweetCoinAwardJob.upsert({
                 where: { message_id: params.messageId },
                 update: {
                     // Update if job already exists (idempotent)
@@ -109,7 +109,7 @@ export async function claimJobs(batchSize: number = 10, lockTimeoutSeconds: numb
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
             // Use a single transaction to atomically unlock stale locks and claim new jobs
-            const jobs = await db.$transaction(async (tx: any) => {
+            const jobs = await (db as any).$transaction(async (tx: any) => {
                 // First, unlock any stale locks (jobs locked too long ago)
                 await tx.$executeRaw`
                     UPDATE sweet_coin_award_jobs
@@ -218,7 +218,7 @@ export async function processJob(job: ClaimedJob): Promise<{ success: boolean; s
 
         // Update message with sweet coins/reason (with retry for connection pool)
         if (sweetCoinResult.awarded || sweetCoinResult.sweetCoinsEarned !== undefined) {
-            await dbUpdateWithRetry(() => db.chatMessage.updateMany({
+            await dbUpdateWithRetry(() => (db as any).chatMessage.updateMany({
                 where: {
                     message_id: job.message_id,
                     sweet_coins_earned: 0, // Only update if still 0
@@ -231,7 +231,7 @@ export async function processJob(job: ClaimedJob): Promise<{ success: boolean; s
         }
 
         // Mark job as completed (with retry for connection pool)
-        await dbUpdateWithRetry(() => db.sweetCoinAwardJob.update({
+        await dbUpdateWithRetry(() => (db as any).sweetCoinAwardJob.update({
             where: { id: job.id },
             data: {
                 status: 'completed',
@@ -257,7 +257,7 @@ export async function processJob(job: ClaimedJob): Promise<{ success: boolean; s
         const shouldRetry = job.attempts < maxAttempts
 
         // Update job status with retry for connection pool
-        await dbUpdateWithRetry(() => db.sweetCoinAwardJob.update({
+        await dbUpdateWithRetry(() => (db as any).sweetCoinAwardJob.update({
             where: { id: job.id },
             data: {
                 status: shouldRetry ? 'pending' : 'failed',
@@ -303,11 +303,11 @@ export async function getQueueStats(): Promise<{
 }> {
     try {
         const [pending, processing, completed, failed, staleLocks] = await Promise.all([
-            db.sweetCoinAwardJob.count({ where: { status: 'pending' } }),
-            db.sweetCoinAwardJob.count({ where: { status: 'processing' } }),
-            db.sweetCoinAwardJob.count({ where: { status: 'completed' } }),
-            db.sweetCoinAwardJob.count({ where: { status: 'failed' } }),
-            db.$queryRaw<Array<{ count: bigint }>>`
+            (db as any).sweetCoinAwardJob.count({ where: { status: 'pending' } }),
+            (db as any).sweetCoinAwardJob.count({ where: { status: 'processing' } }),
+            (db as any).sweetCoinAwardJob.count({ where: { status: 'completed' } }),
+            (db as any).sweetCoinAwardJob.count({ where: { status: 'failed' } }),
+            (db as any).$queryRaw<Array<{ count: bigint }>>`
                 SELECT COUNT(*)::bigint as count
                 FROM sweet_coin_award_jobs
                 WHERE status = 'processing'

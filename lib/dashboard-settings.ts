@@ -56,7 +56,7 @@ export function normalizeDashboardSettings(input: Partial<DashboardSettings>): D
 export async function getDashboardSettingsFromDb(): Promise<DashboardSettings> {
   const base = getDefaultDashboardSettings()
   try {
-    const row = await db.appSetting.findUnique({
+    const row = await (db as any).appSetting.findUnique({
       where: { key: DASHBOARD_SETTINGS_KEY },
       select: { value: true },
     })
@@ -69,7 +69,7 @@ export async function getDashboardSettingsFromDb(): Promise<DashboardSettings> {
 }
 
 export async function setDashboardSettingsInDb(settings: DashboardSettings): Promise<void> {
-  await db.appSetting.upsert({
+  await (db as any).appSetting.upsert({
     where: { key: DASHBOARD_SETTINGS_KEY },
     update: { value: JSON.stringify(settings) },
     create: { key: DASHBOARD_SETTINGS_KEY, value: JSON.stringify(settings) },

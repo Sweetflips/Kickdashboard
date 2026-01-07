@@ -47,7 +47,7 @@ let errorCount = 0
 
 async function acquireAdvisoryLock(): Promise<boolean> {
     try {
-        const result = await db.$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
+        const result = await (db as any).$queryRaw<Array<{ pg_try_advisory_lock: boolean }>>`
             SELECT pg_try_advisory_lock(${ADVISORY_LOCK_ID}) as pg_try_advisory_lock
         `
         const acquired = result[0]?.pg_try_advisory_lock ?? false
@@ -67,7 +67,7 @@ async function acquireAdvisoryLock(): Promise<boolean> {
 async function releaseAdvisoryLock(): Promise<void> {
     if (!advisoryLockAcquired) return
     try {
-        await db.$queryRaw`SELECT pg_advisory_unlock(${ADVISORY_LOCK_ID})`
+        await (db as any).$queryRaw`SELECT pg_advisory_unlock(${ADVISORY_LOCK_ID})`
         console.log(`[chat-worker] ✅ Advisory lock released`)
     } catch (error) {
         console.error(`[chat-worker] ⚠️ Error releasing advisory lock:`, error)
@@ -126,7 +126,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
         // ═══════════════════════════════════════════════════════════════
 
         const [senderResult, broadcasterResult] = await Promise.all([
-            db.user.upsert({
+            (db as any).user.upsert({
                 where: { kick_user_id: senderUserId },
                 update: {
                     username: payload.sender.username,
@@ -139,7 +139,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
                 },
                 select: { id: true, email: true, profile_picture_url: true, bio: true },
             }),
-            db.user.upsert({
+            (db as any).user.upsert({
                 where: { kick_user_id: broadcasterUserId },
                 update: {
                     username: payload.broadcaster.username,
@@ -236,7 +236,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
             const derivedSentences = countSentences(payload.content)
 
             // Save to offline messages table
-            await db.offlineChatMessage.upsert({
+            await (db as any).offlineChatMessage.upsert({
                 where: { message_id: payload.message_id },
                 update: {
                     sender_username: payload.sender.username,
@@ -280,7 +280,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
             const derivedSentences = countSentences(payload.content)
 
             // Save to chat messages table (with session)
-            await db.chatMessage.upsert({
+            await (db as any).chatMessage.upsert({
                 where: { message_id: payload.message_id },
                 update: {
                     stream_session_id: streamSessionId,
@@ -367,7 +367,7 @@ async function processChatJob(job: ClaimedChatJob): Promise<void> {
 
                 // Update message with points info
                 if (pointsEarned > 0 || pointsReason) {
-                    await db.chatMessage.updateMany({
+                    await (db as any).chatMessage.updateMany({
                         where: { message_id: payload.message_id },
                         data: {
                             sweet_coins_earned: pointsEarned,
