@@ -22,7 +22,7 @@ export default function PrivacyPolicy() {
                             1. Introduction
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
-                            Sweetflips Holdings Limited ("we," "our," or "us"), a company registered in Malta, is committed to protecting your privacy. This Privacy
+                            Sweetflips Holdings Limited (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;), a company registered in Malta, is committed to protecting your privacy. This Privacy
                             Policy explains how we collect, use, disclose, and safeguard your information when you
                             use our Service available at www.kickdashboard.com. Please read this policy carefully to understand our views and practices
                             regarding your personal data.
@@ -207,7 +207,7 @@ export default function PrivacyPolicy() {
                                 <a href="mailto:info@sweetflips.gg" className="text-kick-green hover:underline font-medium">
                                     info@sweetflips.gg
                                 </a>{' '}
-                                with the subject line "Data Deletion Request"
+                                 with the subject line &quot;Data Deletion Request&quot;
                             </li>
                             <li>
                                 <strong>Include your account information:</strong> Provide the email address or username associated with your account so we can locate your data
@@ -228,7 +228,7 @@ export default function PrivacyPolicy() {
                         <p className="text-sm text-gray-500 dark:text-kick-text-secondary mt-4">
                             If you connected your Facebook account, you can also manage your data through{' '}
                             <a href="https://www.facebook.com/settings?tab=applications" target="_blank" rel="noopener noreferrer" className="text-kick-green hover:underline">
-                                Facebook's App Settings
+                                Facebook&apos;s App Settings
                             </a>.
                         </p>
                     </section>
@@ -264,7 +264,7 @@ export default function PrivacyPolicy() {
 
                     <section className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-kick-text mb-4">
-                            11. Children's Privacy
+                            11. Children&apos;s Privacy
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             The Service is not intended for users under 18 years of age. We do not knowingly collect

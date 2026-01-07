@@ -73,7 +73,7 @@ export default function DataDeletion() {
                                         <a href="mailto:privacy@sweetflipsoftware.com" className="text-kick-green hover:underline font-medium">
                                             privacy@sweetflipsoftware.com
                                         </a>{' '}
-                                        with the subject line <strong>"Data Deletion Request"</strong>
+                                        with the subject line <strong>&quot;Data Deletion Request&quot;</strong>
                                     </p>
                                 </div>
                             </div>
@@ -160,8 +160,8 @@ export default function DataDeletion() {
                         </p>
                         <ol className="list-decimal pl-6 text-gray-600 dark:text-kick-text-secondary space-y-2 mb-4">
                             <li>Go to your <a href="https://www.facebook.com/settings?tab=applications" target="_blank" rel="noopener noreferrer" className="text-kick-green hover:underline">Facebook App Settings</a></li>
-                            <li>Find "Kickdashboard" in your connected apps</li>
-                            <li>Click "Remove" to revoke access</li>
+                            <li>Find &quot;Kickdashboard&quot; in your connected apps</li>
+                            <li>Click &quot;Remove&quot; to revoke access</li>
                         </ol>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
                             Note: Removing the app from Facebook will disconnect your account but may not delete all data stored on our servers.

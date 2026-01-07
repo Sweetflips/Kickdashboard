@@ -13,7 +13,6 @@
 
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 // Define types locally since Prisma Accelerate doesn't export input types
 type StreamSessionUpdateData = {
@@ -166,7 +165,7 @@ export async function getOrCreateActiveSession(
 
         } catch (error: any) {
             // Handle unique constraint violation (race condition - another request created session)
-            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 console.log(`[SessionManager] Unique constraint hit, fetching existing session (attempt ${attempt + 1})`)
 
                 // Another process created the session - fetch it

@@ -33,7 +33,7 @@ export default function CookiePolicy() {
                             2. How We Use Cookies
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary mb-4">
-                            Sweetflips Holdings Limited ("we," "our," or "us") uses cookies and similar technologies for the following purposes:
+                            Sweetflips Holdings Limited (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) uses cookies and similar technologies for the following purposes:
                         </p>
 
                         <div className="bg-gray-50 dark:bg-kick-surface-hover rounded-xl p-6 mb-4">
@@ -173,7 +173,7 @@ export default function CookiePolicy() {
                             <div className="bg-gray-50 dark:bg-kick-surface-hover rounded-xl p-4">
                                 <h3 className="font-medium text-gray-800 dark:text-kick-text mb-2">Clear Storage</h3>
                                 <p className="text-sm text-gray-600 dark:text-kick-text-secondary">
-                                    You can clear all site data by using your browser's "Clear browsing data" feature
+                                    You can clear all site data by using your browser&apos;s &quot;Clear browsing data&quot; feature
                                     or by accessing the developer tools.
                                 </p>
                             </div>
@@ -185,7 +185,7 @@ export default function CookiePolicy() {
                             5. Do Not Track
                         </h2>
                         <p className="text-gray-600 dark:text-kick-text-secondary">
-                            Some browsers have a "Do Not Track" feature. We currently do not respond to Do Not Track
+                            Some browsers have a &quot;Do Not Track&quot; feature. We currently do not respond to Do Not Track
                             signals as there is no industry standard for compliance. We only use cookies that are
                             necessary for the Service to function.
                         </p>

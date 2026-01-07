@@ -3,7 +3,7 @@ import { memoryCache } from '@/lib/memory-cache'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { ensurePurchaseTransactionsTable } from '@/lib/purchases-ledger'
 import { NextResponse } from 'next/server'
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+import { Prisma } from '@prisma/client'
 
 // Allow caching but revalidate frequently for fresh data
 export const dynamic = 'force-dynamic'
@@ -307,7 +307,7 @@ async function withRetry<T>(
             return await fn()
         } catch (error: any) {
             const isRetryableError =
-                error instanceof PrismaClientKnownRequestError &&
+                error instanceof Prisma.PrismaClientKnownRequestError &&
                 (error.code === 'P2024' || error.code === 'P2034' || error.code === 'P4001' || error.code === 'P2028') ||
                 (error instanceof Error && (
                     error.message.includes('could not serialize access') ||
@@ -318,7 +318,7 @@ async function withRetry<T>(
 
             if (isRetryableError && attempt < maxRetries - 1) {
                 const delay = Math.min(100 * Math.pow(2, attempt), 1000) // Exponential backoff: 100ms, 200ms, 400ms max
-                const code = error instanceof PrismaClientKnownRequestError ? error.code : undefined
+                const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined
                 console.warn(`[${operation}] Retryable error (attempt ${attempt + 1}/${maxRetries}), retrying after ${delay}ms...`, code || error.message)
                 await new Promise(resolve => setTimeout(resolve, delay))
                 continue

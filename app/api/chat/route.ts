@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { rewriteApiMediaUrlToCdn } from '@/lib/media-url'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { validateApiKey } from '@/lib/api-key-auth'
-import type { JsonValue } from '@prisma/client/runtime/library'
+import { Prisma } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,14 +12,14 @@ type OfflineMessageWithRelations = {
     id: bigint
     message_id: string
     content: string
-    emotes: JsonValue
+    emotes: Prisma.JsonValue
     has_emotes: boolean
     timestamp: bigint
     created_at: Date
     sender_user_id: bigint
     sender_username: string
     sender_username_color: string | null
-    sender_badges: JsonValue
+    sender_badges: Prisma.JsonValue
     sender_is_verified: boolean
     sender_is_anonymous: boolean
     broadcaster_user_id: bigint
@@ -49,10 +49,10 @@ type OnlineMessageWithRelations = {
     sender_username: string
     broadcaster_user_id: bigint
     content: string
-    emotes: JsonValue
+    emotes: Prisma.JsonValue
     timestamp: bigint
     sender_username_color: string | null
-    sender_badges: JsonValue
+    sender_badges: Prisma.JsonValue
     sender_is_verified: boolean
     sender_is_anonymous: boolean
     sweet_coins_earned: number
@@ -95,7 +95,7 @@ function isVerifiedUser(username: string, badges: Array<{ type: string }> = []):
 /**
  * GET /api/chat
  * Fetch chat messages
- * 
+ *
  * Authentication: Requires API key (?api_key=) OR authenticated session
  * External tools: Use ?api_key=YOUR_API_SECRET_KEY
  * Internal dashboard: Uses session cookies automatically
@@ -104,10 +104,10 @@ export async function GET(request: Request) {
     try {
         // Allow external tools with API key
         const hasValidApiKey = validateApiKey(request, 'chat')
-        
+
         // Allow authenticated users (internal dashboard)
         const auth = await getAuthenticatedUser(request)
-        
+
         if (!hasValidApiKey && !auth) {
             return NextResponse.json(
                 { error: 'Authentication required. Use api_key parameter or login.' },

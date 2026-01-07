@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/stream-session/leaderboard?broadcaster_user_id=123&session_id=456
  * If session_id is provided, get leaderboard for that session (admin-only for past streams)
  * Otherwise, get leaderboard for active session
- * 
+ *
  * Authentication: Requires API key (?api_key=) OR authenticated session
  * External tools: Use ?api_key=YOUR_API_SECRET_KEY
  * Internal dashboard: Uses session cookies automatically
@@ -27,10 +27,10 @@ export async function GET(request: Request) {
 
         // Allow external tools with API key
         const hasValidApiKey = validateApiKey(request, 'stream-leaderboard')
-        
+
         // Allow authenticated users (internal dashboard)
         const auth = await getAuthenticatedUser(request)
-        
+
         // If session_id is provided, this is a past stream - require admin access
         if (sessionId) {
             const adminCheck = await isAdmin(request)

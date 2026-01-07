@@ -3,11 +3,16 @@ import { PrismaClient } from '@prisma/client'
 import { withAccelerate } from '@prisma/extension-accelerate'
 import { logErrorRateLimited } from './rate-limited-logger'
 
-// Extended Prisma Client type with Accelerate
-type PrismaClientWithAccelerate = ReturnType<typeof createPrismaClient>
+// Check if we're using an Accelerate URL
+const isAccelerateUrl = (url: string) => {
+  return url.startsWith('prisma://') || url.startsWith('prisma+postgres://')
+}
+
+// Extended Prisma Client type - may or may not have Accelerate extension
+type ExtendedPrismaClient = PrismaClient | ReturnType<typeof createPrismaClientWithAccelerate>
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClientWithAccelerate | undefined
+  prisma: ExtendedPrismaClient | undefined
 }
 
 // Prisma 7: Connection is configured via prisma.config.ts and DATABASE_URL env var
@@ -17,7 +22,7 @@ const getDatabaseUrl = () => {
   const url = process.env.DATABASE_URL || ''
 
   // If using Accelerate (prisma:// or prisma+postgres://), return as-is
-  if (url.startsWith('prisma://') || url.startsWith('prisma+postgres://')) {
+  if (isAccelerateUrl(url)) {
     return url
   }
 
@@ -32,24 +37,41 @@ const getDatabaseUrl = () => {
   return url
 }
 
-// Create Prisma Client with Accelerate extension
-// The extension works as a no-op for direct PostgreSQL connections
-function createPrismaClient() {
-  // Defer DATABASE_URL check to runtime - during build, module evaluation
-  // happens without env vars and we must not throw
-  const databaseUrl = getDatabaseUrl()
-
+// Create Prisma Client with Accelerate extension (for Accelerate URLs)
+function createPrismaClientWithAccelerate() {
   const clientConfig: ConstructorParameters<typeof PrismaClient>[0] = {
-    log: [], // Disable all Prisma logging - we handle errors with rate-limited logger
+    log: [],
     transactionOptions: {
-      maxWait: 5000, // Wait up to 5 seconds for transaction to start
-      timeout: 15000, // Transaction timeout of 15 seconds
+      maxWait: 5000,
+      timeout: 15000,
     },
   }
-
-  // Always apply Accelerate extension for consistent typing
-  // Extension is no-op for standard postgresql:// URLs
   return new PrismaClient(clientConfig).$extends(withAccelerate())
+}
+
+// Create standard Prisma Client (for direct PostgreSQL connections)
+function createStandardPrismaClient() {
+  const clientConfig: ConstructorParameters<typeof PrismaClient>[0] = {
+    log: [],
+    transactionOptions: {
+      maxWait: 5000,
+      timeout: 15000,
+    },
+  }
+  return new PrismaClient(clientConfig)
+}
+
+// Create appropriate Prisma Client based on DATABASE_URL
+function createPrismaClient(): ExtendedPrismaClient {
+  const databaseUrl = getDatabaseUrl()
+  
+  // Only use Accelerate extension when we have an Accelerate URL
+  // Direct PostgreSQL connections don't need/support it
+  if (isAccelerateUrl(databaseUrl)) {
+    return createPrismaClientWithAccelerate()
+  }
+  
+  return createStandardPrismaClient()
 }
 
 // CRITICAL: Always use singleton pattern in both dev and production

@@ -541,7 +541,7 @@ export default function AdminStreamsPage() {
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-kick-border rounded-lg bg-white dark:bg-kick-dark text-gray-900 dark:text-kick-text"
                                     />
                                     <p className="text-xs text-gray-500 dark:text-kick-text-muted mt-1">
-                                        Kick's stream/video ID for matching thumbnails
+                                        Kick&#39;s stream/video ID for matching thumbnails
                                     </p>
                                 </div>
                                 <div className="flex gap-2 justify-end pt-4">

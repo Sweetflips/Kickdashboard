@@ -490,7 +490,7 @@ export default function ReferralsPage() {
                                 How many people can I refer?
                             </h3>
                             <p className="text-small text-gray-600 dark:text-kick-text-secondary">
-                                There's no limit! Refer as many friends as you want and earn rewards for each one.
+                                There&apos;s no limit! Refer as many friends as you want and earn rewards for each one.
                             </p>
                         </div>
                         <div>
@@ -503,10 +503,10 @@ export default function ReferralsPage() {
                         </div>
                         <div>
                             <h3 className="text-body font-semibold text-gray-900 dark:text-kick-text mb-1">
-                                Can my referral use someone else's code later?
+                                Can my referral use someone else&apos;s code later?
                             </h3>
                             <p className="text-small text-gray-600 dark:text-kick-text-secondary">
-                                No, once someone signs up with a referral code, they're permanently linked to that referrer.
+                                No, once someone signs up with a referral code, they&apos;re permanently linked to that referrer.
                             </p>
                         </div>
                         <div>
