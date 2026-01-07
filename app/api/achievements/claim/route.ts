@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     }
 
     // Get updated balance
-    const updatedBalance = await db.userSweetCoins.findUnique({
+    const updatedBalance = await (db as any).userSweetCoins.findUnique({
       where: { user_id: auth.userId },
       select: { total_sweet_coins: true },
     })
