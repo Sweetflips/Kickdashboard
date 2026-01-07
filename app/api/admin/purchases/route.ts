@@ -33,7 +33,8 @@ export async function GET(request: NextRequest) {
                 profile_picture_url: string | null
             }
         }
-        const purchasesRaw = await db.adventPurchase.findMany({
+        const prisma = db as any
+        const purchasesRaw = await prisma.adventPurchase.findMany({
             include: {
                 user: {
                     select: {

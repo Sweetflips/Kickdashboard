@@ -72,8 +72,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid periodKey format' }, { status: 400 })
     }
 
+    const prisma = db as any
     // Get top users for this period
-    const periodPointsRaw = await db.sweetCoinHistory.groupBy({
+    const periodPointsRaw = await prisma.sweetCoinHistory.groupBy({
       by: ['user_id'],
       where: {
         earned_at: {
@@ -99,12 +100,12 @@ export async function POST(request: Request) {
 
     // Get user details
     const topUserIds = top3.map((u) => u.user_id)
-    const topUsers = await db.user.findMany({
+    const topUsers = await prisma.user.findMany({
       where: { id: { in: topUserIds } },
       select: { id: true, kick_user_id: true },
     })
 
-    const userMap = new Map(topUsers.map((u) => [u.id.toString(), u]))
+    const userMap = new Map((topUsers as any[]).map((u: any) => [u.id.toString(), u]))
 
     const results = {
       periodKey,
@@ -123,7 +124,7 @@ export async function POST(request: Request) {
       if (!user) continue
 
       // Upsert period result
-      await db.leaderboardPeriodResult.upsert({
+      await prisma.leaderboardPeriodResult.upsert({
         where: {
           period_key_user_id: {
             period_key: periodKey,
@@ -165,7 +166,7 @@ export async function POST(request: Request) {
 
       if (winnerUser) {
         // Record monthly winner
-        await db.monthlyWinner.upsert({
+        await prisma.monthlyWinner.upsert({
           where: { month_key: periodKey },
           update: {
             user_id: winnerUser.id,

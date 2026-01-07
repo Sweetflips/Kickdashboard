@@ -18,7 +18,8 @@ export async function GET(request: Request) {
             )
         }
 
-        const promoCodes = await db.promoCode.findMany({
+        const prisma = db as any
+        const promoCodes = await prisma.promoCode.findMany({
             include: {
                 creator: {
                     select: {
@@ -146,6 +147,7 @@ export async function POST(request: Request) {
             )
         }
 
+        const prisma = db as any
         const createdCodes = []
 
         // Handle bulk creation
@@ -158,7 +160,7 @@ export async function POST(request: Request) {
             }
 
             // Check if code already exists
-            const existing = await db.promoCode.findUnique({
+            const existing = await prisma.promoCode.findUnique({
                 where: { code: finalCode },
             })
 
@@ -173,7 +175,7 @@ export async function POST(request: Request) {
                 continue
             }
 
-            const promoCode = await db.promoCode.create({
+            const promoCode = await prisma.promoCode.create({
                 data: {
                     code: finalCode,
                     sweet_coins_value: parseInt(sweet_coins_value),
@@ -233,10 +235,11 @@ export async function PATCH(request: Request) {
             )
         }
 
+        const prisma = db as any
         const body = await request.json()
         const { is_active } = body
 
-        const promoCode = await db.promoCode.update({
+        const promoCode = await prisma.promoCode.update({
             where: { id: BigInt(id) },
             data: {
                 is_active: is_active !== undefined ? is_active : false,
@@ -288,8 +291,9 @@ export async function DELETE(request: Request) {
             )
         }
 
+        const prisma = db as any
         // Check if code exists
-        const promoCode = await db.promoCode.findUnique({
+        const promoCode = await prisma.promoCode.findUnique({
             where: { id: BigInt(id) },
             include: {
                 redemptions: true,
@@ -306,7 +310,7 @@ export async function DELETE(request: Request) {
         const hasUses = promoCode.current_uses > 0 || ((promoCode as unknown as { redemptions: any[] }).redemptions.length > 0)
 
         // Delete the promo code (even if it has been used)
-        await db.promoCode.delete({
+        await prisma.promoCode.delete({
             where: { id: BigInt(id) },
         })
 

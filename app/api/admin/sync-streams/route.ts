@@ -46,6 +46,7 @@ export async function POST(request: Request) {
         const forceFromQuery = searchParams.get('force')
         let force = forceFromQuery === '1' || forceFromQuery === 'true'
 
+        const prisma = db as any
         let videos: any[] = []
         let liveStreamUpdated = false
         let liveStreamError: string | null = null
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
                     console.log(`[Sync] Got thumbnail from Kick Dev API for ${slug}`)
 
                     // Get broadcaster_user_id from database using slug
-                    const broadcaster = await db.user.findFirst({
+                    const broadcaster = await prisma.user.findFirst({
                         where: {
                             username: {
                                 equals: slug,
@@ -272,7 +273,7 @@ export async function POST(request: Request) {
                 const timeWindow = 30 * 60 * 1000 // 30 minutes
 
                 const findCandidates = async (windowMs: number) => {
-                    return await db.streamSession.findMany({
+                    return await prisma.streamSession.findMany({
                         where: {
                             channel_slug: slug,
                             started_at: {
@@ -370,7 +371,7 @@ export async function POST(request: Request) {
                     }
 
                     if (needsUpdate) {
-                        await db.streamSession.update({
+                        await prisma.streamSession.update({
                             where: { id: matchingSession.id },
                             data: updateData
                         })

@@ -8,8 +8,9 @@ import { syncThumbnailsForActiveStreams } from '@/lib/kick-api'
  */
 export async function POST(request: Request) {
     try {
+        const prisma = db as any
         // Get all active stream sessions
-        const activeSessions = await db.streamSession.findMany({
+        const activeSessions = await prisma.streamSession.findMany({
             where: {
                 ended_at: null, // Only active sessions
             },
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
             if (newThumbnailUrl !== undefined && newThumbnailUrl !== session.thumbnail_url && newThumbnailUrl !== null) {
                 try {
                     // Update all active sessions for this channel
-                    await db.streamSession.updateMany({
+                    await prisma.streamSession.updateMany({
                         where: {
                             channel_slug: session.channel_slug,
                             ended_at: null,

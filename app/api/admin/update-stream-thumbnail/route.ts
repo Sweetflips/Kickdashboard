@@ -38,8 +38,9 @@ export async function POST(request: Request) {
             )
         }
 
+        const prisma = db as any
         // Get the session
-        const session = await db.streamSession.findUnique({
+        const session = await prisma.streamSession.findUnique({
             where: { id: BigInt(sessionId) },
             select: {
                 id: true,
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
         }
 
         // Update the session
-        const updatedSession = await db.streamSession.update({
+        const updatedSession = await prisma.streamSession.update({
             where: { id: session.id },
             data: updateData,
         })

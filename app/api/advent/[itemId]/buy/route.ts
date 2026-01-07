@@ -88,7 +88,8 @@ export async function POST(
     }
 
     // Use transaction to ensure atomicity
-    const result = await db.$transaction(async (tx: any) => {
+    const prisma = db as any
+    const result = await prisma.$transaction(async (tx: any) => {
       await backfillPurchaseTransactionsIfEmpty(tx as any, auth.userId)
       await ensurePurchaseTransactionsTable(tx as any)
 

@@ -16,7 +16,8 @@ export async function GET(request: Request, ctx: { params: { id: string } }) {
       return NextResponse.json({ error: 'Missing id' }, { status: 400 })
     }
 
-    const job = await db.chatJob.findUnique({
+    const prisma = db as any
+    const job = await prisma.chatJob.findUnique({
       where: { id: BigInt(id) },
     })
 

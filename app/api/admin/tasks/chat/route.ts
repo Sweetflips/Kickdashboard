@@ -64,14 +64,15 @@ export async function GET(request: Request) {
       where.OR = or
     }
 
+    const prisma = db as any
     const [rows, total] = await Promise.all([
-      db.chatJob.findMany({
+      prisma.chatJob.findMany({
         where,
         orderBy: { created_at: 'desc' },
         take: limit,
         skip: offset,
       }),
-      db.chatJob.count({ where }),
+      prisma.chatJob.count({ where }),
     ])
 
     const loweredQ = q.toLowerCase()

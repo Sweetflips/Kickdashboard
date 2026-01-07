@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const onlyStale = (searchParams.get('onlyStale') || '').toLowerCase() === 'true'
     const sinceHours = Math.max(0, parseInt(searchParams.get('sinceHours') || '0'))
 
+    const prisma = db as any
     const where: any = {}
     if (status !== 'all') where.status = status
     if (onlyStale) {
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
 
       // If it looks like a username, resolve kick_user_ids matching that username
       if (!/^\d+$/.test(q)) {
-        const matchingUsers = await db.user.findMany({
+        const matchingUsers = await prisma.user.findMany({
           where: { username: { contains: q, mode: 'insensitive' } },
           select: { kick_user_id: true, username: true },
           take: 50,
@@ -66,19 +67,19 @@ export async function GET(request: Request) {
     }
 
     const [rows, total] = await Promise.all([
-      db.sweetCoinAwardJob.findMany({
+      prisma.sweetCoinAwardJob.findMany({
         where,
         orderBy: { created_at: 'desc' },
         take: limit,
         skip: offset,
       }),
-      db.sweetCoinAwardJob.count({ where }),
+      prisma.sweetCoinAwardJob.count({ where }),
     ])
 
     // Best-effort username map (no FK relation in schema)
     const kickIds = Array.from(new Set((rows as any[]).map((r: any) => r.kick_user_id.toString()))).slice(0, 200)
     const users = kickIds.length
-      ? await db.user.findMany({
+      ? await prisma.user.findMany({
           where: { kick_user_id: { in: kickIds.map((id: any) => BigInt(id)) } },
           select: { kick_user_id: true, username: true },
         })

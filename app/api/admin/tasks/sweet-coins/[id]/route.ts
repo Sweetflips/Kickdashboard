@@ -16,7 +16,8 @@ export async function GET(request: Request, ctx: { params: { id: string } }) {
       return NextResponse.json({ error: 'Missing id' }, { status: 400 })
     }
 
-    const job = await db.sweetCoinAwardJob.findUnique({
+    const prisma = db as any
+    const job = await prisma.sweetCoinAwardJob.findUnique({
       where: { id: BigInt(id) },
     })
 
@@ -24,7 +25,7 @@ export async function GET(request: Request, ctx: { params: { id: string } }) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    const user = await db.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { kick_user_id: job.kick_user_id },
       select: { username: true, kick_user_id: true },
     })

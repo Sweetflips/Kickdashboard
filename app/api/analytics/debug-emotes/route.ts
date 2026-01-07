@@ -5,8 +5,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     try {
+        const prisma = db as any
         // Get a sample of messages with their emotes data
-        const messages = await db.chatMessage.findMany({
+        const messages = await prisma.chatMessage.findMany({
             take: 20,
             select: {
                 message_id: true,
@@ -48,10 +49,10 @@ export async function GET(request: Request) {
         })
 
         // Get overall stats
-        const totalMessages = await db.chatMessage.count()
+        const totalMessages = await prisma.chatMessage.count()
 
         // Count messages with empty array emotes (we'll count nulls in the loop)
-        const messagesWithEmptyArrayEmotes = await db.chatMessage.findMany({
+        const messagesWithEmptyArrayEmotes = await prisma.chatMessage.findMany({
             select: {
                 emotes: true,
             },

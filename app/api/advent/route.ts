@@ -16,7 +16,8 @@ export async function GET(request: Request) {
     }
 
     // Get user's purchases for all items
-    const purchases = await db.adventPurchase.findMany({
+    const prisma = db as any
+    const purchases = await prisma.adventPurchase.findMany({
       where: { user_id: auth.userId },
       select: {
         item_id: true,

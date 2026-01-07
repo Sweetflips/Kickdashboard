@@ -26,12 +26,13 @@ export async function GET(request: Request) {
         // Default to sweetflips if no broadcaster specified
         let broadcasterUserId: bigint | null = null
 
+        const prisma = db as any
         if (broadcasterUserIdParam) {
             broadcasterUserId = BigInt(broadcasterUserIdParam)
         } else {
             // Find the main broadcaster by username (from env or default to sweetflips)
             const broadcasterSlug = process.env.KICK_CHANNEL_SLUG || 'sweetflips'
-            const broadcaster = await db.user.findFirst({
+            const broadcaster = await prisma.user.findFirst({
                 where: {
                     username: {
                         equals: broadcasterSlug,
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
         const activeSession = await getActiveSession(broadcasterUserId)
 
         // Get recent sessions (last 10)
-        const recentSessions = await db.streamSession.findMany({
+        const recentSessions = await prisma.streamSession.findMany({
             where: { broadcaster_user_id: broadcasterUserId },
             orderBy: { started_at: 'desc' },
             take: 10,
@@ -123,9 +124,10 @@ export async function POST(request: Request) {
             }
 
             const sessionId = BigInt(String(sessionIdRaw))
+            const prisma = db as any
 
             // Check if this session exists and was recently ended
-            const session = await db.streamSession.findUnique({
+            const session = await prisma.streamSession.findUnique({
                 where: { id: sessionId },
                 select: {
                     id: true,
@@ -152,7 +154,7 @@ export async function POST(request: Request) {
             }
 
             // Reopen the session
-            await db.streamSession.update({
+            await prisma.streamSession.update({
                 where: { id: sessionId },
                 data: {
                     ended_at: null,
@@ -176,8 +178,9 @@ export async function POST(request: Request) {
             const sourceSessionId = BigInt(String(body.source_session_id))
             const targetSessionId = BigInt(String(body.target_session_id))
 
+            const prisma = db as any
             // Move all chat messages and history from source to target
-            await db.$transaction(async (tx: any) => {
+            await prisma.$transaction(async (tx: any) => {
                 await tx.chatMessage.updateMany({
                     where: { stream_session_id: sourceSessionId },
                     data: { stream_session_id: targetSessionId },

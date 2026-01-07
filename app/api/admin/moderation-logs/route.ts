@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const target_username = searchParams.get('target_username') || undefined
 
   try {
+    const prisma = db as any
     const where: any = {}
 
     if (action_type) where.action_type = action_type
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     }
 
     const [logs, total] = await Promise.all([
-      db.moderationActionLog.findMany({
+      prisma.moderationActionLog.findMany({
         where,
         orderBy: { created_at: 'desc' },
         take: limit,
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
           created_at: true,
         },
       }),
-      db.moderationActionLog.count({ where }),
+      prisma.moderationActionLog.count({ where }),
     ])
 
     // Convert BigInt to string for JSON serialization
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const prisma = db as any
     const body = await request.json()
     const { action } = body
 
@@ -104,21 +106,21 @@ export async function POST(request: Request) {
         aiModerated,
         raidModeActions,
       ] = await Promise.all([
-        db.moderationActionLog.count(),
-        db.moderationActionLog.count({ where: { created_at: { gte: oneDayAgo } } }),
-        db.moderationActionLog.count({ where: { created_at: { gte: oneWeekAgo } } }),
-        db.moderationActionLog.groupBy({
+        prisma.moderationActionLog.count(),
+        prisma.moderationActionLog.count({ where: { created_at: { gte: oneDayAgo } } }),
+        prisma.moderationActionLog.count({ where: { created_at: { gte: oneWeekAgo } } }),
+        prisma.moderationActionLog.groupBy({
           by: ['action_type'],
           _count: true,
           where: { created_at: { gte: oneWeekAgo } },
         }),
-        db.moderationActionLog.groupBy({
+        prisma.moderationActionLog.groupBy({
           by: ['rule_id'],
           _count: true,
           where: { created_at: { gte: oneWeekAgo } },
         }),
-        db.moderationActionLog.count({ where: { ai_flagged: true, created_at: { gte: oneWeekAgo } } }),
-        db.moderationActionLog.count({ where: { raid_mode_active: true, created_at: { gte: oneWeekAgo } } }),
+        prisma.moderationActionLog.count({ where: { ai_flagged: true, created_at: { gte: oneWeekAgo } } }),
+        prisma.moderationActionLog.count({ where: { raid_mode_active: true, created_at: { gte: oneWeekAgo } } }),
       ])
 
       return NextResponse.json({
@@ -137,7 +139,7 @@ export async function POST(request: Request) {
     if (action === 'clear') {
       // Optional: clear old logs (keep last 30 days)
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-      const result = await db.moderationActionLog.deleteMany({
+      const result = await prisma.moderationActionLog.deleteMany({
         where: { created_at: { lt: thirtyDaysAgo } },
       })
       return NextResponse.json({ ok: true, deleted: result.count })

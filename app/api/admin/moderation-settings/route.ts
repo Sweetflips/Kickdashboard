@@ -29,8 +29,9 @@ export async function POST(request: Request) {
     await setModeratorBotSettingsInDb(settings)
 
     const auth = await getAuthenticatedUser(request)
+    const prisma = db as any
     const actor = auth
-      ? await db.user.findUnique({ where: { kick_user_id: auth.kickUserId }, select: { username: true, kick_user_id: true } })
+      ? await prisma.user.findUnique({ where: { kick_user_id: auth.kickUserId }, select: { username: true, kick_user_id: true } })
       : null
 
     const changed: string[] = []

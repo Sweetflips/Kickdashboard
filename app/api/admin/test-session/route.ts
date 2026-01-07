@@ -15,8 +15,9 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        const prisma = db as any
         // Get the broadcaster user (sweetflips)
-        const broadcaster = await db.user.findFirst({
+        const broadcaster = await prisma.user.findFirst({
             where: {
                 username: { equals: 'sweetflips', mode: 'insensitive' },
             },
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
         }
 
         // Check for active session
-        const activeSession = await db.streamSession.findFirst({
+        const activeSession = await prisma.streamSession.findFirst({
             where: {
                 broadcaster_user_id: broadcaster.kick_user_id,
                 ended_at: null,
@@ -78,8 +79,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        const prisma = db as any
         // Get the broadcaster user (sweetflips)
-        const broadcaster = await db.user.findFirst({
+        const broadcaster = await prisma.user.findFirst({
             where: {
                 username: { equals: 'sweetflips', mode: 'insensitive' },
             },
@@ -94,7 +96,7 @@ export async function POST(request: Request) {
         }
 
         // Check if there's already an active session
-        const existingSession = await db.streamSession.findFirst({
+        const existingSession = await prisma.streamSession.findFirst({
             where: {
                 broadcaster_user_id: broadcaster.kick_user_id,
                 ended_at: null,
@@ -114,7 +116,7 @@ export async function POST(request: Request) {
         }
 
         // Create a new test session
-        const newSession = await db.streamSession.create({
+        const newSession = await prisma.streamSession.create({
             data: {
                 broadcaster_user_id: broadcaster.kick_user_id,
                 channel_slug: broadcaster.username.toLowerCase(),
@@ -157,8 +159,9 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        const prisma = db as any
         // Get the broadcaster user (sweetflips)
-        const broadcaster = await db.user.findFirst({
+        const broadcaster = await prisma.user.findFirst({
             where: {
                 username: { equals: 'sweetflips', mode: 'insensitive' },
             },
@@ -173,7 +176,7 @@ export async function DELETE(request: Request) {
         }
 
         // Find active session
-        const activeSession = await db.streamSession.findFirst({
+        const activeSession = await prisma.streamSession.findFirst({
             where: {
                 broadcaster_user_id: broadcaster.kick_user_id,
                 ended_at: null,
@@ -189,7 +192,7 @@ export async function DELETE(request: Request) {
         }
 
         // End the session
-        const endedSession = await db.streamSession.update({
+        const endedSession = await prisma.streamSession.update({
             where: { id: activeSession.id },
             data: {
                 ended_at: new Date(),

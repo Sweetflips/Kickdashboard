@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic'
 async function getClaimedAchievementCounts(userIds: bigint[]): Promise<Map<string, number>> {
   if (userIds.length === 0) return new Map()
 
-  const rows = await db.sweetCoinHistory.groupBy({
+  const prisma = db as any
+  const rows = await prisma.sweetCoinHistory.groupBy({
     by: ['user_id'],
     where: {
       user_id: { in: userIds },
@@ -82,8 +83,9 @@ export async function GET(request: Request) {
       }>
     }
 
+    const prisma = db as any
     const [usersRawResult, total] = await Promise.all([
-      db.user.findMany({
+      prisma.user.findMany({
         where,
         include: {
           sweet_coins: {
@@ -110,7 +112,7 @@ export async function GET(request: Request) {
           },
         },
       }),
-      db.user.count({ where }),
+      prisma.user.count({ where }),
     ])
     const usersRaw = usersRawResult as unknown as UserWithRelations[]
 
@@ -127,7 +129,7 @@ export async function GET(request: Request) {
 
     // Get aggregated session stats for each user
     const userIds = users.map(u => u.id)
-    const sessionStats = await db.userSession.groupBy({
+    const sessionStats = await prisma.userSession.groupBy({
       by: ['user_id'],
       where: {
         user_id: { in: userIds },
@@ -158,7 +160,7 @@ export async function GET(request: Request) {
     })
 
     // Get all IP hashes from sessions for these users
-    const allSessions = await db.userSession.findMany({
+    const allSessions = await prisma.userSession.findMany({
       where: {
         user_id: { in: userIdsForDuplicates },
         ip_hash: { not: null },
@@ -347,8 +349,9 @@ export async function PUT(request: Request) {
       )
     }
 
+    const prisma = db as any
     // Update user
-    const user = await db.user.update({
+    const user = await prisma.user.update({
       where: { kick_user_id: BigInt(kick_user_id) },
       data: updateData,
       select: {

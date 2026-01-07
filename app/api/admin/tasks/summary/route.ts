@@ -11,26 +11,27 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 403 })
     }
 
+    const prisma = db as any
     const [sweetCoins, chat, sweetStale, chatStale] = await Promise.all([
       Promise.all([
-        db.sweetCoinAwardJob.count({ where: { status: 'pending' } }),
-        db.sweetCoinAwardJob.count({ where: { status: 'processing' } }),
-        db.sweetCoinAwardJob.count({ where: { status: 'completed' } }),
-        db.sweetCoinAwardJob.count({ where: { status: 'failed' } }),
+        prisma.sweetCoinAwardJob.count({ where: { status: 'pending' } }),
+        prisma.sweetCoinAwardJob.count({ where: { status: 'processing' } }),
+        prisma.sweetCoinAwardJob.count({ where: { status: 'completed' } }),
+        prisma.sweetCoinAwardJob.count({ where: { status: 'failed' } }),
       ]),
       Promise.all([
-        db.chatJob.count({ where: { status: 'pending' } }),
-        db.chatJob.count({ where: { status: 'processing' } }),
-        db.chatJob.count({ where: { status: 'completed' } }),
-        db.chatJob.count({ where: { status: 'failed' } }),
+        prisma.chatJob.count({ where: { status: 'pending' } }),
+        prisma.chatJob.count({ where: { status: 'processing' } }),
+        prisma.chatJob.count({ where: { status: 'completed' } }),
+        prisma.chatJob.count({ where: { status: 'failed' } }),
       ]),
-      db.$queryRaw<Array<{ count: bigint }>>`
+      prisma.$queryRaw`
         SELECT COUNT(*)::bigint as count
         FROM sweet_coin_award_jobs
         WHERE status = 'processing'
         AND locked_at < NOW() - INTERVAL '5 minutes'
       `,
-      db.$queryRaw<Array<{ count: bigint }>>`
+      prisma.$queryRaw`
         SELECT COUNT(*)::bigint as count
         FROM chat_jobs
         WHERE status = 'processing'

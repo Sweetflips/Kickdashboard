@@ -37,8 +37,10 @@ export async function GET(request: Request) {
             )
         }
 
+        const prisma = db as any
+
         // Get stream session info
-        const streamSession = await db.streamSession.findUnique({
+        const streamSession = await prisma.streamSession.findUnique({
             where: { id: BigInt(streamSessionId) },
             include: {
                 broadcaster: {
@@ -58,7 +60,7 @@ export async function GET(request: Request) {
         }
 
         // Get all Sweet Coins earned in this stream session, grouped by user
-        const sweetCoinsByUser = await db.sweetCoinHistory.groupBy({
+        const sweetCoinsByUser = await prisma.sweetCoinHistory.groupBy({
             by: ['user_id'],
             where: {
                 stream_session_id: BigInt(streamSessionId),
@@ -94,7 +96,7 @@ export async function GET(request: Request) {
 
         // Get user details for all participants
         const userIds = (sweetCoinsByUser as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null } }>).map(p => p.user_id)
-        const users = await db.user.findMany({
+        const users = await prisma.user.findMany({
             where: {
                 id: { in: userIds },
             },
