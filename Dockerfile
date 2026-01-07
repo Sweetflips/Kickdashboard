@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy package files and prisma schema/config (needed for postinstall)
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
-COPY prisma.config.ts ./
+COPY prisma.config.js ./
 
 # Install dependencies (this runs postinstall which generates Prisma client)
 RUN npm ci

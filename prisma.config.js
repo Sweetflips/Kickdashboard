@@ -12,18 +12,18 @@ function getMigrationUrl() {
     console.log('[prisma.config.js] Using DIRECT_URL for migrations')
     return directUrl
   }
-  
+
   // Fallback: DATABASE_URL if it's a direct PostgreSQL URL (not Accelerate)
   if (databaseUrl && (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://'))) {
     console.log('[prisma.config.js] Using DATABASE_URL for migrations (direct PostgreSQL)')
     return databaseUrl
   }
-  
+
   // If we get here, we have an Accelerate URL but no DIRECT_URL
   console.error('[prisma.config.js] ERROR: No direct PostgreSQL URL available for migrations!')
   console.error('[prisma.config.js] DIRECT_URL:', directUrl ? 'set (but not postgres://)' : 'NOT SET')
   console.error('[prisma.config.js] DATABASE_URL:', databaseUrl ? 'set (Accelerate URL)' : 'NOT SET')
-  
+
   // Return the hardcoded Railway PostgreSQL URL as absolute fallback
   return 'postgresql://postgres:TGlahexkFWDUIbBOxJKxmTyPPvnSdrIj@shuttle.proxy.rlwy.net:41247/railway'
 }
