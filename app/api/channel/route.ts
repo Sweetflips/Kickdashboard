@@ -204,7 +204,7 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
             // Check stream.is_live from /channels endpoint
             const stream = channel.stream
             const isLive = stream && normalizeIsLiveFlag(stream.is_live)
-            
+
             console.log(`[Channel API] Official API for ${slug}: is_live=${isLive}, viewers=${stream?.viewer_count}`)
 
             if (!isLive) {
@@ -220,10 +220,10 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
                     ? livestream.thumbnail
                     : livestream.thumbnail.url || null
             }
-            
+
             const viewerCount = stream?.viewer_count || livestream?.viewer_count || 0
             const sessionTitle = livestream?.session_title || stream?.session_title || null
-            
+
             let category: { id: number; name: string; slug: string } | null = null
             const cat = livestream?.category || stream?.category
             if (cat) {
@@ -673,7 +673,7 @@ export async function GET(request: Request) {
         let authoritativeViewerCount: number | undefined = undefined
         let authoritativeTitle: string | null = null
         let authoritativeCategory: { id: number; name: string; slug: string } | null = null
-        
+
         // Track if we got a definitive API response (vs API failure)
         let apiResponseReceived = false
 
@@ -750,7 +750,7 @@ export async function GET(request: Request) {
                 streamStartedAt = v2Data.started_at
             }
         }
-        
+
         // Final fallback to channelData/livestream
         if (channelData) {
             if (viewerCount === 0 && livestream?.viewer_count) {
@@ -836,7 +836,7 @@ export async function GET(request: Request) {
             const lastCheckTime = activeSession.last_live_check_at?.getTime() || 0
             const timeSinceLastCheck = Date.now() - lastCheckTime
             const GRACE_PERIOD_MS = 5 * 60 * 1000 // 5 minutes
-            
+
             if (timeSinceLastCheck < GRACE_PERIOD_MS) {
                 console.log(`[Channel API] API failed but active session exists (last check ${Math.round(timeSinceLastCheck/1000)}s ago) - treating as LIVE`)
                 isLive = true
