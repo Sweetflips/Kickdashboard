@@ -531,15 +531,18 @@ async function buildOverallRowsV2(): Promise<RowV2[]> {
 
 async function buildDateFilteredRowsV2(dateFilter: DateRangeFilter): Promise<RowV2[]> {
     const pointAgg = await withRetry(
-        () => db.sweetCoinHistory.groupBy({
-            by: ['user_id'],
-            where: { earned_at: dateFilter },
-            _sum: { sweet_coins_earned: true },
-            _max: { earned_at: true },
-        }),
+        async () => {
+            const result = await db.sweetCoinHistory.groupBy({
+                by: ['user_id'] as const,
+                where: { earned_at: dateFilter },
+                _sum: { sweet_coins_earned: true },
+                _max: { earned_at: true },
+            })
+            return result
+        },
         3,
         'buildDateFilteredRowsV2: sweetCoinHistory groupBy'
-    ) as Array<{ user_id: bigint; _sum: { sweet_coins_earned: number | null }; _max: { earned_at: Date | null } }>
+    )
 
     if (pointAgg.length === 0) return []
 
