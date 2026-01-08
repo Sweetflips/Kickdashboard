@@ -124,7 +124,7 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
         try {
             // Unlock stale locks first (non-transactional, safe)
             await (db as any).$executeRaw`
-                UPDATE chat_jobs
+                UPDATE platform_chat_jobs
                 SET status = 'pending', locked_at = NULL
                 WHERE status = 'processing'
                 AND locked_at < ${lockExpiry}
@@ -134,13 +134,13 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
             const jobs = await (db as any).$queryRaw<ClaimedChatJob[]>`
                 WITH cte AS (
                     SELECT id
-                    FROM chat_jobs
+                    FROM platform_chat_jobs
                     WHERE status = 'pending'
                     ORDER BY created_at ASC
                     LIMIT ${batchSize}
                     FOR UPDATE SKIP LOCKED
                 )
-                UPDATE chat_jobs AS p
+                UPDATE platform_chat_jobs AS p
                 SET status = 'processing', locked_at = NOW(), attempts = attempts + 1
                 WHERE p.id IN (SELECT id FROM cte)
                 RETURNING p.id, p.message_id, p.payload, p.sender_user_id, p.broadcaster_user_id, p.stream_session_id, p.attempts
@@ -249,7 +249,7 @@ export async function getChatQueueStats(): Promise<{
             (db as any).chatJob.count({ where: { status: 'failed' } }),
             (db as any).$queryRaw<Array<{ count: bigint }>>`
                 SELECT COUNT(*)::bigint as count
-                FROM chat_jobs
+                FROM platform_chat_jobs
                 WHERE status = 'processing'
                 AND locked_at < NOW() - INTERVAL '5 minutes'
             `,
