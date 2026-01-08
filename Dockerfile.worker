@@ -6,9 +6,11 @@ WORKDIR /app
 # Install OpenSSL for Prisma and wget for healthcheck
 RUN apk add --no-cache openssl wget
 
-# Copy package files
+# Copy package files from point-worker (worker-specific package.json)
 COPY point-worker/package.json point-worker/package-lock.json ./
-COPY point-worker/prisma ./prisma/
+
+# Copy prisma schema
+COPY prisma ./prisma/
 
 # Install dependencies
 RUN npm ci --omit=dev
@@ -16,9 +18,9 @@ RUN npm ci --omit=dev
 # Generate Prisma client
 RUN npx prisma generate
 
-# Copy scripts and lib from point-worker
-COPY point-worker/scripts ./scripts/
-COPY point-worker/lib ./lib/
+# Copy scripts and lib from root (these are the same files)
+COPY scripts ./scripts/
+COPY lib ./lib/
 
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
