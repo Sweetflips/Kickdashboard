@@ -28,12 +28,21 @@ if (shouldRunWorkerModeEarly()) {
 } else {
   // Startup validation: fail fast on missing required config
   function validateConfig() {
-    const required = ['DATABASE_URL'];
-    const missing = required.filter((key) => !process.env[key]);
-    if (missing.length > 0) {
-      process.stdout.write('❌ FATAL: Missing required environment variables: ' + missing.join(', ') + '\n');
-      process.exit(1);
-    }
+  const isWorker = String(process.env.RUN_AS_WORKER || '').toLowerCase() === 'true'
+
+  // For web mode, allow the server to boot even if DATABASE_URL is missing so healthchecks can pass
+  // and the UI can show a meaningful error. Workers still require DATABASE_URL to function.
+  const required = isWorker ? ['DATABASE_URL'] : []
+  const missing = required.filter((key) => !process.env[key])
+
+  if (missing.length > 0) {
+    process.stdout.write('❌ FATAL: Missing required environment variables: ' + missing.join(', ') + '\n')
+    process.exit(1)
+  }
+
+  if (!process.env.DATABASE_URL) {
+    process.stdout.write('⚠️  WARNING: DATABASE_URL not set. Web will start, but DB-backed API routes will fail.\n')
+  }
   }
 
   try {
