@@ -24,8 +24,9 @@ function shouldRunWorkerModeEarly() {
 if (shouldRunWorkerModeEarly()) {
   process.stdout.write('🔧 start.js: Detected worker mode (missing .next or worker service). Starting start-worker.js...\n')
   require('./start-worker.js')
-  // start-worker.js owns the process lifecycle
-  process.exit(0)
+  // start-worker.js owns the process lifecycle; do NOT exit here
+  // (exiting would kill the health server / workers immediately)
+  return
 }
 
 // Startup validation: fail fast on missing required config
