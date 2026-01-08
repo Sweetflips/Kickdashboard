@@ -1,68 +1,51 @@
-# Web (Next.js) Dockerfile
-# Builds the Next app and runs `scripts/start.js` (which handles migrations + resilient start)
-#
-# IMPORTANT:
-# - `Dockerfile.worker` is for the worker service and should remain separate.
-# - The web runtime uses Prisma CLI for `migrate deploy`, so we keep devDependencies.
+# Worker Dockerfile (for point-worker branch)
+# Uses full node_modules (not standalone) because workers need tsx and prisma CLI
+# NO Next.js build - this is a background worker service
 
 FROM node:22-bookworm-slim AS base
 
+# Install dependencies
 FROM base AS deps
 WORKDIR /app
 
-# Keep npm modern for lockfile compatibility
+# Update npm to latest version
 RUN npm install -g npm@latest
 
-# Runtime/build deps needed by Prisma (and TLS)
+# Install OpenSSL for Prisma (needed during postinstall)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
     openssl \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy package files and prisma schema
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
+
+# Install ALL dependencies (including devDependencies for tsx)
 RUN npm ci
 
-FROM base AS builder
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    openssl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-# Generates Prisma client + builds Next.js (.next)
-RUN npm run build
-
+# Production image for worker
 FROM base AS runner
 WORKDIR /app
+
 ENV NODE_ENV=production
 
+# Install runtime dependencies (ca-certificates for TLS, openssl for Prisma)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     openssl \
     && rm -rf /var/lib/apt/lists/*
 
-# node_modules must include prisma + tsx at runtime (migrations + workers)
+# Copy node_modules (includes tsx, prisma CLI, etc.)
 COPY --from=deps /app/node_modules ./node_modules
 
-# Next build output + public assets
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
+# Copy application files
+COPY package.json ./
+COPY prisma ./prisma
+COPY scripts ./scripts
+COPY lib ./lib
 
-# Runtime files referenced by scripts / prisma migrate
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/next.config.js ./next.config.js
-COPY --from=builder /app/tsconfig.json ./tsconfig.json
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.js ./prisma.config.js
-COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/lib ./lib
+# Expose port for healthcheck (Railway injects PORT at runtime)
+EXPOSE 8080
 
-# Railway injects PORT at runtime; Next listens on it via scripts/start.js
-EXPOSE 3000
-
-CMD ["node", "scripts/start.js"]
+# Start the worker directly
+CMD ["node", "scripts/start-worker.js"]
