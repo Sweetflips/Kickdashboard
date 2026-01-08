@@ -67,7 +67,12 @@ function startWebServer() {
     const crypto = require('crypto');
 
     const port = process.env.PORT || '3000';
-    const hostname = process.env.HOSTNAME || '0.0.0.0';
+
+    // IMPORTANT (Railway/containers):
+    // `HOSTNAME` is commonly set by Docker to the container id/name and often resolves to 127.x.x.x in /etc/hosts.
+    // Binding Next.js to that value can make the server unreachable from outside the container → healthchecks fail.
+    // Only honor explicit bind host vars; otherwise always bind to all interfaces.
+    const hostname = process.env.HOST || process.env.BIND_HOST || '0.0.0.0';
 
     // Add node_modules/.bin to PATH so 'next' command is found
     const binPath = path.join(process.cwd(), 'node_modules', '.bin');
