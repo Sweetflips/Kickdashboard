@@ -14,7 +14,7 @@
 
 console.log('')
 console.log('========================================')
-console.log('🔄 CHAT WORKER STARTING')
+console.log('🔄 CHAT WORKER STARTING (v6)')
 console.log('========================================')
 console.log('')
 
