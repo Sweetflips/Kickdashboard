@@ -4,7 +4,7 @@
 providers = ["node"]
 
 [phases.setup]
-nixPkgs = ["nodejs_24", "npm-10_x", "openssl"]
+nixPkgs = ["nodejs", "npm-10_x", "openssl"]
 
 [phases.install]
 cmds = ["npm ci", "npx prisma generate"]
