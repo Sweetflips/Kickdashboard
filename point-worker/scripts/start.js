@@ -59,13 +59,16 @@ function shouldRunWorkerModeEarly() {
 
 if (shouldRunWorkerModeEarly()) {
   process.stdout.write('🔧 start.js: Detected worker mode (missing .next or worker service). Starting start-worker.js...\n')
-  // Close temporary health server - start-worker.js will create its own
+  // Close temporary health server FIRST, then start worker
+  // Must wait for close to complete to avoid EADDRINUSE when start-worker.js binds to same port
   if (global.__healthServer) {
     global.__healthServer.close(() => {
       process.stdout.write('ℹ️  Temporary health server closed, start-worker.js taking over\n');
+      require('./start-worker.js');
     });
+  } else {
+    require('./start-worker.js');
   }
-  require('./start-worker.js')
   // start-worker.js owns the process lifecycle; do NOT exit here.
 } else {
   // Startup validation: fail fast on missing required config
