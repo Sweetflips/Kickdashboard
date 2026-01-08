@@ -5,6 +5,7 @@
     "dockerfilePath": "Dockerfile.worker"
   },
   "deploy": {
+    "startCommand": "node scripts/start-worker.js",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
