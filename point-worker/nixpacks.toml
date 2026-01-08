@@ -1,0 +1,16 @@
+# Railpack/Nixpacks configuration for Point Worker
+# Auto-detects Node.js and builds without Dockerfile
+
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_22", "openssl"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npx prisma generate"]
+
+[start]
+cmd = "node scripts/start-worker.js"
