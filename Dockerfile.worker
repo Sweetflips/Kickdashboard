@@ -1,6 +1,9 @@
 # Worker Dockerfile - uses Node 22.12+ for Prisma 7.2.0 compatibility
 FROM node:22.13-alpine3.21 AS base
 
+# Cache bust argument
+ARG CACHEBUST=1
+
 WORKDIR /app
 
 # Install OpenSSL for Prisma and wget for healthcheck
@@ -17,6 +20,10 @@ RUN npm ci --omit=dev
 
 # Generate Prisma client
 RUN npx prisma generate
+
+# Invalidate cache for fresh scripts
+ARG SCRIPT_VERSION=2
+RUN echo "Script version: $SCRIPT_VERSION"
 
 # Copy scripts and lib
 COPY scripts ./scripts/
