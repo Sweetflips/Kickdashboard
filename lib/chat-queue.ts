@@ -154,10 +154,11 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
             })
 
             if (jobs.length === 0) {
+                logDebug(`[claimChatJobs] No jobs claimed despite pending jobs`)
                 return []
             }
 
-            logDebug(`[claimChatJobs] Claimed ${jobs.length} jobs`)
+            console.log(`[claimChatJobs] Claimed ${jobs.length} jobs`)
             return jobs
         } catch (error: any) {
             const isRetryableError = error?.code === 'P2024' ||
@@ -175,9 +176,9 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
                                     error?.message?.includes('PrismaClientInitializationError')
 
             if (isConnectionError) {
-                logErrorRateLimited('[claimChatJobs] Database connection error', error)
+                console.error('[claimChatJobs] Database connection error:', error?.message)
             } else {
-                logErrorRateLimited('[claimChatJobs] Failed to claim jobs', error)
+                console.error('[claimChatJobs] Failed to claim jobs:', error?.message)
             }
             return []
         }
