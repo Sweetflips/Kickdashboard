@@ -1,0 +1,23 @@
+# Point Worker - Nixpacks configuration
+# Uses parent directory files during build
+
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_22", "npm-10_x", "openssl"]
+
+[phases.install]
+# Copy files from parent directory (Railway's build context includes full repo)
+cmds = [
+  "cp ../package.json ../package-lock.json .",
+  "cp -r ../prisma ../scripts ../lib .",
+  "npm ci",
+  "npx prisma generate"
+]
+
+# No Next.js build needed for worker
+[phases.build]
+cmds = ["echo '⚡ Worker mode - no build needed'"]
+
+[start]
+cmd = "node scripts/start-worker.js"
