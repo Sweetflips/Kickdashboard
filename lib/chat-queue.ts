@@ -122,36 +122,29 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            const jobs = await (db as any).$transaction(async (tx: any) => {
-                // Unlock stale locks
-                await tx.$executeRaw`
-                    UPDATE chat_jobs
-                    SET status = 'pending', locked_at = NULL
-                    WHERE status = 'processing'
-                    AND locked_at < ${lockExpiry}
-                `
+            // Unlock stale locks first (non-transactional, safe)
+            await (db as any).$executeRaw`
+                UPDATE chat_jobs
+                SET status = 'pending', locked_at = NULL
+                WHERE status = 'processing'
+                AND locked_at < ${lockExpiry}
+            `
 
-                // Claim jobs atomically
-                const claimedJobs = await tx.$queryRaw<ClaimedChatJob[]>`
-                    WITH cte AS (
-                        SELECT id
-                        FROM chat_jobs
-                        WHERE status = 'pending'
-                        ORDER BY created_at ASC
-                        LIMIT ${batchSize}
-                        FOR UPDATE SKIP LOCKED
-                    )
-                    UPDATE chat_jobs AS p
-                    SET status = 'processing', locked_at = NOW(), attempts = attempts + 1
-                    WHERE p.id IN (SELECT id FROM cte)
-                    RETURNING p.id, p.message_id, p.payload, p.sender_user_id, p.broadcaster_user_id, p.stream_session_id, p.attempts
-                `
-
-                return claimedJobs || []
-            }, {
-                maxWait: 10000,
-                timeout: 15000,
-            })
+            // Claim jobs atomically using FOR UPDATE SKIP LOCKED (no interactive transaction needed)
+            const jobs = await (db as any).$queryRaw<ClaimedChatJob[]>`
+                WITH cte AS (
+                    SELECT id
+                    FROM chat_jobs
+                    WHERE status = 'pending'
+                    ORDER BY created_at ASC
+                    LIMIT ${batchSize}
+                    FOR UPDATE SKIP LOCKED
+                )
+                UPDATE chat_jobs AS p
+                SET status = 'processing', locked_at = NOW(), attempts = attempts + 1
+                WHERE p.id IN (SELECT id FROM cte)
+                RETURNING p.id, p.message_id, p.payload, p.sender_user_id, p.broadcaster_user_id, p.stream_session_id, p.attempts
+            ` || []
 
             if (jobs.length === 0) {
                 logDebug(`[claimChatJobs] No jobs claimed despite pending jobs`)
