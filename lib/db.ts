@@ -26,13 +26,21 @@ function createPrismaClientWithAccelerate(accelerateUrl: string) {
   const { withAccelerate } = require('@prisma/extension-accelerate')
   
   const clientConfig: ConstructorParameters<typeof PrismaClient>[0] = {
+    // Prisma 7+ validation: Accelerate engine requires accelerateUrl in constructor options
+    // when using the "client" engine type (no local query engine).
+    // The extension enables Accelerate features; the constructor option satisfies validation.
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - accelerateUrl is supported at runtime but may not be in older Prisma TS types
+    accelerateUrl,
     log: [],
     transactionOptions: {
       maxWait: 5000,
       timeout: 15000,
     },
   }
-  return new PrismaClient(clientConfig).$extends(withAccelerate({ accelerateUrl }))
+  // withAccelerate() should be applied without needing to re-pass the URL here;
+  // accelerateUrl is already supplied to the PrismaClient constructor.
+  return new PrismaClient(clientConfig).$extends(withAccelerate())
 }
 
 // Create standard Prisma Client using pg adapter (for direct PostgreSQL connections)
