@@ -1,5 +1,5 @@
 // @ts-check
-require('dotenv/config')
+// dotenv not needed - Railway injects env vars at runtime
 
 // Get the direct URL for migrations (can't use Accelerate URLs for migrations)
 const directUrl = process.env.DIRECT_URL || ''
