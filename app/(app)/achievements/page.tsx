@@ -172,13 +172,6 @@ export default function AchievementsPage() {
         ? ACHIEVEMENTS
         : ACHIEVEMENTS.filter(a => a.category === selectedCategory)
 
-    const totalPossiblePoints = ACHIEVEMENTS.reduce((sum, a) => {
-        if (a.tiers) {
-            return sum + a.tiers.reduce((tierSum, t) => tierSum + t.reward, 0)
-        }
-        return sum + a.reward
-    }, 0)
-
     const unlockedCount = ACHIEVEMENTS.filter(a => achievementStatuses[a.id]?.unlocked).length
 
     const totalEarnedPoints = ACHIEVEMENTS.reduce((sum, a) => {
@@ -282,7 +275,7 @@ export default function AchievementsPage() {
                             </div>
                             <div>
                                 <p className="text-small text-gray-600 dark:text-kick-text-secondary">Total Sweet Coins</p>
-                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{totalPossiblePoints.toLocaleString()}</p>
+                                <p className="text-h4 font-bold text-gray-900 dark:text-kick-text">{userBalance.toLocaleString()}</p>
                             </div>
                         </div>
                     </div>
