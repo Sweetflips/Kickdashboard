@@ -5,6 +5,8 @@
 #   SKIP_NEXTJS_BUILD=true
 #   RUN_AS_WORKER=true
 
+providers = ["node"]
+
 [phases.setup]
 nixPkgs = ["nodejs_22", "npm-10_x", "openssl", "cacert"]
 
@@ -22,6 +24,3 @@ cacheDirectories = [".next/cache"]
 
 [start]
 cmd = "node scripts/start.js"
-
-[providers]
-node = "22"

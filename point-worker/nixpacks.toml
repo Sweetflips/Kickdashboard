@@ -2,6 +2,8 @@
 # Root directory: /point-worker
 # Uses parent directory for source files
 
+providers = ["node"]
+
 [phases.setup]
 nixPkgs = ["nodejs_22", "npm-10_x", "openssl", "cacert"]
 
@@ -19,6 +21,3 @@ cmds = ["echo '⚡ Worker mode - no build needed'"]
 [start]
 # Start worker from parent directory
 cmd = "cd .. && node scripts/start-worker.js"
-
-[providers]
-node = "22"
