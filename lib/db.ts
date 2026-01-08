@@ -1,38 +1,99 @@
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
-import pg from 'pg'
+import { Pool } from 'pg'
+import { logErrorRateLimited } from './rate-limited-logger'
 
+// Check if we're using an Accelerate URL
+const isAccelerateUrl = (url: string) => {
+  return url.startsWith('prisma://') || url.startsWith('prisma+postgres://')
+}
+
+// Singleton storage - use any to avoid Prisma 7 type union issues
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+  prisma: any
+  pgPool: Pool | undefined
 }
 
-function createClient() {
-  // Use DIRECT_URL for direct PostgreSQL connection (preferred)
-  // Fall back to DATABASE_URL if it's a direct postgres:// URL
-  const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || ''
+// Get raw DATABASE_URL
+const getRawDatabaseUrl = () => {
+  return process.env.DATABASE_URL || ''
+}
 
-  // Skip Accelerate URLs - use direct connection only
-  const isAccelerateUrl = databaseUrl.startsWith('prisma://') || databaseUrl.startsWith('prisma+postgres://')
-
-  if (isAccelerateUrl) {
-    console.error('[Prisma] ERROR: Accelerate URL detected but we need a direct PostgreSQL URL')
-    console.error('[Prisma] Set DIRECT_URL to your PostgreSQL connection string')
-    throw new Error('DIRECT_URL must be set to a direct PostgreSQL connection string')
+// Create Prisma Client with Accelerate extension
+// ONLY used when DATABASE_URL starts with prisma:// or prisma+postgres://
+function createPrismaClientWithAccelerate(accelerateUrl: string) {
+  const { withAccelerate } = require('@prisma/extension-accelerate')
+  
+  const clientConfig: ConstructorParameters<typeof PrismaClient>[0] = {
+    log: [],
+    transactionOptions: {
+      maxWait: 5000,
+      timeout: 15000,
+    },
   }
+  return new PrismaClient(clientConfig).$extends(withAccelerate({ accelerateUrl }))
+}
 
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL or DIRECT_URL must be set')
-  }
-
-  console.log('[Prisma] Using direct PostgreSQL connection')
-
-  // Create pg Pool for the adapter
-  const pool = new pg.Pool({ connectionString: databaseUrl })
+// Create standard Prisma Client using pg adapter (for direct PostgreSQL connections)
+// Used when DATABASE_URL is a standard postgresql:// URL
+// The pg adapter is required because Prisma 7 client was generated with --no-engine
+function createStandardPrismaClient() {
+  const databaseUrl = getRawDatabaseUrl()
+  
+  // Create connection pool with appropriate settings
+  const isWorker = process.env.POINT_WORKER === 'true' || process.env.RAILWAY_SERVICE_NAME?.includes('worker')
+  const connectionLimit = isWorker ? 10 : 20
+  
+  // Create pg Pool
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: connectionLimit,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  })
+  
+  // Store pool in global for cleanup
+  globalForPrisma.pgPool = pool
+  
+  // Create Prisma adapter
   const adapter = new PrismaPg(pool)
-
-  return new PrismaClient({ adapter })
+  
+  // Create Prisma Client with pg adapter
+  return new PrismaClient({
+    adapter,
+    log: [],
+    transactionOptions: {
+      maxWait: 5000,
+      timeout: 15000,
+    },
+  })
 }
 
-export const db = globalForPrisma.prisma ?? (globalForPrisma.prisma = createClient())
+// Create appropriate Prisma Client based on DATABASE_URL
+// IMPORTANT: All client types connect to the SAME database
+// - Standard Client with pg adapter: Direct PostgreSQL connection (your current setup)
+// - Accelerate Client: Connection through Prisma Accelerate proxy (caching, pooling)
+// - Both read/write the same data - switching between them won't cause data issues
+function createPrismaClient(): any {
+  const databaseUrl = getRawDatabaseUrl()
+  
+  // Conditional: Use Accelerate client ONLY if URL starts with prisma://
+  if (isAccelerateUrl(databaseUrl)) {
+    console.log('[db.ts] Using Prisma Accelerate client (prisma:// URL detected)')
+    return createPrismaClientWithAccelerate(databaseUrl)
+  }
+  
+  // Otherwise, use standard PostgreSQL client with pg adapter
+  console.log('[db.ts] Using standard Prisma client with pg adapter (direct PostgreSQL connection)')
+  return createStandardPrismaClient()
+}
+
+// Export the singleton instance as any to ensure $transaction and model calls
+// work correctly across the entire project regardless of the underlying client type
+export const db: any = globalForPrisma.prisma ?? createPrismaClient()
+
+// Store in global
+globalForPrisma.prisma = db
+
 export default db

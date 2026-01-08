@@ -75,7 +75,6 @@ function parseV2ChannelData(data: any): {
     chatroom_id?: number
 } | null {
     try {
-        const prisma = db as any
         const livestream = data.livestream
         const chatroom = data.chatroom
         let category: { id: number; name: string } | null = null
@@ -146,10 +145,13 @@ function normalizeIsLiveFlag(raw: unknown): boolean {
 }
 
 /**
- * Check live status using official Kick API /channels endpoint
- * Directly queries the channel by slug - no need to fetch all livestreams
+ * Check live status using official Kick API /livestreams endpoint (authoritative source)
+ * According to docs.kick.com/apis/livestreams:
+ * - If endpoint returns data array with items, stream is LIVE
+ * - If endpoint returns empty array, stream is OFFLINE
+ * This is more reliable than checking is_live flag which may be missing or undefined
  *
- * Returns isLive status, started_at, and thumbnail
+ * Returns isLive status, started_at, and thumbnail from authoritative /livestreams endpoint
  */
 async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number): Promise<{
     isLive: boolean
@@ -159,84 +161,237 @@ async function checkLiveStatusFromAPI(slug: string, broadcasterUserId?: number):
     sessionTitle?: string | null
     category?: { id: number; name: string; slug: string } | null
 }> {
+
     try {
-        // Use /channels endpoint directly - no need to fetch 100 random livestreams
+        // First, try the official /livestreams endpoint if we have broadcaster_user_id
+        // This is the authoritative source for live status
+        // Note: The API filter is unreliable, so we fetch all livestreams and filter client-side
+        if (broadcasterUserId) {
+            // Don't rely on API filter - fetch recent livestreams and filter ourselves
+            const livestreamsUrl = `${KICK_API_BASE}/livestreams?limit=100`
+
+            // Acquire rate limit slot before making request
+            const releaseSlot = await acquireRateLimitSlot()
+            try {
+                // Try without auth first
+                let livestreamsResponse = await fetch(livestreamsUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                    cache: 'no-store',
+                })
+
+                // If 401, retry with authentication
+                if (livestreamsResponse.status === 401) {
+                    try {
+                        const token = await getBroadcasterToken()
+                        const clientId = process.env.KICK_CLIENT_ID
+
+                        const authHeaders: Record<string, string> = {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                        }
+                        if (clientId) {
+                            authHeaders['Client-Id'] = clientId
+                        }
+
+                        livestreamsResponse = await fetch(livestreamsUrl, {
+                            headers: authHeaders,
+                            cache: 'no-store',
+                        })
+                    } catch (authError) {
+                        console.warn(`[Channel API] Failed to get auth token:`, authError instanceof Error ? authError.message : 'Unknown error')
+                    }
+                }
+
+                if (livestreamsResponse.ok) {
+                    const livestreamsData = await livestreamsResponse.json()
+
+                    if (!Array.isArray(livestreamsData.data)) {
+                        console.warn('[Channel API] Unexpected /livestreams response shape, falling back to /channels:', {
+                            hasData: 'data' in livestreamsData,
+                            dataType: typeof livestreamsData.data,
+                        })
+                    } else if (livestreamsData.data.length === 0) {
+                        // Empty data array means stream is OFFLINE
+                        return { isLive: false }
+                    } else {
+                        // Non-empty array means *something* is live, but the API filter is known to be unreliable.
+                        // We must only treat the channel as live if we can find a matching livestream entry.
+                        const slugLower = slug.toLowerCase()
+                        const broadcasterIdStr = String(broadcasterUserId)
+
+                        // Try to find matching livestream - check multiple field variations
+                        const livestream = livestreamsData.data.find((ls: any) => {
+                            const lsBroadcaster = ls?.broadcaster_user_id
+                            const lsSlug = typeof ls?.slug === 'string' ? ls.slug.toLowerCase() : null
+                            const lsChannelSlug = typeof ls?.channel_slug === 'string' ? ls.channel_slug.toLowerCase() : null
+                            const lsChannelSlugAlt = typeof ls?.channel?.slug === 'string' ? ls.channel.slug.toLowerCase() : null
+                            const lsChannelId = ls?.channel_id
+
+                            // Match by broadcaster ID (most reliable)
+                            if (String(lsBroadcaster) === broadcasterIdStr) {
+                                return true
+                            }
+
+                            // Match by slug variations
+                            if (lsSlug === slugLower || lsChannelSlug === slugLower || lsChannelSlugAlt === slugLower) {
+                                return true
+                            }
+
+                            return false
+                        }) as any | undefined
+
+                        if (livestream) {
+                            // Extract all available data from authoritative source
+                            const startedAt = livestream.started_at || null
+                            let thumbnailUrl: string | null = null
+                            if (livestream.thumbnail) {
+                                thumbnailUrl = typeof livestream.thumbnail === 'string'
+                                    ? livestream.thumbnail
+                                    : livestream.thumbnail.url || null
+                            }
+                            
+                            // Extract viewer count, title, and category from livestream data
+                            const viewerCount = livestream.viewer_count || livestream.viewers || 0
+                            const sessionTitle = livestream.session_title || livestream.stream_title || livestream.title || null
+                            let category: { id: number; name: string; slug: string } | null = null
+                            if (livestream.category) {
+                                category = {
+                                    id: livestream.category.id || 0,
+                                    name: livestream.category.name || livestream.category.title || '',
+                                    slug: livestream.category.slug || '',
+                                }
+                            } else if (livestream.categories && livestream.categories.length > 0) {
+                                const cat = livestream.categories[0]
+                                category = {
+                                    id: cat.id || 0,
+                                    name: cat.name || cat.title || '',
+                                    slug: cat.slug || '',
+                                }
+                            }
+                            
+                            console.log(`[Channel API] Found matching livestream for ${slug} (broadcaster: ${broadcasterUserId}, viewers: ${viewerCount})`)
+                            return { isLive: true, startedAt, thumbnailUrl, viewerCount, sessionTitle, category }
+                        }
+
+                        // Filter mismatch: don't assume live. Fall back to /channels to avoid false-positive LIVE state.
+                        // Log detailed info for debugging
+                        const sampleFields = livestreamsData.data.slice(0, 3).map((ls: any) => ({
+                            broadcaster_user_id: ls?.broadcaster_user_id,
+                            slug: ls?.slug,
+                            channel_slug: ls?.channel_slug,
+                            channel_id: ls?.channel_id,
+                            channel: ls?.channel ? { slug: ls.channel.slug, id: ls.channel.id } : null,
+                            allKeys: Object.keys(ls || {}).slice(0, 10), // First 10 keys for debugging
+                        }))
+
+                        // Check if sweetflips might be in the full list with different field structure
+                        type LivestreamSlugInfo = {
+                            broadcaster: unknown
+                            slug: string | null
+                            channel_slug: string | null
+                            channel_slug_alt: string | null
+                        }
+
+                        const allSlugs: LivestreamSlugInfo[] = livestreamsData.data.map((ls: any): LivestreamSlugInfo => ({
+                            broadcaster: ls?.broadcaster_user_id,
+                            slug: typeof ls?.slug === 'string' ? ls.slug : null,
+                            channel_slug: typeof ls?.channel_slug === 'string' ? ls.channel_slug : null,
+                            channel_slug_alt: typeof ls?.channel?.slug === 'string' ? ls.channel.slug : null,
+                        }))
+                        const potentialMatch = allSlugs.find((s: LivestreamSlugInfo) =>
+                            String(s.broadcaster) === broadcasterIdStr ||
+                            s.slug?.toLowerCase() === slugLower ||
+                            s.channel_slug?.toLowerCase() === slugLower ||
+                            s.channel_slug_alt?.toLowerCase() === slugLower
+                        )
+
+                        console.warn('[Channel API] /livestreams returned items but none match requested broadcaster/slug; falling back to /channels.', {
+                            requested: { slug, broadcasterUserId },
+                            sample: sampleFields,
+                            totalReturned: livestreamsData.data.length,
+                            potentialMatch: potentialMatch || 'none found',
+                            allBroadcasterIds: [...new Set(livestreamsData.data.map((ls: any) => ls?.broadcaster_user_id))].slice(0, 10),
+                        })
+                    }
+                } else {
+                    console.warn(`[Channel API] /livestreams endpoint returned ${livestreamsResponse.status}`)
+                }
+            } finally {
+                releaseSlot()
+            }
+        }
+
+        // Fallback: Use official /channels endpoint with auth
         const channelsUrl = `${KICK_API_BASE}/channels?slug[]=${encodeURIComponent(slug)}`
 
-        const releaseSlot = await acquireRateLimitSlot()
         try {
-            const token = await getBroadcasterToken()
-            const clientId = process.env.KICK_CLIENT_ID
+            // Acquire rate limit slot before making request
+            const releaseSlot = await acquireRateLimitSlot()
+            try {
+                const token = await getBroadcasterToken()
+                const clientId = process.env.KICK_CLIENT_ID
 
-            const authHeaders: Record<string, string> = {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            }
-            if (clientId) {
-                authHeaders['Client-Id'] = clientId
-            }
-
-            const response = await fetch(channelsUrl, {
-                headers: authHeaders,
-                cache: 'no-store',
-            })
-
-            if (!response.ok) {
-                console.warn(`[Channel API] /channels endpoint returned ${response.status}`)
-                return { isLive: false }
-            }
-
-            const responseData = await response.json()
-
-            // Parse response - format is { data: [channel] }
-            let channel = null
-            if (Array.isArray(responseData.data) && responseData.data.length > 0) {
-                channel = responseData.data[0]
-            } else if (responseData.data && typeof responseData.data === 'object') {
-                channel = responseData.data
-            }
-
-            if (!channel) {
-                return { isLive: false }
-            }
-
-            // Check stream.is_live from /channels endpoint
-            const stream = channel.stream
-            const isLive = stream && normalizeIsLiveFlag(stream.is_live)
-
-            console.log(`[Channel API] Official API for ${slug}: is_live=${isLive}, viewers=${stream?.viewer_count}`)
-
-            if (!isLive) {
-                return { isLive: false }
-            }
-
-            // Extract data from channel/livestream
-            const livestream = channel.livestream
-            const startedAt = livestream?.started_at || stream?.started_at || null
-            let thumbnailUrl: string | null = null
-            if (livestream?.thumbnail) {
-                thumbnailUrl = typeof livestream.thumbnail === 'string'
-                    ? livestream.thumbnail
-                    : livestream.thumbnail.url || null
-            }
-
-            const viewerCount = stream?.viewer_count || livestream?.viewer_count || 0
-            const sessionTitle = livestream?.session_title || stream?.session_title || null
-
-            let category: { id: number; name: string; slug: string } | null = null
-            const cat = livestream?.category || stream?.category
-            if (cat) {
-                category = {
-                    id: cat.id || 0,
-                    name: cat.name || cat.title || '',
-                    slug: cat.slug || '',
+                const authHeaders: Record<string, string> = {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
                 }
-            }
+                if (clientId) {
+                    authHeaders['Client-Id'] = clientId
+                }
 
-            return { isLive: true, startedAt, thumbnailUrl, viewerCount, sessionTitle, category }
-        } finally {
-            releaseSlot()
+                const response = await fetch(channelsUrl, {
+                    headers: authHeaders,
+                    cache: 'no-store',
+                })
+
+                if (!response.ok) {
+                    console.warn(`[Channel API] /channels endpoint returned ${response.status}`)
+                    return { isLive: false }
+                }
+
+                const responseData = await response.json()
+
+                // Parse response - format is { data: [channel] }
+                let channel = null
+                if (Array.isArray(responseData.data) && responseData.data.length > 0) {
+                    channel = responseData.data[0]
+                } else if (responseData.data && typeof responseData.data === 'object') {
+                    channel = responseData.data
+                }
+
+                if (!channel) {
+                    console.log(`[Channel API] /channels returned no channel data`)
+                    return { isLive: false }
+                }
+
+                // Check stream.is_live from /channels endpoint (normalize to avoid truthy "0"/"false")
+                const stream = channel.stream
+                if (!stream || !normalizeIsLiveFlag(stream.is_live)) {
+                    return { isLive: false }
+                }
+
+                // Extract started_at and thumbnail if available from channel data
+                const livestream = channel.livestream
+                const startedAt = livestream?.started_at || null
+                let thumbnailUrl: string | null = null
+                if (livestream?.thumbnail) {
+                    thumbnailUrl = typeof livestream.thumbnail === 'string'
+                        ? livestream.thumbnail
+                        : livestream.thumbnail.url || null
+                }
+
+                return { isLive: true, startedAt, thumbnailUrl }
+            } finally {
+                releaseSlot()
+            }
+        } catch (fallbackError) {
+            console.warn(`[Channel API] Fallback /channels failed:`, fallbackError instanceof Error ? fallbackError.message : 'Unknown error')
+            return { isLive: false }
         }
     } catch (error) {
         console.warn(`[Channel API] Failed to check API:`, error instanceof Error ? error.message : 'Unknown error')
@@ -269,11 +424,9 @@ async function fetchV2ChannelDataWithDedup(slug: string): Promise<{
     // Create new request promise
     const requestPromise = (async () => {
         try {
-            const prisma = db as any
             const url = `https://kick.com/api/v2/channels/${slug.toLowerCase()}`
             const releaseSlot = await acquireRateLimitSlot()
             try {
-                const prisma = db as any
                 const controller = new AbortController()
                 const timeoutId = setTimeout(() => controller.abort(), 10000) // Increased to 10s
 
@@ -359,7 +512,6 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
     for (let attempt = 0; attempt < retries; attempt++) {
         const releaseSlot = await acquireRateLimitSlot()
         try {
-            const prisma = db as any
             const controller = new AbortController()
             const timeoutId = setTimeout(() => controller.abort(), 8000)
 
@@ -377,7 +529,6 @@ async function fetchChannelWithRetry(slug: string, retries = MAX_RETRIES): Promi
             // If 401, try with auth
             if (response.status === 401) {
                 try {
-                    const prisma = db as any
                     let token = await getBroadcasterToken()
                     const clientId = process.env.KICK_CLIENT_ID
 
@@ -482,7 +633,6 @@ async function trackStreamSession(
     }
 
     try {
-        const prisma = db as any
         const broadcasterIdBigInt = BigInt(broadcasterUserId)
 
         if (isLive) {
@@ -558,7 +708,6 @@ export async function GET(request: Request) {
     const slug = searchParams.get('slug') || 'sweetflips'
 
     try {
-        const prisma = db as any
         // Check cache first
         const cachedData = getCachedChannelData(slug)
         if (cachedData) {
@@ -790,9 +939,8 @@ export async function GET(request: Request) {
         } | null = null
         if (broadcasterUserId) {
             try {
-                const prisma = db as any
                 const broadcasterIdBigInt = BigInt(broadcasterUserId)
-                activeSession = await prisma.streamSession.findFirst({
+                activeSession = await db.streamSession.findFirst({
                     where: {
                         broadcaster_user_id: broadcasterIdBigInt,
                         ended_at: null,
@@ -867,7 +1015,6 @@ export async function GET(request: Request) {
         let lastLiveTime: Date | null = null
 
         try {
-            const prisma = db as any
             // If v2 data didn't provide follower count, try from channelData
             if (followerCount === 0) {
                 followerCount = channelData.followers_count ||
@@ -888,7 +1035,7 @@ export async function GET(request: Request) {
 
             // Get last live time from database
             if (broadcasterUserId) {
-                const lastSession = await prisma.streamSession.findFirst({
+                const lastSession = await db.streamSession.findFirst({
                     where: {
                         broadcaster_user_id: BigInt(broadcasterUserId),
                     },
