@@ -24,42 +24,38 @@ function shouldRunWorkerModeEarly() {
 if (shouldRunWorkerModeEarly()) {
   process.stdout.write('🔧 start.js: Detected worker mode (missing .next or worker service). Starting start-worker.js...\n')
   require('./start-worker.js')
-  // start-worker.js owns the process lifecycle
-  process.exit(0)
-}
+  // start-worker.js owns the process lifecycle; do NOT exit here.
+} else {
+  // Startup validation: fail fast on missing required config
+  function validateConfig() {
+    const required = ['DATABASE_URL'];
+    const missing = required.filter((key) => !process.env[key]);
+    if (missing.length > 0) {
+      process.stdout.write('❌ FATAL: Missing required environment variables: ' + missing.join(', ') + '\n');
+      process.exit(1);
+    }
+  }
 
-// Startup validation: fail fast on missing required config
-function validateConfig() {
-  const required = ['DATABASE_URL'];
-  const missing = required.filter((key) => !process.env[key]);
-  if (missing.length > 0) {
-    process.stdout.write('❌ FATAL: Missing required environment variables: ' + missing.join(', ') + '\n');
+  try {
+    validateConfig();
+
+    process.stdout.write('🔧 start.js: Modules loaded\n');
+    process.stdout.write('📍 CWD: ' + process.cwd() + '\n');
+    process.stdout.write('📍 PORT: ' + process.env.PORT + '\n');
+    process.stdout.write('📍 RUN_AS_WORKER: ' + process.env.RUN_AS_WORKER + '\n');
+
+    // Check if this should run as worker instead of web server
+    if (process.env.RUN_AS_WORKER === 'true') {
+      process.stdout.write('🔧 RUN_AS_WORKER=true, starting worker mode...\n');
+      require('./start-worker.js');
+    } else {
+      startWebServer();
+    }
+  } catch (err) {
+    process.stdout.write('❌ FATAL ERROR: ' + err.message + '\n');
+    process.stdout.write('❌ Stack: ' + err.stack + '\n');
     process.exit(1);
   }
-}
-
-try {
-  validateConfig();
-
-  const { spawn, exec } = require('child_process');
-  const path = require('path');
-
-  process.stdout.write('🔧 start.js: Modules loaded\n');
-  process.stdout.write('📍 CWD: ' + process.cwd() + '\n');
-  process.stdout.write('📍 PORT: ' + process.env.PORT + '\n');
-  process.stdout.write('📍 RUN_AS_WORKER: ' + process.env.RUN_AS_WORKER + '\n');
-
-  // Check if this should run as worker instead of web server
-  if (process.env.RUN_AS_WORKER === 'true') {
-    process.stdout.write('🔧 RUN_AS_WORKER=true, starting worker mode...\n');
-    require('./start-worker.js');
-  } else {
-    startWebServer();
-  }
-} catch (err) {
-  process.stdout.write('❌ FATAL ERROR: ' + err.message + '\n');
-  process.stdout.write('❌ Stack: ' + err.stack + '\n');
-  process.exit(1);
 }
 
 function startWebServer() {
