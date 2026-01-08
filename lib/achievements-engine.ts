@@ -145,45 +145,47 @@ export async function evaluateAchievementsForUser(
       unlocked.push(achievementId)
 
       if (!currentStatus) {
-        // Create as UNLOCKED
-        await (db as any).userAchievement.create({
-          data: {
-            user_id: auth.userId,
-            achievement_id: achievementId,
-            status: 'UNLOCKED',
-            unlocked_at: now,
-          },
-        })
-        newlyUnlocked.push(achievementId)
-      } else if (currentStatus === 'LOCKED') {
-        // Upgrade to UNLOCKED
-        await (db as any).userAchievement.update({
-          where: {
-            user_id_achievement_id: {
+        // Create as UNLOCKED - wrap in try/catch to handle missing AchievementDefinition
+        try {
+          await (db as any).userAchievement.create({
+            data: {
               user_id: auth.userId,
               achievement_id: achievementId,
+              status: 'UNLOCKED',
+              unlocked_at: now,
             },
-          },
-          data: {
-            status: 'UNLOCKED',
-            unlocked_at: now,
-          },
-        })
-        newlyUnlocked.push(achievementId)
+          })
+          newlyUnlocked.push(achievementId)
+        } catch (e: any) {
+          // Ignore foreign key errors - achievement definition may not exist yet
+          if (e?.code !== 'P2003') {
+            console.error(`[Achievements] Failed to create unlock for ${achievementId}:`, e?.message)
+          }
+        }
+      } else if (currentStatus === 'LOCKED') {
+        // Upgrade to UNLOCKED
+        try {
+          await (db as any).userAchievement.update({
+            where: {
+              user_id_achievement_id: {
+                user_id: auth.userId,
+                achievement_id: achievementId,
+              },
+            },
+            data: {
+              status: 'UNLOCKED',
+              unlocked_at: now,
+            },
+          })
+          newlyUnlocked.push(achievementId)
+        } catch (e: any) {
+          console.error(`[Achievements] Failed to update unlock for ${achievementId}:`, e?.message)
+        }
       }
       // If already UNLOCKED or CLAIMED, do nothing
     } else {
-      // Achievement not unlocked - create LOCKED row if doesn't exist
-      // Never downgrade existing UNLOCKED/CLAIMED
-      if (!currentStatus) {
-        await (db as any).userAchievement.create({
-          data: {
-            user_id: auth.userId,
-            achievement_id: achievementId,
-            status: 'LOCKED',
-          },
-        })
-      }
+      // Achievement not unlocked - skip creating LOCKED rows (they're not useful)
+      // This also avoids foreign key errors
     }
   }
 
@@ -431,8 +433,9 @@ export async function getAchievementStatuses(auth: { userId: bigint; kickUserId:
     claimed_at: Date | null
   }>
 }> {
-  // First evaluate and persist any new unlocks
-  await evaluateAchievementsForUser(auth)
+  // First evaluate and persist any new unlocks - also get computed states
+  const { unlocked: computedUnlocks } = await evaluateAchievementsForUser(auth)
+  const computedUnlockSet = new Set(computedUnlocks)
 
   // Get current status from DB
   const userAchievements = await (db as any).userAchievement.findMany({
@@ -472,7 +475,9 @@ export async function getAchievementStatuses(auth: { userId: bigint; kickUserId:
     const dbStatus = statusMap.get(normalizedId)
     const claimKey = makeAchievementClaimKey(a.id, auth.userId)
     const hasLegacyClaim = legacyClaimSet.has(claimKey)
+    const isComputedUnlocked = computedUnlockSet.has(normalizedId)
 
+    // Check if claimed (either in DB or legacy)
     if (hasLegacyClaim || dbStatus?.status === 'CLAIMED') {
       return {
         id: a.id,
@@ -482,10 +487,20 @@ export async function getAchievementStatuses(auth: { userId: bigint; kickUserId:
       }
     }
 
+    // Check if unlocked (either in DB or computed)
+    if (dbStatus?.status === 'UNLOCKED' || isComputedUnlocked) {
+      return {
+        id: a.id,
+        status: 'UNLOCKED' as const,
+        unlocked_at: dbStatus?.unlocked_at || null,
+        claimed_at: null,
+      }
+    }
+
     return {
       id: a.id,
-      status: dbStatus?.status || 'LOCKED',
-      unlocked_at: dbStatus?.unlocked_at || null,
+      status: 'LOCKED' as const,
+      unlocked_at: null,
       claimed_at: null,
     }
   })
