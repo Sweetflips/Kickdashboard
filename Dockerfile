@@ -5,6 +5,9 @@ FROM node:22-bookworm-slim AS base
 FROM base AS deps
 WORKDIR /app
 
+# Update npm to latest version
+RUN npm install -g npm@latest
+
 # Install OpenSSL for Prisma (needed during postinstall)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
