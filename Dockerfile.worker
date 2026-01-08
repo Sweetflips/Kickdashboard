@@ -22,7 +22,7 @@ RUN npm ci --omit=dev
 RUN npx prisma generate
 
 # Invalidate cache for fresh scripts
-ARG SCRIPT_VERSION=3
+ARG SCRIPT_VERSION=4
 RUN echo "Script version: $SCRIPT_VERSION"
 
 # Copy scripts and lib
