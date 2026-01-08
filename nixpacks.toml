@@ -1,12 +1,24 @@
+# Nixpacks/Railpack configuration
+# Supports both web (Next.js) and worker modes via environment variables
+#
+# For WORKER mode, set in Railway:
+#   SKIP_NEXTJS_BUILD=true
+#   RUN_AS_WORKER=true
+
 [phases.setup]
-nixPkgs = ["nodejs_22", "npm-10_x", "openssl"]
+nixPkgs = ["nodejs_22", "npm-10_x", "openssl", "cacert"]
 
 [phases.install]
 cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npm run build"]
-cacheDirectories = []
+# Conditionally build Next.js - skip if SKIP_NEXTJS_BUILD is set
+# Worker services don't need the Next.js build
+cmds = [
+  "npx prisma generate",
+  "if [ \"$SKIP_NEXTJS_BUILD\" = \"true\" ]; then echo '⚡ Skipping Next.js build (worker mode)'; else npm run build; fi"
+]
+cacheDirectories = [".next/cache"]
 
 [start]
 cmd = "node scripts/start.js"
