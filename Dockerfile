@@ -1,53 +1,68 @@
-# Worker-specific Dockerfile
-# Uses full node_modules (not standalone) because workers need tsx and prisma CLI
+# Web (Next.js) Dockerfile
+# Builds the Next app and runs `scripts/start.js` (which handles migrations + resilient start)
+#
+# IMPORTANT:
+# - `Dockerfile.worker` is for the worker service and should remain separate.
+# - The web runtime uses Prisma CLI for `migrate deploy`, so we keep devDependencies.
 
 FROM node:22-bookworm-slim AS base
 
-# Install dependencies
 FROM base AS deps
 WORKDIR /app
 
-# Update npm to latest version
+# Keep npm modern for lockfile compatibility
 RUN npm install -g npm@latest
 
-# Install OpenSSL for Prisma (needed during postinstall)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy package files and prisma schema
-COPY package.json package-lock.json* ./
-COPY prisma ./prisma
-
-# Install ALL dependencies (including devDependencies for tsx)
-RUN npm ci
-
-# Production image for worker
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-# Install runtime dependencies (ca-certificates for TLS, openssl for Prisma)
+# Runtime/build deps needed by Prisma (and TLS)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     openssl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy node_modules (includes tsx, prisma CLI, etc.)
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma
+RUN npm ci
+
+FROM base AS builder
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Generates Prisma client + builds Next.js (.next)
+RUN npm run build
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# node_modules must include prisma + tsx at runtime (migrations + workers)
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy application files
-COPY package.json ./
-COPY prisma ./prisma
-COPY scripts ./scripts
-COPY lib ./lib
+# Next build output + public assets
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
 
-# Expose port for healthcheck
-EXPOSE 8080
+# Runtime files referenced by scripts / prisma migrate
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.js ./next.config.js
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.js ./prisma.config.js
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/lib ./lib
 
-# PORT is injected by Railway at runtime.
-# Fallback value is handled in scripts/start-worker.js.
+# Railway injects PORT at runtime; Next listens on it via scripts/start.js
+EXPOSE 3000
 
-# Start the worker
-CMD ["node", "scripts/start-worker.js"]
+CMD ["node", "scripts/start.js"]
