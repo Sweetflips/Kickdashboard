@@ -347,7 +347,7 @@ function startWebServer() {
           } else {
             process.stdout.write('✅ Migrations completed\n');
           }
-          
+
           // Seed achievement definitions after migrations
           process.stdout.write('🏆 Seeding achievement definitions...\n');
           exec('npx tsx scripts/seed-achievements.ts', { env: migrateEnv, timeout: 30000 }, (seedError, seedStdout, seedStderr) => {

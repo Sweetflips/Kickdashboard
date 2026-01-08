@@ -27,8 +27,10 @@ export async function GET(request: Request) {
     
     const { achievements } = await getAchievementStatuses(auth)
     
-    const unlockedCount = achievements.filter(a => a.status !== 'LOCKED').length
-    console.log(`[Achievements API] Result: ${unlockedCount}/${achievements.length} unlocked`)
+    const unlockedCount = achievements.filter(a => a.status === 'UNLOCKED').length
+    const claimedCount = achievements.filter(a => a.status === 'CLAIMED').length
+    console.log(`[Achievements API] Result: unlocked=${unlockedCount}, claimed=${claimedCount}, locked=${achievements.length - unlockedCount - claimedCount}`)
+    console.log(`[Achievements API] Sample statuses:`, achievements.slice(0, 3).map(a => `${a.id}:${a.status}`))
 
     const statuses: AchievementStatusResponse[] = achievements.map((a) => ({
       id: a.id,
