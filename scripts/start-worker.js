@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 
+// Force stdout to be unbuffered for Railway logs
+process.stdout.write('🔧 Worker script loading...\n');
+
 // Start HTTP health check server IMMEDIATELY (before ANY other code)
 // This ensures Railway can verify the service is up within seconds
 const http = require('http');
-const port = parseInt(process.env.PORT || '8080', 10);
+const port = parseInt(process.env.PORT || '3000', 10);
 
-console.log(`🔧 Worker starting, PORT=${port}`);
+process.stdout.write(`🔧 Worker starting on port ${port}...\n`);
 
 const healthServer = http.createServer((req, res) => {
   // Support both /health and /api/health for Railway compatibility
