@@ -3,6 +3,31 @@
 // Force immediate output
 process.stdout.write('🔧 start.js: Script starting...\n');
 
+// If this container/image does NOT contain a Next.js build artifact, we must not try to start the web server.
+// This happens when Railway uses a worker-style Dockerfile but still runs the default start command / healthcheck.
+function shouldRunWorkerModeEarly() {
+  try {
+    const fs = require('fs')
+    const path = require('path')
+    const nextDir = path.join(process.cwd(), '.next')
+    const hasNextBuild = fs.existsSync(nextDir)
+    const serviceName = String(process.env.RAILWAY_SERVICE_NAME || process.env.SERVICE_NAME || '').toLowerCase()
+    const looksLikeWorkerService = serviceName.includes('worker') || serviceName.includes('point')
+    const explicit = String(process.env.RUN_AS_WORKER || '').toLowerCase() === 'true'
+    return explicit || looksLikeWorkerService || !hasNextBuild
+  } catch {
+    // If in doubt, keep old behavior.
+    return String(process.env.RUN_AS_WORKER || '').toLowerCase() === 'true'
+  }
+}
+
+if (shouldRunWorkerModeEarly()) {
+  process.stdout.write('🔧 start.js: Detected worker mode (missing .next or worker service). Starting start-worker.js...\n')
+  require('./start-worker.js')
+  // start-worker.js owns the process lifecycle
+  process.exit(0)
+}
+
 // Startup validation: fail fast on missing required config
 function validateConfig() {
   const required = ['DATABASE_URL'];
