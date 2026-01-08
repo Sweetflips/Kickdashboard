@@ -53,3 +53,4 @@ migration_to_apply*.sql
 
 # Dev tools
 *.bat
+AGENTS.md
