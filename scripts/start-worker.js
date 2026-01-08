@@ -1,20 +1,11 @@
 #!/usr/bin/env node
 
-// Startup validation: fail fast on missing required config
-function validateConfig() {
-  const required = ['DATABASE_URL'];
-  const missing = required.filter((key) => !process.env[key]);
-  if (missing.length > 0) {
-    console.error('❌ FATAL: Missing required environment variables:', missing.join(', '));
-    process.exit(1);
-  }
-}
-validateConfig();
-
 // Start HTTP health check server IMMEDIATELY (before ANY other code)
 // This ensures Railway can verify the service is up within seconds
 const http = require('http');
 const port = parseInt(process.env.PORT || '8080', 10);
+
+console.log(`🔧 Worker starting, PORT=${port}`);
 
 const healthServer = http.createServer((req, res) => {
   // Support both /health and /api/health for Railway compatibility
@@ -43,6 +34,17 @@ healthServer.on('error', (err) => {
   console.error('⚠️ Health check server error:', err.message);
   // Don't exit - workers can still run without health endpoint
 });
+
+// Startup validation: fail fast on missing required config (AFTER health server starts)
+function validateConfig() {
+  const required = ['DATABASE_URL'];
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    console.error('❌ FATAL: Missing required environment variables:', missing.join(', '));
+    process.exit(1);
+  }
+}
+validateConfig();
 
 // Now load other modules and start workers
 const { execSync, spawn } = require('child_process');
