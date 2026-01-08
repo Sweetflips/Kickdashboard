@@ -212,7 +212,7 @@ function isOnlyBotMention(content: string, botUsernameLower: string): boolean {
 /**
  * Generate a bot reply using OpenAI API
  */
-async function generateAIReply(messageContent: string, senderUsername: string): Promise<string | null> {
+async function generateAIReply(messageContent: string, senderUsername: string, chatSettings: { model: string; temperature: number; maxTokens: number }): Promise<string | null> {
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
         console.warn('[moderation-worker] ⚠️ OPENAI_API_KEY not set, skipping AI reply')
@@ -220,16 +220,10 @@ async function generateAIReply(messageContent: string, senderUsername: string): 
     }
 
     try {
-        // Default to a broadly available, cost-effective model.
-        // Can be overridden via OPENAI_CHAT_MODEL.
-        const preferredModel = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini'
+        const preferredModel = chatSettings.model
         const fallbackModel = 'gpt-4o-mini'
-        const temperature = Number.isFinite(Number(process.env.OPENAI_CHAT_TEMPERATURE))
-            ? Math.max(0, Math.min(2, Number(process.env.OPENAI_CHAT_TEMPERATURE)))
-            : 0.9
-        const maxTokens = Number.isFinite(Number(process.env.OPENAI_CHAT_MAX_TOKENS))
-            ? Math.max(16, Math.min(256, Math.trunc(Number(process.env.OPENAI_CHAT_MAX_TOKENS))))
-            : 140
+        const temperature = chatSettings.temperature
+        const maxTokens = chatSettings.maxTokens
 
         const buildPayload = (model: string) => ({
             model,
@@ -315,7 +309,7 @@ async function generateAIReply(messageContent: string, senderUsername: string): 
  * Generate a bot reply to a chat message
  * Uses AI if enabled, otherwise falls back to simple keyword-based replies
  */
-async function generateBotReply(messageContent: string, senderUsername: string, useAI: boolean): Promise<string | null> {
+async function generateBotReply(messageContent: string, senderUsername: string, useAI: boolean, chatSettings: { model: string; temperature: number; maxTokens: number }): Promise<string | null> {
     // If OpenAI is configured, prefer AI replies by default (unless explicitly disabled).
     const openAiConfigured = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim())
     const forceAiReplies = String(process.env.BOT_REPLY_USE_AI_ALWAYS || '').toLowerCase() === 'true'
@@ -323,7 +317,7 @@ async function generateBotReply(messageContent: string, senderUsername: string, 
 
     // Try AI first if enabled
     if (aiEnabledEffective) {
-        const aiReply = await generateAIReply(messageContent, senderUsername)
+        const aiReply = await generateAIReply(messageContent, senderUsername, chatSettings)
         if (aiReply) {
             return aiReply
         }
@@ -379,10 +373,10 @@ const AI_MODERATION_CACHE_TTL_MS = Number.isFinite(Number(process.env.OPENAI_MOD
     ? Math.max(0, Math.trunc(Number(process.env.OPENAI_MODERATION_CACHE_TTL_MS)))
     : 120000
 
-function getCachedAIModeration(contentHash: string): OpenAIModerationResult | null {
+function getCachedAIModeration(contentHash: string, cacheTtlMs: number): OpenAIModerationResult | null {
     const entry = aiModerationCache.get(contentHash)
     if (!entry) return null
-    if (AI_MODERATION_CACHE_TTL_MS > 0 && (Date.now() - entry.at) > AI_MODERATION_CACHE_TTL_MS) {
+    if (cacheTtlMs > 0 && (Date.now() - entry.at) > cacheTtlMs) {
         aiModerationCache.delete(contentHash)
         return null
     }
@@ -411,7 +405,7 @@ function summarizeModerationScores(scores: Record<string, number> | null, thresh
     return entries.length ? entries.join(', ') : ''
 }
 
-async function runOpenAIModeration(content: string, contentHash: string): Promise<OpenAIModerationResult | null> {
+async function runOpenAIModeration(content: string, contentHash: string, cacheTtlMs: number, model: string): Promise<OpenAIModerationResult | null> {
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey || !apiKey.trim()) {
         const now = Date.now()
@@ -422,7 +416,7 @@ async function runOpenAIModeration(content: string, contentHash: string): Promis
         return null
     }
 
-    const cached = getCachedAIModeration(contentHash)
+    const cached = getCachedAIModeration(contentHash, cacheTtlMs)
     if (cached) return cached
 
     try {
@@ -433,7 +427,7 @@ async function runOpenAIModeration(content: string, contentHash: string): Promis
                 'Authorization': `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: OPENAI_MODERATION_MODEL,
+                model: model,
                 input: content,
             }),
         })
@@ -467,24 +461,28 @@ async function runOpenAIModeration(content: string, contentHash: string): Promis
     }
 }
 
-function checkRaidMode(state: RaidState, broadcasterUserId: bigint, now: number): boolean {
+function checkRaidMode(state: RaidState, broadcasterUserId: bigint, now: number, settings: ModeratorBotSettings): boolean {
     cleanMessageWindow(state, now)
 
     if (state.raidModeUntil > now) {
         return true
     }
 
+    const triggerMsgs = settings.raid_mode_trigger_msgs_5s ?? RAIDMODE_TRIGGER_MSGS_5S
+    const triggerUnique = settings.raid_mode_trigger_unique_5s ?? RAIDMODE_TRIGGER_UNIQUE_5S
+    const durationMs = settings.raid_mode_duration_ms ?? RAIDMODE_DURATION_MS
+
     const fiveSecondsAgo = now - 5000
     const recentMessages = state.messageWindow.filter(msg => msg.timestamp > fiveSecondsAgo)
 
-    if (recentMessages.length < RAIDMODE_TRIGGER_MSGS_5S) {
+    if (recentMessages.length < triggerMsgs) {
         return false
     }
 
     const uniqueSenders = new Set(recentMessages.map((msg: any) => msg.sender_user_id.toString()))
 
-    if (uniqueSenders.size >= RAIDMODE_TRIGGER_UNIQUE_5S) {
-        state.raidModeUntil = now + RAIDMODE_DURATION_MS
+    if (uniqueSenders.size >= triggerUnique) {
+        state.raidModeUntil = now + durationMs
         console.log(`[moderation-worker] 🚨 RAID MODE ACTIVATED for broadcaster ${broadcasterUserId} (${recentMessages.length} msgs, ${uniqueSenders.size} unique senders in 5s)`)
         return true
     }
@@ -492,7 +490,7 @@ function checkRaidMode(state: RaidState, broadcasterUserId: bigint, now: number)
     return false
 }
 
-function checkUserSpam(state: RaidState, senderUserId: bigint, contentHash: string, now: number): boolean {
+function checkUserSpam(state: RaidState, senderUserId: bigint, contentHash: string, now: number, settings: ModeratorBotSettings): boolean {
     const key = senderUserId.toString()
     const offense = state.userOffenses.get(key) || {
         count: 0,
@@ -507,19 +505,22 @@ function checkUserSpam(state: RaidState, senderUserId: bigint, contentHash: stri
         offense.repeat_count = 1
     }
 
+    const spamPerUser = settings.spam_per_user_msgs_10s ?? SPAM_PER_USER_MSGS_10S
+    const repeatThreshold = settings.spam_repeat_threshold ?? SPAM_REPEAT_THRESHOLD
+
     const tenSecondsAgo = now - 10000
     const userRecentMessages = state.messageWindow.filter(
         msg => msg.sender_user_id === senderUserId && msg.timestamp > tenSecondsAgo
     )
 
-    if (userRecentMessages.length >= SPAM_PER_USER_MSGS_10S) {
+    if (userRecentMessages.length >= spamPerUser) {
         offense.count++
         offense.last_message_hash = contentHash
         state.userOffenses.set(key, offense)
         return true
     }
 
-    if (offense.repeat_count >= SPAM_REPEAT_THRESHOLD) {
+    if (offense.repeat_count >= repeatThreshold) {
         offense.count++
         offense.last_message_hash = contentHash
         state.userOffenses.set(key, offense)
@@ -532,10 +533,11 @@ function checkUserSpam(state: RaidState, senderUserId: bigint, contentHash: stri
     return false
 }
 
-function isInCooldown(state: RaidState, broadcasterUserId: bigint, senderUserId: bigint, now: number): boolean {
+function isInCooldown(state: RaidState, broadcasterUserId: bigint, senderUserId: bigint, now: number, settings: ModeratorBotSettings): boolean {
     const key = `${broadcasterUserId}:${senderUserId}`
     const lastAction = state.lastModerationAction.get(key) || 0
-    return (now - lastAction) < MODERATION_COOLDOWN_MS
+    const cooldownMs = settings.moderation_cooldown_ms ?? MODERATION_COOLDOWN_MS
+    return (now - lastAction) < cooldownMs
 }
 
 function recordModerationAction(state: RaidState, broadcasterUserId: bigint, senderUserId: bigint, now: number): void {
@@ -582,11 +584,11 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
         content_hash: contentHash,
     })
 
-    if (isInCooldown(state, broadcasterUserId, senderUserId, now)) {
+    if (isInCooldown(state, broadcasterUserId, senderUserId, now, settings)) {
         return null
     }
 
-    const raidModeActive = checkRaidMode(state, broadcasterUserId, now) || state.raidModeUntil > now
+    const raidModeActive = checkRaidMode(state, broadcasterUserId, now, settings) || state.raidModeUntil > now
 
     // AI moderation (toxicity / harassment / hate / sexual / violence etc)
     // This is the "AI mods" path; if enabled and the model flags it (or scores exceed threshold), we act.
@@ -595,7 +597,9 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
         if (content.length > 0) {
             // Use score threshold from settings (with fallback to env var)
             const scoreThreshold = settings.ai_moderation_score_threshold ?? OPENAI_MODERATION_SCORE_THRESHOLD
-            const ai = await runOpenAIModeration(content, contentHash)
+            const cacheTtlMs = settings.ai_moderation_cache_ttl_ms ?? AI_MODERATION_CACHE_TTL_MS
+            const moderationModel = settings.ai_moderation_model || OPENAI_MODERATION_MODEL
+            const ai = await runOpenAIModeration(content, contentHash, cacheTtlMs, moderationModel)
             if (ai) {
                 const scores = ai.category_scores
                 const scoreValues = scores ? Object.values(scores).filter(v => typeof v === 'number') : []
@@ -643,7 +647,7 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
         return null
     }
 
-    const isSpam = checkUserSpam(state, senderUserId, contentHash, now)
+    const isSpam = checkUserSpam(state, senderUserId, contentHash, now, settings)
 
     if (!isSpam && !raidModeActive) {
         return null
@@ -924,7 +928,13 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                         console.log(`[moderation-worker] 💬 Bot reply on cooldown (${remaining}s remaining)`)
                     }
                 } else {
-                    // No randomness: if we reached here, we reply.
+                    // Check reply probability
+                    const replyProbability = settings.bot_reply_probability ?? 1
+                    if (replyProbability < 1 && Math.random() > replyProbability) {
+                        if (VERBOSE_LOGS) {
+                            console.log(`[moderation-worker] 💬 Skipping reply due to probability (${(replyProbability * 100).toFixed(0)}%)`)
+                        }
+                    } else {
                     // Generate reply using AI if enabled, otherwise simple fallback
                     let replyText: string | null = null
                     let replyType: 'ai' | 'simple' | 'quick_response' = 'simple'
@@ -935,10 +945,16 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                         replyText = pickOne(['yo?', 'sup?', 'yeah?', 'what you need?', "what's good?"])
                         replyType = 'quick_response'
                     } else {
+                        const chatSettings = {
+                            model: settings.ai_chat_model || 'gpt-4o-mini',
+                            temperature: settings.ai_chat_temperature ?? 0.9,
+                            maxTokens: settings.ai_chat_max_tokens ?? 140,
+                        }
                         replyText = await generateBotReply(
                             payload.content,
                             payload.sender.username,
-                            aiReplyEnabled
+                            aiReplyEnabled,
+                            chatSettings
                         )
                         replyType = aiReplyEnabled ? 'ai' : 'simple'
                     }
@@ -993,6 +1009,7 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                                 // Non-critical
                             })
                         }
+                    }
                     }
                 }
             }
