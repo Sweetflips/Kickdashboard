@@ -1,0 +1,456 @@
+#!/usr/bin/env node
+
+// Force immediate output
+process.stdout.write('🔧 start.js: Script starting...\n');
+
+// ============================================================================
+// IMMEDIATE HEALTH CHECK SERVER
+// Start HTTP health server FIRST, before ANY other logic.
+// This ensures Railway health checks pass immediately while the rest starts up.
+// ============================================================================
+const http = require('http');
+const healthPort = parseInt(process.env.PORT || '3000', 10);
+
+const healthServer = http.createServer((req, res) => {
+  // Support multiple health check paths
+  if (req.url === '/' || req.url === '/health' || req.url === '/api/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString(), service: 'startup' }));
+  } else {
+    res.writeHead(404);
+    res.end('Not Found');
+  }
+});
+
+// Start health server immediately - this is synchronous-ish and very fast
+healthServer.listen(healthPort, '0.0.0.0', () => {
+  process.stdout.write(`✅ Health check server ready on 0.0.0.0:${healthPort}\n`);
+});
+
+healthServer.on('error', (err) => {
+  // If port is already in use (e.g., Next.js took it), that's fine - health checks will work
+  if (err.code === 'EADDRINUSE') {
+    process.stdout.write(`ℹ️  Port ${healthPort} already in use, assuming main server handles health checks\n`);
+  } else {
+    process.stdout.write(`⚠️  Health server error: ${err.message}\n`);
+  }
+});
+
+// Export for later cleanup
+global.__healthServer = healthServer;
+
+// If this container/image does NOT contain a Next.js build artifact, we must not try to start the web server.
+// This happens when Railway uses a worker-style Dockerfile but still runs the default start command / healthcheck.
+function shouldRunWorkerModeEarly() {
+  try {
+    const fs = require('fs')
+    const path = require('path')
+    const nextDir = path.join(process.cwd(), '.next')
+    const hasNextBuild = fs.existsSync(nextDir)
+    const serviceName = String(process.env.RAILWAY_SERVICE_NAME || process.env.SERVICE_NAME || '').toLowerCase()
+    const looksLikeWorkerService = serviceName.includes('worker') || serviceName.includes('point')
+    const explicit = String(process.env.RUN_AS_WORKER || '').toLowerCase() === 'true'
+    return explicit || looksLikeWorkerService || !hasNextBuild
+  } catch {
+    // If in doubt, keep old behavior.
+    return String(process.env.RUN_AS_WORKER || '').toLowerCase() === 'true'
+  }
+}
+
+if (shouldRunWorkerModeEarly()) {
+  process.stdout.write('🔧 start.js: Detected worker mode (missing .next or worker service). Starting start-worker.js...\n')
+  // Close temporary health server - start-worker.js will create its own
+  if (global.__healthServer) {
+    global.__healthServer.close(() => {
+      process.stdout.write('ℹ️  Temporary health server closed, start-worker.js taking over\n');
+    });
+  }
+  require('./start-worker.js')
+  // start-worker.js owns the process lifecycle; do NOT exit here.
+} else {
+  // Startup validation: fail fast on missing required config
+  function validateConfig() {
+  const isWorker = String(process.env.RUN_AS_WORKER || '').toLowerCase() === 'true'
+
+  // For web mode, allow the server to boot even if DATABASE_URL is missing so healthchecks can pass
+  // and the UI can show a meaningful error. Workers still require DATABASE_URL to function.
+  const required = isWorker ? ['DATABASE_URL'] : []
+  const missing = required.filter((key) => !process.env[key])
+
+  if (missing.length > 0) {
+    process.stdout.write('❌ FATAL: Missing required environment variables: ' + missing.join(', ') + '\n')
+    process.exit(1)
+  }
+
+  if (!process.env.DATABASE_URL) {
+    process.stdout.write('⚠️  WARNING: DATABASE_URL not set. Web will start, but DB-backed API routes will fail.\n')
+  }
+  }
+
+  try {
+    validateConfig();
+
+    process.stdout.write('🔧 start.js: Modules loaded\n');
+    process.stdout.write('📍 CWD: ' + process.cwd() + '\n');
+    process.stdout.write('📍 PORT: ' + process.env.PORT + '\n');
+    process.stdout.write('📍 RUN_AS_WORKER: ' + process.env.RUN_AS_WORKER + '\n');
+
+    // Check if this should run as worker instead of web server
+    if (process.env.RUN_AS_WORKER === 'true') {
+      process.stdout.write('🔧 RUN_AS_WORKER=true, starting worker mode...\n');
+      require('./start-worker.js');
+    } else {
+      startWebServer();
+    }
+  } catch (err) {
+    process.stdout.write('❌ FATAL ERROR: ' + err.message + '\n');
+    process.stdout.write('❌ Stack: ' + err.stack + '\n');
+    process.exit(1);
+  }
+}
+
+function startWebServer() {
+  try {
+    const { spawn, exec } = require('child_process');
+    const path = require('path');
+    const fs = require('fs');
+    const os = require('os');
+    const crypto = require('crypto');
+
+    const port = process.env.PORT || '3000';
+
+    // IMPORTANT (Railway/containers):
+    // `HOSTNAME` is commonly set by Docker to the container id/name and often resolves to 127.x.x.x in /etc/hosts.
+    // Binding Next.js to that value can make the server unreachable from outside the container → healthchecks fail.
+    // Only honor explicit bind host vars; otherwise always bind to all interfaces.
+    const hostname = process.env.HOST || process.env.BIND_HOST || '0.0.0.0';
+
+    // Add node_modules/.bin to PATH so 'next' command is found
+    const binPath = path.join(process.cwd(), 'node_modules', '.bin');
+    const envWithPath = {
+      ...process.env,
+      PATH: `${binPath}:${process.env.PATH || ''}`
+    };
+
+    // Declare process variables early
+    let nextProcess = null;
+    let razedWorkerProcess = null;
+    let shuttingDown = false;
+    let shutdownSignal = null;
+    let nextProcessExited = false;
+    let razedWorkerExited = false;
+
+    const checkAllExited = () => {
+      if (nextProcessExited && razedWorkerExited) {
+        const exitCode = nextProcessExited === 0 ? 0 : 1;
+        process.exit(exitCode);
+      }
+    };
+
+    process.stdout.write('🚀 Starting Next.js on port ' + port + '...\n');
+    process.stdout.write('📂 PATH includes: ' + binPath + '\n');
+
+    // Close temporary health server - Next.js will take over the port
+    if (global.__healthServer) {
+      global.__healthServer.close(() => {
+        process.stdout.write('ℹ️  Temporary health server closed, Next.js taking over\n');
+      });
+    }
+
+    // Start Razed worker alongside web server (always runs with frontend)
+    // Start it early so it runs even if Next.js fails to start
+    process.stdout.write('🎮 Starting Razed worker alongside web server...\n');
+    razedWorkerProcess = spawn('npx', ['tsx', 'scripts/razed-worker.ts'], {
+      stdio: 'inherit',
+      env: envWithPath,
+      cwd: process.cwd(),
+    });
+
+    razedWorkerProcess.on('exit', (code) => {
+      razedWorkerExited = code !== null ? code : 0;
+      if (code !== 0 && code !== null) {
+        process.stdout.write(`⚠️  Razed worker exited with code: ${code}\n`);
+      } else {
+        process.stdout.write('✅ Razed worker exited\n');
+      }
+      checkAllExited();
+    });
+
+    razedWorkerProcess.on('error', (err) => {
+      process.stdout.write('⚠️  Failed to start Razed worker: ' + err.message + '\n');
+      razedWorkerExited = true;
+      checkAllExited();
+    });
+
+    const ensureStandaloneAssets = (standaloneDir) => {
+      try {
+        const rootDir = process.cwd();
+
+        const ensureServerActionsManifest = (baseDir) => {
+          try {
+            const serverDir = path.join(baseDir, '.next', 'server');
+            const actionsManifestJson = path.join(serverDir, 'server-actions-manifest.json');
+            const actionsManifestJs = path.join(serverDir, 'server-actions-manifest.js');
+            if (fs.existsSync(actionsManifestJson) || fs.existsSync(actionsManifestJs)) return;
+
+            fs.mkdirSync(serverDir, { recursive: true });
+
+            // Next.js (App Router) can crash on some requests if it expects a server-actions manifest
+            // but the deployment artifact layout omitted it. This can surface as:
+            // "Failed to find Server Action" + "Cannot read properties of undefined (reading 'workers')"
+            //
+            // If this app doesn't use Server Actions, a minimal manifest is safe and prevents crashes.
+            // If it does use Server Actions, the real manifest should exist and we won't overwrite it.
+            const refManifestPath = path.join(serverDir, 'server-reference-manifest.json');
+            let encryptionKey = '';
+            try {
+              if (fs.existsSync(refManifestPath)) {
+                const ref = JSON.parse(fs.readFileSync(refManifestPath, 'utf8'));
+                if (ref && typeof ref.encryptionKey === 'string') encryptionKey = ref.encryptionKey;
+              }
+            } catch {
+              // ignore
+            }
+            if (!encryptionKey) {
+              // 32 bytes -> base64, similar shape to Next's keys (not used if no actions)
+              encryptionKey = crypto.randomBytes(32).toString('base64');
+            }
+
+            const minimal = {
+              node: {},
+              edge: {},
+              workers: {},
+              encryptionKey,
+            };
+            fs.writeFileSync(actionsManifestJson, JSON.stringify(minimal));
+          } catch (e) {
+            // Non-fatal: only affects hardening for missing manifests
+          }
+        };
+
+        const linkOrCopyDir = (src, dest) => {
+          if (!fs.existsSync(src) || fs.existsSync(dest)) return;
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+
+          // Prefer symlink/junction; fall back to copy.
+          try {
+            const isWindows = process.platform === 'win32';
+            fs.symlinkSync(src, dest, isWindows ? 'junction' : 'dir');
+          } catch (e) {
+            fs.cpSync(src, dest, { recursive: true });
+          }
+        };
+
+        // Standalone server.js does `process.chdir(__dirname)`,
+        // so it expects `public/` and `.next/static` relative to the standalone dir.
+        linkOrCopyDir(path.join(rootDir, 'public'), path.join(standaloneDir, 'public'));
+
+        const staticSrc = path.join(rootDir, '.next', 'static');
+        const staticDest = path.join(standaloneDir, '.next', 'static');
+        linkOrCopyDir(staticSrc, staticDest);
+
+        // Standalone also expects `.next/server` relative to the standalone dir.
+        // If it's missing, Next can fail with "Failed to find Server Action" / missing manifest errors.
+        const serverSrc = path.join(rootDir, '.next', 'server');
+        const serverDest = path.join(standaloneDir, '.next', 'server');
+        linkOrCopyDir(serverSrc, serverDest);
+
+        // Ensure a server-actions manifest exists in BOTH locations (root + standalone runtime),
+        // to avoid edge cases where the server resolves manifests relative to CWD.
+        ensureServerActionsManifest(rootDir);
+        ensureServerActionsManifest(standaloneDir);
+      } catch (e) {
+        process.stdout.write('⚠️ Failed to prepare standalone assets: ' + (e && e.message ? e.message : String(e)) + '\n');
+      }
+    };
+
+    // Prefer `next start` when the full `.next` directory is present.
+    // Use standalone only as a fallback for environments that deploy ONLY standalone artifacts.
+    const rootStandaloneServer = path.join(process.cwd(), 'server.js');
+    const nextStandaloneServer = path.join(process.cwd(), '.next', 'standalone', 'server.js');
+    const hasFullNextServer =
+      fs.existsSync(path.join(process.cwd(), '.next', 'server', 'server-reference-manifest.json')) ||
+      fs.existsSync(path.join(process.cwd(), '.next', 'server', 'server-reference-manifest.js'));
+
+    // Hardening: ensure server-actions manifest exists if the build/layout omitted it.
+    // This prevents runtime crashes on some POST requests that trigger the server-action pipeline.
+    try {
+      const serverDir = path.join(process.cwd(), '.next', 'server');
+      const actionsManifestJson = path.join(serverDir, 'server-actions-manifest.json');
+      const actionsManifestJs = path.join(serverDir, 'server-actions-manifest.js');
+      if (!fs.existsSync(actionsManifestJson) && !fs.existsSync(actionsManifestJs)) {
+        fs.mkdirSync(serverDir, { recursive: true });
+        const refPath = path.join(serverDir, 'server-reference-manifest.json');
+        let encryptionKey = '';
+        try {
+          if (fs.existsSync(refPath)) {
+            const ref = JSON.parse(fs.readFileSync(refPath, 'utf8'));
+            if (ref && typeof ref.encryptionKey === 'string') encryptionKey = ref.encryptionKey;
+          }
+        } catch {
+          // ignore
+        }
+        if (!encryptionKey) encryptionKey = crypto.randomBytes(32).toString('base64');
+        fs.writeFileSync(
+          actionsManifestJson,
+          JSON.stringify({ node: {}, edge: {}, workers: {}, encryptionKey })
+        );
+      }
+    } catch {
+      // ignore
+    }
+
+    const spawnNode = (args, extraEnv = {}) =>
+      spawn(process.execPath, args, {
+        stdio: 'inherit',
+        env: { ...envWithPath, ...extraEnv },
+        cwd: process.cwd(),
+      });
+
+    if (hasFullNextServer) {
+      // Normal Next.js runtime
+      process.stdout.write('🚀 Using next start (full .next build detected)\n');
+      const isWindows = process.platform === 'win32';
+      if (isWindows) {
+        const nextBin = path.join(process.cwd(), 'node_modules', '.bin', 'next.cmd');
+        nextProcess = spawn(nextBin, ['start', '-H', hostname, '-p', port], {
+          stdio: 'inherit',
+          env: { ...envWithPath, HOSTNAME: hostname },
+          cwd: process.cwd(),
+        });
+      } else {
+        nextProcess = spawn('sh', ['-c', `next start -H ${hostname} -p ${port}`], {
+          stdio: 'inherit',
+          env: { ...envWithPath, HOSTNAME: hostname },
+          cwd: process.cwd(),
+        });
+      }
+    } else if (fs.existsSync(rootStandaloneServer)) {
+      process.stdout.write('🚀 Using standalone server (server.js)\n');
+      nextProcess = spawnNode(['server.js'], { PORT: port, HOSTNAME: hostname });
+    } else if (fs.existsSync(nextStandaloneServer)) {
+      process.stdout.write('🚀 Using standalone server (.next/standalone/server.js)\n');
+      ensureStandaloneAssets(path.join(process.cwd(), '.next', 'standalone'));
+      nextProcess = spawnNode([path.join('.next', 'standalone', 'server.js')], { PORT: port, HOSTNAME: hostname });
+    } else {
+      throw new Error('No Next.js start target found (.next build missing)');
+    }
+
+    if (!nextProcess) {
+      throw new Error('Failed to start Next.js (no start command selected)');
+    }
+
+    nextProcess.on('exit', (code, signal) => {
+      nextProcessExited = code !== null ? code : (signal ? 1 : 0);
+
+      // IMPORTANT:
+      // - When a child is terminated by a signal, Node reports `code === null` and provides `signal`.
+      // - Treat SIGTERM/SIGINT as a graceful shutdown so the platform doesn't restart-loop the service.
+      if (signal) {
+        process.stdout.write(`ℹ️  Next.js stopped by signal: ${signal}\n`);
+        if (shuttingDown && (signal === 'SIGTERM' || signal === 'SIGINT')) {
+          // Wait for Razed worker to exit before exiting
+          checkAllExited();
+          return;
+        }
+
+        // Unexpected signal: exit non-zero so restartPolicyType=ON_FAILURE can recover.
+        const sigNum = (os.constants && os.constants.signals && os.constants.signals[signal]) || 0;
+        // Still wait for Razed worker
+        checkAllExited();
+        return;
+      }
+
+      if (code === 0) {
+        process.stdout.write('✅ Next.js exited successfully (code: 0)\n');
+      } else {
+        process.stdout.write('⚠️  Next.js exited with code: ' + code + '\n');
+      }
+
+      // Wait for Razed worker to exit before exiting
+      checkAllExited();
+    });
+
+    nextProcess.on('error', (err) => {
+      process.stdout.write('❌ Spawn error: ' + err.message + '\n');
+      // Don't exit immediately - let Razed worker continue running
+      nextProcessExited = 1;
+      checkAllExited();
+    });
+
+    // Handle graceful shutdown
+    const shutdown = (signal) => {
+      process.stdout.write('\n' + signal + ' received, shutting down...\n');
+      shuttingDown = true;
+      shutdownSignal = signal;
+      if (nextProcess) nextProcess.kill(signal);
+      if (razedWorkerProcess) razedWorkerProcess.kill(signal);
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+
+    // Run migrations in background after 5 seconds
+    setTimeout(async () => {
+      // Get the direct PostgreSQL URL for migrations (can't use Accelerate URLs)
+      const directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || '';
+      const isAccelerateUrl = directUrl.startsWith('prisma://') || directUrl.startsWith('prisma+postgres://');
+
+      if (isAccelerateUrl) {
+        process.stdout.write('⚠️ Cannot run migrations: DATABASE_URL is Accelerate URL and DIRECT_URL not set\n');
+        return;
+      }
+
+      if (!directUrl) {
+        process.stdout.write('⚠️ Cannot run migrations: No database URL configured\n');
+        return;
+      }
+
+      process.stdout.write('🔄 Resolving stuck migrations...\n');
+      process.stdout.write('🔄 Using direct URL: ' + (directUrl ? 'YES (starts with ' + directUrl.substring(0, 15) + '...)' : 'NO') + '\n');
+
+      // Override DATABASE_URL with the direct URL for migrations only
+      const migrateEnv = { ...envWithPath, DATABASE_URL: directUrl };
+
+      // First resolve any stuck migrations (using same env as migrate deploy)
+      try {
+        process.stdout.write('🔄 Resolving stuck migrations...\n');
+        const { execSync } = require('child_process');
+        try {
+          execSync('node scripts/resolve-stuck-migrations.js', { env: migrateEnv, timeout: 60000, stdio: 'inherit' });
+        } catch (resolveError) {
+          process.stdout.write('⚠️ Migration resolution warning: ' + resolveError.message + '\n');
+        }
+
+        // Then run migrate deploy
+        process.stdout.write('🔄 Running database migrations...\n');
+        // Use --config to explicitly point to the config file
+        try {
+          execSync('npx prisma migrate deploy --config=./prisma.config.js', { env: migrateEnv, timeout: 60000, stdio: 'inherit' });
+          process.stdout.write('✅ Migrations completed\n');
+        } catch (migrateError) {
+          process.stdout.write('❌ Migration failed: ' + migrateError.message + '\n');
+          process.stdout.write('⚠️ Continuing anyway, but database may be in inconsistent state\n');
+        }
+
+        // Seed achievement definitions after migrations (synchronously)
+        process.stdout.write('🏆 Seeding achievement definitions...\n');
+        try {
+          execSync('npx tsx scripts/seed-achievements.ts', { env: migrateEnv, timeout: 30000, stdio: 'inherit' });
+          process.stdout.write('✅ Achievements seeded successfully\n');
+        } catch (seedError) {
+          process.stdout.write('❌ Achievement seeding failed: ' + seedError.message + '\n');
+          process.stdout.write('⚠️ This may cause achievement claim errors. Please run seed script manually.\n');
+          // Don't exit - server can still start, but achievements won't work until seeded
+        }
+      } catch (err) {
+        process.stdout.write('❌ Database setup error: ' + err.message + '\n');
+        // Continue anyway - migrations may have partially succeeded
+      }
+    }, 5000);
+
+  } catch (err) {
+    process.stdout.write('❌ startWebServer error: ' + err.message + '\n');
+    process.exit(1);
+  }
+}
