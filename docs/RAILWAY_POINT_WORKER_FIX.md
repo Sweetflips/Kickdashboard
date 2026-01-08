@@ -3,7 +3,17 @@
 ## Problem
 Railway is using `Dockerfile` (main app) instead of `Dockerfile.worker`, causing health check failures because it's trying to start Next.js instead of the worker.
 
-## Solution: Configure Railway Dashboard
+## Solution: Code Fix Applied ✅
+
+**FIXED**: The `point-worker` branch now has `Dockerfile` replaced with the worker version. Railway will automatically use the correct Dockerfile when deploying from the `point-worker` branch.
+
+### What Changed
+- On `point-worker` branch: `Dockerfile` = worker version (no Next.js build)
+- On `main` branch: `Dockerfile` = web app version (with Next.js build)
+
+Railway auto-detects `Dockerfile`, so it will now use the worker version when deploying from `point-worker` branch.
+
+## Alternative: Configure Railway Dashboard (if code fix doesn't work)
 
 Railway's `railway.json` file is being ignored. You **MUST** configure the service in Railway dashboard:
 
