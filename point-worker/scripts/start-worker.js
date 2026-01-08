@@ -58,6 +58,20 @@ const serverReady = new Promise((resolve, reject) => {
     // Now load other modules and start workers
     const { execSync, spawn } = require('child_process');
     const { PrismaClient } = require('@prisma/client');
+    const { PrismaPg } = require('@prisma/adapter-pg');
+    const { Pool } = require('pg');
+    
+    // Helper to create Prisma client with pg adapter (required for Prisma 7 --no-engine)
+    function createPrismaClient() {
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: 5,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+      });
+      const adapter = new PrismaPg(pool);
+      return new PrismaClient({ adapter });
+    }
 
     // Resolve stuck migrations and run migrations before starting the worker
     try {
@@ -77,7 +91,7 @@ const serverReady = new Promise((resolve, reject) => {
 
     // Wait for database to be reachable with retries
     async function waitForDatabase(maxRetries = 10, delayMs = 3000) {
-      const prisma = new PrismaClient();
+      const prisma = createPrismaClient();
       for (let i = 0; i < maxRetries; i++) {
         try {
           await prisma.$queryRaw`SELECT 1`;
@@ -96,7 +110,7 @@ const serverReady = new Promise((resolve, reject) => {
 
     // Safety net: Ensure required tables exist
     async function ensureTables() {
-      const prisma = new PrismaClient();
+      const prisma = createPrismaClient();
       try {
         console.log('🔄 Verifying database tables...');
 
