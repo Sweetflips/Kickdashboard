@@ -1,11 +1,34 @@
 /**
  * Seed script for AchievementDefinition records
- * Run: npx ts-node scripts/seed-achievements.ts
+ * Run: npx tsx scripts/seed-achievements.ts
  */
 
+import 'dotenv/config'
 import { PrismaClient, AchievementCategory } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import pg from 'pg'
 
-const prisma = new PrismaClient()
+// Use the same database configuration as the rest of the app
+function createPrismaClient() {
+  const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || ''
+
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL or DIRECT_URL must be set')
+  }
+
+  const isAccelerateUrl = databaseUrl.startsWith('prisma://') || databaseUrl.startsWith('prisma+postgres://')
+
+  if (isAccelerateUrl) {
+    throw new Error('DIRECT_URL must be set to a direct PostgreSQL connection string (not Accelerate)')
+  }
+
+  const pool = new pg.Pool({ connectionString: databaseUrl })
+  const adapter = new PrismaPg(pool)
+
+  return new PrismaClient({ adapter })
+}
+
+const prisma = createPrismaClient()
 
 type AchievementSeed = {
   id: string
