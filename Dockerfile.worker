@@ -33,5 +33,5 @@ COPY lib ./lib/
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3000}/health || exit 1
 
-# Start worker
-CMD ["node", "scripts/start-worker.js"]
+# Start with minimal health server for debugging
+CMD ["node", "scripts/health-only.js"]
