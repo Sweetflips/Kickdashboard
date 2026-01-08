@@ -329,38 +329,40 @@ function startWebServer() {
       const migrateEnv = { ...envWithPath, DATABASE_URL: directUrl };
 
       // First resolve any stuck migrations (using same env as migrate deploy)
-      exec('node scripts/resolve-stuck-migrations.js', { env: migrateEnv, timeout: 60000 }, (resolveError, resolveStdout, resolveStderr) => {
-        if (resolveStdout) process.stdout.write(resolveStdout);
-        if (resolveStderr) process.stderr.write(resolveStderr);
-        if (resolveError) {
+      try {
+        process.stdout.write('🔄 Resolving stuck migrations...\n');
+        const { execSync } = require('child_process');
+        try {
+          execSync('node scripts/resolve-stuck-migrations.js', { env: migrateEnv, timeout: 60000, stdio: 'inherit' });
+        } catch (resolveError) {
           process.stdout.write('⚠️ Migration resolution warning: ' + resolveError.message + '\n');
         }
 
         // Then run migrate deploy
         process.stdout.write('🔄 Running database migrations...\n');
         // Use --config to explicitly point to the config file
-        exec('npx prisma migrate deploy --config=./prisma.config.js', { env: migrateEnv, timeout: 60000 }, (error, stdout, stderr) => {
-          if (stdout) process.stdout.write(stdout);
-          if (stderr) process.stderr.write(stderr);
-          if (error) {
-            process.stdout.write('⚠️ Migration failed: ' + error.message + '\n');
-          } else {
-            process.stdout.write('✅ Migrations completed\n');
-          }
+        try {
+          execSync('npx prisma migrate deploy --config=./prisma.config.js', { env: migrateEnv, timeout: 60000, stdio: 'inherit' });
+          process.stdout.write('✅ Migrations completed\n');
+        } catch (migrateError) {
+          process.stdout.write('❌ Migration failed: ' + migrateError.message + '\n');
+          process.stdout.write('⚠️ Continuing anyway, but database may be in inconsistent state\n');
+        }
 
-          // Seed achievement definitions after migrations
-          process.stdout.write('🏆 Seeding achievement definitions...\n');
-          exec('npx tsx scripts/seed-achievements.ts', { env: migrateEnv, timeout: 30000 }, (seedError, seedStdout, seedStderr) => {
-            if (seedStdout) process.stdout.write(seedStdout);
-            if (seedStderr) process.stderr.write(seedStderr);
-            if (seedError) {
-              process.stdout.write('⚠️ Achievement seeding warning: ' + seedError.message + '\n');
-            } else {
-              process.stdout.write('✅ Achievements seeded\n');
-            }
-          });
-        });
-      });
+        // Seed achievement definitions after migrations (synchronously)
+        process.stdout.write('🏆 Seeding achievement definitions...\n');
+        try {
+          execSync('npx tsx scripts/seed-achievements.ts', { env: migrateEnv, timeout: 30000, stdio: 'inherit' });
+          process.stdout.write('✅ Achievements seeded successfully\n');
+        } catch (seedError) {
+          process.stdout.write('❌ Achievement seeding failed: ' + seedError.message + '\n');
+          process.stdout.write('⚠️ This may cause achievement claim errors. Please run seed script manually.\n');
+          // Don't exit - server can still start, but achievements won't work until seeded
+        }
+      } catch (err) {
+        process.stdout.write('❌ Database setup error: ' + err.message + '\n');
+        // Continue anyway - migrations may have partially succeeded
+      }
     }, 5000);
 
   } catch (err) {

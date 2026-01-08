@@ -39,6 +39,25 @@ export async function POST(request: Request) {
     const normalizedId = normalizeAchievementId(achievementId)
     const now = new Date()
 
+    // Verify AchievementDefinition exists before attempting to claim
+    const achievementDef = await (db as any).achievementDefinition.findUnique({
+      where: { id: normalizedId },
+      select: { id: true },
+    })
+
+    if (!achievementDef) {
+      console.error(
+        `[Achievements] AchievementDefinition not found: ${normalizedId}. This indicates a deployment issue - achievement definitions may not be seeded.`,
+      )
+      return NextResponse.json(
+        {
+          error: 'Achievement definition not found in database. Please contact support.',
+          details: `Missing achievement: ${normalizedId}`,
+        },
+        { status: 500 },
+      )
+    }
+
     try {
       await (db as any).$transaction(async (tx: any) => {
         // Create history entry first (idempotency is enforced by unique message_id)
@@ -86,8 +105,24 @@ export async function POST(request: Request) {
         })
       })
     } catch (e: unknown) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        return NextResponse.json({ claimed: true, alreadyClaimed: true, sweetCoinsAwarded: 0 })
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        if (e.code === 'P2002') {
+          return NextResponse.json({ claimed: true, alreadyClaimed: true, sweetCoinsAwarded: 0 })
+        }
+        if (e.code === 'P2003') {
+          // Foreign key constraint violation - AchievementDefinition still missing somehow
+          console.error(
+            `[Achievements] P2003 FK violation for ${normalizedId}. AchievementDefinition check passed but FK failed.`,
+            e,
+          )
+          return NextResponse.json(
+            {
+              error: 'Database constraint violation. Achievement definition may be missing.',
+              details: `Foreign key error for achievement: ${normalizedId}`,
+            },
+            { status: 500 },
+          )
+        }
       }
       throw e
     }
