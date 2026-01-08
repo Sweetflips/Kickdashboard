@@ -33,5 +33,5 @@ COPY lib ./lib/
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3000}/health || exit 1
 
-# Start with minimal health server for debugging
-CMD ["node", "scripts/health-only.js"]
+# Start with inline minimal health server for debugging
+CMD ["node", "-e", "const h=require('http');const p=process.env.PORT||3000;console.log('Starting on',p);h.createServer((q,r)=>{r.end('OK')}).listen(p,'0.0.0.0',()=>console.log('Ready'))"]
