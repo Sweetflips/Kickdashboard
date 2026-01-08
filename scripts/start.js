@@ -3,6 +3,42 @@
 // Force immediate output
 process.stdout.write('🔧 start.js: Script starting...\n');
 
+// ============================================================================
+// IMMEDIATE HEALTH CHECK SERVER
+// Start HTTP health server FIRST, before ANY other logic.
+// This ensures Railway health checks pass immediately while the rest starts up.
+// ============================================================================
+const http = require('http');
+const healthPort = parseInt(process.env.PORT || '3000', 10);
+
+const healthServer = http.createServer((req, res) => {
+  // Support multiple health check paths
+  if (req.url === '/' || req.url === '/health' || req.url === '/api/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString(), service: 'startup' }));
+  } else {
+    res.writeHead(404);
+    res.end('Not Found');
+  }
+});
+
+// Start health server immediately - this is synchronous-ish and very fast
+healthServer.listen(healthPort, '0.0.0.0', () => {
+  process.stdout.write(`✅ Health check server ready on 0.0.0.0:${healthPort}\n`);
+});
+
+healthServer.on('error', (err) => {
+  // If port is already in use (e.g., Next.js took it), that's fine - health checks will work
+  if (err.code === 'EADDRINUSE') {
+    process.stdout.write(`ℹ️  Port ${healthPort} already in use, assuming main server handles health checks\n`);
+  } else {
+    process.stdout.write(`⚠️  Health server error: ${err.message}\n`);
+  }
+});
+
+// Export for later cleanup
+global.__healthServer = healthServer;
+
 // If this container/image does NOT contain a Next.js build artifact, we must not try to start the web server.
 // This happens when Railway uses a worker-style Dockerfile but still runs the default start command / healthcheck.
 function shouldRunWorkerModeEarly() {
@@ -23,6 +59,12 @@ function shouldRunWorkerModeEarly() {
 
 if (shouldRunWorkerModeEarly()) {
   process.stdout.write('🔧 start.js: Detected worker mode (missing .next or worker service). Starting start-worker.js...\n')
+  // Close temporary health server - start-worker.js will create its own
+  if (global.__healthServer) {
+    global.__healthServer.close(() => {
+      process.stdout.write('ℹ️  Temporary health server closed, start-worker.js taking over\n');
+    });
+  }
   require('./start-worker.js')
   // start-worker.js owns the process lifecycle; do NOT exit here.
 } else {
@@ -107,6 +149,13 @@ function startWebServer() {
 
     process.stdout.write('🚀 Starting Next.js on port ' + port + '...\n');
     process.stdout.write('📂 PATH includes: ' + binPath + '\n');
+
+    // Close temporary health server - Next.js will take over the port
+    if (global.__healthServer) {
+      global.__healthServer.close(() => {
+        process.stdout.write('ℹ️  Temporary health server closed, Next.js taking over\n');
+      });
+    }
 
     // Start Razed worker alongside web server (always runs with frontend)
     // Start it early so it runs even if Next.js fails to start
