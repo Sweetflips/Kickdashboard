@@ -2,6 +2,70 @@ import { db } from './db'
 
 export const MODERATOR_BOT_SETTINGS_KEY = 'moderator_bot_settings_v2'
 
+// ============================================================================
+// STREAM SIZE PRESETS
+// ============================================================================
+
+export type StreamSize = 'small' | 'medium' | 'large'
+
+export interface StreamSizePreset {
+  raid_mode_trigger_msgs_5s: number
+  raid_mode_trigger_unique_5s: number
+  spam_per_user_msgs_10s: number
+  spam_repeat_threshold: number
+  timeout_seconds: number
+  ban_on_repeat_count: number
+  moderation_cooldown_ms: number
+}
+
+export const STREAM_SIZE_PRESETS: Record<StreamSize, StreamSizePreset> = {
+  // Small streams (<100 viewers): more relaxed thresholds
+  small: {
+    raid_mode_trigger_msgs_5s: 30,
+    raid_mode_trigger_unique_5s: 15,
+    spam_per_user_msgs_10s: 8,
+    spam_repeat_threshold: 4,
+    timeout_seconds: 300,
+    ban_on_repeat_count: 4,
+    moderation_cooldown_ms: 30000,
+  },
+  // Medium streams (100-1000 viewers): balanced thresholds
+  medium: {
+    raid_mode_trigger_msgs_5s: 80,
+    raid_mode_trigger_unique_5s: 40,
+    spam_per_user_msgs_10s: 6,
+    spam_repeat_threshold: 3,
+    timeout_seconds: 600,
+    ban_on_repeat_count: 3,
+    moderation_cooldown_ms: 60000,
+  },
+  // Large streams (1000+ viewers): stricter thresholds
+  large: {
+    raid_mode_trigger_msgs_5s: 150,
+    raid_mode_trigger_unique_5s: 80,
+    spam_per_user_msgs_10s: 4,
+    spam_repeat_threshold: 2,
+    timeout_seconds: 900,
+    ban_on_repeat_count: 2,
+    moderation_cooldown_ms: 120000,
+  },
+}
+
+export function getStreamSizePreset(size: StreamSize): StreamSizePreset {
+  return STREAM_SIZE_PRESETS[size] || STREAM_SIZE_PRESETS.medium
+}
+
+export function applyStreamSizePreset(
+  settings: ModeratorBotSettings,
+  size: StreamSize
+): ModeratorBotSettings {
+  const preset = getStreamSizePreset(size)
+  return {
+    ...settings,
+    ...preset,
+  }
+}
+
 export interface ModeratorBotSettings {
   // === AI MODERATION ===
   ai_moderation_enabled: boolean
