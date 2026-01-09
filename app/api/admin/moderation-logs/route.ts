@@ -136,6 +136,60 @@ export async function POST(request: Request) {
       })
     }
 
+    if (action === 'risk_status') {
+      // Compute current risk level based on recent activity
+      const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000)
+      const oneMinAgo = new Date(now.getTime() - 60 * 1000)
+
+      const [
+        actionsLast5Min,
+        actionsLast1Min,
+        raidActionsLast5Min,
+        coordinatedRaidLast5Min,
+        uniqueTargetsLast5Min,
+      ] = await Promise.all([
+        prisma.moderationActionLog.count({ where: { created_at: { gte: fiveMinAgo } } }),
+        prisma.moderationActionLog.count({ where: { created_at: { gte: oneMinAgo } } }),
+        prisma.moderationActionLog.count({ where: { created_at: { gte: fiveMinAgo }, raid_mode_active: true } }),
+        prisma.moderationActionLog.count({ where: { created_at: { gte: fiveMinAgo }, rule_id: 'coordinated_raid' } }),
+        prisma.moderationActionLog.groupBy({
+          by: ['target_user_id'],
+          where: { created_at: { gte: fiveMinAgo } },
+        }),
+      ])
+
+      // Compute risk score based on recent signals
+      const actionRate = actionsLast1Min // actions per minute
+      const raidRatio = actionsLast5Min > 0 ? raidActionsLast5Min / actionsLast5Min : 0
+      const coordinatedRaids = coordinatedRaidLast5Min
+      const uniqueTargets = (uniqueTargetsLast5Min as any[]).length
+
+      let riskScore = 0
+      riskScore += Math.min(0.3, actionRate * 0.05)  // Up to 0.3 for high action rate
+      riskScore += raidRatio * 0.3                    // Up to 0.3 for raid activity
+      riskScore += Math.min(0.2, coordinatedRaids * 0.1) // Up to 0.2 for coordinated raids
+      riskScore += Math.min(0.2, uniqueTargets * 0.01)   // Up to 0.2 for many unique targets
+
+      let riskMode: 'low' | 'medium' | 'high' = 'low'
+      if (riskScore > 0.7) riskMode = 'high'
+      else if (riskScore > 0.3) riskMode = 'medium'
+
+      return NextResponse.json({
+        risk_status: {
+          mode: riskMode,
+          score: Math.min(1, riskScore),
+          signals: {
+            actions_per_minute: actionRate,
+            raid_action_ratio: raidRatio,
+            coordinated_raids_5min: coordinatedRaids,
+            unique_targets_5min: uniqueTargets,
+            total_actions_5min: actionsLast5Min,
+          },
+          updated_at: now.toISOString(),
+        },
+      })
+    }
+
     if (action === 'clear') {
       // Optional: clear old logs (keep last 30 days)
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)

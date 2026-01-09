@@ -101,6 +101,19 @@ type ReplyStats = {
   avg_latency_ms: number | null
 }
 
+type RiskStatus = {
+  mode: 'low' | 'medium' | 'high'
+  score: number
+  signals: {
+    actions_per_minute: number
+    raid_action_ratio: number
+    coordinated_raids_5min: number
+    unique_targets_5min: number
+    total_actions_5min: number
+  }
+  updated_at: string
+}
+
 const DEFAULTS: ModeratorBotSettings = {
   ai_moderation_enabled: false,
   ai_action: 'timeout',
@@ -312,6 +325,7 @@ export default function AdminAIModeratorPage() {
   const [logsLoading, setLogsLoading] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
   const [replyStats, setReplyStats] = useState<ReplyStats | null>(null)
+  const [riskStatus, setRiskStatus] = useState<RiskStatus | null>(null)
 
   // Allowlist state
   const [newAllowlistUser, setNewAllowlistUser] = useState('')
@@ -363,22 +377,25 @@ export default function AdminAIModeratorPage() {
   const loadLogs = useCallback(async () => {
     setLogsLoading(true)
     try {
-      const [modResp, replyResp, statsResp, replyStatsResp] = await Promise.all([
+      const [modResp, replyResp, statsResp, replyStatsResp, riskResp] = await Promise.all([
         fetch('/api/admin/moderation-logs?limit=50'),
         fetch('/api/admin/bot-reply-logs?limit=50'),
         fetch('/api/admin/moderation-logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stats' }) }),
         fetch('/api/admin/bot-reply-logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stats' }) }),
+        fetch('/api/admin/moderation-logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'risk_status' }) }),
       ])
-      const [modData, replyData, statsData, replyStatsData] = await Promise.all([
+      const [modData, replyData, statsData, replyStatsData, riskData] = await Promise.all([
         modResp.json(),
         replyResp.json(),
         statsResp.json(),
         replyStatsResp.json(),
+        riskResp.json(),
       ])
       setModerationLogs(modData?.logs || [])
       setReplyLogs(replyData?.logs || [])
       setStats(statsData?.stats || null)
       setReplyStats(replyStatsData?.stats || null)
+      setRiskStatus(riskData?.risk_status || null)
     } catch {
       // ignore
     } finally {
@@ -792,6 +809,62 @@ export default function AdminAIModeratorPage() {
       {/* Moderation Logs Tab */}
       {activeTab === 'moderation-logs' && (
         <div className="space-y-6">
+          {/* Live Risk Status */}
+          {riskStatus && (
+            <div className={`p-5 rounded-xl border-2 ${
+              riskStatus.mode === 'high' 
+                ? 'border-red-500 bg-red-50 dark:bg-red-900/20' 
+                : riskStatus.mode === 'medium' 
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20' 
+                  : 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+            }`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{riskStatus.mode === 'high' ? '🚨' : riskStatus.mode === 'medium' ? '⚠️' : '✅'}</span>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-kick-text">
+                      Live Risk Status: <span className={`uppercase ${
+                        riskStatus.mode === 'high' ? 'text-red-600' : riskStatus.mode === 'medium' ? 'text-amber-600' : 'text-emerald-600'
+                      }`}>{riskStatus.mode}</span>
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-kick-text-secondary">
+                      Score: {(riskStatus.score * 100).toFixed(0)}% • Updated: {formatTimeAgo(riskStatus.updated_at)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={loadLogs}
+                  disabled={logsLoading}
+                  className="px-3 py-1.5 rounded-lg bg-white/50 dark:bg-kick-surface-hover text-gray-700 dark:text-kick-text text-sm hover:bg-white/80 dark:hover:bg-kick-border transition-colors disabled:opacity-60"
+                >
+                  {logsLoading ? '...' : '↻'}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                <div className="p-2 rounded-lg bg-white/50 dark:bg-kick-surface">
+                  <div className="font-bold text-gray-900 dark:text-kick-text">{riskStatus.signals.actions_per_minute}</div>
+                  <div className="text-xs text-gray-600 dark:text-kick-text-secondary">Actions/min</div>
+                </div>
+                <div className="p-2 rounded-lg bg-white/50 dark:bg-kick-surface">
+                  <div className="font-bold text-gray-900 dark:text-kick-text">{riskStatus.signals.total_actions_5min}</div>
+                  <div className="text-xs text-gray-600 dark:text-kick-text-secondary">Actions (5m)</div>
+                </div>
+                <div className="p-2 rounded-lg bg-white/50 dark:bg-kick-surface">
+                  <div className="font-bold text-gray-900 dark:text-kick-text">{(riskStatus.signals.raid_action_ratio * 100).toFixed(0)}%</div>
+                  <div className="text-xs text-gray-600 dark:text-kick-text-secondary">Raid Ratio</div>
+                </div>
+                <div className="p-2 rounded-lg bg-white/50 dark:bg-kick-surface">
+                  <div className="font-bold text-gray-900 dark:text-kick-text">{riskStatus.signals.coordinated_raids_5min}</div>
+                  <div className="text-xs text-gray-600 dark:text-kick-text-secondary">Coord. Raids</div>
+                </div>
+                <div className="p-2 rounded-lg bg-white/50 dark:bg-kick-surface">
+                  <div className="font-bold text-gray-900 dark:text-kick-text">{riskStatus.signals.unique_targets_5min}</div>
+                  <div className="text-xs text-gray-600 dark:text-kick-text-secondary">Unique Targets</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Stats */}
           {stats && (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">

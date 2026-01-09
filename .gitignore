@@ -53,3 +53,6 @@ migration_to_apply*.sql
 
 # Dev tools
 *.bat
+
+# Windows nul file
+nul

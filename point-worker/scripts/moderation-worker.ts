@@ -115,12 +115,43 @@ function looksLikeRequestOrQuestion(content: string): boolean {
     return false
 }
 
+// ============================================================================
+// SPAM/RAID DETECTION TYPES
+// ============================================================================
+
+type MessageClass = 'normal_hype' | 'repetitive_spam' | 'coordinated_raid_spam' | 'ambiguous'
+type RaidStateLabel = 'none' | 'suspected_raid' | 'confirmed_raid'
+type RiskMode = 'low' | 'medium' | 'high'
+
+interface SpamDetectionResult {
+    classification: MessageClass
+    similarityScore: number      // 0-1: how similar to recent messages
+    groupSimilarityScore: number // 0-1: similarity across all recent messages
+    userBurstScore: number       // 0-1: user's message rate
+    raidPatternScore: number     // 0-1: coordinated raid signals
+    features: string[]           // debug signals
+}
+
+interface RaidAssessment {
+    state: RaidStateLabel
+    confidence: number
+    evidence: string[]
+}
+
+interface RiskScoreState {
+    score: number
+    mode: RiskMode
+    components: Record<string, number>
+}
+
 // In-memory state for raid detection
 interface MessageWindow {
     timestamp: number
     broadcaster_user_id: bigint
     sender_user_id: bigint
     content_hash: string
+    normalized_content: string
+    is_new_user: boolean
 }
 
 interface UserOffense {
@@ -135,6 +166,9 @@ interface RaidState {
     messageWindow: MessageWindow[]
     userOffenses: Map<string, UserOffense>
     lastModerationAction: Map<string, number>
+    newUserMessageCount: number
+    lastRiskScore: number
+    streamStartTime: number
 }
 
 const raidState = new Map<string, RaidState>()
@@ -147,9 +181,218 @@ function getRaidState(broadcasterUserId: bigint): RaidState {
             messageWindow: [],
             userOffenses: new Map(),
             lastModerationAction: new Map(),
+            newUserMessageCount: 0,
+            lastRiskScore: 0,
+            streamStartTime: Date.now(),
         })
     }
     return raidState.get(key)!
+}
+
+// ============================================================================
+// CONTENT NORMALIZATION & SIMILARITY
+// ============================================================================
+
+function normalizeContentForComparison(content: string): string {
+    return content
+        .toLowerCase()
+        .replace(/[\u{1F600}-\u{1F6FF}]/gu, '') // strip emojis
+        .replace(/(.)\1{2,}/g, '$1$1')          // reduce repeated chars: aaaa -> aa
+        .replace(/[^\w\s]/g, '')                // remove punctuation
+        .replace(/\s+/g, ' ')
+        .trim()
+}
+
+function getTokens(text: string): string[] {
+    return text.split(/\s+/).filter(t => t.length > 0)
+}
+
+function computeJaccardSimilarity(a: string[], b: string[]): number {
+    if (a.length === 0 && b.length === 0) return 1
+    if (a.length === 0 || b.length === 0) return 0
+    const setA = new Set(a)
+    const setB = new Set(b)
+    let intersection = 0
+    for (const item of setA) {
+        if (setB.has(item)) intersection++
+    }
+    const union = setA.size + setB.size - intersection
+    return union === 0 ? 0 : intersection / union
+}
+
+function computeGroupDiversity(messages: string[]): number {
+    if (messages.length < 2) return 1
+    const uniqueHashes = new Set(messages.map(m => hashMessageContent(m)))
+    return uniqueHashes.size / messages.length
+}
+
+// ============================================================================
+// SPAM DETECTION ENGINE
+// ============================================================================
+
+function detectSpam(
+    content: string,
+    senderUserId: bigint,
+    state: RaidState,
+    now: number,
+    isNewUser: boolean
+): SpamDetectionResult {
+    const normalized = normalizeContentForComparison(content)
+    const tokens = getTokens(normalized)
+    const contentHash = hashMessageContent(content)
+    const features: string[] = []
+
+    // Get recent messages (last 10 seconds)
+    const recentWindow = state.messageWindow.filter(m => m.timestamp > now - 10000)
+    const userRecent = recentWindow.filter(m => m.sender_user_id === senderUserId)
+
+    // 1. Similarity to user's own recent messages
+    let maxUserSimilarity = 0
+    for (const msg of userRecent) {
+        const sim = computeJaccardSimilarity(tokens, getTokens(msg.normalized_content))
+        if (sim > maxUserSimilarity) maxUserSimilarity = sim
+    }
+    if (maxUserSimilarity > 0.8) features.push(`high_self_similarity:${maxUserSimilarity.toFixed(2)}`)
+
+    // 2. Similarity to other users' recent messages (template detection)
+    const otherRecent = recentWindow.filter(m => m.sender_user_id !== senderUserId)
+    let maxGroupSimilarity = 0
+    let similarCount = 0
+    for (const msg of otherRecent) {
+        const sim = computeJaccardSimilarity(tokens, getTokens(msg.normalized_content))
+        if (sim > maxGroupSimilarity) maxGroupSimilarity = sim
+        if (sim > 0.7) similarCount++
+    }
+    const groupSimilarityScore = otherRecent.length > 0 ? similarCount / otherRecent.length : 0
+    if (groupSimilarityScore > 0.3) features.push(`group_template:${(groupSimilarityScore * 100).toFixed(0)}%`)
+
+    // 3. User burst score (messages per 10s)
+    const userBurstScore = Math.min(1, userRecent.length / 6)
+    if (userRecent.length >= 4) features.push(`user_burst:${userRecent.length}`)
+
+    // 4. Raid pattern: many new users + low diversity
+    const newUserMsgs = recentWindow.filter(m => m.is_new_user)
+    const newUserRatio = recentWindow.length > 0 ? newUserMsgs.length / recentWindow.length : 0
+    const diversity = computeGroupDiversity(recentWindow.map(m => m.normalized_content))
+    const raidPatternScore = (1 - diversity) * 0.5 + newUserRatio * 0.5
+    if (newUserRatio > 0.5) features.push(`new_user_flood:${(newUserRatio * 100).toFixed(0)}%`)
+    if (diversity < 0.3) features.push(`low_diversity:${(diversity * 100).toFixed(0)}%`)
+
+    // Classification
+    let classification: MessageClass = 'normal_hype'
+    if (raidPatternScore > 0.6 && groupSimilarityScore > 0.3) {
+        classification = 'coordinated_raid_spam'
+    } else if (maxUserSimilarity > 0.85 || userBurstScore > 0.8) {
+        classification = 'repetitive_spam'
+    } else if (raidPatternScore > 0.4 || groupSimilarityScore > 0.5) {
+        classification = 'ambiguous'
+    }
+
+    return {
+        classification,
+        similarityScore: maxUserSimilarity,
+        groupSimilarityScore,
+        userBurstScore,
+        raidPatternScore,
+        features,
+    }
+}
+
+// ============================================================================
+// RAID VS HYPE CLASSIFICATION
+// ============================================================================
+
+function assessRaidState(state: RaidState, now: number): RaidAssessment {
+    const recentWindow = state.messageWindow.filter(m => m.timestamp > now - 5000)
+    const evidence: string[] = []
+
+    if (recentWindow.length < 10) {
+        return { state: 'none', confidence: 0, evidence: ['low_volume'] }
+    }
+
+    // Unique senders
+    const uniqueSenders = new Set(recentWindow.map(m => m.sender_user_id.toString()))
+    const senderRatio = uniqueSenders.size / recentWindow.length
+
+    // New user ratio
+    const newUserMsgs = recentWindow.filter(m => m.is_new_user)
+    const newUserRatio = newUserMsgs.length / recentWindow.length
+
+    // Content diversity
+    const diversity = computeGroupDiversity(recentWindow.map(m => m.normalized_content))
+
+    // Evidence collection
+    if (newUserRatio > 0.5) evidence.push(`new_user_ratio:${(newUserRatio * 100).toFixed(0)}%`)
+    if (diversity < 0.3) evidence.push(`low_content_diversity:${(diversity * 100).toFixed(0)}%`)
+    if (senderRatio > 0.8) evidence.push(`many_unique_senders:${uniqueSenders.size}`)
+    if (recentWindow.length > 50) evidence.push(`high_volume:${recentWindow.length}/5s`)
+
+    // Raid signals: many unique new users + low diversity = raid
+    // Hype signals: high volume + high diversity + established users = hype
+    const raidScore = (newUserRatio * 0.4) + ((1 - diversity) * 0.3) + (senderRatio * 0.3)
+
+    let raidState: RaidStateLabel = 'none'
+    if (raidScore > 0.7) {
+        raidState = 'confirmed_raid'
+    } else if (raidScore > 0.4) {
+        raidState = 'suspected_raid'
+    }
+
+    return { state: raidState, confidence: raidScore, evidence }
+}
+
+// ============================================================================
+// RISK SCORING
+// ============================================================================
+
+function computeRiskScore(
+    spamResult: SpamDetectionResult,
+    raidAssessment: RaidAssessment,
+    state: RaidState
+): RiskScoreState {
+    const components: Record<string, number> = {
+        spam_classification: spamResult.classification === 'coordinated_raid_spam' ? 0.8 :
+                             spamResult.classification === 'repetitive_spam' ? 0.5 :
+                             spamResult.classification === 'ambiguous' ? 0.3 : 0,
+        raid_confidence: raidAssessment.confidence,
+        group_similarity: spamResult.groupSimilarityScore,
+        raid_pattern: spamResult.raidPatternScore,
+    }
+
+    // Weighted sum
+    const score = (
+        components.spam_classification * 0.3 +
+        components.raid_confidence * 0.3 +
+        components.group_similarity * 0.2 +
+        components.raid_pattern * 0.2
+    )
+
+    // Map to mode
+    let mode: RiskMode = 'low'
+    if (score > 0.7) mode = 'high'
+    else if (score > 0.3) mode = 'medium'
+
+    return { score, mode, components }
+}
+
+// ============================================================================
+// DYNAMIC STRICTNESS
+// ============================================================================
+
+function getDynamicThresholds(riskState: RiskScoreState, baseSettings: ModeratorBotSettings): {
+    spamThreshold: number
+    timeoutMultiplier: number
+    autoEscalate: boolean
+} {
+    switch (riskState.mode) {
+        case 'high':
+            return { spamThreshold: 2, timeoutMultiplier: 3, autoEscalate: true }
+        case 'medium':
+            return { spamThreshold: 3, timeoutMultiplier: 1.5, autoEscalate: false }
+        case 'low':
+        default:
+            return { spamThreshold: baseSettings.spam_repeat_threshold, timeoutMultiplier: 1, autoEscalate: false }
+    }
 }
 
 function hashMessageContent(content: string): string {
@@ -574,21 +817,49 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
     const senderUserId = BigInt(payload.sender.kick_user_id)
     const now = Date.now()
     const contentHash = hashMessageContent(payload.content)
+    const normalizedContent = normalizeContentForComparison(payload.content)
 
     const state = getRaidState(broadcasterUserId)
+
+    // Detect new user: no badges and not seen in recent window
+    const hasBadges = payload.sender.badges && payload.sender.badges.length > 0
+    const seenBefore = state.messageWindow.some(m => m.sender_user_id === senderUserId)
+    const isNewUser = !hasBadges && !seenBefore
 
     state.messageWindow.push({
         timestamp: now,
         broadcaster_user_id: broadcasterUserId,
         sender_user_id: senderUserId,
         content_hash: contentHash,
+        normalized_content: normalizedContent,
+        is_new_user: isNewUser,
     })
+
+    if (isNewUser) state.newUserMessageCount++
 
     if (isInCooldown(state, broadcasterUserId, senderUserId, now, settings)) {
         return null
     }
 
-    const raidModeActive = checkRaidMode(state, broadcasterUserId, now, settings) || state.raidModeUntil > now
+    // Run enhanced spam detection
+    const spamResult = detectSpam(payload.content, senderUserId, state, now, isNewUser)
+
+    // Assess raid state
+    const raidAssessment = assessRaidState(state, now)
+
+    // Compute risk score
+    const riskState = computeRiskScore(spamResult, raidAssessment, state)
+    state.lastRiskScore = riskState.score
+
+    // Get dynamic thresholds based on risk
+    const dynamicThresholds = getDynamicThresholds(riskState, settings)
+
+    const raidModeActive = checkRaidMode(state, broadcasterUserId, now, settings) || state.raidModeUntil > now || raidAssessment.state === 'confirmed_raid'
+
+    // Log detection results for audit
+    if (spamResult.classification !== 'normal_hype' || riskState.mode !== 'low') {
+        console.log(`[moderation-worker] 📊 Detection: class=${spamResult.classification}, risk=${riskState.mode}(${riskState.score.toFixed(2)}), raid=${raidAssessment.state}, features=[${spamResult.features.join(', ')}]`)
+    }
 
     // AI moderation (toxicity / harassment / hate / sexual / violence etc)
     // This is the "AI mods" path; if enabled and the model flags it (or scores exceed threshold), we act.
@@ -649,7 +920,11 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
 
     const isSpam = checkUserSpam(state, senderUserId, contentHash, now, settings)
 
-    if (!isSpam && !raidModeActive) {
+    // Use enhanced classification: only act on spam classifications, not normal hype
+    const isClassifiedSpam = spamResult.classification === 'repetitive_spam' || 
+                              spamResult.classification === 'coordinated_raid_spam'
+
+    if (!isSpam && !raidModeActive && !isClassifiedSpam) {
         return null
     }
 
@@ -661,43 +936,52 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
         repeat_count: 0,
     }
 
-    // Use settings from DB with fallbacks to env vars
-    const timeoutSecs = settings.timeout_seconds ?? TIMEOUT_SECONDS
+    // Use settings from DB with dynamic thresholds based on risk
+    const baseTimeoutSecs = settings.timeout_seconds ?? TIMEOUT_SECONDS
+    const timeoutSecs = Math.round(baseTimeoutSecs * dynamicThresholds.timeoutMultiplier)
     const banOnRepeatCount = settings.ban_on_repeat_count ?? BAN_ON_REPEAT_COUNT
-    const spamRepeatThreshold = settings.spam_repeat_threshold ?? SPAM_REPEAT_THRESHOLD
+    const spamRepeatThreshold = dynamicThresholds.spamThreshold
 
     let action: ModerationAction | null = null
 
-    if (offense.count >= banOnRepeatCount) {
+    // Coordinated raid spam: immediate escalation in high risk mode
+    if (spamResult.classification === 'coordinated_raid_spam' && dynamicThresholds.autoEscalate) {
+        action = {
+            type: 'ban',
+            reason: `Coordinated raid spam detected (confidence: ${(riskState.score * 100).toFixed(0)}%, features: ${spamResult.features.slice(0, 3).join(', ')})`,
+            rule_id: 'coordinated_raid',
+            raid_mode_active: raidModeActive,
+        }
+    } else if (offense.count >= banOnRepeatCount) {
         action = {
             type: 'ban',
             reason: `Repeat spam offender (${offense.count} offenses)`,
             rule_id: 'repeat_offender',
             raid_mode_active: raidModeActive,
         }
-    } else if (offense.repeat_count >= spamRepeatThreshold) {
+    } else if (offense.repeat_count >= spamRepeatThreshold || spamResult.similarityScore > 0.85) {
         action = {
             type: 'timeout',
             duration_seconds: timeoutSecs,
-            reason: `Repeated identical messages (${offense.repeat_count}x)`,
+            reason: `Repeated messages (similarity: ${(spamResult.similarityScore * 100).toFixed(0)}%)`,
             rule_id: 'repeated_message',
             raid_mode_active: raidModeActive,
         }
-    } else if (isSpam || raidModeActive) {
+    } else if (isSpam || raidModeActive || isClassifiedSpam) {
         action = {
             type: 'timeout',
             duration_seconds: raidModeActive ? timeoutSecs * 2 : timeoutSecs,
             reason: raidModeActive
-                ? `Spam detected during raid mode`
-                : `Spam detected (${state.messageWindow.filter(m => m.sender_user_id === senderUserId && m.timestamp > now - 10000).length} msgs in 10s)`,
-            rule_id: raidModeActive ? 'raid_spam' : 'spam',
+                ? `Spam during raid mode (risk: ${riskState.mode})`
+                : `Spam detected (class: ${spamResult.classification}, burst: ${(spamResult.userBurstScore * 100).toFixed(0)}%)`,
+            rule_id: raidModeActive ? 'raid_spam' : spamResult.classification === 'coordinated_raid_spam' ? 'coordinated_raid' : 'spam',
             raid_mode_active: raidModeActive,
         }
     }
 
     if (action) {
         recordModerationAction(state, broadcasterUserId, senderUserId, now)
-        console.log(`[moderation-worker] ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason}`)
+        console.log(`[moderation-worker] ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason} [risk=${riskState.mode}]`)
     }
 
     return action
