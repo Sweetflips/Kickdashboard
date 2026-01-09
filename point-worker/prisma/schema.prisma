@@ -442,6 +442,7 @@ model ReferralReward {
   tier_id          String // 'starter', 'active', 'dedicated', 'superfan', 'legend'
   required_sweet_coins  Int // Sweet Coins threshold that was reached
   reward_sweet_coins    Int // Sweet Coins awarded to referrer
+  referee_reward_awarded Boolean @default(false) // Track if referee reward was awarded
   awarded_at       DateTime @default(now())
   created_at       DateTime @default(now())
 

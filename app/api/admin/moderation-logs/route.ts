@@ -138,6 +138,7 @@ export async function POST(request: Request) {
 
     if (action === 'risk_status') {
       // Compute current risk level based on recent activity
+      const now = new Date()
       const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000)
       const oneMinAgo = new Date(now.getTime() - 60 * 1000)
 

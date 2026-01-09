@@ -67,36 +67,26 @@ export async function POST(request: Request) {
                 })
 
                 if (!existingReward) {
-                    // Award this tier
+                    // Award this tier to both referrer and referee
                     try {
                         const prisma = db as any
-                        const reward = await prisma.referralReward.create({
-                            data: {
-                                referrer_user_id: referrerId,
-                                referee_user_id: refereeUserId,
-                                tier_id: tier.id,
-                                required_sweet_coins: tier.requiredPoints,
-                                reward_sweet_coins: tier.yourReward,
+                        
+                        // Award referrer (create record if it doesn't exist)
+                        await prisma.userSweetCoins.upsert({
+                            where: { user_id: referrerId },
+                            update: {
+                                total_sweet_coins: {
+                                    increment: tier.yourReward
+                                }
+                            },
+                            create: {
+                                user_id: referrerId,
+                                total_sweet_coins: tier.yourReward,
+                                total_emotes: 0,
                             }
                         })
 
-                        // Add Sweet Coins to referrer
-                        const referrerPoints = await prisma.userSweetCoins.findUnique({
-                            where: { user_id: referrerId }
-                        })
-
-                        if (referrerPoints) {
-                            await prisma.userSweetCoins.update({
-                                where: { user_id: referrerId },
-                                data: {
-                                    total_sweet_coins: {
-                                        increment: tier.yourReward
-                                    }
-                                }
-                            })
-                        }
-
-                        // Log the Sweet Coins award
+                        // Log the referrer's Sweet Coins award
                         await prisma.sweetCoinHistory.create({
                             data: {
                                 user_id: referrerId,
@@ -104,15 +94,100 @@ export async function POST(request: Request) {
                             }
                         })
 
+                        // Award referee (create record if it doesn't exist)
+                        await prisma.userSweetCoins.upsert({
+                            where: { user_id: refereeUserId },
+                            update: {
+                                total_sweet_coins: {
+                                    increment: tier.theirReward
+                                }
+                            },
+                            create: {
+                                user_id: refereeUserId,
+                                total_sweet_coins: tier.theirReward,
+                                total_emotes: 0,
+                            }
+                        })
+
+                        // Log the referee's Sweet Coins award
+                        await prisma.sweetCoinHistory.create({
+                            data: {
+                                user_id: refereeUserId,
+                                sweet_coins_earned: tier.theirReward,
+                            }
+                        })
+
+                        // Create reward record tracking both awards
+                        const reward = await prisma.referralReward.create({
+                            data: {
+                                referrer_user_id: referrerId,
+                                referee_user_id: refereeUserId,
+                                tier_id: tier.id,
+                                required_sweet_coins: tier.requiredPoints,
+                                reward_sweet_coins: tier.yourReward,
+                                referee_reward_awarded: true,
+                            }
+                        })
+
                         awardedRewards.push({
                             tier: tier.id,
-                            sweet_coins: tier.yourReward,
+                            referrerReward: tier.yourReward,
+                            refereeReward: tier.theirReward,
                             rewardId: reward.id
                         })
 
-                        console.log(`✅ Awarded referral reward: ${tier.id} (+${tier.yourReward}) to user ${referrerId}`)
+                        console.log(`✅ Awarded referral rewards for tier ${tier.id}: Referrer ${referrerId} (+${tier.yourReward}), Referee ${refereeUserId} (+${tier.theirReward})`)
                     } catch (awardError) {
                         console.error(`❌ Error awarding reward for tier ${tier.id}:`, awardError)
+                    }
+                } else if (!existingReward.referee_reward_awarded || existingReward.referee_reward_awarded === null) {
+                    // Referrer was already awarded, but referee wasn't - award referee now
+                    try {
+                        const prisma = db as any
+                        
+                        // Award referee (create record if it doesn't exist)
+                        await prisma.userSweetCoins.upsert({
+                            where: { user_id: refereeUserId },
+                            update: {
+                                total_sweet_coins: {
+                                    increment: tier.theirReward
+                                }
+                            },
+                            create: {
+                                user_id: refereeUserId,
+                                total_sweet_coins: tier.theirReward,
+                                total_emotes: 0,
+                            }
+                        })
+
+                        // Log the referee's Sweet Coins award
+                        await prisma.sweetCoinHistory.create({
+                            data: {
+                                user_id: refereeUserId,
+                                sweet_coins_earned: tier.theirReward,
+                            }
+                        })
+
+                        // Update reward record to mark referee reward as awarded
+                        await prisma.referralReward.update({
+                            where: {
+                                id: existingReward.id
+                            },
+                            data: {
+                                referee_reward_awarded: true,
+                            }
+                        })
+
+                        awardedRewards.push({
+                            tier: tier.id,
+                            referrerReward: 0, // Already awarded
+                            refereeReward: tier.theirReward,
+                            rewardId: existingReward.id
+                        })
+
+                        console.log(`✅ Awarded referee reward for tier ${tier.id}: Referee ${refereeUserId} (+${tier.theirReward})`)
+                    } catch (awardError) {
+                        console.error(`❌ Error awarding referee reward for tier ${tier.id}:`, awardError)
                     }
                 }
             }
