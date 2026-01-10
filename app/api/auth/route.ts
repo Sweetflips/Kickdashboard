@@ -32,8 +32,9 @@ function generatePKCE() {
 /**
  * Build redirect URI from request headers (proxy-aware)
  * Prefers x-forwarded-proto/x-forwarded-host, falls back to host header, then env var
+ * For bot flows, uses the bot-specific callback URL
  */
-function buildRedirectUri(request: Request): string {
+function buildRedirectUri(request: Request, isBot: boolean = false): string {
     const headers = request.headers
     const forwardedHost = headers.get('x-forwarded-host')
     const forwardedProto = headers.get('x-forwarded-proto')
@@ -41,25 +42,36 @@ function buildRedirectUri(request: Request): string {
 
     const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
 
+    // Bot callback path
+    const callbackPath = isBot ? '/api/auth/sweetflipsbot/callback' : '/api/auth/callback'
+
+    // Check for explicit redirect URI override in environment (highest priority for bot)
+    if (isBot) {
+        const explicitBotRedirectUri = process.env.KICK_BOT_REDIRECT_URI
+        if (explicitBotRedirectUri) {
+            return explicitBotRedirectUri
+        }
+    }
+
     // In production, force the canonical APP_URL to keep cookies/redirects aligned
     if (!isLocalhost) {
-        return `${APP_URL}/api/auth/callback`
+        return `${APP_URL}${callbackPath}`
     }
 
     // Prefer forwarded headers if present (proxy/reverse proxy)
     if (forwardedHost) {
         const proto = forwardedProto || 'https'
-        return `${proto}://${forwardedHost}/api/auth/callback`
+        return `${proto}://${forwardedHost}${callbackPath}`
     }
 
     // Fallback to host header
     if (host) {
         const proto = isLocalhost ? 'http' : 'https'
-        return `${proto}://${host}/api/auth/callback`
+        return `${proto}://${host}${callbackPath}`
     }
 
     // Final fallback to env var
-    return `${APP_URL}/api/auth/callback`
+    return `${APP_URL}${callbackPath}`
 }
 
 // Generate OAuth authorization URL
@@ -71,7 +83,7 @@ export async function GET(request: Request) {
 
         if (action === 'debug') {
             const isBot = searchParams.get('bot') === '1'
-            const redirectUri = buildRedirectUri(request)
+            const redirectUri = buildRedirectUri(request, isBot)
             const { clientId } = isBot ? getKickBotCredentials() : getKickUserCredentials()
 
             const scopes = [
@@ -122,10 +134,10 @@ export async function GET(request: Request) {
 
         if (action === 'authorize') {
             // Generate authorization URL with PKCE
-            const redirectUri = buildRedirectUri(request)
             const host = request.headers.get('host') || ''
             const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
             const isBot = searchParams.get('bot') === '1'
+            const redirectUri = buildRedirectUri(request, isBot)
             const { clientId } = isBot ? getKickBotCredentials() : getKickUserCredentials()
 
             const state = crypto.randomUUID()
