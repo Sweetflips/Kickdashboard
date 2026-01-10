@@ -2,15 +2,15 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
-  // Railway/Docker runs on Debian with OpenSSL 3.x (bookworm-slim). Include this
-  // target so Prisma ships the correct query engine at runtime.
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  provider   = "prisma-client-js"
+  engineType = "library"
+  // Using library engine for direct PostgreSQL connections
+  // This works with both direct connections and Accelerate
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Connection URLs are configured in prisma.config.ts (Prisma 7)
 }
 
 model User {
@@ -48,9 +48,20 @@ model User {
   telegram_user_id            String?
   telegram_username           String?
   telegram_access_token_hash  String?
+  twitter_user_id             String?
+  twitter_username            String?
+  twitter_access_token_hash   String?
+  instagram_user_id           String?
+  instagram_username          String?
+  instagram_access_token_hash String?
+  razed_user_id               String?
+  razed_username               String?
   kick_connected              Boolean   @default(true)
   discord_connected           Boolean   @default(false)
   telegram_connected          Boolean   @default(false)
+  twitter_connected           Boolean   @default(false)
+  instagram_connected         Boolean   @default(false)
+  razed_connected             Boolean   @default(false)
   is_admin                    Boolean   @default(false)
   is_excluded                 Boolean   @default(false)
   moderator_override          Boolean? // null = auto-detect, true = force on, false = force off
@@ -70,30 +81,23 @@ model User {
   raffle_entries               RaffleEntry[]
   advent_purchases             AdventPurchase[]
   purchase_transactions        PurchaseTransaction[]
-  advent_days_drawn            AdventDayStatus[]
   promo_codes_created          PromoCode[]           @relation("PromoCodeCreator")
   promo_code_redemptions       PromoCodeRedemption[] @relation("PromoCodeRedemptions")
   // Referral relations
   referrals_as_referrer        Referral[]            @relation("Referrer")
   referrals_as_referee         Referral[]            @relation("Referee")
   referral_rewards_earned      ReferralReward[]
-  meeting_notes_created        MeetingNote[]       @relation("MeetingNoteCreator")
+  // Achievement system relations
+  user_achievements            UserAchievement[]
+  coin_ledger_entries          CoinLedger[]
+  dashboard_login_days         DashboardLoginDay[]
+  chat_counter                 ChatCounter?
+  chat_days                    ChatDay[]
+  leaderboard_period_results   LeaderboardPeriodResult[]
+  monthly_wins                 MonthlyWinner[]
+  watch_time_aggregate         WatchTimeAggregate?
 
-  @@map("users")
-}
-
-model MeetingNote {
-  id         BigInt   @id @default(autoincrement())
-  title      String
-  content    String   @db.Text
-  created_by BigInt
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  creator User @relation("MeetingNoteCreator", fields: [created_by], references: [id], onDelete: Cascade)
-
-  @@index([created_by, created_at])
-  @@map("meeting_notes")
+  @@map("platform_users")
 }
 
 model PurchaseTransaction {
@@ -114,7 +118,7 @@ model PurchaseTransaction {
   @@index([type, created_at])
   @@index([raffle_id])
   @@index([advent_item_id])
-  @@map("purchase_transactions")
+  @@map("platform_purchase_transactions")
 }
 
 model StreamSession {
@@ -144,7 +148,7 @@ model StreamSession {
   // Partial unique index enforced at database level via migration
   // Ensures only one active session per broadcaster
   @@index([broadcaster_user_id, ended_at])
-  @@map("stream_sessions")
+  @@map("platform_stream_sessions")
 }
 
 model ChatMessage {
@@ -181,7 +185,7 @@ model ChatMessage {
   @@index([sender_user_id, stream_session_id])
   @@index([broadcaster_user_id, created_at])
   @@index([has_emotes])
-  @@map("chat_messages")
+  @@map("platform_chat_messages")
 }
 
 model OfflineChatMessage {
@@ -209,7 +213,7 @@ model OfflineChatMessage {
   sender      User @relation("OfflineSenderMessages", fields: [sender_user_id], references: [kick_user_id])
   broadcaster User @relation("OfflineBroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
 
-  @@map("offline_chat_messages")
+  @@map("platform_offline_chat_messages")
 }
 
 model UserSweetCoins {
@@ -225,7 +229,7 @@ model UserSweetCoins {
   // Relations
   user User @relation(fields: [user_id], references: [id])
 
-  @@map("user_sweet_coins")
+  @@map("platform_user_sweet_coins")
 }
 
 model SweetCoinHistory {
@@ -244,7 +248,7 @@ model SweetCoinHistory {
   @@index([stream_session_id])
   @@index([user_id, earned_at])
   @@index([earned_at])
-  @@map("sweet_coin_history")
+  @@map("platform_sweet_coin_history")
 }
 
 model Raffle {
@@ -264,10 +268,6 @@ model Raffle {
   hidden               Boolean   @default(false) // Hidden from public view by admin
   draw_seed            String? // For transparency
   number_of_winners    Int       @default(1)
-  rigging_enabled      Boolean   @default(false)
-  wheel_background_url String?
-  center_logo_url      String?
-  slice_opacity        Float?    @default(0.5)
   drawn_at             DateTime?
   claim_message        String?   @db.Text // Custom instructions for winners to claim prize
   created_by           BigInt
@@ -276,11 +276,8 @@ model Raffle {
 
   creator        User                 @relation(fields: [created_by], references: [id])
   entries        RaffleEntry[]
-  winners        RaffleWinner[]
-  rigged_winners RaffleRiggedWinner[]
-  wheel_overlays WheelOverlayState[]
 
-  @@map("raffles")
+  @@map("platform_raffles")
 }
 
 model RaffleEntry {
@@ -293,40 +290,9 @@ model RaffleEntry {
 
   raffle      Raffle               @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
   user        User                 @relation(fields: [user_id], references: [id])
-  wins        RaffleWinner[]
-  riggedSlots RaffleRiggedWinner[]
 
   @@unique([raffle_id, user_id])
-  @@map("raffle_entries")
-}
-
-model RaffleWinner {
-  id                    BigInt   @id @default(autoincrement())
-  raffle_id             BigInt
-  entry_id              BigInt
-  selected_at           DateTime @default(now())
-  // Optional metadata
-  selected_ticket_index BigInt?
-  spin_number           Int?
-  is_rigged             Boolean? @default(false)
-
-  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
-  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
-
-  @@map("raffle_winners")
-}
-
-model RaffleRiggedWinner {
-  id        BigInt @id @default(autoincrement())
-  raffle_id BigInt
-  entry_id  BigInt
-  position  Int // 1-based position in rigging order
-
-  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
-  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
-
-  @@unique([raffle_id, position])
-  @@map("raffle_rigged_winners")
+  @@map("platform_raffle_entries")
 }
 
 model UserSession {
@@ -347,7 +313,7 @@ model UserSession {
 
   @@index([user_id])
   @@index([last_seen_at])
-  @@map("user_sessions")
+  @@map("platform_user_sessions")
 }
 
 model PromoCode {
@@ -369,7 +335,7 @@ model PromoCode {
   @@index([code])
   @@index([expires_at])
   @@index([is_active])
-  @@map("promo_codes")
+  @@map("platform_promo_codes")
 }
 
 model PromoCodeRedemption {
@@ -386,7 +352,7 @@ model PromoCodeRedemption {
   @@unique([promo_code_id, user_id])
   @@index([user_id])
   @@index([redeemed_at])
-  @@map("promo_code_redemptions")
+  @@map("platform_promo_code_redemptions")
 }
 
 model SweetCoinAwardJob {
@@ -406,7 +372,7 @@ model SweetCoinAwardJob {
 
   @@index([status, created_at])
   @@index([status, locked_at])
-  @@map("sweet_coin_award_jobs")
+  @@map("platform_sweet_coin_award_jobs")
 }
 
 // Full chat message job queue - worker handles ALL writes
@@ -433,7 +399,7 @@ model ChatJob {
 
   @@index([status, created_at])
   @@index([status, locked_at])
-  @@map("chat_jobs")
+  @@map("platform_chat_jobs")
 }
 
 model AdventPurchase {
@@ -446,20 +412,7 @@ model AdventPurchase {
   user User @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, item_id])
-  @@map("advent_purchases")
-}
-
-model AdventDayStatus {
-  day        Int       @id // December day (1-31)
-  drawn      Boolean   @default(false)
-  drawn_at   DateTime?
-  drawn_by   BigInt? // Admin user ID who marked it as drawn
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-
-  drawn_by_user User? @relation(fields: [drawn_by], references: [id])
-
-  @@map("advent_day_status")
+  @@map("platform_advent_purchases")
 }
 
 model Referral {
@@ -479,7 +432,7 @@ model Referral {
   @@index([referrer_user_id])
   @@index([referral_code])
   @@index([created_at])
-  @@map("referrals")
+  @@map("platform_referrals")
 }
 
 model ReferralReward {
@@ -489,6 +442,7 @@ model ReferralReward {
   tier_id          String // 'starter', 'active', 'dedicated', 'superfan', 'legend'
   required_sweet_coins  Int // Sweet Coins threshold that was reached
   reward_sweet_coins    Int // Sweet Coins awarded to referrer
+  referee_reward_awarded Boolean @default(false) // Track if referee reward was awarded
   awarded_at       DateTime @default(now())
   created_at       DateTime @default(now())
 
@@ -499,61 +453,7 @@ model ReferralReward {
   @@unique([referrer_user_id, referee_user_id, tier_id])
   @@index([referrer_user_id])
   @@index([awarded_at])
-  @@map("referral_rewards")
-}
-
-// OBS Wheel Overlay (singleton state + custom entrants + spin events)
-model WheelOverlayState {
-  key                  String   @id @default("default")
-  mode                 String   @default("raffle") // raffle | custom
-  raffle_id            BigInt?
-  title                String?
-  locked               Boolean  @default(false)
-  locked_entries       Json?
-  locked_total_tickets Int?
-  wheel_background_url String?
-  center_logo_url      String?
-  slice_opacity        Float?   @default(0.5)
-  updated_at           DateTime @updatedAt
-  created_at           DateTime @default(now())
-
-  raffle   Raffle?               @relation(fields: [raffle_id], references: [id], onDelete: SetNull)
-  entrants WheelOverlayEntrant[]
-  spins    WheelOverlaySpin[]
-
-  @@map("wheel_overlay_state")
-}
-
-model WheelOverlayEntrant {
-  id          BigInt   @id @default(autoincrement())
-  overlay_key String
-  label       String
-  weight      Int      @default(1)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-
-  overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
-
-  @@index([overlay_key])
-  @@map("wheel_overlay_entrants")
-}
-
-model WheelOverlaySpin {
-  id                  BigInt   @id @default(autoincrement())
-  overlay_key         String
-  version             Int
-  mode                String // raffle | custom
-  raffle_id           BigInt?
-  target_ticket_index Int
-  winner_label        String
-  winner_user_id      BigInt?
-  winner_entry_id     BigInt?
-  created_at          DateTime @default(now())
-
-  overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
-
-  @@index([overlay_key, version])
-  @@map("wheel_overlay_spins")
+  @@map("platform_referral_rewards")
 }
 
 model AppSetting {
@@ -562,5 +462,218 @@ model AppSetting {
   updated_at  DateTime @updatedAt
   created_at  DateTime @default(now())
 
-  @@map("app_settings")
+  @@map("platform_app_settings")
+}
+
+// AI Moderation Action Log - tracks every moderation action taken
+model ModerationActionLog {
+  id                  BigInt   @id @default(autoincrement())
+  broadcaster_user_id BigInt
+  target_user_id      BigInt
+  target_username     String
+  action_type         String   // timeout | ban | unban | delete_message
+  duration_seconds    Int?     // For timeouts
+  reason              String?  @db.Text
+  rule_id             String?  // spam | repeated_message | raid_spam | ai_moderation | repeat_offender
+  ai_flagged          Boolean  @default(false)
+  ai_categories       Json?    // OpenAI moderation categories that triggered
+  ai_max_score        Float?   // Highest score from OpenAI
+  message_content     String?  @db.Text // The message that triggered the action
+  message_id          String?
+  raid_mode_active    Boolean  @default(false)
+  dry_run             Boolean  @default(false)
+  success             Boolean  @default(true)
+  error_message       String?  @db.Text
+  created_at          DateTime @default(now())
+
+  @@index([broadcaster_user_id, created_at])
+  @@index([target_user_id, created_at])
+  @@index([action_type, created_at])
+  @@index([rule_id, created_at])
+  @@index([ai_flagged, created_at])
+  @@map("platform_moderation_action_logs")
+}
+
+// Bot Reply Log - tracks bot replies for analysis
+model BotReplyLog {
+  id                  BigInt   @id @default(autoincrement())
+  broadcaster_user_id BigInt
+  trigger_user_id     BigInt
+  trigger_username    String
+  trigger_message     String   @db.Text
+  reply_content       String   @db.Text
+  reply_type          String   // ai | simple | quick_response
+  ai_model            String?
+  success             Boolean  @default(true)
+  error_message       String?  @db.Text
+  latency_ms          Int?
+  created_at          DateTime @default(now())
+
+  @@index([broadcaster_user_id, created_at])
+  @@index([reply_type, created_at])
+  @@map("platform_bot_reply_logs")
+}
+
+// Razed Account Verification - tracks chat-based verification codes
+model RazedVerification {
+  id                BigInt   @id @default(autoincrement())
+  kick_user_id      BigInt
+  razed_username    String
+  verification_code String   @unique
+  status            String   @default("pending") // pending, verified, expired
+  verified_at       DateTime?
+  expires_at        DateTime
+  created_at        DateTime @default(now())
+
+  @@index([verification_code])
+  @@index([status, expires_at])
+  @@map("platform_razed_verifications")
+}
+
+// Achievement system tables
+enum AchievementCategory {
+  STREAMS
+  COMMUNITY
+  CHAT
+  LEADERBOARD
+  SPECIAL
+}
+
+enum AchievementStatus {
+  LOCKED
+  UNLOCKED
+  CLAIMED
+}
+
+model AchievementDefinition {
+  id           String               @id // e.g. "DISCORD_CONNECTED"
+  category     AchievementCategory
+  title        String
+  description  String
+  reward_coins Int
+  claimable    Boolean              @default(true)
+  sort_order   Int                  @default(0)
+  created_at   DateTime             @default(now())
+  updated_at   DateTime             @updatedAt
+
+  user_achievements UserAchievement[]
+
+  @@map("platform_achievement_definitions")
+}
+
+model UserAchievement {
+  id             BigInt            @id @default(autoincrement())
+  user_id        BigInt
+  achievement_id String
+  status         AchievementStatus @default(LOCKED)
+  unlocked_at    DateTime?
+  claimed_at     DateTime?
+  created_at     DateTime          @default(now())
+  updated_at     DateTime          @updatedAt
+
+  user        User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  achievement AchievementDefinition @relation(fields: [achievement_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, achievement_id])
+  @@index([user_id])
+  @@index([achievement_id])
+  @@index([status])
+  @@map("platform_user_achievements")
+}
+
+model CoinLedger {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  amount     Int      // positive for credits, negative for debits
+  reason     String   // e.g. "achievement_claim", "chat_message", "promo_code"
+  ref_id     String?  // idempotency key, e.g. "achievement:DISCORD_CONNECTED:123"
+  metadata   Json?    // optional extra data
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, ref_id])
+  @@index([user_id, created_at])
+  @@index([reason])
+  @@map("platform_coin_ledger")
+}
+
+model DashboardLoginDay {
+  id        BigInt   @id @default(autoincrement())
+  user_id   BigInt
+  day       DateTime @db.Date
+  month_key String   // YYYY-MM format for quick monthly queries
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, day])
+  @@index([user_id, month_key])
+  @@map("platform_dashboard_login_days")
+}
+
+model ChatCounter {
+  id            BigInt   @id @default(autoincrement())
+  user_id       BigInt   @unique
+  message_count Int      @default(0)
+  emote_count   Int      @default(0)
+  updated_at    DateTime @updatedAt
+  created_at    DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("platform_chat_counters")
+}
+
+model ChatDay {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  day        DateTime @db.Date
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, day])
+  @@index([user_id])
+  @@map("platform_chat_days")
+}
+
+model LeaderboardPeriodResult {
+  id         BigInt   @id @default(autoincrement())
+  period_key String   // e.g. "2026-01-W01" or "2026-01"
+  user_id    BigInt
+  rank       Int
+  points     Int
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([period_key, user_id])
+  @@index([period_key, rank])
+  @@map("platform_leaderboard_period_results")
+}
+
+model MonthlyWinner {
+  id         BigInt   @id @default(autoincrement())
+  month_key  String   @unique // YYYY-MM format
+  user_id    BigInt
+  points     Int
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("platform_monthly_winners")
+}
+
+model WatchTimeAggregate {
+  id               BigInt   @id @default(autoincrement())
+  user_id          BigInt   @unique
+  total_minutes    Int      @default(0)
+  last_updated_at  DateTime @updatedAt
+  created_at       DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("platform_watch_time_aggregates")
 }

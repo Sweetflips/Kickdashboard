@@ -39,8 +39,9 @@ const BAN_ON_REPEAT_COUNT = parseInt(process.env.KICK_BAN_ON_REPEAT_COUNT || '3'
 const RAIDMODE_DURATION_MS = parseInt(process.env.KICK_RAIDMODE_DURATION_MS || '300000', 10)
 const MODERATION_COOLDOWN_MS = parseInt(process.env.KICK_MODERATION_COOLDOWN_MS || '60000', 10)
 
-// Advisory lock ID (must be unique per worker type; point-worker uses 9223372036854775806)
-const ADVISORY_LOCK_ID = BigInt('9223372036854775807')
+// Advisory lock ID (must be unique per worker type)
+// Note: Kick-moderator uses 9223372036854775807, so we use a different ID here
+const ADVISORY_LOCK_ID = BigInt('9223372036854775803')
 
 // OpenAI moderation settings (AI moderation decisions, not chat replies)
 const OPENAI_MODERATION_MODEL = process.env.OPENAI_MODERATION_MODEL || 'omni-moderation-latest'
@@ -921,7 +922,7 @@ async function evaluateMessageForModeration(payload: ChatJobPayload, settings: M
     const isSpam = checkUserSpam(state, senderUserId, contentHash, now, settings)
 
     // Use enhanced classification: only act on spam classifications, not normal hype
-    const isClassifiedSpam = spamResult.classification === 'repetitive_spam' || 
+    const isClassifiedSpam = spamResult.classification === 'repetitive_spam' ||
                               spamResult.classification === 'coordinated_raid_spam'
 
     if (!isSpam && !raidModeActive && !isClassifiedSpam) {
@@ -1356,14 +1357,14 @@ async function runWorker(): Promise<void> {
     const hasClientSecret = !!(process.env.KICK_BOT_CLIENT_SECRET || process.env.KICK_CLIENT_SECRET)
     const hasRedirectUri = !!process.env.KICK_REDIRECT_URI
     const hasEncryptionKey = !!process.env.TOKEN_ENCRYPTION_KEY
-    
+
     console.log(`[moderation-worker] Credentials check:`)
     console.log(`  - KICK_BOT_CLIENT_ID or KICK_CLIENT_ID: ${hasClientId ? '✅' : '❌ MISSING'}`)
     console.log(`  - KICK_BOT_CLIENT_SECRET or KICK_CLIENT_SECRET: ${hasClientSecret ? '✅' : '❌ MISSING'}`)
     console.log(`  - KICK_REDIRECT_URI: ${hasRedirectUri ? '✅' : '⚠️ (using default)'}`)
     console.log(`  - TOKEN_ENCRYPTION_KEY: ${hasEncryptionKey ? '✅' : '❌ MISSING'}`)
     console.log(`  - KICK_MODERATOR_USERNAME: ${process.env.KICK_MODERATOR_USERNAME || 'sweetflipsbot (default)'}`)
-    
+
     if (!hasClientId || !hasClientSecret) {
         console.error(`[moderation-worker] ⚠️ OAuth credentials missing! Token refresh will fail.`)
         console.error(`[moderation-worker]    Set KICK_BOT_CLIENT_ID and KICK_BOT_CLIENT_SECRET`)
