@@ -727,6 +727,8 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
 
         // Fetch from livestreams endpoint - this is the authoritative source for live streams and thumbnails
         if (broadcasterUserId) {
+            // Acquire rate limit slot before making /livestreams request
+            const releaseSlot = await acquireRateLimitSlot()
             try {
                 // Fetch thumbnail from /livestreams endpoint using broadcaster_user_id
                 // Note: /livestreams endpoint doesn't support slug, only broadcaster_user_id[]
@@ -742,6 +744,15 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                         'Content-Type': 'application/json',
                     },
                 })
+
+                // Handle 429 rate limit
+                if (livestreamsResponse.status === 429) {
+                    const retryAfter = livestreamsResponse.headers.get('Retry-After')
+                    const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 30000
+                    console.warn(`[Channel API] /livestreams endpoint returned 429, backing off for ${backoffMs}ms`)
+                    triggerGlobalBackoff(backoffMs)
+                    return null
+                }
 
                 // If we get 401, try with authentication
                 if (livestreamsResponse.status === 401) {
@@ -759,6 +770,15 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                     }
 
                     livestreamsResponse = await fetch(livestreamsUrl, { headers })
+
+                    // Handle 429 on authenticated request
+                    if (livestreamsResponse.status === 429) {
+                        const retryAfter = livestreamsResponse.headers.get('Retry-After')
+                        const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 30000
+                        console.warn(`[Channel API] /livestreams endpoint returned 429 (authenticated), backing off for ${backoffMs}ms`)
+                        triggerGlobalBackoff(backoffMs)
+                        return null
+                    }
                 }
 
                 if (livestreamsResponse && livestreamsResponse.ok) {
@@ -840,6 +860,8 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
                     livestreamsError instanceof Error ? livestreamsError.message : 'Unknown error')
                 // If livestreams fetch fails, we can't determine if stream is live
                 return null
+            } finally {
+                releaseSlot()
             }
         } else {
             console.warn(`[Kick API] No broadcaster_user_id found in channel response, cannot fetch thumbnail from livestreams endpoint`)
@@ -870,86 +892,128 @@ export async function getChannelWithLivestream(slug: string): Promise<StreamThum
  * Get livestreams (for bulk operations)
  * Uses GET /public/v1/livestreams endpoint
  * Tries without auth first, then with auth if needed
+ * Includes rate limiting and 429 handling with exponential backoff
  */
 export async function getLivestreams(filters?: {
     broadcaster_user_id?: number[]
     limit?: number
 }): Promise<StreamThumbnail[]> {
-    try {
-        const params = new URLSearchParams()
-        if (filters?.broadcaster_user_id) {
-            filters.broadcaster_user_id.forEach(id => {
-                params.append('broadcaster_user_id[]', id.toString())
+    const maxRetries = 3
+    let lastError: Error | null = null
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        // Acquire rate limit slot before making request
+        const releaseSlot = await acquireRateLimitSlot()
+
+        try {
+            const params = new URLSearchParams()
+            if (filters?.broadcaster_user_id) {
+                filters.broadcaster_user_id.forEach(id => {
+                    params.append('broadcaster_user_id[]', id.toString())
+                })
+            }
+            if (filters?.limit) {
+                params.append('limit', filters.limit.toString())
+            }
+
+            const queryString = params.toString()
+            const endpoint = `/livestreams${queryString ? `?${queryString}` : ''}`
+            const url = `${KICK_API_BASE}${endpoint}`
+
+            // Try without authentication first (public endpoint might not require auth)
+            let response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
             })
-        }
-        if (filters?.limit) {
-            params.append('limit', filters.limit.toString())
-        }
 
-        const queryString = params.toString()
-        const endpoint = `/livestreams${queryString ? `?${queryString}` : ''}`
-        const url = `${KICK_API_BASE}${endpoint}`
-
-        // Try without authentication first (public endpoint might not require auth)
-        let response = await fetch(url, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            },
-        })
-
-        // If we get 401, try with authentication
-        if (response.status === 401) {
-            console.log(`[Kick API] Got 401 without auth for livestreams, retrying with authentication`)
-            const token = await getBroadcasterToken()
-            const clientId = process.env.KICK_CLIENT_ID
-
-            const headers: Record<string, string> = {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
+            // Handle 429 rate limit
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After')
+                const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.min(30000, 5000 * Math.pow(2, attempt))
+                console.warn(`[Kick API] /livestreams endpoint returned 429, backing off for ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})`)
+                triggerGlobalBackoff(backoffMs)
+                releaseSlot()
+                await new Promise(resolve => setTimeout(resolve, backoffMs))
+                continue
             }
 
-            if (clientId) {
-                headers['Client-Id'] = clientId
+            // If we get 401, try with authentication
+            if (response.status === 401) {
+                console.log(`[Kick API] Got 401 without auth for livestreams, retrying with authentication`)
+                const token = await getBroadcasterToken()
+                const clientId = process.env.KICK_CLIENT_ID
+
+                const headers: Record<string, string> = {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                }
+
+                if (clientId) {
+                    headers['Client-Id'] = clientId
+                }
+
+                response = await fetch(url, { headers })
+
+                // Handle 429 on authenticated request
+                if (response.status === 429) {
+                    const retryAfter = response.headers.get('Retry-After')
+                    const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.min(30000, 5000 * Math.pow(2, attempt))
+                    console.warn(`[Kick API] /livestreams endpoint returned 429 (authenticated), backing off for ${backoffMs}ms`)
+                    triggerGlobalBackoff(backoffMs)
+                    releaseSlot()
+                    await new Promise(resolve => setTimeout(resolve, backoffMs))
+                    continue
+                }
             }
 
-            response = await fetch(url, { headers })
-        }
-
-        if (!response.ok) {
-            const errorText = await response.text()
-            throw new Error(`Kick API error: ${response.status} ${errorText}`)
-        }
-
-        const apiResponse: { data: KickLivestream[] } = await response.json()
-
-        // Filter response to only include requested broadcaster IDs
-        // The Kick API may return other streams if the filter doesn't work properly
-        let filteredData = apiResponse.data
-        if (filters?.broadcaster_user_id && filters.broadcaster_user_id.length > 0) {
-            const requestedIds = new Set(filters.broadcaster_user_id)
-            filteredData = apiResponse.data.filter(ls => requestedIds.has(ls.broadcaster_user_id))
-
-            if (filteredData.length !== apiResponse.data.length) {
-                console.warn(`[Kick API] Livestreams response contained ${apiResponse.data.length - filteredData.length} unrequested streams, filtered out`)
+            if (!response.ok) {
+                const errorText = await response.text()
+                throw new Error(`Kick API error: ${response.status} ${errorText}`)
             }
-        }
 
-        return filteredData.map(livestream => ({
-            streamId: livestream.broadcaster_user_id.toString(),
-            channelSlug: livestream.slug || '',
-            // Per API docs: thumbnail is a direct string URL
-            thumbnailUrl: typeof livestream.thumbnail === 'string'
-                ? livestream.thumbnail
-                : extractThumbnailUrl(livestream.thumbnail),
-            startedAt: livestream.started_at,
-            fetchedAt: new Date(),
-        }))
-    } catch (error) {
-        console.error('Error fetching livestreams:', error)
-        return []
+            const apiResponse: { data: KickLivestream[] } = await response.json()
+
+            // Filter response to only include requested broadcaster IDs
+            // The Kick API may return other streams if the filter doesn't work properly
+            let filteredData = apiResponse.data
+            if (filters?.broadcaster_user_id && filters.broadcaster_user_id.length > 0) {
+                const requestedIds = new Set(filters.broadcaster_user_id)
+                filteredData = apiResponse.data.filter(ls => requestedIds.has(ls.broadcaster_user_id))
+
+                if (filteredData.length !== apiResponse.data.length) {
+                    console.warn(`[Kick API] Livestreams response contained ${apiResponse.data.length - filteredData.length} unrequested streams, filtered out`)
+                }
+            }
+
+            return filteredData.map(livestream => ({
+                streamId: livestream.broadcaster_user_id.toString(),
+                channelSlug: livestream.slug || '',
+                // Per API docs: thumbnail is a direct string URL
+                thumbnailUrl: typeof livestream.thumbnail === 'string'
+                    ? livestream.thumbnail
+                    : extractThumbnailUrl(livestream.thumbnail),
+                startedAt: livestream.started_at,
+                fetchedAt: new Date(),
+            }))
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error))
+            console.error(`[Kick API] Error fetching livestreams (attempt ${attempt + 1}/${maxRetries}):`, lastError.message)
+
+            // If not last attempt, wait before retry
+            if (attempt < maxRetries - 1) {
+                const backoffMs = Math.min(10000, 1000 * Math.pow(2, attempt))
+                await new Promise(resolve => setTimeout(resolve, backoffMs))
+            }
+        } finally {
+            releaseSlot()
+        }
     }
+
+    console.error('[Kick API] All retries exhausted for getLivestreams')
+    return []
 }
 
 /**

@@ -1404,7 +1404,7 @@ export function clearTokenCache(): void {
  */
 export async function getModeratorToken(): Promise<string | null> {
     const MODERATOR_USERNAME = process.env.KICK_MODERATOR_USERNAME || 'sweetflipsbot'
-    
+
     try {
         console.log(`[Kick API] Looking for moderator token for: ${MODERATOR_USERNAME}`)
 
@@ -1434,7 +1434,7 @@ export async function getModeratorToken(): Promise<string | null> {
             return accessToken
         } catch (decryptError) {
             console.warn(`[Kick API] Failed to decrypt moderator token:`, decryptError instanceof Error ? decryptError.message : 'Unknown error')
-            
+
             // Try to refresh if we have a refresh token
             if (moderator.refresh_token_encrypted) {
                 const { clientId, clientSecret } = getKickBotCredentials()
@@ -1460,7 +1460,7 @@ export async function getModeratorToken(): Promise<string | null> {
 
                     if (response.ok) {
                         const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
-                        
+
                         // Update tokens in database
                         await (db as any).user.update({
                             where: { kick_user_id: moderator.kick_user_id },
@@ -1484,7 +1484,7 @@ export async function getModeratorToken(): Promise<string | null> {
                     console.error(`[Kick API] Error refreshing moderator token:`, refreshError instanceof Error ? refreshError.message : 'Unknown error')
                 }
             }
-            
+
             return null
         }
     } catch (dbError) {
@@ -1503,7 +1503,7 @@ export async function moderationBan(params: {
     reason?: string
 }): Promise<{ success: boolean; error?: string }> {
     const releaseSlot = await acquireRateLimitSlot()
-    
+
     try {
         const moderatorToken = await getModeratorToken()
         if (!moderatorToken) {
@@ -1521,11 +1521,11 @@ export async function moderationBan(params: {
         }
 
         const body: any = {
-            broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint' 
-                ? params.broadcaster_user_id.toString() 
+            broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint'
+                ? params.broadcaster_user_id.toString()
                 : params.broadcaster_user_id,
-            user_id: typeof params.user_id === 'bigint' 
-                ? params.user_id.toString() 
+            user_id: typeof params.user_id === 'bigint'
+                ? params.user_id.toString()
                 : params.user_id,
         }
 
@@ -1545,13 +1545,13 @@ export async function moderationBan(params: {
 
         if (!response.ok) {
             const errorText = await response.text()
-            
+
             if (response.status === 429) {
                 const retryAfter = response.headers.get('Retry-After')
                 const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000
                 triggerGlobalBackoff(backoffMs)
             }
-            
+
             return { success: false, error: `Kick API error: ${response.status} ${errorText}` }
         }
 
@@ -1578,7 +1578,7 @@ export async function sendModeratorChatMessage(params: {
     type?: 'user' | 'bot'
 }): Promise<{ success: boolean; error?: string }> {
     const releaseSlot = await acquireRateLimitSlot()
-    
+
     try {
         const moderatorToken = await getModeratorToken()
         if (!moderatorToken) {
@@ -1604,8 +1604,8 @@ export async function sendModeratorChatMessage(params: {
         }
 
         const body = {
-            broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint' 
-                ? params.broadcaster_user_id.toString() 
+            broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint'
+                ? params.broadcaster_user_id.toString()
                 : params.broadcaster_user_id,
             content: params.content.trim(),
             type: params.type || 'bot',
@@ -1619,13 +1619,13 @@ export async function sendModeratorChatMessage(params: {
 
         if (!response.ok) {
             const errorText = await response.text()
-            
+
             if (response.status === 429) {
                 const retryAfter = response.headers.get('Retry-After')
                 const backoffMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000
                 triggerGlobalBackoff(backoffMs)
             }
-            
+
             if (response.status === 500) {
                 try {
                     const errorJson = JSON.parse(errorText)
@@ -1637,7 +1637,7 @@ export async function sendModeratorChatMessage(params: {
                     // Not JSON, continue with normal error
                 }
             }
-            
+
             return { success: false, error: `Kick API error: ${response.status} ${errorText}` }
         }
 
