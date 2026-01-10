@@ -39,6 +39,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@esbuild/linux-x64": "^0.27.2",
     "@types/node": "^20.11.0",
     "@types/pg": "^8.16.0",
     "@types/react": "^18.2.0",
@@ -51,7 +52,7 @@
     "pg": "^8.16.3",
     "postcss": "^8.4.33",
     "prisma": "^7.2.0",
-    "sharp": "^0.34.4",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"
   }

@@ -557,14 +557,8 @@ function evaluateMessageForModeration(payload: ChatJobPayload): ModerationAction
 
     if (action) {
         recordModerationAction(state, broadcasterUserId, senderUserId, now)
-        const prefix = DRY_RUN ? '[DRY RUN] ' : ''
-        if (DRY_RUN) {
-            console.log(`${prefix}[moderation-worker] Action determined (DRY RUN): ${action.type.toUpperCase()}`)
-            // Do NOT return null here. Return the action so the main loop handles it (and skips bot reply).
-            // The main loop must handle blocking the actual API call for bans.
-        } else {
-            console.log(`${prefix}[moderation-worker] ${action.type.toUpperCase()} user ${payload.sender.username} (${senderUserId}): ${action.reason}`)
-        }
+        // Log the detected action - actual execution/dry-run handling is done in processModerationJob
+        console.log(`[moderation-worker] Moderation action detected: ${action.type.toUpperCase()} for ${payload.sender.username} - ${action.reason}`)
     }
 
     return action
@@ -670,11 +664,22 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
             await sendStartupMessage()
         }
 
+        // Load settings for moderation
+        const settings = await getModeratorBotSettingsFromDb()
+
+        // Check dry-run mode from both settings and env variable
+        const isDryRun = settings.dry_run_mode || DRY_RUN
+
         // Moderation check
         const moderationAction = evaluateMessageForModeration(payload)
         if (moderationAction) {
             try {
-                if (moderationAction.type === 'warn') {
+                if (isDryRun) {
+                    // Dry run - log but don't execute any moderation actions
+                    const dryRunSource = settings.dry_run_mode ? 'database settings' : 'KICK_MODERATION_DRY_RUN env var'
+                    console.log(`[moderation-worker] [DRY RUN] Would ${moderationAction.type.toUpperCase()} user ${payload.sender.username} (${moderationAction.reason}) - enabled via ${dryRunSource}`)
+                    moderationActionsCount++
+                } else if (moderationAction.type === 'warn') {
                     // Warning: Just send message
                     await sendModeratorChatMessage({
                         broadcaster_user_id: broadcasterUserId,
@@ -684,33 +689,23 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
                     moderationActionsCount++
                     console.log(`[moderation-worker] ✅ WARNED user ${payload.sender.username} (${moderationAction.reason})`)
                 } else {
-                    let banResult;
-                    if (DRY_RUN && moderationAction.type === 'ban') {
-                        console.log(`[moderation-worker] [DRY RUN] Skipping actual BAN API call for ${payload.sender.username}`)
-                        banResult = { success: true, error: null } // Simulate success
-                    } else {
-                        banResult = await moderationBan({
-                            broadcaster_user_id: broadcasterUserId,
-                            user_id: senderUserId,
-                            duration_seconds: moderationAction.duration_seconds,
-                            reason: moderationAction.reason,
-                        })
-                    }
+                    // Timeout or Ban - execute via API
+                    const banResult = await moderationBan({
+                        broadcaster_user_id: broadcasterUserId,
+                        user_id: senderUserId,
+                        duration_seconds: moderationAction.duration_seconds,
+                        reason: moderationAction.reason,
+                    })
 
                     if (banResult.success) {
                         moderationActionsCount++
 
-                        // Send chat message announcing the action
-                        const actionText = moderationAction.type === 'ban'
-                            ? 'banned'
-                            : `timed out for ${Math.floor((moderationAction.duration_seconds || 0) / 60)} minutes`
+                        // Send chat message announcing the action (if enabled)
+                        if (settings.moderation_announce_actions) {
+                            const actionText = moderationAction.type === 'ban'
+                                ? 'banned'
+                                : `timed out for ${Math.floor((moderationAction.duration_seconds || 0) / 60)} minutes`
 
-                        if (DRY_RUN && moderationAction.type === 'ban') {
-                            // Don't announce bans in chat during dry run to avoid confusion? 
-                            // User asked for "Logs only". 
-                            // But warnings/timeouts are live.
-                            console.log(`[moderation-worker] [DRY RUN] Skipping chat announcement for BAN`)
-                        } else {
                             const announcement = `🛡️ ${payload.sender.username} has been ${actionText}. Reason: ${moderationAction.reason}`
                             await sendModeratorChatMessage({
                                 broadcaster_user_id: broadcasterUserId,
@@ -729,10 +724,12 @@ async function processModerationJob(job: ClaimedChatJob): Promise<void> {
             } catch (modError) {
                 console.warn(`[moderation-worker] ⚠️ Error executing moderation action:`, modError instanceof Error ? modError.message : 'Unknown error')
             }
-        } else {
-            // Bot reply check (ONLY if no moderation action was taken)
+        }
+
+        // Bot reply check (runs regardless of moderation action)
+        if (!moderationAction) {
             try {
-                const settings = await getModeratorBotSettingsFromDb()
+                // Settings already loaded above
                 const replyEnabled = FORCE_BOT_REPLIES ? true : settings.bot_reply_enabled
                 const replyCooldownMs = FORCE_BOT_REPLIES ? FORCE_BOT_REPLIES_COOLDOWN_MS : settings.bot_reply_cooldown_ms
                 const aiReplyEnabled = FORCE_BOT_REPLIES ? true : settings.ai_reply_enabled

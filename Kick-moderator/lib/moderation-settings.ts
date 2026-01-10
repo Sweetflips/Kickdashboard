@@ -1,6 +1,6 @@
 import { db } from './db'
 
-export const MODERATOR_BOT_SETTINGS_KEY = 'moderator_bot_settings_v1'
+export const MODERATOR_BOT_SETTINGS_KEY = 'moderator_bot_settings_v2'
 
 export interface ModeratorBotSettings {
   ai_moderation_enabled: boolean
@@ -17,6 +17,9 @@ export interface ModeratorBotSettings {
   bot_slot_call_message: string
 
   moderation_announce_actions: boolean
+
+  // Dry run mode - when true, moderation actions are logged but not executed
+  dry_run_mode: boolean
 }
 
 export function getDefaultModeratorBotSettings(): ModeratorBotSettings {
@@ -36,6 +39,9 @@ export function getDefaultModeratorBotSettings(): ModeratorBotSettings {
     bot_slot_call_message: process.env.BOT_SLOT_CALL_MESSAGE || '!slots',
 
     moderation_announce_actions: process.env.MODERATION_ANNOUNCE_ACTIONS === 'true',
+
+    // Dry run mode defaults to false unless env var is explicitly set
+    dry_run_mode: process.env.KICK_MODERATION_DRY_RUN === '1',
   }
 }
 
@@ -68,6 +74,7 @@ export function normalizeModeratorBotSettings(input: Partial<ModeratorBotSetting
   out.bot_reply_enabled = Boolean(out.bot_reply_enabled)
   out.bot_slot_call_enabled = Boolean(out.bot_slot_call_enabled)
   out.moderation_announce_actions = Boolean(out.moderation_announce_actions)
+  out.dry_run_mode = Boolean(out.dry_run_mode)
 
   return out
 }
@@ -75,10 +82,20 @@ export function normalizeModeratorBotSettings(input: Partial<ModeratorBotSetting
 export async function getModeratorBotSettingsFromDb(): Promise<ModeratorBotSettings> {
   const base = getDefaultModeratorBotSettings()
   try {
-    const row = await db.appSetting.findUnique({
+    // Try v2 first, then fall back to v1 for migration
+    let row = await db.appSetting.findUnique({
       where: { key: MODERATOR_BOT_SETTINGS_KEY },
       select: { value: true },
     })
+
+    if (!row?.value) {
+      // Try legacy v1 key
+      row = await db.appSetting.findUnique({
+        where: { key: 'moderator_bot_settings_v1' },
+        select: { value: true },
+      })
+    }
+
     if (!row?.value) return base
     const parsed = JSON.parse(row.value)
     return normalizeModeratorBotSettings(parsed)

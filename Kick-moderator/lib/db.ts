@@ -1,4 +1,8 @@
-import 'dotenv/config'
+import { config } from 'dotenv'
+// Load .env.local first, then fall back to .env
+config({ path: '.env.local' })
+config({ path: '.env' })
+
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'

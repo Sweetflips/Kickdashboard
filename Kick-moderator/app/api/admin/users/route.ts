@@ -45,10 +45,46 @@ export async function GET(request: Request) {
       ]
     }
 
+    type UserWithRelations = {
+      id: bigint
+      kick_user_id: bigint
+      username: string
+      email: string | null
+      profile_picture_url: string | null
+      custom_profile_picture_url: string | null
+      is_admin: boolean
+      is_excluded: boolean
+      moderator_override: boolean | null
+      created_at: Date
+      last_login_at: Date | null
+      kick_connected: boolean
+      discord_connected: boolean
+      discord_username: string | null
+      telegram_connected: boolean
+      telegram_username: string | null
+      last_ip_address: string | null
+      signup_ip_address: string | null
+      sweet_coins: {
+        total_sweet_coins: number
+        total_emotes: number
+      } | null
+      user_sessions: Array<{
+        session_id: string
+        region: string | null
+        country: string | null
+        client_type: string | null
+        user_agent: string | null
+        ip_hash: string | null
+        last_seen_at: Date
+        created_at: Date
+      }>
+    }
+
     // Get users with session diagnostics
     // We'll sort by Sweet Coins in JavaScript since Prisma relation ordering is unreliable with optional relations
-    const [usersRaw, total] = await Promise.all([
-      db.user.findMany({
+    const prisma = db as any
+    const [usersRawResult, total] = await Promise.all([
+      prisma.user.findMany({
         where,
         include: {
           sweet_coins: {
@@ -75,11 +111,12 @@ export async function GET(request: Request) {
           },
         },
       }),
-      db.user.count({ where }),
+      prisma.user.count({ where }),
     ])
+    const usersRaw = usersRawResult as unknown as UserWithRelations[]
 
     // Sort by Sweet Coins descending, then by created_at descending
-    const sortedUsers = usersRaw.sort((a, b) => {
+    const sortedUsers = usersRaw.sort((a: UserWithRelations, b: UserWithRelations) => {
       const coinsA = a.sweet_coins?.total_sweet_coins || 0
       const coinsB = b.sweet_coins?.total_sweet_coins || 0
       if (coinsB !== coinsA) return coinsB - coinsA
