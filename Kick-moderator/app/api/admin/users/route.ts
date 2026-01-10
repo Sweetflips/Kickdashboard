@@ -17,7 +17,7 @@ async function getClaimedAchievementCounts(userIds: bigint[]): Promise<Map<strin
     _count: { _all: true },
   })
 
-  return new Map(rows.map((r) => [r.user_id.toString(), r._count._all]))
+  return new Map(rows.map((r: { user_id: bigint; _count: { _all: number } }) => [r.user_id.toString(), r._count._all]))
 }
 
 export async function GET(request: Request) {
