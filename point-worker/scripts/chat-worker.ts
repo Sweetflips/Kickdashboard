@@ -437,11 +437,8 @@ async function runWorker(): Promise<void> {
     console.log(`[chat-worker] Starting chat worker`)
     console.log(`[chat-worker] Configuration: batchSize=${BATCH_SIZE}, pollInterval=${POLL_INTERVAL_MS}ms, concurrency=${CONCURRENCY}`)
 
-    const lockAcquired = await acquireAdvisoryLock()
-    if (!lockAcquired) {
-        console.log(`[chat-worker] Another worker is running - this instance will exit`)
-        process.exit(0) // Exit cleanly - another instance handling the work is fine
-    }
+    // Skip advisory lock - FOR UPDATE SKIP LOCKED in claimChatJobs handles concurrency
+    console.log(`[chat-worker] Skipping advisory lock (using row-level locking instead)`)
 
     let lastStatsLog = Date.now()
 
