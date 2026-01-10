@@ -1,0 +1,43 @@
+# ============================================
+# RAILWAY ENVIRONMENT VARIABLES - REAL VALUES
+# ============================================
+# Copy these to Railway Variables tab
+# ============================================
+
+# ============================================
+# DATABASE (Required)
+# ============================================
+# Get from Railway PostgreSQL service → Connect → Copy connection string
+DATABASE_URL=postgresql://postgres:uodQAUPrNwNEfJWVPwOQNYlBtWYvimQD@mainline.proxy.rlwy.net:46309/railway
+
+# ============================================
+# KICK OAUTH (Required)
+# ============================================
+# ⚠️ ADD YOUR VALUES HERE - Get from https://kick.com/dashboard/oauth/applications
+KICK_CLIENT_ID=your_kick_client_id_here
+KICK_CLIENT_SECRET=your_kick_client_secret_here
+
+# ============================================
+# APPLICATION URL (Required)
+# ============================================
+NEXT_PUBLIC_APP_URL=https://kickdashboard.com
+
+# ============================================
+# WEBHOOK CONFIGURATION (Optional)
+# ============================================
+EXTERNAL_WEBHOOK_URL=https://kickdashboard.com/api/webhooks/kick
+WEBHOOK_TUNNEL_URL=
+NEXT_PUBLIC_WEBHOOK_TUNNEL_URL=
+
+# ============================================
+# DISCORD OAUTH (Optional)
+# ============================================
+DISCORD_CLIENT_ID=1416857158640865340
+DISCORD_CLIENT_SECRET=fqW5kionWqu-nZ0QTvq_Ykh43ZyorWjx
+DISCORD_REDIRECT_URI=https://kickdashboard.com/api/oauth/discord/callback
+
+# ============================================
+# TELEGRAM BOT (Optional)
+# ============================================
+TELEGRAM_BOT_TOKEN=8043621475:AAEsKYIfU1MeN4xikV794z-UXSQLWV2FhsY
+TELEGRAM_BOT_USERNAME=Sweetflipskickauthbot

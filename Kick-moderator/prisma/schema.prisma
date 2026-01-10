@@ -1,0 +1,566 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  // Railway/Docker runs on Debian with OpenSSL 3.x (bookworm-slim). Include this
+  // target so Prisma ships the correct query engine at runtime.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                          BigInt    @id @default(autoincrement())
+  kick_user_id                BigInt    @unique
+  username                    String
+  email                       String?
+  email_verified_at           DateTime?
+  bio                         String?   @db.Text
+  profile_picture_url         String?
+  custom_profile_picture_url  String?
+  access_token_hash           String?
+  refresh_token_hash          String?
+  // Encrypted tokens (can be decrypted for API calls)
+  access_token_encrypted      String?   @db.Text
+  refresh_token_encrypted     String?   @db.Text
+  notifications_enabled       Boolean   @default(true)
+  email_notifications_enabled Boolean   @default(false)
+  chat_font_size              String?   @default("14px")
+  chat_show_timestamps        Boolean   @default(true)
+  last_login_at               DateTime?
+  last_ip_address             String?
+  last_user_agent             String?
+  // Social Media Links (for duplicate detection)
+  instagram_url               String?
+  twitter_url                 String?
+  // Signup Tracking
+  signup_ip_address           String?
+  signup_user_agent           String?
+  signup_referrer             String?
+  // Connected Accounts
+  discord_user_id             String?
+  discord_username            String?
+  discord_access_token_hash   String?
+  telegram_user_id            String?
+  telegram_username           String?
+  telegram_access_token_hash  String?
+  kick_connected              Boolean   @default(true)
+  discord_connected           Boolean   @default(false)
+  telegram_connected          Boolean   @default(false)
+  is_admin                    Boolean   @default(false)
+  is_excluded                 Boolean   @default(false)
+  moderator_override          Boolean? // null = auto-detect, true = force on, false = force off
+  created_at                  DateTime  @default(now())
+  updated_at                  DateTime  @updatedAt
+
+  // Relations
+  sweet_coins                  UserSweetCoins?
+  sweet_coin_history           SweetCoinHistory[]
+  sent_messages                ChatMessage[]         @relation("SenderMessages")
+  broadcaster_messages         ChatMessage[]         @relation("BroadcasterMessages")
+  offline_sent_messages        OfflineChatMessage[]  @relation("OfflineSenderMessages")
+  offline_broadcaster_messages OfflineChatMessage[]  @relation("OfflineBroadcasterMessages")
+  stream_sessions              StreamSession[]
+  user_sessions                UserSession[]
+  raffles_created              Raffle[]
+  raffle_entries               RaffleEntry[]
+  advent_purchases             AdventPurchase[]
+  purchase_transactions        PurchaseTransaction[]
+  advent_days_drawn            AdventDayStatus[]
+  promo_codes_created          PromoCode[]           @relation("PromoCodeCreator")
+  promo_code_redemptions       PromoCodeRedemption[] @relation("PromoCodeRedemptions")
+  // Referral relations
+  referrals_as_referrer        Referral[]            @relation("Referrer")
+  referrals_as_referee         Referral[]            @relation("Referee")
+  referral_rewards_earned      ReferralReward[]
+  meeting_notes_created        MeetingNote[]       @relation("MeetingNoteCreator")
+
+  @@map("users")
+}
+
+model MeetingNote {
+  id         BigInt   @id @default(autoincrement())
+  title      String
+  content    String   @db.Text
+  created_by BigInt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  creator User @relation("MeetingNoteCreator", fields: [created_by], references: [id], onDelete: Cascade)
+
+  @@index([created_by, created_at])
+  @@map("meeting_notes")
+}
+
+model PurchaseTransaction {
+  id             BigInt   @id @default(autoincrement())
+  user_id        BigInt
+  type           String // advent_ticket | raffle_ticket | reward | bundle (future)
+  quantity       Int
+  sweet_coins_spent   Int
+  item_name      String
+  advent_item_id String?
+  raffle_id      BigInt?
+  metadata       Json?
+  created_at     DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([type, created_at])
+  @@index([raffle_id])
+  @@index([advent_item_id])
+  @@map("purchase_transactions")
+}
+
+model StreamSession {
+  id                          BigInt    @id @default(autoincrement())
+  broadcaster_user_id         BigInt
+  channel_slug                String
+  kick_stream_id              String? // Kick's video/VOD ID for thumbnail fetching
+  session_title               String?
+  thumbnail_url               String?
+  thumbnail_captured_at       DateTime?
+  thumbnail_last_refreshed_at DateTime?
+  thumbnail_source            String?
+  started_at                  DateTime  @default(now())
+  ended_at                    DateTime?
+  last_live_check_at          DateTime? // Last time we verified stream is actually live
+  peak_viewer_count           Int       @default(0)
+  total_messages              Int       @default(0)
+  duration_seconds            Int?
+  created_at                  DateTime  @default(now())
+  updated_at                  DateTime  @updatedAt
+
+  // Relations
+  broadcaster   User           @relation(fields: [broadcaster_user_id], references: [kick_user_id])
+  chat_messages ChatMessage[]
+  sweet_coin_history SweetCoinHistory[]
+
+  // Partial unique index enforced at database level via migration
+  // Ensures only one active session per broadcaster
+  @@index([broadcaster_user_id, ended_at])
+  @@map("stream_sessions")
+}
+
+model ChatMessage {
+  id                    BigInt   @id @default(autoincrement())
+  message_id            String   @unique
+  stream_session_id     BigInt?
+  sender_user_id        BigInt
+  sender_username       String
+  broadcaster_user_id   BigInt
+  content               String   @db.Text
+  emotes                Json?
+  // Derived fields for fast analytics (computed at ingest time by worker)
+  has_emotes            Boolean  @default(false)
+  engagement_type       String   @default("regular")
+  message_length        Int      @default(0)
+  exclamation_count     Int      @default(0)
+  sentence_count        Int      @default(0)
+  timestamp             BigInt
+  sender_username_color String?
+  sender_badges         Json?
+  sender_is_verified    Boolean  @default(false)
+  sender_is_anonymous   Boolean  @default(false)
+  sweet_coins_earned         Int      @default(0)
+  sweet_coins_reason         String?
+  sent_when_offline     Boolean  @default(false)
+  created_at            DateTime @default(now())
+
+  // Relations
+  stream_session StreamSession? @relation(fields: [stream_session_id], references: [id])
+  sender         User           @relation("SenderMessages", fields: [sender_user_id], references: [kick_user_id])
+  broadcaster    User           @relation("BroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
+
+  @@index([stream_session_id, sent_when_offline])
+  @@index([sender_user_id, stream_session_id])
+  @@index([broadcaster_user_id, created_at])
+  @@index([has_emotes])
+  @@map("chat_messages")
+}
+
+model OfflineChatMessage {
+  id                    BigInt   @id @default(autoincrement())
+  message_id            String   @unique
+  sender_user_id        BigInt
+  sender_username       String
+  broadcaster_user_id   BigInt
+  content               String   @db.Text
+  emotes                Json?
+  // Derived fields for fast analytics (computed at ingest time by worker)
+  has_emotes            Boolean  @default(false)
+  engagement_type       String   @default("regular")
+  message_length        Int      @default(0)
+  exclamation_count     Int      @default(0)
+  sentence_count        Int      @default(0)
+  timestamp             BigInt
+  sender_username_color String?
+  sender_badges         Json?
+  sender_is_verified    Boolean  @default(false)
+  sender_is_anonymous   Boolean  @default(false)
+  created_at            DateTime @default(now())
+
+  // Relations
+  sender      User @relation("OfflineSenderMessages", fields: [sender_user_id], references: [kick_user_id])
+  broadcaster User @relation("OfflineBroadcasterMessages", fields: [broadcaster_user_id], references: [kick_user_id])
+
+  @@map("offline_chat_messages")
+}
+
+model UserSweetCoins {
+  id                        BigInt    @id @default(autoincrement())
+  user_id                   BigInt    @unique
+  total_sweet_coins         Int       @default(0)
+  total_emotes               Int       @default(0)
+  last_sweet_coin_earned_at DateTime?
+  is_subscriber             Boolean   @default(false)
+  created_at                DateTime  @default(now())
+  updated_at                 DateTime  @updatedAt
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id])
+
+  @@map("user_sweet_coins")
+}
+
+model SweetCoinHistory {
+  id                BigInt   @id @default(autoincrement())
+  user_id           BigInt
+  stream_session_id BigInt?
+  sweet_coins_earned     Int      @default(1)
+  message_id        String?  @unique
+  earned_at         DateTime @default(now())
+  created_at        DateTime @default(now())
+
+  // Relations
+  user           User           @relation(fields: [user_id], references: [id])
+  stream_session StreamSession? @relation(fields: [stream_session_id], references: [id])
+
+  @@index([stream_session_id])
+  @@index([user_id, earned_at])
+  @@index([earned_at])
+  @@map("sweet_coin_history")
+}
+
+model Raffle {
+  id                   BigInt    @id @default(autoincrement())
+  title                String
+  description          String?   @db.Text
+  type                 String    @default("general") // daily, weekly, special, sub_only, general
+  prize_description    String
+  ticket_cost          Int
+  max_tickets_per_user Int? // null = no limit
+  total_tickets_cap    Int? // null = no cap
+  start_at             DateTime
+  end_at               DateTime
+  status               String    @default("upcoming") // upcoming, active, drawing, completed, cancelled
+  sub_only             Boolean   @default(false)
+  hidden_until_start   Boolean   @default(false)
+  hidden               Boolean   @default(false) // Hidden from public view by admin
+  draw_seed            String? // For transparency
+  number_of_winners    Int       @default(1)
+  rigging_enabled      Boolean   @default(false)
+  wheel_background_url String?
+  center_logo_url      String?
+  slice_opacity        Float?    @default(0.5)
+  drawn_at             DateTime?
+  claim_message        String?   @db.Text // Custom instructions for winners to claim prize
+  created_by           BigInt
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  creator        User                 @relation(fields: [created_by], references: [id])
+  entries        RaffleEntry[]
+  winners        RaffleWinner[]
+  rigged_winners RaffleRiggedWinner[]
+  wheel_overlays WheelOverlayState[]
+
+  @@map("raffles")
+}
+
+model RaffleEntry {
+  id         BigInt   @id @default(autoincrement())
+  raffle_id  BigInt
+  user_id    BigInt
+  tickets    Int      @default(1)
+  source     String   @default("system")
+  created_at DateTime @default(now())
+
+  raffle      Raffle               @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
+  user        User                 @relation(fields: [user_id], references: [id])
+  wins        RaffleWinner[]
+  riggedSlots RaffleRiggedWinner[]
+
+  @@unique([raffle_id, user_id])
+  @@map("raffle_entries")
+}
+
+model RaffleWinner {
+  id                    BigInt   @id @default(autoincrement())
+  raffle_id             BigInt
+  entry_id              BigInt
+  selected_at           DateTime @default(now())
+  // Optional metadata
+  selected_ticket_index BigInt?
+  spin_number           Int?
+  is_rigged             Boolean? @default(false)
+
+  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
+  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+
+  @@map("raffle_winners")
+}
+
+model RaffleRiggedWinner {
+  id        BigInt @id @default(autoincrement())
+  raffle_id BigInt
+  entry_id  BigInt
+  position  Int // 1-based position in rigging order
+
+  raffle Raffle      @relation(fields: [raffle_id], references: [id], onDelete: Cascade)
+  entry  RaffleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+
+  @@unique([raffle_id, position])
+  @@map("raffle_rigged_winners")
+}
+
+model UserSession {
+  id           BigInt   @id @default(autoincrement())
+  user_id      BigInt
+  session_id   String   @unique // Unique session identifier (e.g., UUID)
+  region       String? // Geographic region (e.g., "NA-East", "EU-West")
+  country      String? // Country code (e.g., "US", "CA", "GB")
+  client_type  String? // Client type: "web", "mobile", "embedded"
+  user_agent   String?  @db.Text // User agent string (for device/browser detection)
+  ip_hash      String? // Hashed IP address (for privacy - not storing raw IP)
+  created_at   DateTime @default(now())
+  last_seen_at DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([last_seen_at])
+  @@map("user_sessions")
+}
+
+model PromoCode {
+  id           BigInt    @id @default(autoincrement())
+  code         String    @unique
+  sweet_coins_value Int
+  max_uses     Int? // null = unlimited
+  current_uses Int       @default(0)
+  expires_at   DateTime?
+  is_active    Boolean   @default(true)
+  created_by   BigInt
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  // Relations
+  creator     User                  @relation("PromoCodeCreator", fields: [created_by], references: [id])
+  redemptions PromoCodeRedemption[]
+
+  @@index([code])
+  @@index([expires_at])
+  @@index([is_active])
+  @@map("promo_codes")
+}
+
+model PromoCodeRedemption {
+  id             BigInt   @id @default(autoincrement())
+  promo_code_id  BigInt
+  user_id        BigInt
+  sweet_coins_awarded Int
+  redeemed_at    DateTime @default(now())
+
+  // Relations
+  promo_code PromoCode @relation(fields: [promo_code_id], references: [id], onDelete: Cascade)
+  user       User      @relation("PromoCodeRedemptions", fields: [user_id], references: [id])
+
+  @@unique([promo_code_id, user_id])
+  @@index([user_id])
+  @@index([redeemed_at])
+  @@map("promo_code_redemptions")
+}
+
+model SweetCoinAwardJob {
+  id                BigInt    @id @default(autoincrement())
+  kick_user_id      BigInt
+  stream_session_id BigInt?
+  message_id        String    @unique
+  badges            Json? // Badges array for subscriber detection
+  emotes            Json? // Emotes array for emote counting
+  status            String    @default("pending") // pending, processing, completed, failed
+  attempts          Int       @default(0)
+  locked_at         DateTime?
+  processed_at      DateTime?
+  last_error        String?   @db.Text
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@index([status, created_at])
+  @@index([status, locked_at])
+  @@map("sweet_coin_award_jobs")
+}
+
+// Full chat message job queue - worker handles ALL writes
+model ChatJob {
+  id         BigInt @id @default(autoincrement())
+  message_id String @unique
+
+  // Full message payload (stored as JSON for flexibility)
+  payload Json // Contains: sender, broadcaster, content, emotes, badges, timestamp, etc.
+
+  // Denormalized fields for quick filtering
+  sender_user_id      BigInt
+  broadcaster_user_id BigInt
+  stream_session_id   BigInt?
+
+  // Job status
+  status       String    @default("pending") // pending, processing, completed, failed
+  attempts     Int       @default(0)
+  locked_at    DateTime?
+  processed_at DateTime?
+  last_error   String?   @db.Text
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  @@index([status, created_at])
+  @@index([status, locked_at])
+  @@map("chat_jobs")
+}
+
+model AdventPurchase {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  item_id    String // e.g. "day-9", "day-23a"
+  tickets    Int      @default(1)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@unique([user_id, item_id])
+  @@map("advent_purchases")
+}
+
+model AdventDayStatus {
+  day        Int       @id // December day (1-31)
+  drawn      Boolean   @default(false)
+  drawn_at   DateTime?
+  drawn_by   BigInt? // Admin user ID who marked it as drawn
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  drawn_by_user User? @relation(fields: [drawn_by], references: [id])
+
+  @@map("advent_day_status")
+}
+
+model Referral {
+  id               BigInt   @id @default(autoincrement())
+  referrer_user_id BigInt
+  referee_user_id  BigInt
+  referral_code    String // The code used at signup
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relations
+  referrer User @relation("Referrer", fields: [referrer_user_id], references: [id], onDelete: Cascade)
+  referee  User @relation("Referee", fields: [referee_user_id], references: [id], onDelete: Cascade)
+
+  // Unique constraint - one referee per referrer
+  @@unique([referee_user_id])
+  @@index([referrer_user_id])
+  @@index([referral_code])
+  @@index([created_at])
+  @@map("referrals")
+}
+
+model ReferralReward {
+  id               BigInt   @id @default(autoincrement())
+  referrer_user_id BigInt
+  referee_user_id  BigInt
+  tier_id          String // 'starter', 'active', 'dedicated', 'superfan', 'legend'
+  required_sweet_coins  Int // Sweet Coins threshold that was reached
+  reward_sweet_coins    Int // Sweet Coins awarded to referrer
+  awarded_at       DateTime @default(now())
+  created_at       DateTime @default(now())
+
+  // Relations
+  referrer_user User @relation(fields: [referrer_user_id], references: [id], onDelete: Cascade)
+
+  // Unique constraint - one reward per tier per referral pair
+  @@unique([referrer_user_id, referee_user_id, tier_id])
+  @@index([referrer_user_id])
+  @@index([awarded_at])
+  @@map("referral_rewards")
+}
+
+// OBS Wheel Overlay (singleton state + custom entrants + spin events)
+model WheelOverlayState {
+  key                  String   @id @default("default")
+  mode                 String   @default("raffle") // raffle | custom
+  raffle_id            BigInt?
+  title                String?
+  locked               Boolean  @default(false)
+  locked_entries       Json?
+  locked_total_tickets Int?
+  wheel_background_url String?
+  center_logo_url      String?
+  slice_opacity        Float?   @default(0.5)
+  updated_at           DateTime @updatedAt
+  created_at           DateTime @default(now())
+
+  raffle   Raffle?               @relation(fields: [raffle_id], references: [id], onDelete: SetNull)
+  entrants WheelOverlayEntrant[]
+  spins    WheelOverlaySpin[]
+
+  @@map("wheel_overlay_state")
+}
+
+model WheelOverlayEntrant {
+  id          BigInt   @id @default(autoincrement())
+  overlay_key String
+  label       String
+  weight      Int      @default(1)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
+
+  @@index([overlay_key])
+  @@map("wheel_overlay_entrants")
+}
+
+model WheelOverlaySpin {
+  id                  BigInt   @id @default(autoincrement())
+  overlay_key         String
+  version             Int
+  mode                String // raffle | custom
+  raffle_id           BigInt?
+  target_ticket_index Int
+  winner_label        String
+  winner_user_id      BigInt?
+  winner_entry_id     BigInt?
+  created_at          DateTime @default(now())
+
+  overlay WheelOverlayState @relation(fields: [overlay_key], references: [key], onDelete: Cascade)
+
+  @@index([overlay_key, version])
+  @@map("wheel_overlay_spins")
+}
+
+model AppSetting {
+  key         String   @id
+  value       String   @db.Text
+  updated_at  DateTime @updatedAt
+  created_at  DateTime @default(now())
+
+  @@map("app_settings")
+}

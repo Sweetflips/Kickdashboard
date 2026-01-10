@@ -1,0 +1,208 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
+export type ToastType = 'success' | 'error' | 'warning' | 'info'
+
+interface ToastProps {
+    message: React.ReactNode
+    type?: ToastType
+    duration?: number
+    onClose?: () => void
+    title?: string
+}
+
+interface ToastItem extends ToastProps {
+    id: string
+}
+
+export function Toast({ message, type = 'info', duration = 3000, onClose, title }: ToastProps) {
+    useEffect(() => {
+        if (duration > 0) {
+            const timer = setTimeout(() => {
+                onClose?.()
+            }, duration)
+            return () => clearTimeout(timer)
+        }
+    }, [duration, onClose])
+
+    const icons = {
+        success: (
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+        ),
+        error: (
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+        ),
+        warning: (
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+        ),
+        info: (
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+        ),
+    }
+
+    const chrome = {
+        base: 'bg-white dark:bg-kick-surface border',
+        success: 'border-kick-green',
+        error: 'border-red-500',
+        warning: 'border-yellow-500',
+        info: 'border-blue-500',
+    } as const
+
+    const text = {
+        base: 'text-gray-900 dark:text-kick-text',
+        muted: 'text-gray-700 dark:text-kick-text-secondary',
+        successIcon: 'text-kick-green',
+        errorIcon: 'text-red-600 dark:text-red-400',
+        warningIcon: 'text-yellow-600 dark:text-yellow-400',
+        infoIcon: 'text-blue-600 dark:text-blue-400',
+    } as const
+
+    const titles: Record<ToastType, string> = {
+        success: 'Success',
+        error: 'Something went wrong',
+        warning: 'Heads up',
+        info: 'Info',
+    }
+
+    const iconColor =
+        type === 'success'
+            ? text.successIcon
+            : type === 'error'
+                ? text.errorIcon
+                : type === 'warning'
+                    ? text.warningIcon
+                    : text.infoIcon
+
+    return (
+        <div
+            className={[
+                'pointer-events-auto w-full max-w-xl rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.45)] toast-enter relative overflow-hidden',
+                type === 'success' ? 'toast-success' : '',
+                chrome.base,
+                chrome[type],
+            ].join(' ')}
+            role={type === 'error' ? 'alert' : 'status'}
+            aria-live={type === 'error' ? 'assertive' : 'polite'}
+        >
+            <div className="flex items-start gap-4 p-6">
+                <div className="flex-shrink-0 mt-0.5">
+                    <span className={[iconColor, type === 'success' ? 'toast-success-icon' : ''].join(' ')}>{icons[type]}</span>
+                </div>
+                <div className={`flex-1 min-w-0 ${text.base}`}>
+                    <div className="text-lg font-extrabold tracking-tight">
+                        {title || titles[type]}
+                    </div>
+                    <div className={`mt-1 text-base font-semibold ${text.muted} break-words`}>
+                        {message}
+                    </div>
+                </div>
+            <button
+                onClick={onClose}
+                className="ml-2 flex-shrink-0 text-gray-500 hover:text-gray-900 dark:text-kick-text-secondary dark:hover:text-kick-text transition-colors"
+                aria-label="Close"
+            >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+            </button>
+            </div>
+        </div>
+    )
+}
+
+let toastIdCounter = 0
+
+class ToastManager {
+    private toasts: ToastItem[] = []
+    private listeners: Array<(toasts: ToastItem[]) => void> = []
+
+    subscribe(listener: (toasts: ToastItem[]) => void) {
+        this.listeners.push(listener)
+        return () => {
+            this.listeners = this.listeners.filter(l => l !== listener)
+        }
+    }
+
+    private notify() {
+        this.listeners.forEach(listener => listener([...this.toasts]))
+    }
+
+    show(message: React.ReactNode, type: ToastType = 'info', duration: number = 3000, title?: string) {
+        const id = `toast-${++toastIdCounter}-${Date.now()}`
+        const toast: ToastItem = { id, message, type, duration, title }
+        this.toasts.push(toast)
+        this.notify()
+
+        if (duration > 0) {
+            setTimeout(() => {
+                this.remove(id)
+            }, duration)
+        }
+
+        return id
+    }
+
+    remove(id: string) {
+        this.toasts = this.toasts.filter(t => t.id !== id)
+        this.notify()
+    }
+
+    clear() {
+        this.toasts = []
+        this.notify()
+    }
+
+    getToasts(): ToastItem[] {
+        return [...this.toasts]
+    }
+}
+
+export const toastManager = new ToastManager()
+
+export function useToast() {
+    const [toasts, setToasts] = useState<ToastItem[]>([])
+
+    useEffect(() => {
+        const unsubscribe = toastManager.subscribe(setToasts)
+        return unsubscribe
+    }, [])
+
+    const showToast = (message: React.ReactNode, type: ToastType = 'info', duration: number = 3000, title?: string) => {
+        return toastManager.show(message, type, duration, title)
+    }
+
+    return { toasts, showToast }
+}
+
+export function ToastContainer() {
+    const { toasts } = useToast()
+
+    if (toasts.length === 0) return null
+
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+            <div className="absolute inset-0 bg-black/25" />
+            <div className="w-full max-w-xl space-y-2">
+            {toasts.map((toast) => (
+                <Toast
+                    key={toast.id}
+                    message={toast.message}
+                    type={toast.type}
+                    duration={toast.duration}
+                    title={toast.title}
+                    onClose={() => toastManager.remove(toast.id)}
+                />
+            ))}
+            </div>
+        </div>
+    )
+}

@@ -1,0 +1,31 @@
+name = "kickdashboard"
+main = "src/index.ts"
+compatibility_date = "2025-12-01"
+
+# Route all cdn.kickdashboard.com traffic through this Worker
+[[routes]]
+pattern = "cdn.kickdashboard.com/*"
+zone_name = "kickdashboard.com"
+
+[vars]
+# Must match the custom domain you mapped in R2 Custom Domains
+PUBLIC_HOST = "cdn.kickdashboard.com"
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "sweetflips-media"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
