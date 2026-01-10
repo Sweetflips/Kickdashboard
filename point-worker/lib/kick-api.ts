@@ -1401,7 +1401,7 @@ export function clearTokenCache(): void {
 /**
  * Force refresh moderator token using refresh token
  * Call this when API returns 401 to get a fresh token
- * 
+ *
  * IMPORTANT: The refresh token is bound to the OAuth app that issued it.
  * If KICK_BOT_CLIENT_ID/SECRET are different from what was used to authorize
  * the bot, refresh will fail with "invalid_client".
@@ -1494,7 +1494,7 @@ export async function refreshModeratorToken(): Promise<string | null> {
         } else {
             const errorText = await response.text()
             console.error(`[Kick API] Moderator token refresh failed: ${response.status} ${errorText}`)
-            
+
             // Parse error for better diagnostics
             try {
                 const errorJson = JSON.parse(errorText)
@@ -1580,7 +1580,8 @@ export async function moderationBan(params: {
             return { success: false, error: 'Moderator token not available. Ensure moderator account is authorized with moderation:ban scope.' }
         }
 
-        const clientId = process.env.KICK_CLIENT_ID
+        // Use bot credentials for moderation actions
+        const { clientId } = getKickBotCredentials()
 
         const makeRequest = async (token: string) => {
             const headers: Record<string, string> = {
@@ -1678,7 +1679,8 @@ export async function sendModeratorChatMessage(params: {
             return { success: false, error: 'Message content cannot exceed 500 characters' }
         }
 
-        const clientId = process.env.KICK_CLIENT_ID
+        // Use bot credentials for moderator chat messages
+        const { clientId } = getKickBotCredentials()
 
         const makeRequest = async (token: string) => {
             const headers: Record<string, string> = {
