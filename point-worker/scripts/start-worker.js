@@ -83,7 +83,12 @@ const serverReady = new Promise((resolve, reject) => {
 
     try {
       console.log('🔄 Running database migrations...');
-      execSync('npx prisma migrate deploy', { stdio: 'inherit' });
+      // Pass DATABASE_URL directly to ensure Prisma can find it
+      const migrationEnv = { ...process.env }
+      if (!migrationEnv.DATABASE_URL && process.env.DIRECT_URL) {
+        migrationEnv.DATABASE_URL = process.env.DIRECT_URL
+      }
+      execSync('npx prisma migrate deploy', { stdio: 'inherit', env: migrationEnv });
       console.log('✅ Migrations completed');
     } catch (error) {
       console.error('⚠️ Migration failed (continuing anyway):', error.message);
