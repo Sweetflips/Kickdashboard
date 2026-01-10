@@ -1351,10 +1351,38 @@ async function runWorker(): Promise<void> {
     console.log(`[moderation-worker] Starting moderation worker`)
     console.log(`[moderation-worker] Configuration: batchSize=${BATCH_SIZE}, pollInterval=${POLL_INTERVAL_MS}ms, concurrency=${CONCURRENCY}`)
 
+    // Validate credentials at startup
+    const hasClientId = !!(process.env.KICK_BOT_CLIENT_ID || process.env.KICK_CLIENT_ID)
+    const hasClientSecret = !!(process.env.KICK_BOT_CLIENT_SECRET || process.env.KICK_CLIENT_SECRET)
+    const hasRedirectUri = !!process.env.KICK_REDIRECT_URI
+    const hasEncryptionKey = !!process.env.TOKEN_ENCRYPTION_KEY
+    
+    console.log(`[moderation-worker] Credentials check:`)
+    console.log(`  - KICK_BOT_CLIENT_ID or KICK_CLIENT_ID: ${hasClientId ? '✅' : '❌ MISSING'}`)
+    console.log(`  - KICK_BOT_CLIENT_SECRET or KICK_CLIENT_SECRET: ${hasClientSecret ? '✅' : '❌ MISSING'}`)
+    console.log(`  - KICK_REDIRECT_URI: ${hasRedirectUri ? '✅' : '⚠️ (using default)'}`)
+    console.log(`  - TOKEN_ENCRYPTION_KEY: ${hasEncryptionKey ? '✅' : '❌ MISSING'}`)
+    console.log(`  - KICK_MODERATOR_USERNAME: ${process.env.KICK_MODERATOR_USERNAME || 'sweetflipsbot (default)'}`)
+    
+    if (!hasClientId || !hasClientSecret) {
+        console.error(`[moderation-worker] ⚠️ OAuth credentials missing! Token refresh will fail.`)
+        console.error(`[moderation-worker]    Set KICK_BOT_CLIENT_ID and KICK_BOT_CLIENT_SECRET`)
+        console.error(`[moderation-worker]    (or KICK_CLIENT_ID and KICK_CLIENT_SECRET)`)
+    }
+
     const lockAcquired = await acquireAdvisoryLock()
     if (!lockAcquired) {
         console.error(`[moderation-worker] Exiting - another moderation worker is running`)
         process.exit(1)
+    }
+
+    // Validate moderator token at startup
+    const moderatorToken = await getModeratorToken()
+    if (moderatorToken) {
+        console.log(`[moderation-worker] ✅ Moderator token retrieved successfully`)
+    } else {
+        console.warn(`[moderation-worker] ⚠️ No moderator token available - moderation actions will fail`)
+        console.warn(`[moderation-worker]    Ensure ${process.env.KICK_MODERATOR_USERNAME || 'sweetflipsbot'} is authorized at /api/auth/kick?bot=true`)
     }
 
     // Send startup message after a short delay

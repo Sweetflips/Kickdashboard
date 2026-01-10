@@ -1401,6 +1401,10 @@ export function clearTokenCache(): void {
 /**
  * Force refresh moderator token using refresh token
  * Call this when API returns 401 to get a fresh token
+ * 
+ * IMPORTANT: The refresh token is bound to the OAuth app that issued it.
+ * If KICK_BOT_CLIENT_ID/SECRET are different from what was used to authorize
+ * the bot, refresh will fail with "invalid_client".
  */
 export async function refreshModeratorToken(): Promise<string | null> {
     const MODERATOR_USERNAME = process.env.KICK_MODERATOR_USERNAME || 'sweetflipsbot'
@@ -1427,10 +1431,32 @@ export async function refreshModeratorToken(): Promise<string | null> {
             return null
         }
 
-        const { clientId, clientSecret } = getKickBotCredentials()
+        // Get bot credentials - these MUST match the OAuth app used to authorize the bot
+        let clientId: string
+        let clientSecret: string
+        try {
+            const creds = getKickBotCredentials()
+            clientId = creds.clientId
+            clientSecret = creds.clientSecret
+        } catch (credError) {
+            console.error(`[Kick API] ❌ Bot credentials not configured:`, credError instanceof Error ? credError.message : 'Unknown error')
+            console.error(`[Kick API] Set KICK_BOT_CLIENT_ID and KICK_BOT_CLIENT_SECRET (or KICK_CLIENT_ID/KICK_CLIENT_SECRET)`)
+            return null
+        }
+
+        // Log credential info (masked) for debugging
+        console.log(`[Kick API] Using bot credentials: client_id=${clientId.substring(0, 8)}...${clientId.slice(-4)}`)
+
         const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
 
-        const refreshToken = decryptToken(moderator.refresh_token_encrypted)
+        let refreshToken: string
+        try {
+            refreshToken = decryptToken(moderator.refresh_token_encrypted)
+        } catch (decryptError) {
+            console.error(`[Kick API] ❌ Failed to decrypt refresh token - check TOKEN_ENCRYPTION_KEY`)
+            return null
+        }
+
         const params = new URLSearchParams({
             grant_type: 'refresh_token',
             client_id: clientId,
@@ -1467,7 +1493,24 @@ export async function refreshModeratorToken(): Promise<string | null> {
             return data.access_token
         } else {
             const errorText = await response.text()
-            console.warn(`[Kick API] Moderator token refresh failed: ${response.status} ${errorText}`)
+            console.error(`[Kick API] Moderator token refresh failed: ${response.status} ${errorText}`)
+            
+            // Parse error for better diagnostics
+            try {
+                const errorJson = JSON.parse(errorText)
+                if (errorJson.error === 'invalid_client') {
+                    console.error(`[Kick API] ❌ INVALID_CLIENT: The OAuth client credentials don't match.`)
+                    console.error(`[Kick API]    This means KICK_BOT_CLIENT_ID/SECRET are different from`)
+                    console.error(`[Kick API]    the credentials used when sweetflipsbot was authorized.`)
+                    console.error(`[Kick API]    FIX: Re-authorize the bot at /api/auth/kick?bot=true`)
+                    console.error(`[Kick API]         OR update env vars to match original OAuth app`)
+                } else if (errorJson.error === 'invalid_grant') {
+                    console.error(`[Kick API] ❌ INVALID_GRANT: Refresh token is expired or revoked.`)
+                    console.error(`[Kick API]    FIX: Re-authorize the bot at /api/auth/kick?bot=true`)
+                }
+            } catch {
+                // Not JSON
+            }
             return null
         }
     } catch (error) {
