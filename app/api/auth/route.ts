@@ -83,8 +83,8 @@ export async function GET(request: Request) {
 
         if (action === 'debug') {
             const isBot = searchParams.get('bot') === '1'
-            // Only use bot callback URL if explicitly requested AND we're in moderation/worker context
-            const useBotCallback = isBot && (process.env.MODERATION_ONLY === 'true' || process.env.RUN_AS_WORKER === 'true' || process.env.KICK_BOT_REDIRECT_URI)
+            // Use bot callback URL if bot=1 is explicitly requested
+            const useBotCallback = isBot || !!process.env.KICK_BOT_REDIRECT_URI
             const redirectUri = buildRedirectUri(request, useBotCallback)
             const { clientId } = isBot ? getKickBotCredentials() : getKickUserCredentials()
 
@@ -139,9 +139,9 @@ export async function GET(request: Request) {
             const host = request.headers.get('host') || ''
             const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
             const isBot = searchParams.get('bot') === '1'
-            // Only use bot callback URL if explicitly requested AND we're in moderation/worker context
-            // Check for MODERATION_ONLY or RUN_AS_WORKER env vars to ensure this is the worker branch
-            const useBotCallback = isBot && (process.env.MODERATION_ONLY === 'true' || process.env.RUN_AS_WORKER === 'true' || process.env.KICK_BOT_REDIRECT_URI)
+            // Use bot callback URL if bot=1 is explicitly requested
+            // Also check for KICK_BOT_REDIRECT_URI env var for explicit override
+            const useBotCallback = isBot || !!process.env.KICK_BOT_REDIRECT_URI
             const redirectUri = buildRedirectUri(request, useBotCallback)
             const { clientId } = isBot ? getKickBotCredentials() : getKickUserCredentials()
 
