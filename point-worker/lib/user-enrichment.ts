@@ -6,7 +6,7 @@
  * and process them in batches.
  */
 
-import { db } from '@/lib/db'
+import { db } from './db'
 
 interface EnrichmentRequest {
     kickUserId: bigint

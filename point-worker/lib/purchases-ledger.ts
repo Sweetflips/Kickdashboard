@@ -1,4 +1,4 @@
-import { ADVENT_ITEMS } from '@/lib/advent-calendar'
+import { ADVENT_ITEMS } from './advent-calendar'
 
 type TxLike = {
   $queryRaw: <T = unknown>(query: TemplateStringsArray, ...values: any[]) => Promise<T>

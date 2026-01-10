@@ -11,7 +11,7 @@
  * 4. Use atomic operations to prevent race conditions
  */
 
-import { db } from '@/lib/db'
+import { db } from './db'
 import { Prisma } from '@prisma/client'
 
 // Define types locally since Prisma Accelerate doesn't export input types

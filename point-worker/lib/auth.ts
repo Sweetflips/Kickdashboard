@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { db } from './db';
 import crypto from 'crypto'
 import { getKickUserCredentials } from './kick-oauth-creds'
 

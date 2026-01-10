@@ -5,7 +5,7 @@
  * pages still read `localStorage`. This module keeps backward compatibility by
  * hydrating localStorage from cookies once, then returning the token.
  */
-import { getAccessToken, getRefreshToken, setAuthTokens } from '@/lib/cookies'
+import { getAccessToken, getRefreshToken, setAuthTokens } from './cookies'
 
 /**
  * Ensure localStorage has tokens if cookies do (best-effort).

@@ -1,5 +1,5 @@
-import { ACHIEVEMENTS, type AchievementDefinition } from '@/lib/achievements'
-import { db } from '@/lib/db'
+import { ACHIEVEMENTS, type AchievementDefinition } from './achievements'
+import { db } from './db'
 import type { AchievementStatus } from '@prisma/client'
 
 // Map old kebab-case IDs to new SCREAMING_SNAKE_CASE IDs

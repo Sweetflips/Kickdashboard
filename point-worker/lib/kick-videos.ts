@@ -1,5 +1,5 @@
-import { acquireRateLimitSlot } from '@/lib/kick-api'
-import { memoryCache } from '@/lib/memory-cache'
+import { acquireRateLimitSlot } from './kick-api'
+import { memoryCache } from './memory-cache'
 
 export interface KickV2ChannelVideo {
   // raw id (video list item id)

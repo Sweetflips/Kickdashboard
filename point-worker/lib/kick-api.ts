@@ -5,9 +5,9 @@
  * Uses broadcaster's User Access Token from database for API calls.
  */
 
-import { db } from '@/lib/db'
-import { decryptToken, encryptToken, hashToken } from '@/lib/encryption'
-import { getKickBotCredentials, getKickUserCredentials } from '@/lib/kick-oauth-creds'
+import { db } from './db'
+import { decryptToken, encryptToken, hashToken } from './encryption'
+import { getKickBotCredentials, getKickUserCredentials } from './kick-oauth-creds'
 
 // Kick Dev API endpoints
 // Base URL for Kick Dev API v1 (public endpoint)
