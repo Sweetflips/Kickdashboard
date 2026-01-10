@@ -1,5 +1,6 @@
 import { isAdmin } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
         }
 
         // Use transaction to ensure atomicity
-        const result = await db.$transaction(async (tx) => {
+        const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
             // Update or create user sweet coins
             const userSweetCoins = await tx.userSweetCoins.upsert({
                 where: { user_id: user.id },
