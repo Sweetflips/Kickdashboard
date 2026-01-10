@@ -17,6 +17,9 @@ RUN npm ci --omit=dev
 # Generate Prisma client
 RUN npx prisma generate
 
+# Copy tsconfig for path aliases
+COPY tsconfig.json ./
+
 # Copy scripts and lib
 COPY scripts ./scripts/
 COPY lib ./lib/
