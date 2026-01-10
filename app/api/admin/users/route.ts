@@ -117,7 +117,7 @@ export async function GET(request: Request) {
     const usersRaw = usersRawResult as unknown as UserWithRelations[]
 
     // Sort by Sweet Coins descending, then by created_at descending
-    const sortedUsers = usersRaw.sort((a, b) => {
+    const sortedUsers = usersRaw.sort((a: UserWithRelations, b: UserWithRelations) => {
       const coinsA = a.sweet_coins?.total_sweet_coins || 0
       const coinsB = b.sweet_coins?.total_sweet_coins || 0
       if (coinsB !== coinsA) return coinsB - coinsA
