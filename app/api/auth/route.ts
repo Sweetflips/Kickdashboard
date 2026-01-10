@@ -83,9 +83,8 @@ export async function GET(request: Request) {
 
         if (action === 'debug') {
             const isBot = searchParams.get('bot') === '1'
-            // Use bot callback URL if bot=1 is explicitly requested
-            const useBotCallback = isBot || !!process.env.KICK_BOT_REDIRECT_URI
-            const redirectUri = buildRedirectUri(request, useBotCallback)
+            // Use bot callback URL only if bot=1 is explicitly requested
+            const redirectUri = buildRedirectUri(request, isBot)
             const { clientId } = isBot ? getKickBotCredentials() : getKickUserCredentials()
 
             const scopes = [
@@ -139,10 +138,8 @@ export async function GET(request: Request) {
             const host = request.headers.get('host') || ''
             const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
             const isBot = searchParams.get('bot') === '1'
-            // Use bot callback URL if bot=1 is explicitly requested
-            // Also check for KICK_BOT_REDIRECT_URI env var for explicit override
-            const useBotCallback = isBot || !!process.env.KICK_BOT_REDIRECT_URI
-            const redirectUri = buildRedirectUri(request, useBotCallback)
+            // Use bot callback URL only if bot=1 is explicitly requested
+            const redirectUri = buildRedirectUri(request, isBot)
             const { clientId } = isBot ? getKickBotCredentials() : getKickUserCredentials()
 
             const state = crypto.randomUUID()
