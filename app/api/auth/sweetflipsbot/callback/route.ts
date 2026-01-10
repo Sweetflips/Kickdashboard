@@ -11,21 +11,46 @@ const KICK_API_BASE = 'https://api.kick.com/public/v1'
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.kickdashboard.com').replace(/\/$/, '')
 
 /**
- * Build redirect URI for bot callback from the request
- * Must match exactly what was sent to Kick during authorization
+ * Build redirect URI for bot callback
+ * Must match EXACTLY what was sent to Kick during authorization
+ * Uses the same logic as the auth route to ensure consistency
  */
 function buildBotRedirectUri(request: Request): string {
     // Check for explicit redirect URI override in environment (highest priority)
+    // This MUST match what's configured in Kick OAuth app settings
     const explicitRedirectUri = process.env.KICK_BOT_REDIRECT_URI
     if (explicitRedirectUri) {
         return explicitRedirectUri
     }
 
-    // Build from request URL to ensure exact match with what Kick redirected to
-    const url = new URL(request.url)
-    const protocol = url.protocol
-    const host = url.host
-    return `${protocol}//${host}/api/auth/sweetflipsbot/callback`
+    // Use the same logic as auth route for consistency
+    const headers = request.headers
+    const forwardedHost = headers.get('x-forwarded-host')
+    const forwardedProto = headers.get('x-forwarded-proto')
+    const host = headers.get('host') || ''
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+    const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.kickdashboard.com').replace(/\/$/, '')
+    const callbackPath = '/api/auth/sweetflipsbot/callback'
+
+    // In production, use canonical APP_URL
+    if (!isLocalhost) {
+        return `${APP_URL}${callbackPath}`
+    }
+
+    // For localhost, prefer forwarded headers
+    if (forwardedHost) {
+        const proto = forwardedProto || 'https'
+        return `${proto}://${forwardedHost}${callbackPath}`
+    }
+
+    // Fallback to host header
+    if (host) {
+        const proto = isLocalhost ? 'http' : 'https'
+        return `${proto}://${host}${callbackPath}`
+    }
+
+    // Final fallback
+    return `${APP_URL}${callbackPath}`
 }
 
 export async function GET(request: Request) {
@@ -55,9 +80,22 @@ export async function GET(request: Request) {
             return NextResponse.redirect(`${errorRedirect}/?error=${encodeURIComponent('PKCE code verifier not found. Please try authenticating again at /api/auth?action=authorize&bot=1')}&bot_auth=true`)
         }
 
-        // Always use bot credentials for this callback
-        const { clientId, clientSecret } = getKickBotCredentials()
+        // Always use bot credentials for this callback (moderator-only route)
+        let clientId: string
+        let clientSecret: string
+        try {
+            const botCreds = getKickBotCredentials()
+            clientId = botCreds.clientId
+            clientSecret = botCreds.clientSecret
+        } catch (credError) {
+            console.error('❌ Bot credentials not configured:', credError instanceof Error ? credError.message : 'Unknown error')
+            return NextResponse.redirect(`${errorRedirect}/?error=${encodeURIComponent('Bot OAuth credentials not configured. Set KICK_BOT_CLIENT_ID and KICK_BOT_CLIENT_SECRET.')}&bot_auth=true`)
+        }
+
         const redirectUri = buildBotRedirectUri(request)
+        
+        // Log for debugging (masked credentials)
+        console.log(`[Bot Callback] Exchanging token with client_id=${clientId.substring(0, 8)}...${clientId.slice(-4)}, redirect_uri=${redirectUri}`)
 
         // Exchange code for token using form-urlencoded
         const params = new URLSearchParams({
@@ -79,6 +117,22 @@ export async function GET(request: Request) {
 
         if (!tokenResponse.ok) {
             const errorText = await tokenResponse.text()
+            console.error(`❌ Token exchange failed: ${tokenResponse.status} ${errorText}`)
+            console.error(`[Bot Callback] Used redirect_uri: ${redirectUri}`)
+            console.error(`[Bot Callback] Used client_id: ${clientId.substring(0, 8)}...${clientId.slice(-4)}`)
+            
+            // Parse error for better diagnostics
+            try {
+                const errorJson = JSON.parse(errorText)
+                if (errorJson.error === 'invalid_client') {
+                    return NextResponse.redirect(`${errorRedirect}/?error=${encodeURIComponent('Invalid client credentials. Ensure KICK_BOT_CLIENT_ID and KICK_BOT_CLIENT_SECRET match the OAuth app configured in Kick.')}&bot_auth=true`)
+                } else if (errorJson.error === 'invalid_grant') {
+                    return NextResponse.redirect(`${errorRedirect}/?error=${encodeURIComponent('Invalid authorization code or redirect URI mismatch. Ensure the callback URL in Kick OAuth app matches exactly.')}&bot_auth=true`)
+                }
+            } catch {
+                // Not JSON
+            }
+            
             return NextResponse.redirect(`${errorRedirect}/?error=${encodeURIComponent(`Failed to exchange token: ${errorText}`)}&bot_auth=true`)
         }
 
