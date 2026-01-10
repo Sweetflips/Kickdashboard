@@ -42,7 +42,7 @@ const serverReady = new Promise((resolve, reject) => {
 (async () => {
   try {
     await serverReady;
-    
+
     // Now that health server is ready, proceed with validation and startup
     // Startup validation: fail fast on missing required config (AFTER health server starts)
     function validateConfig() {
@@ -60,7 +60,7 @@ const serverReady = new Promise((resolve, reject) => {
     const { PrismaClient } = require('@prisma/client');
     const { PrismaPg } = require('@prisma/adapter-pg');
     const { Pool } = require('pg');
-    
+
     // Helper to create Prisma client with pg adapter (required for Prisma 7 --no-engine)
     function createPrismaClient() {
       const pool = new Pool({

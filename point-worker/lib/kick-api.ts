@@ -1399,6 +1399,84 @@ export function clearTokenCache(): void {
 }
 
 /**
+ * Force refresh moderator token using refresh token
+ * Call this when API returns 401 to get a fresh token
+ */
+export async function refreshModeratorToken(): Promise<string | null> {
+    const MODERATOR_USERNAME = process.env.KICK_MODERATOR_USERNAME || 'sweetflipsbot'
+
+    try {
+        console.log(`[Kick API] Force refreshing moderator token for: ${MODERATOR_USERNAME}`)
+
+        const moderator = await (db as any).user.findFirst({
+            where: {
+                username: {
+                    equals: MODERATOR_USERNAME,
+                    mode: 'insensitive',
+                },
+            },
+            select: {
+                refresh_token_encrypted: true,
+                username: true,
+                kick_user_id: true,
+            },
+        })
+
+        if (!moderator?.refresh_token_encrypted) {
+            console.warn(`[Kick API] No refresh token found for moderator: ${MODERATOR_USERNAME}`)
+            return null
+        }
+
+        const { clientId, clientSecret } = getKickBotCredentials()
+        const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
+
+        const refreshToken = decryptToken(moderator.refresh_token_encrypted)
+        const params = new URLSearchParams({
+            grant_type: 'refresh_token',
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            redirect_uri: redirectUri,
+        })
+
+        const response = await fetch(KICK_AUTH_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+        })
+
+        if (response.ok) {
+            const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
+
+            // Update tokens in database
+            await (db as any).user.update({
+                where: { kick_user_id: moderator.kick_user_id },
+                data: {
+                    access_token_hash: hashToken(data.access_token),
+                    refresh_token_hash: data.refresh_token ? hashToken(data.refresh_token) : undefined,
+                    access_token_encrypted: encryptToken(data.access_token),
+                    ...(data.refresh_token && {
+                        refresh_token_encrypted: encryptToken(data.refresh_token),
+                    }),
+                },
+            })
+
+            console.log(`[Kick API] ✅ Successfully refreshed moderator token`)
+            return data.access_token
+        } else {
+            const errorText = await response.text()
+            console.warn(`[Kick API] Moderator token refresh failed: ${response.status} ${errorText}`)
+            return null
+        }
+    } catch (error) {
+        console.error(`[Kick API] Error refreshing moderator token:`, error instanceof Error ? error.message : 'Unknown error')
+        return null
+    }
+}
+
+/**
  * Get moderator's User Access Token from database
  * Used for moderation actions (ban/timeout) and chat messages
  */
@@ -1433,59 +1511,8 @@ export async function getModeratorToken(): Promise<string | null> {
             console.log(`[Kick API] Successfully retrieved token for moderator: ${moderator.username}`)
             return accessToken
         } catch (decryptError) {
-            console.warn(`[Kick API] Failed to decrypt moderator token:`, decryptError instanceof Error ? decryptError.message : 'Unknown error')
-
-            // Try to refresh if we have a refresh token
-            if (moderator.refresh_token_encrypted) {
-                const { clientId, clientSecret } = getKickBotCredentials()
-                const redirectUri = process.env.KICK_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
-
-                try {
-                    const refreshToken = decryptToken(moderator.refresh_token_encrypted)
-                    const params = new URLSearchParams({
-                        grant_type: 'refresh_token',
-                        client_id: clientId,
-                        client_secret: clientSecret,
-                        refresh_token: refreshToken,
-                        redirect_uri: redirectUri,
-                    })
-
-                    const response = await fetch(KICK_AUTH_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: params.toString(),
-                    })
-
-                    if (response.ok) {
-                        const data: AppAccessTokenResponse & { refresh_token?: string } = await response.json()
-
-                        // Update tokens in database
-                        await (db as any).user.update({
-                            where: { kick_user_id: moderator.kick_user_id },
-                            data: {
-                                access_token_hash: hashToken(data.access_token),
-                                refresh_token_hash: data.refresh_token ? hashToken(data.refresh_token) : undefined,
-                                access_token_encrypted: encryptToken(data.access_token),
-                                ...(data.refresh_token && {
-                                    refresh_token_encrypted: encryptToken(data.refresh_token),
-                                }),
-                            },
-                        })
-
-                        console.log(`[Kick API] Successfully refreshed moderator token`)
-                        return data.access_token
-                    } else {
-                        const errorText = await response.text()
-                        console.warn(`[Kick API] Moderator token refresh failed: ${response.status} ${errorText}`)
-                    }
-                } catch (refreshError) {
-                    console.error(`[Kick API] Error refreshing moderator token:`, refreshError instanceof Error ? refreshError.message : 'Unknown error')
-                }
-            }
-
-            return null
+            console.warn(`[Kick API] Failed to decrypt moderator token, attempting refresh...`)
+            return await refreshModeratorToken()
         }
     } catch (dbError) {
         console.warn(`[Kick API] Error fetching moderator from database:`, dbError instanceof Error ? dbError.message : 'Unknown error')
@@ -1505,43 +1532,58 @@ export async function moderationBan(params: {
     const releaseSlot = await acquireRateLimitSlot()
 
     try {
-        const moderatorToken = await getModeratorToken()
+        let moderatorToken = await getModeratorToken()
         if (!moderatorToken) {
             return { success: false, error: 'Moderator token not available. Ensure moderator account is authorized with moderation:ban scope.' }
         }
 
         const clientId = process.env.KICK_CLIENT_ID
-        const headers: Record<string, string> = {
-            'Authorization': `Bearer ${moderatorToken}`,
-            'Content-Type': 'application/json',
+
+        const makeRequest = async (token: string) => {
+            const headers: Record<string, string> = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            }
+
+            if (clientId) {
+                headers['Client-Id'] = clientId
+            }
+
+            const body: any = {
+                broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint'
+                    ? params.broadcaster_user_id.toString()
+                    : params.broadcaster_user_id,
+                user_id: typeof params.user_id === 'bigint'
+                    ? params.user_id.toString()
+                    : params.user_id,
+            }
+
+            if (params.duration_seconds !== undefined) {
+                body.duration = params.duration_seconds
+            }
+
+            if (params.reason) {
+                body.reason = params.reason
+            }
+
+            return fetch(`${KICK_API_BASE}/moderation/ban`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body),
+            })
         }
 
-        if (clientId) {
-            headers['Client-Id'] = clientId
-        }
+        let response = await makeRequest(moderatorToken)
 
-        const body: any = {
-            broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint'
-                ? params.broadcaster_user_id.toString()
-                : params.broadcaster_user_id,
-            user_id: typeof params.user_id === 'bigint'
-                ? params.user_id.toString()
-                : params.user_id,
+        // If 401, try refreshing token and retry once
+        if (response.status === 401) {
+            console.log(`[Kick API] Got 401 on moderation/ban, refreshing moderator token...`)
+            const newToken = await refreshModeratorToken()
+            if (newToken) {
+                moderatorToken = newToken
+                response = await makeRequest(moderatorToken)
+            }
         }
-
-        if (params.duration_seconds !== undefined) {
-            body.duration = params.duration_seconds
-        }
-
-        if (params.reason) {
-            body.reason = params.reason
-        }
-
-        const response = await fetch(`${KICK_API_BASE}/moderation/ban`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-        })
 
         if (!response.ok) {
             const errorText = await response.text()
@@ -1580,7 +1622,7 @@ export async function sendModeratorChatMessage(params: {
     const releaseSlot = await acquireRateLimitSlot()
 
     try {
-        const moderatorToken = await getModeratorToken()
+        let moderatorToken = await getModeratorToken()
         if (!moderatorToken) {
             return { success: false, error: 'Moderator token not available. Ensure moderator account is authorized.' }
         }
@@ -1594,28 +1636,43 @@ export async function sendModeratorChatMessage(params: {
         }
 
         const clientId = process.env.KICK_CLIENT_ID
-        const headers: Record<string, string> = {
-            'Authorization': `Bearer ${moderatorToken}`,
-            'Content-Type': 'application/json',
+
+        const makeRequest = async (token: string) => {
+            const headers: Record<string, string> = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            }
+
+            if (clientId) {
+                headers['Client-Id'] = clientId
+            }
+
+            const body = {
+                broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint'
+                    ? params.broadcaster_user_id.toString()
+                    : params.broadcaster_user_id,
+                content: params.content.trim(),
+                type: params.type || 'bot',
+            }
+
+            return fetch(`${KICK_API_BASE}/chat`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body),
+            })
         }
 
-        if (clientId) {
-            headers['Client-Id'] = clientId
-        }
+        let response = await makeRequest(moderatorToken)
 
-        const body = {
-            broadcaster_user_id: typeof params.broadcaster_user_id === 'bigint'
-                ? params.broadcaster_user_id.toString()
-                : params.broadcaster_user_id,
-            content: params.content.trim(),
-            type: params.type || 'bot',
+        // If 401, try refreshing token and retry once
+        if (response.status === 401) {
+            console.log(`[Kick API] Got 401 on chat message, refreshing moderator token...`)
+            const newToken = await refreshModeratorToken()
+            if (newToken) {
+                moderatorToken = newToken
+                response = await makeRequest(moderatorToken)
+            }
         }
-
-        const response = await fetch(`${KICK_API_BASE}/chat`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-        })
 
         if (!response.ok) {
             const errorText = await response.text()
