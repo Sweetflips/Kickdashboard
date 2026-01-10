@@ -1,5 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Exclude nested project directories from build
+  webpack: (config, { isServer }) => {
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: ['**/Kick-moderator/**', '**/point-worker/**', '**/node_modules/**'],
+    }
+    return config
+  },
   images: {
     remotePatterns: [
       {
