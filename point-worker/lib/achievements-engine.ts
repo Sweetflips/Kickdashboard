@@ -236,7 +236,7 @@ async function gatherUnlockContext(
       stream_session_id: true,
     },
   })
-  
+
   if (messages.length === 0) {
     console.log(`[Achievements] No chat messages found for kickUserId=${auth.kickUserId}`)
   }
