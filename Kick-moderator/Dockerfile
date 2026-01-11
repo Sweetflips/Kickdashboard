@@ -1,5 +1,6 @@
-# Use Node.js 20 LTS (Debian slim for better native module compatibility)
-FROM node:20-bookworm-slim AS base
+# Use Node.js 22 LTS (Debian slim for better native module compatibility)
+# NOTE: Prisma 7.2.0 requires Node 22+
+FROM node:22-bookworm-slim AS base
 
 # Install dependencies only when needed
 FROM base AS deps
