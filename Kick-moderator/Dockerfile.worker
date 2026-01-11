@@ -36,8 +36,9 @@ COPY prisma ./prisma
 COPY scripts ./scripts
 COPY lib ./lib
 
-# Railway sets PORT dynamically - don't hardcode it
-# Fallback to 8080 is in start-worker.js
+# Railway sets PORT dynamically - don't hardcode it. 
+# Default in start-worker.js is 3000.
+EXPOSE 3000
 
 # Start the worker
 CMD ["node", "scripts/start-worker.js"]

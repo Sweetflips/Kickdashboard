@@ -3,13 +3,26 @@
 // Start HTTP health check server IMMEDIATELY (before ANY other code)
 // This ensures Railway can verify the service is up within seconds
 const http = require('http');
-const port = parseInt(process.env.PORT || '8080', 10);
+const { exec, spawn } = require('child_process');
+const path = require('path');
+
+// Use port 3000 as default to match Next.js and Railway conventions
+const port = parseInt(process.env.PORT || '3000', 10);
 
 console.log(`🔧 Worker starting, PORT=${port}`);
 
+// Prepare environment with node_modules/.bin in PATH
+const binPath = path.join(process.cwd(), 'node_modules', '.bin');
+const envWithPath = {
+  ...process.env,
+  PATH: `${binPath}:${process.env.PATH || ''}`
+};
+
 const healthServer = http.createServer((req, res) => {
   // Support both /health and /api/health for Railway compatibility
-  if (req.url === '/' || req.url === '/health' || req.url === '/api/health') {
+  // Use a more flexible check for the URL
+  const url = req.url.split('?')[0];
+  if (url === '/' || url === '/health' || url === '/api/health' || url === '/healthz') {
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache'
@@ -17,7 +30,8 @@ const healthServer = http.createServer((req, res) => {
     res.end(JSON.stringify({
       status: 'ok',
       timestamp: new Date().toISOString(),
-      service: 'worker'
+      service: 'worker',
+      uptime: process.uptime()
     }));
   } else {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -25,39 +39,42 @@ const healthServer = http.createServer((req, res) => {
   }
 });
 
-// Wait for server to be listening before proceeding
-const serverReady = new Promise((resolve, reject) => {
-  healthServer.on('error', (err) => {
-    console.error('⚠️ Health check server error:', err.message);
-    reject(err);
-  });
-
-  healthServer.listen(port, '0.0.0.0', () => {
-    console.log(`✅ Health check server listening on 0.0.0.0:${port}`);
-    resolve();
-  });
+// Bind to 0.0.0.0 to ensure it's accessible from outside the container
+healthServer.listen(port, '0.0.0.0', () => {
+  console.log(`✅ Health check server listening on 0.0.0.0:${port}`);
 });
 
-// Start server and wait for it to be ready, THEN proceed with other initialization
+// Handle server errors
+healthServer.on('error', (err) => {
+  console.error('⚠️ Health check server error:', err.message);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${port} is already in use`);
+  }
+  process.exit(1);
+});
+
+// Start other initialization
 (async () => {
   try {
-    await serverReady;
-
-    // Now load other modules and start workers
-    const { execSync, spawn } = require('child_process');
     const { PrismaClient } = require('@prisma/client');
 
-    // Run migrations before starting the worker
-    try {
+    // Run migrations asynchronously to not block the event loop
+    console.log('🔄 Scheduling database migrations...');
+    setTimeout(() => {
       console.log('🔄 Running database migrations...');
-      execSync('npx prisma migrate deploy', { stdio: 'inherit' });
-      console.log('✅ Migrations completed');
-    } catch (error) {
-      console.error('⚠️ Migration failed (continuing anyway):', error.message);
-    }
+      exec('npx prisma migrate deploy', { env: envWithPath }, (error, stdout, stderr) => {
+        if (error) {
+          console.error('⚠️ Migration failed:', error.message);
+          if (stderr) console.error(stderr);
+        } else {
+          console.log('✅ Migrations completed');
+          if (stdout) console.log(stdout);
+        }
+      });
+    }, 2000); // 2 second delay to let health server settle
 
     // Wait for database to be reachable with retries
-    async function waitForDatabase(maxRetries = 10, delayMs = 3000) {
+    async function waitForDatabase(maxRetries = 15, delayMs = 2000) {
       const prisma = new PrismaClient();
       for (let i = 0; i < maxRetries; i++) {
         try {
@@ -156,7 +173,7 @@ const serverReady = new Promise((resolve, reject) => {
       console.log('📝 Moderation Worker: Starting (moderation only, no message/point processing)...');
       const moderationWorkerProcess = spawn('npx', ['tsx', 'scripts/moderation-worker.ts'], {
         stdio: 'inherit',
-        env: process.env
+        env: envWithPath
       });
 
       console.log('');
@@ -204,14 +221,14 @@ const serverReady = new Promise((resolve, reject) => {
     console.log('📝 Chat Worker: Starting (handles users, messages, points)...');
     const chatWorkerProcess = spawn('npx', ['tsx', 'scripts/chat-worker.ts'], {
       stdio: 'inherit',
-      env: process.env
+      env: envWithPath
     });
 
     // Session tracker (polling) is optional. For true event-driven tracking,
     // rely on Kick webhook events (livestream.status.updated).
     const sessionTrackerEnabled = String(process.env.SESSION_TRACKER_ENABLED || '').toLowerCase() === 'true';
     const sessionTrackerProcess = sessionTrackerEnabled
-      ? spawn('npx', ['tsx', 'scripts/session-tracker.ts'], { stdio: 'inherit', env: process.env })
+      ? spawn('npx', ['tsx', 'scripts/session-tracker.ts'], { stdio: 'inherit', env: envWithPath })
       : null;
     if (sessionTrackerEnabled) {
       console.log('📝 Session Tracker: Starting (polling fallback enabled)...');
@@ -225,7 +242,7 @@ const serverReady = new Promise((resolve, reject) => {
     console.log('📝 Point Worker: Starting (currently idle - no jobs enqueued)...');
     const pointWorkerProcess = spawn('npx', ['tsx', 'scripts/point-worker.ts'], {
       stdio: 'inherit',
-      env: process.env
+      env: envWithPath
     });
 
     console.log('');
