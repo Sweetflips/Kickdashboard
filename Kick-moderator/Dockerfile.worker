@@ -37,8 +37,8 @@ COPY scripts ./scripts
 COPY lib ./lib
 
 # Railway sets PORT dynamically - don't hardcode it. 
-# Default in start-worker.js is 3000.
-EXPOSE 3000
+# Default in start-worker.js is 8080.
+EXPOSE 8080
 
 # Start the worker
 CMD ["node", "scripts/start-worker.js"]
