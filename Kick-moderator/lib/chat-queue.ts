@@ -120,7 +120,7 @@ export async function claimChatJobs(batchSize: number = 10, lockTimeoutSeconds: 
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            const jobs = await db.$transaction(async (tx) => {
+            const jobs = await db.$transaction(async (tx: Prisma.TransactionClient) => {
                 // Unlock stale locks
                 await tx.$executeRaw`
                     UPDATE chat_jobs

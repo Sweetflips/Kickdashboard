@@ -78,7 +78,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
       },
     })
 
-    totalWatchSeconds = sessions.reduce((sum, session) => {
+    totalWatchSeconds = sessions.reduce((sum: number, session: { duration_seconds: number | null; started_at: Date; ended_at: Date | null }) => {
       let duration = session.duration_seconds
       if (duration == null) {
         const end = session.ended_at ?? now
@@ -147,7 +147,7 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
     })(),
   ])
 
-  const isTopGChatter = topUsersByPoints.some((u) => u.user_id === auth.userId)
+  const isTopGChatter = topUsersByPoints.some((u: { user_id: bigint }) => u.user_id === auth.userId)
 
   let isMonthlyLegend = false
   if (monthlyPointAggs.length > 0) {
@@ -156,8 +156,8 @@ export async function computeAchievementUnlocks(auth: { userId: bigint; kickUser
       const coins = agg._sum.sweet_coins_earned || 0
       if (coins > maxSweetCoins) maxSweetCoins = coins
     }
-    const topUsers = monthlyPointAggs.filter((agg) => (agg._sum.sweet_coins_earned || 0) === maxSweetCoins)
-    isMonthlyLegend = topUsers.some((agg) => agg.user_id === auth.userId)
+    const topUsers = monthlyPointAggs.filter((agg: { user_id: bigint; _sum: { sweet_coins_earned: number | null } }) => (agg._sum.sweet_coins_earned || 0) === maxSweetCoins)
+    isMonthlyLegend = topUsers.some((agg: { user_id: bigint; _sum: { sweet_coins_earned: number | null } }) => agg.user_id === auth.userId)
   }
 
   // OG Dash: one of the first 100 users created

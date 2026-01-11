@@ -47,7 +47,7 @@ export async function purchaseTickets(
         }
 
         // Use transaction to ensure atomicity
-        const result = await db.$transaction(async (tx) => {
+        const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
             await backfillPurchaseTransactionsIfEmpty(tx as any, userId)
             await ensurePurchaseTransactionsTable(tx as any)
 
@@ -251,7 +251,7 @@ export async function drawWinners(
             }
         }
 
-        const result = await db.$transaction(async (tx) => {
+        const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
             // Lock raffle
             const raffle = await tx.raffle.findUnique({
                 where: { id: raffleId },
@@ -304,8 +304,10 @@ export async function drawWinners(
             // Fetch rigged winners (if enabled)
             let riggedRecords: Array<{ entry_id: bigint; position: number }> = []
             try {
-                if ((await tx.raffle.findUnique({ where: { id: raffleId }, select: { rigging_enabled: true } }))?.rigging_enabled) {
-                    riggedRecords = await tx.raffleRiggedWinner.findMany({
+                const raffle = await tx.raffle.findUnique({ where: { id: raffleId } })
+                if (raffle && 'rigging_enabled' in raffle && (raffle as { rigging_enabled?: boolean }).rigging_enabled) {
+                    const txWithRigged = tx as unknown as { raffleRiggedWinner: { findMany: (args: { where: { raffle_id: bigint }; orderBy: { position: string }; select: { entry_id: boolean; position: boolean } }) => Promise<Array<{ entry_id: bigint; position: number }>> } }
+                    riggedRecords = await txWithRigged.raffleRiggedWinner.findMany({
                         where: { raffle_id: raffleId },
                         orderBy: { position: 'asc' },
                         select: { entry_id: true, position: true },
@@ -390,8 +392,9 @@ export async function drawWinners(
 
 
             // Create winner records and persist selected ticket index and spin number if schema allows
+            const txWithWinner = tx as unknown as { raffleWinner: { create: (args: { data: unknown }) => Promise<unknown> } }
             for (const winner of winners) {
-                await tx.raffleWinner.create({
+                await txWithWinner.raffleWinner.create({
                     data: {
                         raffle_id: raffleId,
                         entry_id: winner.entryId,

@@ -127,9 +127,17 @@ export async function GET(request: Request) {
         ])
 
         // Combine and sort messages by timestamp
+        type MessageWithRelations = {
+            id: bigint
+            timestamp: bigint
+            content: string
+            sender: { username: string; profile_picture_url: string | null; kick_user_id: bigint } | null
+            broadcaster: { username: string; profile_picture_url: string | null; kick_user_id: bigint } | null
+            [key: string]: unknown
+        }
         const allMessages = [
-            ...onlineMessages.map(msg => ({ ...msg, isOffline: false })),
-            ...offlineMessages.map(msg => ({ ...msg, isOffline: true })),
+            ...onlineMessages.map((msg: MessageWithRelations) => ({ ...msg, isOffline: false })),
+            ...offlineMessages.map((msg: MessageWithRelations) => ({ ...msg, isOffline: true })),
         ].sort((a, b) => {
             const aTime = Number(a.timestamp)
             const bTime = Number(b.timestamp)

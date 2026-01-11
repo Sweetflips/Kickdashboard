@@ -109,7 +109,7 @@ export async function claimJobs(batchSize: number = 10, lockTimeoutSeconds: numb
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
             // Use a single transaction to atomically unlock stale locks and claim new jobs
-            const jobs = await db.$transaction(async (tx) => {
+            const jobs = await db.$transaction(async (tx: Prisma.TransactionClient) => {
                 // First, unlock any stale locks (jobs locked too long ago)
                 await tx.$executeRaw`
                     UPDATE sweet_coin_award_jobs

@@ -287,7 +287,7 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
                 console.log(`[SessionManager] Backfilling ${offlineMessages.length} offline message(s) into session ${sessionId}`)
 
                 // Convert offline messages to chat messages
-                const chatMessagesToCreate = offlineMessages.map(offlineMsg => ({
+                const chatMessagesToCreate = offlineMessages.map((offlineMsg: { message_id: string; sender_user_id: bigint; sender_username: string; broadcaster_user_id: bigint; content: string; emotes: unknown; has_emotes: boolean; engagement_type: string | null; message_length: number | null; exclamation_count: number | null; sentence_count: number | null; timestamp: bigint; sender_username_color: string | null; sender_badges: unknown; sender_is_verified: boolean; sender_is_anonymous: boolean; sweet_coins_earned: number | null; sweet_coins_reason: string | null }) => ({
                     message_id: offlineMsg.message_id,
                     stream_session_id: sessionId,
                     sender_user_id: offlineMsg.sender_user_id,
@@ -321,7 +321,7 @@ export async function endSession(sessionId: bigint, force: boolean = false): Pro
                 await db.offlineChatMessage.deleteMany({
                     where: {
                         message_id: {
-                            in: offlineMessages.map(m => m.message_id),
+                            in: offlineMessages.map((m: { message_id: string }) => m.message_id),
                         },
                     },
                 })
@@ -450,7 +450,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
             if (offlineMessages.length > 0) {
                 console.log(`[SessionManager] Backfilling ${offlineMessages.length} offline message(s) into session ${sessionId}`)
 
-                const chatMessagesToCreate = offlineMessages.map(offlineMsg => ({
+                const chatMessagesToCreate = offlineMessages.map((offlineMsg: { message_id: string; sender_user_id: bigint; sender_username: string; broadcaster_user_id: bigint; content: string; emotes: unknown; has_emotes: boolean; engagement_type: string | null; message_length: number | null; exclamation_count: number | null; sentence_count: number | null; timestamp: bigint; sender_username_color: string | null; sender_badges: unknown; sender_is_verified: boolean; sender_is_anonymous: boolean; sweet_coins_earned: number | null; sweet_coins_reason: string | null }) => ({
                     message_id: offlineMsg.message_id,
                     stream_session_id: sessionId,
                     sender_user_id: offlineMsg.sender_user_id,
@@ -480,7 +480,7 @@ export async function endSessionAt(sessionId: bigint, endedAt: Date, force: bool
                 await db.offlineChatMessage.deleteMany({
                     where: {
                         message_id: {
-                            in: offlineMessages.map(m => m.message_id),
+                            in: offlineMessages.map((m: { message_id: string }) => m.message_id),
                         },
                     },
                 })
@@ -807,7 +807,7 @@ export async function mergeLikelyDuplicateSessions(anchorSessionId: bigint): Pro
         const mergedIds = group.map(s => s.id)
         const deletedIds: bigint[] = []
 
-        await db.$transaction(async (tx) => {
+        await db.$transaction(async (tx: Prisma.TransactionClient) => {
             // Move related records
             for (const dup of toMerge) {
                 await tx.chatMessage.updateMany({

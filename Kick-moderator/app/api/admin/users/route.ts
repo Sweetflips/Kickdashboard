@@ -138,7 +138,7 @@ export async function GET(request: Request) {
       },
     })
 
-    const sessionStatsMap = new Map(sessionStats.map(s => [s.user_id.toString(), s._count.id]))
+    const sessionStatsMap = new Map(sessionStats.map((s: { user_id: bigint; _count: { id: number } }) => [s.user_id.toString(), s._count.id]))
 
     // Duplicate detection: Find users sharing IP addresses
     const userIdsForDuplicates = users.map(u => u.id)
@@ -172,7 +172,7 @@ export async function GET(request: Request) {
 
     // Group users by session IP hash
     const sessionIPMap = new Map<string, bigint[]>()
-    allSessions.forEach(session => {
+    allSessions.forEach((session: { user_id: bigint; ip_hash: string | null }) => {
       if (session.ip_hash) {
         if (!sessionIPMap.has(session.ip_hash)) {
           sessionIPMap.set(session.ip_hash, [])

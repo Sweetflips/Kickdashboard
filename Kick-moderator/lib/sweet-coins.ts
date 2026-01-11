@@ -59,7 +59,7 @@ export async function awardSweetCoins(
 ): Promise<{ awarded: boolean; sweetCoinsEarned?: number; reason?: string }> {
     try {
         // First, find the user by kick_user_id to get the internal id, kick_connected status, last_login_at, and username
-        const user = await dbQueryWithRetry(() => db.user.findUnique({
+        const user: { id: bigint; kick_connected: boolean; last_login_at: Date | null; username: string; is_excluded: boolean } | null = await dbQueryWithRetry(() => db.user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true, kick_connected: true, last_login_at: true, username: true, is_excluded: true },
         }))
@@ -147,7 +147,7 @@ export async function awardSweetCoins(
                 ended_at: true,
                 broadcaster_user_id: true,
             },
-        }))
+        })) as { ended_at: Date | null; broadcaster_user_id: bigint } | null
 
         // If session doesn't exist or has ended, don't award sweet coins
         if (!session || session.ended_at !== null) {
@@ -161,7 +161,7 @@ export async function awardSweetCoins(
 
         // Early check for message_id uniqueness (quick exit before transaction)
         if (messageId) {
-            const existingSweetCoinHistory = await dbQueryWithRetry(() => db.sweetCoinHistory.findFirst({
+            const existingSweetCoinHistory: { sweet_coins_earned: number | null } | null = await dbQueryWithRetry(() => db.sweetCoinHistory.findFirst({
                 where: { message_id: messageId },
                 select: { sweet_coins_earned: true },
             }))
@@ -190,7 +190,7 @@ export async function awardSweetCoins(
             rateLimitHit = null
             const attemptStartTime = Date.now()
             try {
-                await db.$transaction(async (tx) => {
+                await db.$transaction(async (tx: Prisma.TransactionClient) => {
                     const transactionNow = new Date()
 
                     // Use row-level locking (SELECT FOR UPDATE) to prevent concurrent modifications
@@ -410,7 +410,7 @@ export async function awardEmotes(
         }
 
         // Find the user by kick_user_id to get the internal id
-        const user = await dbQueryWithRetry(() => db.user.findUnique({
+        const user: { id: bigint } | null = await dbQueryWithRetry(() => db.user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true },
         }))
@@ -472,7 +472,7 @@ export async function awardEmotes(
 
 export async function getUserSweetCoins(kickUserId: bigint): Promise<number> {
     try {
-        const user = await dbQueryWithRetry(() => db.user.findUnique({
+        const user: { id: bigint } | null = await dbQueryWithRetry(() => db.user.findUnique({
             where: { kick_user_id: kickUserId },
             select: { id: true },
         }))
@@ -481,7 +481,7 @@ export async function getUserSweetCoins(kickUserId: bigint): Promise<number> {
             return 0
         }
 
-        const userSweetCoins = await dbQueryWithRetry(() => db.userSweetCoins.findUnique({
+        const userSweetCoins: { total_sweet_coins: number } | null = await dbQueryWithRetry(() => db.userSweetCoins.findUnique({
             where: { user_id: user.id },
         }))
         return userSweetCoins?.total_sweet_coins || 0

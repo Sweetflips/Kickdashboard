@@ -54,7 +54,7 @@ export async function buildRaffleSnapshot(raffleId: bigint): Promise<WheelSnapsh
     orderBy: { id: 'asc' },
   })
 
-  const mapped = entries.map((e) => ({
+  const mapped = entries.map((e: { id: bigint; tickets: number; source: string | null; user: { id: bigint; username: string } }) => ({
     id: e.id,
     userId: e.user.id,
     username: e.user.username,
@@ -87,8 +87,8 @@ export async function buildCustomSnapshot(): Promise<WheelSnapshot> {
   })
 
   const mapped = entrants
-    .filter((e) => Number(e.weight) > 0)
-    .map((e) => ({
+    .filter((e: { weight: bigint | number | null }) => Number(e.weight) > 0)
+    .map((e: { id: bigint; weight: bigint | number | null; label: string }) => ({
       id: e.id,
       userId: e.id,
       username: e.label,
