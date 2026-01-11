@@ -1,9 +1,9 @@
 ---
 active: true
-iteration: 4
+iteration: 1
 max_iterations: 0
 completion_promise: null
-started_at: "2026-01-11T00:18:12Z"
+started_at: "2026-01-11T00:30:30Z"
 ---
 
-C:UsersAdministratorDocumentsSweetFlipsKickdashboardKickdashboardKick-moderator this doesnt pass healthcheck, but pointworker does, do we have an api for healthcheck on kick moderator worker bruv?
+====================

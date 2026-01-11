@@ -36,10 +36,8 @@ COPY prisma ./prisma
 COPY scripts ./scripts
 COPY lib ./lib
 
-# Expose port for healthcheck
-EXPOSE 8080
-
-ENV PORT=8080
+# Railway sets PORT dynamically - don't hardcode it
+# Fallback to 8080 is in start-worker.js
 
 # Start the worker
 CMD ["node", "scripts/start-worker.js"]
